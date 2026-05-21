@@ -86,6 +86,18 @@ Cross-reference: locked specs live in `docs/REQUIREMENTS.md`; this file logs
 - **Rationale**: Sai's call. "Let physics dictate". Phase 2.5 converges: minimum-board-area for 4 × 70 A continuous + JLC trace/space density → take the larger of {physics-required, nearest standard FPV stack pattern (20×20 / 30.5×30.5 / 40×40 / 60×60 family)}. Start large, iterate down across subsequent revisions.
 - **Trade-offs**: First-rev board may be larger than direct competitors. Acceptable — Sai prioritizes margins via simulation confidence over first-rev compactness.
 
+### OQ-006 — PL1 MCU family pick (closed)
+
+- **Raised + Closed**: 2026-05-22
+- **Question**: Which MCU family for the FPV 4-in-1 (PL1)? Per `REQUIREMENTS.md` §fpv-4in1, choices were STM32G071 OR AT32F421.
+- **Options**:
+  - **(A)** STM32G071CBT6 — ST mainline, 128 KB Flash, M0+ 64 MHz, LQFP-48, ~$3–5, AM32 29 targets
+  - **(B)** AT32F421K8T7 — Artery, 64 KB Flash, M4 120 MHz, LQFP-32, ~$0.90, AM32 240 targets, JLC 9419 in stock
+- **Pick**: **B (AT32F421K8T7)**.
+- **Rationale**: AM32 community references 8× higher on f421 → more community-validated, sureshot per Sai's tiebreaker. M4 @ 120 MHz gives speed headroom for bidirectional DShot RPM filtering + telemetry. Cost advantage meaningful for commercial product. LQFP-32 fits 4-in-1 density. JLC stock confirmed.
+- **Trade-off**: Artery clone, not ST mainline — supply chain has slightly more risk than STM32. Mitigation: AT32 has been shipping in volume since 2016, well-established; second-source qualification (e.g., MM32 or STM32G031 pin-compat option) added to a future Phase 2 sub-task if reliability data ever warrants it.
+- **Resolution-gate**: closed; pin assignments and exact part SKU (-T7 vs -U7 package variants) confirmed at Phase 2 from final datasheet + JLC availability check.
+
 ---
 
 ## Open — pending owner input

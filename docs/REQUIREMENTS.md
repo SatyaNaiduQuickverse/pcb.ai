@@ -43,10 +43,11 @@ Hardware design + reliability + brand are the IP; firmware is community-owned.
 
 | Item | Spec |
 |---|---|
-| Family | STM32G071 *or* AT32F421 |
-| Pick gating | Phase 2 — JLCPCB assembly library coverage *and* AM32 hardware-target file availability (per Rigor §10, pull both fresh, not from memory) |
-| Class | 32-bit Cortex-M0+, AM32-supported |
-| Pin count | ≥ 32 pins (4 PWM × 3 phases + 4 current sense × 3 phases + 4 DShot inputs + comms / config / debug) |
+| Family | **AT32F421K8T7** (Artery) — closed at Phase 1 per OQ-006 |
+| Class | 32-bit Cortex-M4 @ 120 MHz, 64 KB Flash, 16 KB SRAM, LQFP-32 |
+| Firmware-per-MCU | AM32 single-motor build (`PCBAI_FPV4IN1_F421`) — same `.elf` flashed to each MCU on the 4-in-1 board |
+| Pin count | ≥ 32 pins per MCU (3 PWM × 1 phase set + 1 current sense + 1 voltage sense + 1 DShot in + 1 telemetry out + comms / config / debug). NOTE: requires architectural cross-check — see open thread in Phase 1 PR description |
+| Phase 2 lock-ins | Pin assignments, exact part SKU (-T7 LQFP-32 vs -U7 QFN-32), and the `K8` `.ld` script (vs the default `x6` 32 KB script AM32 ships) |
 
 ### MOSFETs
 
