@@ -1,0 +1,127 @@
+(kicad_symbol_lib
+	(version 20240618)
+	(generator "claude-worker")
+	(generator_version "9.0")
+
+	; Custom symbols for pcb.ai FPV 4-in-1 parts not in KiCad standard libraries.
+	; Per Phase 3a contract — author at this phase, populate visually at Phase 4
+	; when GUI access is available. Skeletons here are minimal-valid; the SKiDL
+	; netlist generator (pcbai_fpv4in1_skidl.py) is the canonical design source.
+
+	; AON6260 — 60 V N-Channel MOSFET (DFN5x6), used 24× for phase + 4× for reverse-pol
+	(symbol "AON6260"
+		(pin_numbers (hide yes))
+		(pin_names (offset 0.254))
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "Q" (at 0 5.08 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "AON6260" (at 0 -5.08 0) (effects (font (size 1.27 1.27))))
+		(property "Footprint" "" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(property "Datasheet" "http://www.aosmd.com/pdfs/datasheet/AON6260.pdf" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(property "Description" "60V N-Channel MOSFET DFN5x6 (Phase 2b lock)" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+	)
+
+	; DRV8300DRGER — TI 100 V 3-phase gate driver (VQFN-24 4×4 mm)
+	(symbol "DRV8300DRGER"
+		(pin_numbers (hide no))
+		(pin_names (offset 0.254))
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "U" (at 0 7.62 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "DRV8300DRGER" (at 0 -7.62 0) (effects (font (size 1.27 1.27))))
+		(property "Datasheet" "https://www.ti.com/lit/ds/symlink/drv8300.pdf" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(property "Description" "TI 100V 3-phase BLDC gate driver (Phase 2c lock)" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+	)
+
+	; INA186A3IDCKR — TI 100 V/V current-sense amplifier (SC-70-6)
+	(symbol "INA186A3IDCKR"
+		(pin_numbers (hide no))
+		(pin_names (offset 0.254))
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "U" (at 0 3.81 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "INA186A3IDCKR" (at 0 -3.81 0) (effects (font (size 1.27 1.27))))
+		(property "Datasheet" "https://www.ti.com/product/INA186/part-details/INA186A3IDCKR" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(property "Description" "TI 100 V/V CSA SC-70-6 (Phase 2c lock)" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+	)
+
+	; USBLC6-2SC6 — STMicroelectronics ESD array, 2-channel + V_BUS
+	(symbol "USBLC6-2SC6"
+		(pin_numbers (hide no))
+		(pin_names (offset 0.254))
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "U" (at 0 3.81 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "USBLC6-2SC6" (at 0 -3.81 0) (effects (font (size 1.27 1.27))))
+		(property "Datasheet" "https://www.st.com/resource/en/datasheet/usblc6-2.pdf" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(property "Description" "ST low-cap ESD array, SOT-23-6 (Phase 2e lock)" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+	)
+
+	; LMR51420YDDCR — TI buck regulator (SOT-23-6)
+	(symbol "LMR51420YDDCR"
+		(pin_numbers (hide no))
+		(pin_names (offset 0.254))
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "U" (at 0 3.81 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "LMR51420YDDCR" (at 0 -3.81 0) (effects (font (size 1.27 1.27))))
+		(property "Datasheet" "https://www.ti.com/product/LMR51420" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(property "Description" "TI 2A buck regulator, SOT-23-6 (Phase 2d lock)" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+	)
+
+	; TLV76733DRVR — TI 3.3 V LDO (WSON-6 2×2 mm)
+	(symbol "TLV76733DRVR"
+		(pin_numbers (hide no))
+		(pin_names (offset 0.254))
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "U" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "TLV76733DRVR" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+		(property "Datasheet" "https://www.ti.com/product/TLV767" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(property "Description" "TI 3.3V/1A LDO, WSON-6 (Phase 2d lock)" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+	)
+
+	; SMBJ33A — TVS diode (SMB / DO-214AA)
+	(symbol "SMBJ33A"
+		(pin_numbers (hide no))
+		(pin_names (offset 0.254))
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "D" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "SMBJ33A" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+		(property "Description" "TVS 33V 600W SMB (Phase 2e lock)" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+	)
+
+	; JST SM08B-SRSS-TB — 8-pin FC connector
+	(symbol "SM08B-SRSS-TB"
+		(pin_numbers (hide no))
+		(pin_names (offset 0.254))
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "J" (at 0 5.08 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "SM08B-SRSS-TB" (at 0 -5.08 0) (effects (font (size 1.27 1.27))))
+		(property "Datasheet" "https://www.jst-mfg.com/product/pdf/eng/eSR.pdf" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(property "Description" "JST SH 1.0 mm pitch 8-pin SMD top-mount (Phase 2e lock)" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+	)
+
+	; AT32F421K8T7 — Artery MCU (LQFP-32)
+	(symbol "AT32F421K8T7"
+		(pin_numbers (hide no))
+		(pin_names (offset 0.254))
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "U" (at 0 12.7 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "AT32F421K8T7" (at 0 -12.7 0) (effects (font (size 1.27 1.27))))
+		(property "Datasheet" "https://www.arterychip.com/download/DS/DS_AT32F421_V2.02_EN.pdf" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(property "Description" "Artery AT32F421K8T7 M4 120MHz 64KB Flash LQFP-32 (OQ-006 lock)" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+	)
+)

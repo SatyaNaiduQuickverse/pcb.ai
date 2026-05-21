@@ -133,6 +133,16 @@ Closed at Phase 2e — see `docs/PHASE2E_CONNECTORS_PROTECTION.md`.
 - **Motor pads**: 12 × 3.0 mm dia SMD pads (4 channels × 3 phases). Accommodates 20-26 AWG wire by user choice.
 - **SWD per-MCU**: 4 × {SWDIO + SWCLK + GND} = 12 test pads minimum (NRST optional adds 4). Per-MCU one-at-a-time flash (Open-4in1 pattern).
 
+### Schematic (KiCad 9)
+
+KiCad project at `hardware/kicad/pcbai_fpv4in1.kicad_pro`. Phase 3 split into three sub-phases per CLAUDE.md §6:
+
+- **3a** (PR #9): main schematic sheet skeleton + canonical SKiDL netlist spec (`hardware/kicad/pcbai_fpv4in1_skidl.py`) + custom symbols library (`hardware/kicad/components.kicad_sym`). ERC 0 violations on skeleton files. See `docs/PHASE3A_MAIN_SCHEMATIC.md`.
+- **3b**: channel sub-sheet (MCU + gate driver + 6 MOSFETs + 3 shunts + 3 CSAs + per-channel decoupling) — `channel.kicad_sch`.
+- **3c**: hierarchical instances × 4 + full ERC + netlist export.
+
+Phase 4 (placement) renders the visual schematic in the KiCad GUI against the Phase 3a-3c canonical netlist spec.
+
 ### Status indicators
 
 - 1 × Power-good LED (green 0603, 1 kΩ current limit).
