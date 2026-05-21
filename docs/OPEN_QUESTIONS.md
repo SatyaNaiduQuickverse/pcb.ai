@@ -118,11 +118,9 @@ Cross-reference: locked specs live in `docs/REQUIREMENTS.md`; this file logs
 ### OQ-004 — Worker's working copy of pcb.ai
 
 - **Raised**: 2026-05-21
-- **Status**: Open (proposed)
-- **Question**: How does the worker (in tmux `escworker`, CWD `/home/novatics64/escworker`) get a working copy of `pcb.ai` for hands-on PCB / firmware / sim work?
-- **Options**:
+- **Closed**: 2026-05-22 — **Option A** (worker clones into `/home/novatics64/escworker/pcb.ai`, branches per sub-phase per CLAUDE.md §6, pushes to GitHub, master reviews on GitHub)
+- **Options considered**:
   - **(A)** Worker clones `github.com/SatyaNaiduQuickverse/pcb.ai` into `/home/novatics64/escworker/pcb.ai`; branches per sub-phase per CLAUDE.md §6 ("one sub-phase = one PR"); pushes to GitHub; master fetches + reviews + merges
   - **(B)** Worker has read-only access to master's clone at `/home/novatics64/novapcbmaster/pcb.ai` — no write workspace, defeats PR review boundary, CLAUDE.md autoload doesn't trigger
   - **(C)** Shared writable clone — concurrent-edit risk, defeats master/worker review model
-- **Recommendation**: **A**. Existing GitHub origin is the natural shared remote (no new infra). CLAUDE.md autoloads on worker session start (if worker is restarted in the new CWD-subtree). Standard PR workflow: branches per sub-phase, master reviews on GitHub. Setup is one `gh repo clone` away.
-- **Pending**: Sai's OK to act on A. (Worker session may need to be restarted from new CWD-subtree for CLAUDE.md autoload; alternatively, send an explicit `/read CLAUDE.md` instruction.)
+- **Rationale**: Existing GitHub origin is the natural shared remote (no new infra). Standard PR workflow: branches per sub-phase, master reviews on GitHub. Setup is one `gh repo clone` away. Closed by Sai/master authorization in the Phase 0 task contract (2026-05-22).
