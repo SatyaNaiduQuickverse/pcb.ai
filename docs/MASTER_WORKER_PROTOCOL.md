@@ -1,5 +1,12 @@
 # Master ↔ worker protocol
 
+> **This project's coord instance**
+> - **Port:** `8766` (the other project on this machine, `novapcb`, uses `8765` — do not collide)
+> - **Dashboard:** `http://novarobotics64:8766/` (tailscale hostname; the home dir is `/home/novatics64/` but the host is `novarobotics64`)
+> - **Sessions:** `master` (tmux `novapcbmaster`) and `worker` (tmux `escworker`), both `host: localhost` on `novarobotics64`
+> - **Send endpoints:** `POST http://localhost:8766/send/master` and `POST http://localhost:8766/send/worker` — `from` field is mandatory
+> - **Round-trip verified:** 2026-05-21 — master → worker bootstrap landed; worker → master PONG returned with role acknowledged
+
 How the master and worker Claude sessions communicate and coordinate, and how to
 stand up the coordination channel for a new project.
 
