@@ -1,0 +1,24 @@
+(kicad_sch
+	(version 20240618)
+	(generator "claude-worker")
+	(generator_version "9.0")
+	(uuid "22222222-2222-2222-2222-222222222222")
+	(paper "A3")
+
+	(title_block
+		(title "pcb.ai FPV 4-in-1 ESC — Channel sub-sheet (template)")
+		(date "2026-05-22")
+		(rev "Phase 3a (stub)")
+		(company "pcb.ai")
+		(comment 1 "Per-channel: 1× AT32F421K8T7 MCU + 1× DRV8300DRGER gate driver +")
+		(comment 2 "6× AON6260 (3 phases × 2 H+L) + 3× shunts + 3× INA186A3IDCKR CSAs")
+		(comment 3 "Populated at Phase 3b (this is the 3a placeholder)")
+	)
+
+	(lib_symbols
+	)
+
+	(sheet_instances
+		(path "/" (page "1"))
+	)
+)

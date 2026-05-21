@@ -1,0 +1,13 @@
+# KiCad transient files
+*_autosave-*
+*.kicad_sch-bak
+*.kicad_pcb-bak
+*-backups/
+fp-info-cache
+~*.lck
+*.bak
+*.lock
+*.zip
+
+# KiCad project local state (per-machine paths)
+*.kicad_prl
