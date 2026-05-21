@@ -14,8 +14,9 @@ begins.
 1. `CLAUDE.md` — the bootstrap: the master/worker model, the rules, the working style.
 2. `docs/ENGINEERING_RIGOR.md` — the non-negotiable commitments.
 3. `docs/MASTER_WORKER_PROTOCOL.md` — how master and worker communicate + coordinate.
-4. `docs/DESIGN_PHASES.md` — the PCB design-phase structure (the canonical plan).
-5. `docs/PCB_PLAYBOOK.md` — the toolchain + the hard-won routing / manufacturability / sim lessons.
+4. `docs/NOVA_COORD_SETUP.md` — deploying this project's coordination server.
+5. `docs/DESIGN_PHASES.md` — the PCB design-phase structure (the canonical plan).
+6. `docs/PCB_PLAYBOOK.md` — the toolchain + the hard-won routing / manufacturability / sim lessons.
 
 ## The model in one line
 
