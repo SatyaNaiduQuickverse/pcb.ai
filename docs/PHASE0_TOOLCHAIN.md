@@ -19,7 +19,7 @@ Environment: novarobotics64 (Raspberry Pi 5, aarch64, Linux 6.18.29+rpt-rpi-2712
 | 1 | KiCad 9 (kicad-cli) | 9.0.2 (dpkg `9.0.2+dfsg-1`) | `/usr/bin/kicad-cli`, `/usr/bin/kicad` | PASS — opened `pic_programmer.kicad_sch` demo, ran ERC (115 violations expected on demo), exported 1179-line netlist | No CLI "re-save" subcommand; ERC + netlist export are the round-trip equivalent (file fully parsed + traversed) |
 | 2 | SKiDL | 2.2.3 | `/home/novatics64/.local/lib/python3.13/site-packages/skidl/` | PASS — 5-component netlist (R, C, LED, NPN BJT, 1×02 header) generated, 0 errors | Needs `KICAD_SYMBOL_DIR` / `KICAD9_SYMBOL_DIR=/usr/share/kicad/symbols` env. Initial run failed on `Q_NPN_BCE` (not a KiCad 9 symbol); correct symbol is `Q_NPN`. 14 non-fatal "missing tstamps tag" warnings. |
 | 3 | kinet2pcb | 1.1.4 | `/home/novatics64/.local/bin/kinet2pcb`, `/home/novatics64/.local/lib/python3.13/site-packages/kinet2pcb/` | PASS — converted SKiDL netlist → 22 KB `.kicad_pcb` with 5 footprints; kicad-cli renders it to SVG cleanly | Cosmetic startup line: `pcbnew/action_plugin.cpp(163): assert "PgmOrNull()"` — wxWidgets headless warning, non-blocking |
-| 4 | Freerouting | post-v2.2.4 build (manifest: Built 2026-05-13 with Adoptium JDK 25.0.2+10-LTS, jar revision `20f1a72e546b9b23c7ba5127086885cfacbdd4be`) | `/home/novatics64/local/freerouting/freerouting.jar` (57.7 MB) | **FAIL — bytecode/runtime mismatch** | Jar requires Java 25 (class file v69); only Java 21 installed (`/usr/bin/java`, `/usr/lib/jvm/java-21-openjdk-arm64`). Raised URGENT 2026-05-22 to master; awaiting authorization to install OpenJDK 25 OR downgrade jar to literal v2.2.4 release. Resolution will land in this PR before merge. |
+| 4 | Freerouting | post-v2.2.4 build (manifest: Built 2026-05-13 with Adoptium JDK 25.0.2+10-LTS, jar revision `20f1a72e546b9b23c7ba5127086885cfacbdd4be`) | `/home/novatics64/local/freerouting/freerouting.jar` (57.7 MB) | **DEFERRED — see OQ-005** | Jar requires Java 25 (class file v69); only Java 21 installed (`/usr/bin/java`, `/usr/lib/jvm/java-21-openjdk-arm64`). novapcb worker currently uses this install; coordinated change required. Resolution gated to Phase 5 (routing) prep. |
 | 5 | Elmer FEM (ElmerSolver) | 26.2-devel (Rev `03313b2`, compiled 2026-05-20) | `/home/novatics64/local/elmer/bin/ElmerSolver` (source build at `/home/novatics64/local/src/em-fem-builds/elmerfem`) | PASS — `HeatControl` steady-state thermal test converged in 0.21 CPU-s; built-in reference comparison: relative error 1.33e-16 (machine precision) | Not on `$PATH` — absolute path needed |
 | 6 | OpenEMS | `655947c` (CSXCAD `32847a2`, libCSXCAD.so.0.6.3, libopenEMS.so.0.0.36) | `/home/novatics64/local/openems/bin/openEMS`, `/home/novatics64/local/openems/lib/`, Python: `/home/novatics64/.local/lib/python3.13/site-packages/openEMS/` | PASS — 100-timestep FDTD on 726-cell vacuum box completed in 0.75 ms; et + ht output files produced | Python bindings need `LD_LIBRARY_PATH=/home/novatics64/local/openems/lib`. Probe `Box([0,0,0],[0,0,0])` produced a "primitive dimension not suitable" warning (cosmetic — use a non-zero-dim probe for real work) |
 | 7 | ngspice | 44.2 (KLU direct linear solver, dpkg `44.2+ds-1`) | `/usr/bin/ngspice`, `/usr/lib/aarch64-linux-gnu/libngspice.so.0` (`libngspice0:arm64` 44.2+ds-1) | PASS — `rc.cir` direct batch transient charged to 4.9998 V by t=1 ms (theory ≈ 5) | The `libngspice0-dev` deb (with the un-versioned `libngspice.so` symlink) is **not** apt-installed; a copy exists at `/home/novatics64/local/src/libngspice0-dev.deb` |
@@ -43,7 +43,7 @@ real PL1 need surfaces (R4 + R15).
 
 ## Open items from this phase
 
-1. **Freerouting / Java 25 mismatch** (row #4) — raised URGENT 2026-05-22; resolution pending master/Sai. Will be fixed within this PR before merge.
+1. **Freerouting / Java 25 mismatch** (row #4) — DEFERRED to Phase 5 (routing) prep per OQ-005 (Sai's call, 2026-05-22). novapcb worker on this machine uses the same install; coordinated change only. Non-blocking for Phases 1-4 (no routing).
 2. **PySpice subprocess backend broken** (row #7b) — workaround documented (use `ngspice-shared` + `NGSPICE_LIBRARY_PATH`). PySpice 1.5 was released before ngspice 44; long-term fix is upstream PySpice or pin ngspice ≤ 43. Not blocking — `ngspice-shared` works.
 3. **`libngspice.so` symlink missing** (row #7b) — `libngspice0-dev` is not apt-installed though the .deb is staged at `/home/novatics64/local/src/libngspice0-dev.deb`. Workaround via env var. If desired later, `sudo dpkg -i` the staged deb (system-state change — requires authorization).
 
@@ -54,7 +54,7 @@ real PL1 need surfaces (R4 + R15).
 kicad-cli --version
 python3 -c "import skidl; print(skidl.__version__)"
 kinet2pcb --version
-java -jar /home/novatics64/local/freerouting/freerouting.jar --version   # FAILS until JDK 25 installed
+java -jar /home/novatics64/local/freerouting/freerouting.jar --version   # FAILS — deferred per OQ-005, reverify at Phase 5 prep
 /home/novatics64/local/elmer/bin/ElmerSolver --version
 /home/novatics64/local/openems/bin/openEMS --version
 ngspice --version
