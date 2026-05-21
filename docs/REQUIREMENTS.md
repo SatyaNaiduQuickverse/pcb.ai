@@ -116,11 +116,27 @@ Per-channel local bus: 22 µF X5R/X7R 0603 ceramic at each gate driver V_CC (×4
 
 ### Protection
 
-- TVS diodes on input rail (per channel + bulk)
-- HW overcurrent comparator (independent of firmware); target trip < 1 µs
-- UVLO at MCU regulator level
-- Reverse-polarity protection on input (P-MOSFET ideal-diode topology or fuse + Schottky)
-- Per-phase low-side shunt monitoring (AM32 standard)
+Closed at Phase 2e — see `docs/PHASE2E_CONNECTORS_PROTECTION.md`.
+
+- **TVS on input rail**: SMBJ33A (33 V V_WM, 53.3 V V_C clamp — safely under AON6260 60 V V_DS_max with 6.7 V margin). Specific JLC C# at Phase 3.
+- **Reverse-polarity**: 4 × AON6260 in parallel, low-side N-FET ideal-diode topology (reuses Phase 2b part). Effective R_DS(on) 0.49 mΩ across 4 FETs in parallel. Phase 3 schematic decides between this default and the AOTL66912 single-FET alternate based on board real-estate.
+- **ESD on FC-side signals**: 3 × USBLC6-2SC6 (JLC C7519) covering 4 DShot + 1 TLM + 1 spare. C_io 3.5 pF max satisfies DShot 600 edge integrity.
+- **HW overcurrent comparator**: independent of firmware; target trip < 1 µs (via AT32F421 internal CMP1 on PA0/PA4/PA5 BEMF pins, repurposed-during-fault — Phase 3 schematic + AM32 firmware-target work).
+- **UVLO at MCU regulator level**: TLV76733DRVR has built-in UVLO; AT32F421 has internal V_LVR threshold 1.88 V typ (datasheet §5.3.3).
+- **Per-phase low-side shunt monitoring**: per Phase 2c (AM32 standard).
+
+### Connectors
+
+Closed at Phase 2e — see `docs/PHASE2E_CONNECTORS_PROTECTION.md`.
+
+- **FC connector**: JST SM08B-SRSS-TB (JLC C160407) — Open-4in1 reference. Betaflight 4-in-1 8-pin pinout: 1=GND, 2=VBAT, 3=CURR, 4=TLM, 5-8=M4/M3/M2/M1.
+- **Motor pads**: 12 × 3.0 mm dia SMD pads (4 channels × 3 phases). Accommodates 20-26 AWG wire by user choice.
+- **SWD per-MCU**: 4 × {SWDIO + SWCLK + GND} = 12 test pads minimum (NRST optional adds 4). Per-MCU one-at-a-time flash (Open-4in1 pattern).
+
+### Status indicators
+
+- 1 × Power-good LED (green 0603, 1 kΩ current limit).
+- 4 × Per-channel status LED (red 0603, 1 kΩ current limit, GPIO from free MCU pin pool per Phase 2a).
 
 ### Mechanical
 
