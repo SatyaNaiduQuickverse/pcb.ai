@@ -108,6 +108,19 @@ Cross-reference: locked specs live in `docs/REQUIREMENTS.md`; this file logs
 - **Sai's answer**: "we have time.. as much as we need.. quality matters a lot here."
 - **Effect on plan**: full P3.5 reference audit + full P6 sim regime + P6.5 external review all in scope without time-pressure trade-offs. Wall-clock for the FPV 4-in-1 will be 4–6 months as estimated in the dev plan, possibly more if sim re-loops surface design changes (Rigor §6 — expected). The development pace is bounded by quality gates, not calendar deadlines.
 
+### OQ-005 — Freerouting Java mismatch (resolution deferred to Phase 5 prep)
+
+- **Raised**: 2026-05-22. **Deferred**: 2026-05-22.
+- **Question**: Pre-installed Freerouting jar (post-v2.2.4 build, compiled with JDK 25 / class file v69) cannot run on the system's Java 21. `PCB_PLAYBOOK.md` §Toolchain explicitly names v2.2.4. novapcb worker is currently using the install — uncoordinated change would disrupt their work.
+- **Options**:
+  - **(A)** Install JDK 25 to a worker-local path (e.g. `/home/novatics64/local/jdk25/`), wrap Freerouting invocation to use it. No system change, no novapcb impact.
+  - **(B)** Swap jar to the literal Freerouting v2.2.4 release when novapcb is free. Matches playbook spec exactly; sureshot per Sai's tiebreaker rule.
+  - **(C)** Wait for novapcb's JDK upgrade — passive, depends on their timeline.
+- **Recommendation**: A (lowest novapcb-disruption risk) OR B (matches playbook spec, sureshot) — both defensible. Phase 5 prep adjudicates.
+- **Trade-offs**: A keeps newer Freerouting (unverified for our routing recipe); B is the playbook-validated version but requires novapcb's window. C is the passive option, may delay Phase 5.
+- **Resolution-gate**: Phase 5 (routing) entry — must close before routing work begins.
+- **Risk accepted in deferral**: Freerouting unavailable in Phase 0; non-blocking for Phases 1-4 which don't use it. Phase 5 entry gated on resolution.
+
 ### OQ-003 — HV60 family ship target
 
 - **Raised**: 2026-05-21
@@ -118,11 +131,9 @@ Cross-reference: locked specs live in `docs/REQUIREMENTS.md`; this file logs
 ### OQ-004 — Worker's working copy of pcb.ai
 
 - **Raised**: 2026-05-21
-- **Status**: Open (proposed)
-- **Question**: How does the worker (in tmux `escworker`, CWD `/home/novatics64/escworker`) get a working copy of `pcb.ai` for hands-on PCB / firmware / sim work?
-- **Options**:
+- **Closed**: 2026-05-22 — **Option A** (worker clones into `/home/novatics64/escworker/pcb.ai`, branches per sub-phase per CLAUDE.md §6, pushes to GitHub, master reviews on GitHub)
+- **Options considered**:
   - **(A)** Worker clones `github.com/SatyaNaiduQuickverse/pcb.ai` into `/home/novatics64/escworker/pcb.ai`; branches per sub-phase per CLAUDE.md §6 ("one sub-phase = one PR"); pushes to GitHub; master fetches + reviews + merges
   - **(B)** Worker has read-only access to master's clone at `/home/novatics64/novapcbmaster/pcb.ai` — no write workspace, defeats PR review boundary, CLAUDE.md autoload doesn't trigger
   - **(C)** Shared writable clone — concurrent-edit risk, defeats master/worker review model
-- **Recommendation**: **A**. Existing GitHub origin is the natural shared remote (no new infra). CLAUDE.md autoloads on worker session start (if worker is restarted in the new CWD-subtree). Standard PR workflow: branches per sub-phase, master reviews on GitHub. Setup is one `gh repo clone` away.
-- **Pending**: Sai's OK to act on A. (Worker session may need to be restarted from new CWD-subtree for CLAUDE.md autoload; alternatively, send an explicit `/read CLAUDE.md` instruction.)
+- **Rationale**: Existing GitHub origin is the natural shared remote (no new infra). Standard PR workflow: branches per sub-phase, master reviews on GitHub. Setup is one `gh repo clone` away. Closed by Sai/master authorization in the Phase 0 task contract (2026-05-22).
