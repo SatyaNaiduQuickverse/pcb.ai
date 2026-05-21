@@ -83,8 +83,9 @@ CBULK2[1] += VMOTOR
 CBULK2[2] += GND
 
 # ─────────── BEC — Buck stage ───────────
-U_BUCK = Part("Regulator_Switching", "TPS563200DDC", value="LMR51420YDDCR",
-              footprint="Package_TO_SOT_SMD:SOT-23-6")
+U_BUCK = Part("Connector_Generic", "Conn_01x06", value="LMR51420YDDCR",
+              footprint="Package_TO_SOT_SMD:SOT-23-6",
+              description="LMR51420YDDCR functional placeholder; Phase 4 GUI swaps to custom symbol from components.kicad_sym")
 
 SW = Net("BUCK_SW")
 FB = Net("BUCK_FB")
@@ -130,8 +131,9 @@ U_BUCK[6] += BST
 U_BUCK[3] += FB
 
 # ─────────── BEC — LDO stage (TLV76733DRVR) ───────────
-U_LDO = Part("Regulator_Linear", "AP2127K-3.3", value="TLV76733DRVR",
-             footprint="Package_SON:WSON-6-1EP_2x2mm_P0.65mm_EP0.9x1.6mm")
+U_LDO = Part("Connector_Generic", "Conn_01x06", value="TLV76733DRVR",
+             footprint="Package_SON:WSON-6-1EP_2x2mm_P0.65mm_EP0.9x1.6mm",
+             description="TLV76733DRVR functional placeholder; Phase 4 GUI swaps to custom symbol")
 
 C_LDO_IN = Part("Device", "C", value="1uF",
                 footprint="Capacitor_SMD:C_0402_1005Metric")
@@ -194,8 +196,9 @@ TLM_CLEAN = Net("TLM_CLEAN")
 ESD_SPARE = Net("ESD_SPARE")
 
 # Each USBLC6-2SC6: I/O1, GND, Vbus, I/O2, GND, Vbus (per ST datasheet SC-70-6 mapping)
-U_ESD1 = Part("Power_Protection", "USBLC6-2SC6", value="USBLC6-2SC6",
-              footprint="Package_TO_SOT_SMD:SOT-23-6")
+U_ESD1 = Part("Connector_Generic", "Conn_01x06", value="USBLC6-2SC6",
+              footprint="Package_TO_SOT_SMD:SOT-23-6",
+              description="USBLC6-2SC6 ESD array placeholder")
 U_ESD1[1] += M1_RAW
 U_ESD1[2] += GND
 U_ESD1[3] += V5
@@ -203,7 +206,7 @@ U_ESD1[4] += M2_RAW
 U_ESD1[5] += GND
 U_ESD1[6] += M1_CLEAN
 
-U_ESD2 = Part("Power_Protection", "USBLC6-2SC6", value="USBLC6-2SC6",
+U_ESD2 = Part("Connector_Generic", "Conn_01x06", value="USBLC6-2SC6",
               footprint="Package_TO_SOT_SMD:SOT-23-6")
 U_ESD2[1] += M3_RAW
 U_ESD2[2] += GND
@@ -212,7 +215,7 @@ U_ESD2[4] += M4_RAW
 U_ESD2[5] += GND
 U_ESD2[6] += M3_CLEAN
 
-U_ESD3 = Part("Power_Protection", "USBLC6-2SC6", value="USBLC6-2SC6",
+U_ESD3 = Part("Connector_Generic", "Conn_01x06", value="USBLC6-2SC6",
               footprint="Package_TO_SOT_SMD:SOT-23-6")
 U_ESD3[1] += TLM
 U_ESD3[2] += GND

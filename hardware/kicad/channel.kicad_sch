@@ -8,11 +8,15 @@
 	(title_block
 		(title "pcb.ai FPV 4-in-1 ESC — Channel sub-sheet (template)")
 		(date "2026-05-22")
-		(rev "Phase 3a (stub)")
+		(rev "Phase 3b (netlist spec in channel_skidl.py)")
 		(company "pcb.ai")
 		(comment 1 "Per-channel: 1× AT32F421K8T7 MCU + 1× DRV8300DRGER gate driver +")
 		(comment 2 "6× AON6260 (3 phases × 2 H+L) + 3× shunts + 3× INA186A3IDCKR CSAs")
-		(comment 3 "Populated at Phase 3b (this is the 3a placeholder)")
+		(comment 3 "Hierarchical pins: VMOTOR, V5, V3V3, V3V3A, GND, DSHOT_IN, TLM,")
+		(comment 4 "  SWDIO, SWCLK (in); MOTOR_A_OUT, MOTOR_B_OUT, MOTOR_C_OUT (out)")
+		(comment 5 "Canonical netlist: hardware/kicad/channel_skidl.py make_channel()")
+		(comment 6 "Visual pins + symbols populated at Phase 4 GUI; ERC 0 violations")
+		(comment 7 "Phase 3c will instantiate this sheet 4× from pcbai_fpv4in1.kicad_sch")
 	)
 
 	(lib_symbols
