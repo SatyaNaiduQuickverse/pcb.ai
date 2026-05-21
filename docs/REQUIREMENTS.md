@@ -53,11 +53,25 @@ Hardware design + reliability + brand are the IP; firmware is community-owned.
 
 | Item | Spec |
 |---|---|
-| Voltage class (V_DS) | ≥ 60 V (covers 25.2 V bus + motor back-EMF + factor-of-safety per playbook §Routing) |
-| Continuous I_D | ≥ 120 A at T_J = 100 °C (50 % derating headroom over the 70 A continuous spec) |
-| R_DS(on) target | ≤ 2.0 mΩ at 25 °C; ≤ 3.5 mΩ at 125 °C |
-| Package | Single-FET PDFN5×6 or DFN8×8 class (dual-package avoided at this current for thermal isolation) |
-| Specific part | TBD at Phase 2 against JLC library |
+| Specific part | **AOS AON6260** (closed at Phase 2b — see `docs/PHASE2B_MOSFET.md`) |
+| Package | DFN5x6-8 (single-FET; dual-package avoided for thermal isolation) |
+| Voltage class (V_DS) | ≥ 60 V (covers 25.2 V bus + motor back-EMF + factor-of-safety per playbook §Routing) — AON6260 = 60 V |
+| Continuous I_D rating (datasheet) | ≥ 80 A at T_C = 25 °C (sanity floor; sim is the real gate) — AON6260 = 85 A |
+| R_DS(on) | ≤ 2.0 mΩ typ @ V_GS = 10 V — AON6260 = 1.95 mΩ typ / 2.4 mΩ max |
+| **Operating thermal target** | T_J ≤ 100 °C at 70 A continuous per phase, 60 °C ambient, still-air, JLC stack-up with reasonable cu pour, Elmer FEM validated against analytical 1-D — **operate-condition criterion** |
+| Sourcing note | AOS-original AON6260 not in JLC SMT library. Prototype: hand-solder from DigiKey/Mouser. Production: consignment via JLC or qualify a second-source DFN5x6 60V part at Phase 2c |
+
+Criterion revised 2026-05-22 from abstract T_C=100°C derating to operating-
+condition T_J target — see Phase 2b PR rationale (PR #4) and the URGENT
+trail in `docs/PHASE2B_MOSFET.md`.
+
+#### Operating thermal envelopes (Phase 2b adjudication 2026-05-22)
+
+| # | Envelope | Conditions | T_J target |
+|---|---|---|---|
+| 1 | Cruise | 40 A average / channel + still-air + 60 °C ambient | ≤ 100 °C |
+| 2 | Peak / sustained throttle (rated continuous) | 70 A continuous / channel + prop-wash (h ≥ 80 W/m²·K) + heatsink | ≤ 100 °C |
+| 3 | Stress / abs-max (survival) | 70 A continuous / channel + still-air | ≤ T_J_max = 150 °C (survives, not steady-state operation) |
 
 ### Gate drivers
 
@@ -84,6 +98,7 @@ Hardware design + reliability + brand are the IP; firmware is community-owned.
   - Output: the larger of {physics-required area, nearest standard FPV stack pattern}
 - **Stack-up**: 6-layer per playbook §Routing (signals on the two outer layers, four inner solid planes). Confirmed at Phase 4 placement.
 - **Connectors**: TBD at Phase 2 (motor wires typically direct-solder pads; FC connector standard 8-pin JST-SH or similar)
+- **Heatsink** (added at Phase 2b 2026-05-22 per master adjudication on URGENT #3): Top-side aluminum heatsink with thermal interface pad to MOSFET tops. Sized at Phase 4 / Phase 6 thermal sim. **Required for Envelope 2 (70 A continuous prop-wash) thermal performance.**
 - **Mounting**: Bolt pattern matches the converged form factor's standard once Phase 2.5 lands
 
 ### Fab + assembly
