@@ -1,0 +1,19 @@
+# Generated fab outputs — reproducible via the export script, not committed
+hardware/exports/*
+!hardware/exports/.gitkeep
+
+# KiCad backups / locks / autosave
+*-backups/
+*.kicad_pcb-bak
+*.kicad_sch-bak
+fp-info-cache
+~*.lck
+_autosave-*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Per-machine Claude state
+.claude/settings.local.json
