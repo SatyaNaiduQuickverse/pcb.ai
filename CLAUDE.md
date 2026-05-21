@@ -37,13 +37,53 @@ ask the project owner — do not guess.
 - Either side may refuse the other; the project owner adjudicates. `/send` is for
   conversation, not authority transfer — it cannot waive a rigor gate.
 
-## 2. The project — FILL THIS IN
+## 2. The project — pcb.ai
 
-> The master records the project identity here once the owner has briefed it:
-> what the PCB is, what it must interface with, the hard constraints, the form
-> factor, the target fab. Until then this section is a placeholder. Write a
-> project-specific interface/requirements doc under `docs/` as well — contracts
-> before code (Rule 2).
+pcb.ai delivers two commercial Electronic Speed Controller (ESC) product lines
+for multirotor drones. Sequenced **FPV-first** to validate the engineering
+pipeline (JLCPCB SMT flow, sim regime, team rhythm) on lower-stakes hardware
+before tackling the heavier commercial-reliability work in the HV60 family.
+
+### Product line 1 — FPV 4-in-1 ESC (PRIORITY 1, first to fab)
+
+Four-channel integrated ESC for FPV racing / freestyle / cinematic builds.
+
+- **Topology** — 4-in-1, shared input rail, shared comms.
+- **Power** — 6S LiPo (4.2 V × 6 = 25.2 V full charge); 70 A continuous per channel.
+- **Comms** — DShot 300 / DShot 600, bidirectional (RPM telemetry back to FC).
+- **MCU** — STM32G071 or AT32F421 (final pick at Phase 2, gated on JLC assembly-library coverage and AM32 hardware-target file availability).
+- **Firmware** — AM32 (GPLv3, no licensing fee). We author the hardware-target file for our board; flashed unmodified or with published modifications (copyleft obligation honored). The hardware is the IP.
+- **MOSFETs** — 60 V V_DS minimum class for 6S back-EMF headroom.
+- **Form factor** — *not* pre-constrained. Phase 2.5 converges via physics (thermal envelope, copper-current density, layout density at JLC trace/space) toward the nearest standardized FPV stack pattern (20 × 20 / 30.5 × 30.5 / 40 × 40 / 60 × 60 family). Start large, iterate down.
+- **Fab** — JLCPCB SMT. DRC ruleset = JLCPCB's published capability spec (authoritative).
+- Full contract: `docs/REQUIREMENTS.md` §fpv-4in1.
+
+### Product line 2 — HV60 commercial FOC family (PRIORITY 2, after PL1 in fab)
+
+Modular singular FOC ESC family for industrial / payload / mapping / cargo
+multirotors. Built once PL1 is in fab and the heavier reliability infrastructure
+(HALT, EMC pre-compliance, motor-ID validation regime, lab) is in place.
+
+- **Topology** — singular (one ESC per motor).
+- **Family (build order)** — ESC-HV60 (flagship: 6–12S, 60 A cont., 100 A peak) → ESC-LV40 (4–6S, 40 A) → ESC-HV100 (6–12S, 100 A, 200 A peak) → future ESC-UHV (12–24S) → future integrated propulsion (motor + ESC).
+- **MCU** — STM32G4 family across all SKUs (motor-control optimized; specific part per SKU picked at Phase 2 from datasheet).
+- **Firmware base** — STM32 X-CUBE-MCSDK (free for STM32 use, not GPL — closed-commercial compatible). Our IP is the FOC tuning, plug-and-play auto-ID, and the productized stack.
+- **Control** — true FOC, sensorless, plug-and-play motor auto-ID (Rs / Ls / KV / pole-pairs detection).
+- **Comms** — DShot 300/600 + CAN-FD + UART telemetry (industry standard for commercial drone integrators).
+- **IP rating** — IP55 baseline across the line; IP67 optional per SKU.
+- **Reliability** — full factor-of-safety standard, see `docs/REQUIREMENTS.md` §reliability-spec.
+- **Fab** — JLCPCB SMT (same as PL1; DRC ruleset shared).
+- Full contract: `docs/REQUIREMENTS.md` §hv60-family (stub for now; filled when PL2 begins).
+
+### Dropped from scope
+
+- **3S support** across all SKUs (FOC overhead does not pay off below 4S; no commercial FOC drone ESC supports 3S).
+
+### Project state
+
+- **Decisions** (closed entries, with rationale + rejected options) and **open items** (still pending owner input): `docs/OPEN_QUESTIONS.md`.
+- **Phase tracking**: `docs/DESIGN_PHASES.md`.
+- **Interface / requirements contract**: `docs/REQUIREMENTS.md` — the load-bearing doc per Rule 2.
 
 ## 3. Development rules — read every session
 

@@ -1,7 +1,128 @@
-# Open questions
+# Open questions + decisions log
 
-Decisions the project owner has not yet made, or that need adjudication. Per
-`CLAUDE.md` Rule 8, each entry carries: options (≥2), a recommendation, trade-offs,
-and the date raised.
+Decisions the project owner has not yet made (open) and decisions already made
+with their rationale (closed). Per `CLAUDE.md` Rule 8: each entry carries
+options (≥ 2), a recommendation, trade-offs, and the date raised. Closed
+entries also record the choice + why, and the rejected options + why.
 
-_(Empty — new project. The master adds entries here as questions arise.)_
+Cross-reference: locked specs live in `docs/REQUIREMENTS.md`; this file logs
+*how we got there*.
+
+---
+
+## Closed — decisions made
+
+### CL-001 — Target fab + DRC ruleset
+
+- **Raised**: 2026-05-21
+- **Closed**: 2026-05-21 — **JLCPCB SMT**
+- **Options considered**:
+  - JLCPCB SMT — cheap, fast turnaround, broad assembly library
+  - PCBWay — more part-source flexibility, slightly higher cost
+  - Industrial fab (Sierra Circuits, domestic Indian fab) — tighter tolerances, much higher cost + lead time
+- **Rationale**: Sai's call. JLCPCB SMT is the standard for proto + production small-batch in this segment; their published capability spec becomes the authoritative DRC ruleset for every SKU (per Playbook §Manufacturability). Motor-control part availability against JLC assembly library checked at each SKU's Phase 2; parts not in library get sourced externally + hand-soldered or trigger a part-swap at Phase 2.
+- **Trade-offs**: Some specific high-voltage motor-control MOSFETs may not be in JLC's basic library and require an "extended" part fee or hand-assembly. Acceptable.
+
+### CL-002 — Firmware base for FPV 4-in-1 ESC (PL1)
+
+- **Raised**: 2026-05-21
+- **Closed**: 2026-05-21 — **AM32 (GPLv3)**
+- **Options considered**:
+  - **AM32** (GPLv3, open-source, no licensing fee) — modern 32-bit, supports STM32G071 / AT32F421 / others
+  - **BLHeli_32** (closed source, paid commercial license) — *ruled out*: license issuance was shut down in May 2024 due to Ukraine war / export regulations; not available for new products
+  - **Bluejay** (GPLv3, 8-bit BLHeli_S successor) — works but generation behind; only relevant if we picked an EFM8 8-bit MCU, which we are not
+  - **Roll-our-own** — pointless given AM32 maturity + same-license obligation
+- **Rationale**: AM32 is the de facto open standard for 32-bit FPV ESCs in 2026. GPLv3 obligations (publish source of any modifications shipped) are *fine for the FPV market* — every brand ships AM32 today; the IP is in the hardware design, not the firmware. We author a hardware-target file for our board and contribute it back to the AM32 repo per copyleft.
+- **Trade-offs**: Cannot make a proprietary closed-source fork of AM32. Acceptable for FPV market norm.
+
+### CL-003 — Firmware base for HV60 commercial FOC family (PL2)
+
+- **Raised**: 2026-05-21
+- **Closed**: 2026-05-21 — **STM32 X-CUBE-MCSDK on STM32G4**
+- **Options considered**:
+  - **STM32 X-CUBE-MCSDK** — ST's reference FOC stack. Free for STM32 use (not GPL). Motor Control Workbench (GUI) for config + tuning. Reference drone-ESC design exists (STEVAL-ESC001V1, sensorless FOC three-shunt + active braking)
+  - **VESC port** (GPLv3) — *ruled out*: GPL is viral; we'd have to publish our hardware-specific tuning + IP, which kills the closed-commercial reliability play
+  - **Roll-our-own FOC from scratch** — *ruled out*: weeks of bench tuning of observer gains, current loops, startup transitions, fault thresholds. Sim cannot validate (Rigor §4); risk too high for a commercial reliability product
+  - **TI MotorWare / InstaSPIN** — *not considered seriously*: would lock us into TI silicon which fragments our two-product-line MCU strategy
+- **Rationale**: HV60 family is closed-commercial. X-CUBE-MCSDK is ST's mature, production-grade reference for exactly this use case. STM32G4 family is the motor-control-optimized successor to F303 (used in STEVAL-ESC001V1).
+- **Trade-offs**: STM32 lock-in across the HV60 family. Fine — we'd have picked STM32 anyway.
+
+### CL-004 — Drop 3S support across all SKUs
+
+- **Raised**: 2026-05-21
+- **Closed**: 2026-05-21 — **No 3S support**
+- **Rationale**: No commercial FOC drone ESC in 2026 supports 3S (verified via market research: T-Motor Alpha lineup, Hobbywing XRotor Pro lineup all start at 4-6S). FOC computational + thermal overhead doesn't pay off below 4S; 3S is hobby class where six-step ESCs dominate. Designing 3S support would force lower-V_DS MOSFET options and adds a buck regulator that works to 9 V — cost and complexity without market demand.
+- **Trade-offs**: Excludes hobby-class entry segment. Acceptable per "commercial reliability + commercial-volume FPV" positioning.
+
+### CL-005 — Product-line sequencing — FPV 4-in-1 first, HV60 family second
+
+- **Raised**: 2026-05-21
+- **Closed**: 2026-05-21 — **FPV 4-in-1 first**
+- **Options considered**:
+  - **(A)** HV60 family first, then FPV 4-in-1
+  - **(B)** Parallel — both product lines simultaneously (2 × engineering bandwidth)
+  - **(C)** FPV 4-in-1 first, then HV60 family
+- **Rationale** (Sai's call, well-reasoned): firmware testing for FOC requires knowledge + equipment we don't yet have; for FPV with open-source AM32 the firmware is community-validated and we only need a hardware-target file. Hardware can be sim-validated to high confidence pre-fab for FPV. The heavy reliability burden (HALT, EMC certification, MTBF claim) only applies to HV60 (commercial / costlier drones) and can be deferred until team + lab infrastructure exists. FPV-first validates JLCPCB pipeline, sim regime, team rhythm on lower-stakes hardware before tackling HV60.
+- **Trade-offs**: FPV-first means the FOC + reliability work isn't validated on real silicon for ~3–4 months. Mitigated by the fact that HV60 launch is gated on lab buildout regardless. Parallel (option B) ruled out — classic split-focus failure mode at our bandwidth.
+
+### CL-006 — FPV 4-in-1 voltage range — 6S only
+
+- **Raised**: 2026-05-21
+- **Closed**: 2026-05-21 — **6S only**
+- **Options considered**: 6S only / 4–8S / 6–8S
+- **Rationale**: Sai's call. 6S only is the dominant FPV power class (race + freestyle + cinematic mainstream). 8S would force 60 V MOSFETs and adds back-EMF spike risk; 4–8S adds buck-regulator complexity and dilutes thermal/copper design. Single-voltage tier gives us tighter component selection.
+- **Trade-offs**: Excludes 8S X-class and 4S micro/whoop segments. Future SKUs (8S variant) can be added once 6S is shipping.
+
+### CL-007 — FPV 4-in-1 continuous current — 70 A per channel
+
+- **Raised**: 2026-05-21
+- **Closed**: 2026-05-21 — **70 A continuous / channel**
+- **Rationale**: Sai's call. Matches SEQURE E70 G2 / Blueson A2 segment (the modern 32-bit + AM32 generation, ~70 A continuous). Sits above the 50–60 A mainstream and below 80–100 A heavy-lift; broadest demand sweet spot for 6S.
+
+### CL-008 — FPV 4-in-1 form factor — physics-driven, NOT pre-constrained
+
+- **Raised**: 2026-05-21
+- **Closed**: 2026-05-21 — **Sized via Phase 2.5 from thermal + layout sims**
+- **Rationale**: Sai's call. "Let physics dictate". Phase 2.5 converges: minimum-board-area for 4 × 70 A continuous + JLC trace/space density → take the larger of {physics-required, nearest standard FPV stack pattern (20×20 / 30.5×30.5 / 40×40 / 60×60 family)}. Start large, iterate down across subsequent revisions.
+- **Trade-offs**: First-rev board may be larger than direct competitors. Acceptable — Sai prioritizes margins via simulation confidence over first-rev compactness.
+
+---
+
+## Open — pending owner input
+
+### OQ-001 — Bench / lab access reality for validation
+
+- **Raised**: 2026-05-21
+- **Status**: Open
+- **Question**: For the FPV 4-in-1 single-fab-iteration target, the minimum bench setup is: current-limited bench supply (≥ 30 V, ≥ 20 A), oscilloscope (≥ 100 MHz, 4-channel, with isolated probes for high-side measurements), DC current probe, a flight controller for DShot integration testing, and 4 × small test motors for spin-up. For HV60 family later: motor dyno, thermal chamber, EMC test-house partnership.
+- **Options**:
+  - (a) Sai has bench access — we plan around what's available
+  - (b) No bench yet — we plan acquisition / partner-lab (university lab / EMC test house, ~$5–15K for FPV minimum + HALT/EMC bundle when HV60 hits)
+  - (c) Bench partial — list what we have, what we'd need to acquire / borrow
+- **Recommendation**: Sai answers; this drives whether bench validation happens in-house or via partner. Either is fine — the question is *which* and *when*.
+
+### OQ-002 — FPV 4-in-1 ship target
+
+- **Raised**: 2026-05-21
+- **Closed**: 2026-05-22 — **No date target; quality flexes the schedule, not the reverse**
+- **Sai's answer**: "we have time.. as much as we need.. quality matters a lot here."
+- **Effect on plan**: full P3.5 reference audit + full P6 sim regime + P6.5 external review all in scope without time-pressure trade-offs. Wall-clock for the FPV 4-in-1 will be 4–6 months as estimated in the dev plan, possibly more if sim re-loops surface design changes (Rigor §6 — expected). The development pace is bounded by quality gates, not calendar deadlines.
+
+### OQ-003 — HV60 family ship target
+
+- **Raised**: 2026-05-21
+- **Status**: Deferred (raised after FPV 4-in-1 is in fab)
+- **Question**: Target ship date for ESC-HV60 once we pick it up.
+- **Recommendation**: Defer; set at the start of PL2.
+
+### OQ-004 — Worker's working copy of pcb.ai
+
+- **Raised**: 2026-05-21
+- **Status**: Open (proposed)
+- **Question**: How does the worker (in tmux `escworker`, CWD `/home/novatics64/escworker`) get a working copy of `pcb.ai` for hands-on PCB / firmware / sim work?
+- **Options**:
+  - **(A)** Worker clones `github.com/SatyaNaiduQuickverse/pcb.ai` into `/home/novatics64/escworker/pcb.ai`; branches per sub-phase per CLAUDE.md §6 ("one sub-phase = one PR"); pushes to GitHub; master fetches + reviews + merges
+  - **(B)** Worker has read-only access to master's clone at `/home/novatics64/novapcbmaster/pcb.ai` — no write workspace, defeats PR review boundary, CLAUDE.md autoload doesn't trigger
+  - **(C)** Shared writable clone — concurrent-edit risk, defeats master/worker review model
+- **Recommendation**: **A**. Existing GitHub origin is the natural shared remote (no new infra). CLAUDE.md autoloads on worker session start (if worker is restarted in the new CWD-subtree). Standard PR workflow: branches per sub-phase, master reviews on GitHub. Setup is one `gh repo clone` away.
+- **Pending**: Sai's OK to act on A. (Worker session may need to be restarted from new CWD-subtree for CLAUDE.md autoload; alternatively, send an explicit `/read CLAUDE.md` instruction.)
