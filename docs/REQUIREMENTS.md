@@ -140,13 +140,15 @@ Closed at Phase 2e — see `docs/PHASE2E_CONNECTORS_PROTECTION.md`.
 
 ### Mechanical
 
-- **Form factor NOT pre-constrained.** Phase 2.5 converges via:
-  - Thermal sim: minimum board area for 4 × 70 A continuous at JLC stack-up + nominal prop-wash airflow
-  - Layout sim: minimum routing density at JLC trace/space + via rules
-  - Output: the larger of {physics-required area, nearest standard FPV stack pattern}
-- **Stack-up**: 6-layer per playbook §Routing (signals on the two outer layers, four inner solid planes). Confirmed at Phase 4 placement.
-- **Connectors**: TBD at Phase 2 (motor wires typically direct-solder pads; FC connector standard 8-pin JST-SH or similar)
-- **Heatsink** (added at Phase 2b 2026-05-22 per master adjudication on URGENT #3): Top-side aluminum heatsink with thermal interface pad to MOSFET tops. Sized at Phase 4 / Phase 6 thermal sim. **Required for Envelope 2 (70 A continuous prop-wash) thermal performance.**
+Closed at Phase 2.5 — see `docs/PHASE2_5_FITCHECK.md`.
+
+- **Form factor**: **50 × 50 mm** (locked at Phase 2.5). 40 × 40 and 30 × 60 candidates failed B.Cu overflow on the locked-BOM area budget (24+4 AON6260 MOSFETs + 12 shunts + 2 × 470 µF bulk = ~1440 mm² pure component vs 1600 / 1800 mm² of those candidates). 50 × 50 mm gives F.Cu 64% margin / B.Cu 19% margin (≥ 15% per-side criterion).
+- **Mounting**: 4 × M3 holes on 40 × 40 mm Betaflight stack pattern, 5 mm inset from board corners.
+- **Stack-up**: 6-layer per playbook §Routing (signals F.Cu + B.Cu, four inner solid planes).
+- **F.Cu / B.Cu split**: F.Cu = signal side (4 MCUs, 4 drivers, 12 CSAs, buck+LDO, ESD, decoupling, LEDs, FC connector, motor pads, SWD pads); B.Cu = power side (24+4 MOSFETs, 12 shunts, 2 bulk caps, TVS, buck inductor).
+- **Heatsink**: ~46 × 32 mm aluminum 6061-T6, 3-5 mm thick, covering B.Cu MOSFET cluster. Mounted via M2 screws (through-PCB tap or adhesive bond — Phase 4 decides). Silicone thermal pad 0.5 mm thick, 4-6 W/m·K thermal conductivity, 1500 V isolation.
+- **Connectors**: FC connector (JST SM08B-SRSS-TB) on F.Cu top edge, centered. 12 motor pads (3.0 mm dia) distributed 3-per-edge across all 4 board edges, one channel per edge. SWD pads (12-16 total, castellated-edge style preferred) on F.Cu left edge.
+- **Z-axis budget**: 14-22 mm total board+heatsink+bulk-cap stack depending on bulk-cap placement (B.Cu preferred; F.Cu fallback). FPV stack compatibility needs a custom dual-standoff structure OR low-profile polymer bulk caps (~6 mm tall vs 13.5 mm aluminum electrolytic) — Phase 4 placement decides.
 - **Mounting**: Bolt pattern matches the converged form factor's standard once Phase 2.5 lands
 
 ### Fab + assembly
