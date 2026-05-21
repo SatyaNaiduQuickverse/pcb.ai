@@ -11,3 +11,9 @@ fp-info-cache
 
 # KiCad project local state (per-machine paths)
 *.kicad_prl
+
+# SKiDL run artifacts
+*.erc
+*.log
+*_test.net
+*_sklib.py

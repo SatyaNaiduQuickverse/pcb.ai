@@ -1,7 +1,0 @@
-WARNING: KICAD7_SYMBOL_DIR environment variable is missing, so the default KiCad symbol libraries won't be searched. @ [/home/novatics64/escworker/pcb.ai/hardware/kicad/<frozen importlib._bootstrap_external>:1026=>/home/novatics64/escworker/pcb.ai/hardware/kicad/<frozen importlib._bootstrap>:488]
-WARNING: KICAD6_SYMBOL_DIR environment variable is missing, so the default KiCad symbol libraries won't be searched. @ [/home/novatics64/escworker/pcb.ai/hardware/kicad/<frozen importlib._bootstrap_external>:1026=>/home/novatics64/escworker/pcb.ai/hardware/kicad/<frozen importlib._bootstrap>:488]
-WARNING: KICAD8_SYMBOL_DIR environment variable is missing, so the default KiCad symbol libraries won't be searched. @ [/home/novatics64/escworker/pcb.ai/hardware/kicad/<frozen importlib._bootstrap_external>:1026=>/home/novatics64/escworker/pcb.ai/hardware/kicad/<frozen importlib._bootstrap>:488]
-WARNING: fp-lib-table file was not found. Component footprints are not available.
-WARNING: fp-lib-table file was not found. Component footprints are not available.
-WARNING: fp-lib-table file was not found. Component footprints are not available.
-ERROR: Unable to find part TPS563200DDC in library Regulator_Switching. @ [/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1_skidl.py:86]
