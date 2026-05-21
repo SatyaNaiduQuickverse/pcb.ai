@@ -78,9 +78,23 @@ trail in `docs/PHASE2B_MOSFET.md`.
 | Item | Spec |
 |---|---|
 | Topology | Half-bridge integrated, 4 × 3-phase = 12 driver channels total |
-| Reference family | TI DRV83xx (DRV8300 / DRV8307 / DRV8323 — final pick at Phase 2) |
-| Shoot-through protection | Required (independent per channel) |
-| Dead-time | Per AM32 hardware-target convention (typically 0.5 – 1.5 µs) |
+| Specific part | **TI DRV8300DRGER** (primary, JLC C3655801) — closed at Phase 2c, see `docs/PHASE2C_GATEDRIVER_CURRENTSENSE.md` |
+| Footprint-compat alternate | **Fortior FD6288Q** (JLC C328453) — same QFN-24 4×4 mm package + same drive class; pin-by-pin compat verified at Phase 3 schematic capture. Gives fab-time supplier flexibility. |
+| Shoot-through protection | Required (built-in cross-conduction prevention in both DRV8300 and FD6288Q) |
+| Dead-time (driver internal) | DRV8300: variable via DT pin resistor (150–2600 ns); FD6288Q: fixed 100–300 ns. Both ENFORCE dead-time at the MOSFET gate independent of MCU input timing. |
+| Dead-time (AM32 MCU output) | **500 ns** (raw DTG register value 60 at 120 MHz TMR1 clock) — covers DRV8300 + FD6288Q substitution case with safety margin |
+
+### Current sense
+
+| Item | Spec |
+|---|---|
+| Architecture | Per-phase low-side shunt → CSA → MCU ADC (AM32 standard; matches Open-4in1-AM32-ESC reference) |
+| Per-MCU instance | 3 shunts + 3 CSAs (one per phase); per board: 12 shunts + 12 CSAs across 4 channels |
+| Shunt | 0.2 mΩ ±1 % 1 W low-inductance (Vishay WSLP / WSL2512 / equivalent class); specific JLC part picked at Phase 3 schematic |
+| CSA part | **TI INA186A3IDCKR** (100 V/V gain, SC-70-6) — closed at Phase 2c; JLC C-number verified at Phase 3 schematic |
+| Effective gain | 20 mV/A (`MILLIVOLT_PER_AMP = 20` in `firmware/am32-target/PCBAI_FPV4IN1_F421.target.h`) |
+| ADC range usage | 70 A peak × 20 mV/A = 1.4 V at AT32F421 ADC (42 % of 3.3 V reference; comfortable headroom + noise floor) |
+| Shunt dissipation | 0.2 mΩ × 70² A = 0.98 W per shunt; 11.7 W board-total (included in Phase 6 thermal envelope) |
 
 ### Protection
 
