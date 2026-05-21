@@ -96,6 +96,24 @@ trail in `docs/PHASE2B_MOSFET.md`.
 | ADC range usage | 70 A peak × 20 mV/A = 1.4 V at AT32F421 ADC (42 % of 3.3 V reference; comfortable headroom + noise floor) |
 | Shunt dissipation | 0.2 mΩ × 70² A = 0.98 W per shunt; 11.7 W board-total (included in Phase 6 thermal envelope) |
 
+### Power supply subsystem
+
+Closed at Phase 2d — see `docs/PHASE2D_POWER.md` for the full part-by-part breakdown.
+
+| Rail | Source | Part | JLC C# | Capability | Load (estimated) |
+|---|---|---|---|---|---|
+| +BATT (6S, 18.0–25.2 V) | LiPo battery direct | n/a | n/a | bus | 280 A peak / 70 A continuous per channel |
+| +5 V | LMR51420YDDCR buck from +BATT | TI buck SOT-23-6 | C7296200 | 2 A @ V_in 3.5–36 V | ~461 mA average (drivers + LDO input) |
+| +3.3 V | TLV76733DRVR LDO from +5 V | TI LDO WSON-6 | C2848334 | 1 A | ~421 mA average (4 MCUs + 12 CSAs) |
+
+Bulk capacitance: **2 × 470 µF 63 V aluminum electrolytic SMD radial, low-ESR (≤ 30 mΩ at 100 kHz), ≥ 1.5 A RMS ripple per cap, parallel = 940 µF total bulk**. Specific JLC C-number picked at Phase 3 schematic against current stock; criteria fully constrain the pick.
+
+Per-MCU decoupling: per AT32F421 datasheet Fig 8 — 2 × 100 nF (digital VDD) + 1 × 100 nF (analog VDDA) + 1 × 10 µF (digital VDD pool) + 1 × 1 µF (VDDA) + 1 × ferrite bead per MCU (×4 = 20 caps + 4 ferrites total).
+
+Per-driver decoupling: 1 × 10 µF + 1 × 100 nF at GVDD (×4 = 8 caps). Bootstrap caps (3 × 12 = 12 placeholder 100 nF; value finalized at Phase 3).
+
+Per-channel local bus: 22 µF X5R/X7R 0603 ceramic at each gate driver V_CC (×4).
+
 ### Protection
 
 - TVS diodes on input rail (per channel + bulk)
