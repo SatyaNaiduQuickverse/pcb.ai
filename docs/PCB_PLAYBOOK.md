@@ -88,3 +88,8 @@ Routing is the hardest, least-predictable phase. What works:
   change, check every doc that references it.
 - **Trusting a pin-budget count without checking alternate-function conflicts** — a
   "free peripheral" may have every pin option blocked by other assignments.
+- **Connector physical accessibility not checked** — a connector set in from the board
+  edge, or a mid-mount with no Edge.Cuts cutout, is *unpluggable*: the cable / card /
+  plug cannot physically reach it. A board render does not make this obvious. At the
+  placement gate, verify every connector's edge position and orientation explicitly,
+  one by one — and confirm any mid-mount part has its required edge cutout.
