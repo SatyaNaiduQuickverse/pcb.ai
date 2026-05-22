@@ -40,7 +40,7 @@ plt.colorbar(cs, ax=ax, label='Temperature (°C)')
 # Mark FET centers (offset back to local coords)
 # Mesh is 0..30 × 0..21 corresponding to S1 cluster 35..65 × 4..21 in board frame
 # So board-frame FET position (40, 10) corresponds to local (5, 6).
-fet_positions_local = [(5, 6, 'Q1'), (25, 6, 'Q2'), (5, 13, 'Q3'), (25, 13, 'Q4')]
+fet_positions_local = [(6, 5.5, 'Q1'), (14, 5.5, 'Q2'), (6, 14.5, 'Q3'), (14, 14.5, 'Q4')]
 for x, y, label in fet_positions_local:
     ax.plot(x, y, 'wo', markersize=8, markeredgecolor='black')
     ax.annotate(label, (x, y), textcoords="offset points",
@@ -50,7 +50,7 @@ for x, y, label in fet_positions_local:
 ax.set_xlabel('x (mm) — local to S1 cluster')
 ax.set_ylabel('y (mm) — local to S1 cluster')
 ax.set_title(f'S1 rev-pol FET 2×2 cluster — Elmer FEM thermal contour\n'
-             f'(continuous load 2.95 W, T_amb=60°C, h_bottom_eff=200 W/m²·K)\n'
+             f'(Option A: Q1/Q2 pour+vias h=400, Q3/Q4 heatsink h=800; cont. load 2.95 W, T_amb=60°C)\n'
              f'T_max = {Ts.max():.1f} °C  margin to 100°C = {100 - Ts.max():.1f} °C')
 ax.set_aspect('equal')
 plt.tight_layout()

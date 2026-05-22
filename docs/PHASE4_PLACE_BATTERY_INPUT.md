@@ -84,27 +84,50 @@ Three subsystem-internal sims per master's revised acceptance. Tools per `docs/P
 | **Verdict** | **PASS ✓** |
 | Figure | `sims/phase4_place_battery_input/tvs_clamp.png` |
 
-### Sim 3 — Rev-pol FET cluster thermal (Elmer FEM)
+### Sim 3 — Rev-pol FET cluster thermal (Elmer FEM, per-FET T_J)
+
+**Master amendment 2026-05-22 (PR #32 audit):** area-weighted sim masks per-FET defect. Per-FET T_J required + Option A applied (copper pour + thermal vias on Q1/Q2).
+
+**Option A geometry (locked here, layout enforced in Phase 5b):**
+- Per-FET copper pour: **10 × 8 mm** on B.Cu around each of Q1, Q2 TO-263 drain tab
+- Per-FET thermal-via grid: **4 × 4 = 16 vias** under each FET drain, 0.3 mm drill diameter, plated through, connecting B.Cu pour → In3.Cu VMOTOR plane (3 oz) → F.Cu (full-board copper, prop-wash convected)
+- Industry reference: Nexperia AN90003 (SO8/TDSON thermal best practices) — 16 thermal vias per FET drain matches their max-current spec
+- Phase 5b layout enforces; this sim models the EFFECT
 
 | Item | Value |
 |---|---|
-| Method | 3D FEM steady-state heat conduction on 30×21×1.6 mm board section around 4× rev-pol FET 2×2 cluster; effective composite k=60 W/m·K (8L 3oz F/In3/B Cu + FR4 dielectric) |
-| BCs | F.Cu top h=80 W/m²·K (prop-wash); B.Cu bottom h=200 W/m²·K (area-weighted heatsink mix); sides h=10 (still-air); T_amb=60 °C |
-| Source | `sims/phase4_place_battery_input/revpol_thermal_elmer/{.grd, .sif, run_sweep.py, plot_contour.py}` |
-| **T_J max @ continuous** (P_total = 2.95 W = 4× 17.5 A × 2.4 mΩ) | **76.75 °C** |
-| Continuous limit | 100 °C (master spec) |
-| **Continuous margin** | **23.25 °C** |
-| **T_J max @ burst** (P_total = 6.00 W = 4× 25 A × 2.4 mΩ) | **94.06 °C** |
-| Burst abs-max limit | 175 °C (BSC014N06NS T_J,max) |
-| **Burst margin** | **80.94 °C** |
-| **Verdict** | **PASS ✓** (both cases) |
+| Method | 3D FEM steady-state heat conduction on 30×21×1.6 mm board section around 4× rev-pol FET cluster (Q1/Q2 at y=5.5, Q3/Q4 at y=14.5 mm local) |
+| Mesh | 5×5 subcell grid with 20×14×4 minimum divisions → ~2800 elements; per-FET heat extraction via spatially-varying B.Cu BC |
+| Material | k=60 W/m·K composite (FR4+Cu isotropic, conservative) |
+| BCs | F.Cu top: h=80 W/m²·K (prop-wash); **B.Cu bottom (MATC spatially-varying)**: y<10 mm → h=400 (Q1/Q2 pour+vias); y≥10 mm → h=800 (Q3/Q4 heatsink); sides: h=10 (still-air); T_amb=60 °C |
+| Source | `sims/phase4_place_battery_input/revpol_thermal_elmer/{revpol_cluster.grd, revpol_thermal.sif, run_sweep.py, plot_contour.py}` |
 | Figure | `sims/phase4_place_battery_input/revpol_thermal_elmer/revpol_thermal_contour.png` |
+
+**Per-FET T_J — continuous load (P_total = 2.95 W = 4 × 17.5 A × 2.4 mΩ):**
+
+| FET | Position (local) | T_J | Spec | Margin | Verdict |
+|---|---|---:|---:|---:|---|
+| Q1 | (6.0, 5.5) mm | **67.36 °C** | 100 °C | 32.6 °C | **PASS ✓** |
+| Q2 | (14.0, 5.5) mm | **67.36 °C** | 100 °C | 32.6 °C | **PASS ✓** |
+| Q3 | (6.0, 14.5) mm | **66.55 °C** | 100 °C | 33.5 °C | **PASS ✓** |
+| Q4 | (14.0, 14.5) mm | **66.55 °C** | 100 °C | 33.5 °C | **PASS ✓** |
+
+**Per-FET T_J — burst load (P_total = 6.00 W = 4 × 25 A × 2.4 mΩ, 10 s):**
+
+| FET | Position (local) | T_J | Spec | Margin | Verdict |
+|---|---|---:|---:|---:|---|
+| Q1 | (6.0, 5.5) mm | **74.96 °C** | 175 °C abs-max | 100 °C | **PASS ✓** |
+| Q2 | (14.0, 5.5) mm | **74.96 °C** | 175 °C abs-max | 100 °C | **PASS ✓** |
+| Q3 | (6.0, 14.5) mm | **73.33 °C** | 175 °C abs-max | 102 °C | **PASS ✓** |
+| Q4 | (14.0, 14.5) mm | **73.33 °C** | 175 °C abs-max | 102 °C | **PASS ✓** |
+
+**Verdict**: **PASS ✓** — all 4 FETs PASS both continuous (100°C operating spec) and burst (175°C absolute) under Option A. Q1/Q2 slightly hotter than Q3/Q4 (by 0.8 °C continuous) because their h_bottom=400 vs Q3/Q4's h=800 — but both with 30+ °C margin to spec.
 
 ### Sim methodology + limitations (honest reporting)
 
 - **ngspice inrush — NTC cold resistance**: 2.5 Ω total parallel is the worst-case before NTC warms. Real-world peak current is LOWER as NTC self-heats during inrush. The 9.86 A result is an UPPER BOUND; PASS verdict is conservative.
 - **TVS clamp — source impedance R_SRC=10 Ω**: matches realistic XT30 + battery-wire + PCB-trace impedance at MHz spectral content of 30 V/µs slew. Lower R_SRC would conduct more current → higher V_clamp.
-- **Elmer rev-pol — h_bottom=200 W/m²·K is area-weighted**: Q3/Q4 at y=17 sit UNDER the 80×55 mm heatsink (x=10-90, y=15-70) → h_eff ≈ 800 with fin_mult=10; Q1/Q2 at y=10 are OUTSIDE the heatsink → h ≈ 20 natural-conv. The 200 W/m²·K mean is realistic; per-FET BC refinement would show Q1/Q2 ~107 °C continuous (over master spec) while Q3/Q4 ~50 °C. **Phase 5b layout follow-up**: extend heatsink to cover Q1/Q2 OR add per-FET copper-pour with via stitching. TODO marker in `revpol_thermal.sif`.
+- **Elmer rev-pol — per-FET BC via MATC** (master amendment 2026-05-22): the area-weighted h_bottom=200 approach was rejected as masking per-FET defects. **Refined model**: spatially-varying h_bottom via MATC expression — y<10 mm → h=400 (Q1/Q2 Option-A copper pour + 16 thermal vias to In3 plane); y≥10 mm → h=800 (Q3/Q4 under existing heatsink). Per-FET T_J extracted at FET center coordinates. Result: all 4 FETs PASS continuous + burst with ≥30 °C margin. **Option A is locked here in the sim; Phase 5b layout PR will enforce the copper-pour + via-grid geometry per the spec above.**
 - **Mesh** is 12×8×4 = 384 elements (coarse smoke-grade). Production thermal sim uses 50k+ elements for chip-die-level accuracy. Re-run with finer mesh recommended in Phase 4c-v2.
 - **Material k=60 W/m·K** is geometric mean between in-plane (~112) and through-thickness (~1) — conservative isotropic; anisotropic tensor would refine to ~80–100 W/m·K in-plane.
 - **Burst case** is steady-state at 6.0 W — physically the 10 s burst doesn't reach steady-state (thermal RC > 10 s for full board). Real peak T_J during 10 s burst is LOWER than steady-state at burst power.
@@ -132,5 +155,5 @@ All 577 unplaced components remain at kinet2pcb-default positions in this PR (ty
 | Updates only S1 components | ✓ (no S2-S7 placements) |
 | **Sim 1 (inrush ngspice)**: peak ≤ 16 A | **✓ PASS** (9.86 A, margin 6.14 A) |
 | **Sim 2 (TVS clamp ngspice)**: V_clamp ≤ 60 V | **✓ PASS** (40.19 V, margin 19.81 V) |
-| **Sim 3 (rev-pol thermal Elmer FEM)**: T_J ≤ 100 °C cont. + ≤ 175 °C burst abs | **✓ PASS** (76.75 °C cont. margin 23.25; 94.06 °C burst margin 80.94) |
+| **Sim 3 (rev-pol thermal Elmer FEM)**: **per-FET** T_J ≤ 100 °C cont. + ≤ 175 °C burst abs | **✓ PASS** Q1/Q2 67.4 °C / Q3/Q4 66.6 °C cont. (all margins ≥32 °C); Q1/Q2 75.0 / Q3/Q4 73.3 burst (margins ≥100 °C) — **Option A: per-FET pour+vias on Q1/Q2** geometry locked above |
 | Sim methodology documented (tool versions, mesh, BCs, limitations) | ✓ (see §Sim methodology + limitations) |

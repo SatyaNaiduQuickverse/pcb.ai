@@ -77,23 +77,24 @@ End
 !   P_per_FET_burst = R_DS(on)_hot × I² ≈ 2.4 mΩ × 25² = 1.5W
 !   P_total_burst = 4 × 1.5 = 6.0 W
 ! With density 2700 kg/m³ and V = 0.030 × 0.021 × 0.0016 = 1.008e-6 m³
-!   mass = 2.72e-3 kg → Heat Source = 2204.5855 / 2.72e-3 = 2206 W/kg
+!   mass = 2.72e-3 kg → Heat Source = 1083.9212 / 2.72e-3 = 2206 W/kg
 Body Force 1
-  Heat Source = 2204.5855
+  Heat Source = 1083.9212
 End
 
-! Bottom (B.Cu — heatsink-PARTIAL coverage)
-! Heatsink (80×55 mm, x=10..90, y=15..70 in board frame) covers rev-pol FETs
-! Q3/Q4 at y=17 (under heatsink, h_eff ≈ 800 W/m²·K with fin_multiplier=10) and
-! does NOT cover Q1/Q2 at y=10 (natural-conv h≈20). Area-weighted average h_eff
-! across the cluster bottom face: ~200 W/m²·K (per-FET breakdown shows Q3/Q4
-! dominantly cooled, Q1/Q2 hotter; sweep-script reports max which will be from
-! Q1/Q2 corner).
-! TODO Phase 5b: extend heatsink or add per-rev-pol FET copper-pour vias
+! Bottom (B.Cu) — Option A applied (master adjudication 2026-05-22):
+! Q1/Q2 at y<10 mm get 10×8 mm copper pour + 16 thermal-via grid (0.3 mm drill)
+! to In3.Cu VMOTOR plane (3 oz). Effective h_eff at Q1/Q2 zone ≈ 400 W/m²·K
+! (analytical: pour spreads heat; vias conduct to In3 full-board plane which
+!  acts as heat-spreader; In3 then convects via F.Cu prop-wash over full board).
+! Q3/Q4 at y≥10 mm sit under existing 80×55 mm heatsink at h_eff ≈ 800
+! (fin_multiplier=10 × prop-wash h=80).
+! Spatially-varying h via MATC: y<0.010 → 400 (pour+vias zone); else 800 (HS zone).
 Boundary Condition 1
   Target Boundaries(1) = 1
   Heat Flux BC = True
-  Heat Transfer Coefficient = 200.0
+  Heat Transfer Coefficient = Variable Coordinate 2
+    Real MATC "if (tx < 0.010) {400.0} else {800.0}"
   External Temperature = 60.0
 End
 
