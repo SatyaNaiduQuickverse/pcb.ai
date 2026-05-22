@@ -381,11 +381,11 @@ S5_POSITIONS = {
     'C12': (50.0, 70.0, 'F.Cu', 0.0),    # V5_PI5 C_OUT (spine pocket center, between J3/J5 row)
     'C15': (22.0, 75.0, 'F.Cu', 0.0),    # V5_AI C_OUT (top strip west, clears R7 FB resistor)
     'C18': (88.0, 73.0, 'F.Cu', 0.0),    # V9_VTX1 C_OUT (top strip east)
-    # 4× output TVS on B.Cu y=76 row (between spine pocket B.Cu inductors and S6)
-    'D10': (35.0, 76.0, 'B.Cu', 0.0),    # V5_FC TVS SMAJ5.0A
-    'D11': (50.0, 76.0, 'B.Cu', 0.0),    # V5_PI5 TVS
-    'D12': (65.0, 76.0, 'B.Cu', 0.0),    # V5_AI TVS
-    'D13': (82.0, 76.0, 'B.Cu', 0.0),    # V9_VTX1 TVS SMAJ9.0A
+    # 4× output TVS on B.Cu y=78 row (clears S4 CH1 Q9/Q10 B.Cu y_max=75.675; S6 all F.Cu)
+    'D10': (35.0, 78.0, 'B.Cu', 0.0),    # V5_FC TVS SMAJ5.0A
+    'D11': (50.0, 78.0, 'B.Cu', 0.0),    # V5_PI5 TVS
+    'D12': (65.0, 78.0, 'B.Cu', 0.0),    # V5_AI TVS
+    'D13': (82.0, 78.0, 'B.Cu', 0.0),    # V9_VTX1 TVS SMAJ9.0A
     # ── Buck #5 V9_VTX2 SW (2A VTX #2, isolated from #1) — vertical column x=5 ──
     'J6':  (12.0, 22.0, 'F.Cu', 0.0),    # buck IC AOZ1284
     'L5':  (12.0, 30.0, 'F.Cu', 0.0),    # 10uH
@@ -455,6 +455,90 @@ def place_bec(fps_by_ref, placements):
     return placed
 
 
+# ────────────────────────────────────────────────────────────────────
+# S4 CH1: Channel #1 template (docs/PHASE4_SUBSYSTEMS.md §S4)
+# NW quadrant X=5-39, Y=42-72 — now FULLY CLEAR after PR-A2 S5 4-zone relocation.
+# Per R6 motor-pad-anchored architecture:
+#   - 3 motor phase pads at outer west edge x=5
+#   - 6 MOSFETs on B.Cu in 2×3 grid (full NW B.Cu)
+#   - MCU + DRV + 3 INA on F.Cu interior
+#   - Protection cluster (TL431/LM393/74LVC1G08) interior east edge
+#   - LEDs + NTC interior
+#   - Current shunts on B.Cu near Q lo-side FETs
+# ────────────────────────────────────────────────────────────────────
+S4_CH1_POSITIONS = {
+    # Motor phase pads — west edge x=5
+    'TP19': (5.0,  46.0, 'F.Cu', 0.0),    # MOTOR_A_CH1 (phase A motor pad)
+    'TP20': (5.0,  56.0, 'F.Cu', 0.0),    # MOTOR_B_CH1
+    'TP21': (5.0,  66.0, 'F.Cu', 0.0),    # MOTOR_C_CH1
+    # 6× AOTL66912 MOSFETs on B.Cu (2 columns × 3 phase rows)
+    # Hi-side west col x=12 (near motor pad), Lo-side east col x=28
+    'Q5':  (12.0, 45.0, 'B.Cu', 0.0),     # Phase A hi
+    'Q6':  (30.0, 45.0, 'B.Cu', 0.0),     # Phase A lo (x=30 for 1.3mm gap from Q5 x_max=20.35)
+    'Q7':  (12.0, 58.0, 'B.Cu', 0.0),     # Phase B hi
+    'Q8':  (30.0, 58.0, 'B.Cu', 0.0),     # Phase B lo
+    'Q9':  (12.0, 70.0, 'B.Cu', 0.0),     # Phase C hi
+    'Q10': (30.0, 70.0, 'B.Cu', 0.0),     # Phase C lo
+    # MCU + DRV8300 on F.Cu (interior — east of FET cluster)
+    'J18': (32.0, 52.0, 'F.Cu', 0.0),     # AT32F421 MCU LQFP-32 (y=52 clears S2 C3 bbox y_max=45.5)
+    'J19': (22.0, 50.0, 'F.Cu', 0.0),     # DRV8300 gate driver HVQFN-24
+    # INA186 column (x=15) — wide 10mm y-pitch to clear shunt 0402 courtyards
+    'J20': (15.0, 45.0, 'F.Cu', 0.0),     # Phase A INA186
+    'J21': (15.0, 55.0, 'F.Cu', 0.0),     # Phase B INA186
+    'J22': (15.0, 65.0, 'F.Cu', 0.0),     # Phase C INA186
+    # Protection cluster — row y=64 in NW quadrant SE corner
+    'U2':  (35.0, 64.0, 'F.Cu', 0.0),     # TL431 SOT-23
+    'U3':  (28.0, 64.0, 'F.Cu', 0.0),     # LM393 SOIC-8
+    'U4':  (37.0, 60.0, 'F.Cu', 0.0),     # 74LVC1G08 SOT-353 (clear J2 spine pocket boundary at x=39.275)
+    # Status LEDs — top row y=43 (north of S4 quadrant, clear of S2 caps + INA col)
+    'D15': (10.0, 43.0, 'F.Cu', 0.0),     # RED_KILL_FW
+    'D19': (28.0, 59.0, 'F.Cu', 0.0),     # RED_FAULT_HW (south of MCU, between MCU and U3 LM393)
+    'D33': (35.0, 43.0, 'F.Cu', 0.0),     # RED status
+    # NTC for OTP — north of protection cluster
+    'TH1': (38.0, 68.0, 'F.Cu', 0.0),     # 10K B4250
+    # Current sense shunts F.Cu in INA cluster gaps (x=10 column, between motor pads and INAs)
+    'R56': (10.0, 50.0, 'F.Cu', 0.0),     # Phase A shunt (between J20 y=45 and J21 y=55)
+    'R57': (10.0, 60.0, 'F.Cu', 0.0),     # Phase B shunt (between J21 y=55 and J22 y=65)
+    'R58': (10.0, 70.0, 'F.Cu', 0.0),     # Phase C shunt (south of J22)
+}
+S4_CH1_EXPECTED_VALUES = {
+    'TP19': 'MOTOR_A_CH1', 'TP20': 'MOTOR_B_CH1', 'TP21': 'MOTOR_C_CH1',
+    'Q5':  'AOTL66912', 'Q6':  'AOTL66912', 'Q7':  'AOTL66912',
+    'Q8':  'AOTL66912', 'Q9':  'AOTL66912', 'Q10': 'AOTL66912',
+    'J18': 'AT32F421', 'J19': 'DRV8300',
+    'J20': 'INA186', 'J21': 'INA186', 'J22': 'INA186',
+    'U2':  'TL431', 'U3':  'LM393', 'U4':  '74LVC1G08',
+    'D15': 'RED', 'D19': 'RED', 'D33': 'RED',
+    'TH1': '10K_B4250',
+    'R56': '0.2mR', 'R57': '0.2mR', 'R58': '0.2mR',
+}
+
+
+def place_channel_ch1(fps_by_ref, placements):
+    """S4 CH1 — channel #1 template (NW quadrant per spec)."""
+    placed = 0
+    missing = []
+    mismatched = []
+    for ref, pos in S4_CH1_POSITIONS.items():
+        fp = fps_by_ref.get(ref)
+        if not fp:
+            missing.append(ref)
+            continue
+        expected = S4_CH1_EXPECTED_VALUES[ref]
+        if expected not in fp['value']:
+            mismatched.append((ref, expected, fp['value']))
+            continue
+        x, y, layer, rot = pos
+        placements[ref] = (x, y, layer, rot)
+        placed += 1
+    if missing:
+        print(f"  WARN: S4 CH1 components missing: {missing}")
+    if mismatched:
+        for ref, exp, act in mismatched:
+            print(f"  WARN: S4 CH1 {ref} mismatch — expected '{exp}', got '{act}'")
+    return placed
+
+
 # Registry of subsystem placers in spec order
 ALL_PLACERS = [
     ('S1', 'Battery input',         place_battery_input),
@@ -462,7 +546,7 @@ ALL_PLACERS = [
     ('S3', 'Supervisor + Hall',     place_supervisor_hall),
     ('S6', 'FC + AUX connectors',   place_connectors),
     ('S5', 'BEC subsystem',         place_bec),
-    # ('S4', 'Channel template (×4)', place_channels),          # PR ×2
+    ('S4 CH1', 'Channel #1 template (NW)', place_channel_ch1),
 ]
 
 
