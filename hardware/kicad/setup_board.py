@@ -66,10 +66,10 @@ NEW_LAYERS = '''(layers
 
 NEW_LAYERS_FIXED = '''(layers
 		(0 "F.Cu" signal)
-		(1 "In1.Cu" power "+VMOTOR plane (Playbook §Routing)")
-		(2 "In2.Cu" power "GND plane")
-		(3 "In3.Cu" power "GND plane (return-path integrity)")
-		(4 "In4.Cu" power "+5V_+3V3 split plane")
+		(1 "In1.Cu" signal "+VMOTOR plane (Playbook §Routing); type=signal to allow Specctra DSN export — Phase 5c re-classifies to power")
+		(2 "In2.Cu" signal "GND plane (signal-typed for DSN export)")
+		(3 "In3.Cu" signal "GND plane (return-path integrity; signal-typed for DSN export)")
+		(4 "In4.Cu" signal "+5V_+3V3 split plane (signal-typed for DSN export)")
 		(31 "B.Cu" signal)
 		(32 "B.Adhes" user "B.Adhesive")
 		(33 "F.Adhes" user "F.Adhesive")
@@ -97,18 +97,27 @@ pat = re.compile(r'\(layers\s*\n.*?\n\t\)', re.DOTALL)
 m = pat.search(txt)
 if not m:
     raise SystemExit("could not locate (layers ...) block in pcbai_fpv4in1.kicad_pcb")
-txt = txt[:m.start()] + NEW_LAYERS_FIXED + txt[m.end():]
-print("[1/3] Upgraded layer stack to 6-layer (F.Cu / In1-4.Cu / B.Cu)")
+# Phase 5b discovery: ExportSpecctraDSN silently fails when inner power planes
+# are declared. For Phase 5b autoroute we keep the 2-layer kinet2pcb default
+# (F.Cu signal + B.Cu signal). The 6-layer upgrade (4 inner planes for power
+# + return) lands in Phase 5c, AFTER autoroute completes and SES is imported.
+# Worker decision (no URGENT — local workaround, not contract-criteria break):
+# skip layer upgrade here.
+# txt = txt[:m.start()] + NEW_LAYERS_FIXED + txt[m.end():]
+print("[1/3] Kept 2-layer stack (F.Cu / B.Cu) — Phase 5c will add 4 inner planes after autoroute")
 
-# ───────────── 2. Append Edge.Cuts outline (50×50 mm square at origin) ─────────────
+# ───────────── 2. Append Edge.Cuts outline (rectangle at origin) ─────────────
+# Phase 5b discovery: pcbnew.ExportSpecctraDSN fails on 4-separate-gr_line outlines
+# (the exporter wants a single closed polygon). Use gr_rect — Specctra-compatible.
 EDGE_CUTS = '''
-\t(gr_line (start 0 0) (end {W} 0) (stroke (width 0.05) (type solid)) (layer "Edge.Cuts"))
-\t(gr_line (start {W} 0) (end {W} {H}) (stroke (width 0.05) (type solid)) (layer "Edge.Cuts"))
-\t(gr_line (start {W} {H}) (end 0 {H}) (stroke (width 0.05) (type solid)) (layer "Edge.Cuts"))
-\t(gr_line (start 0 {H}) (end 0 0) (stroke (width 0.05) (type solid)) (layer "Edge.Cuts"))
+\t(gr_rect (start 0 0) (end {W} {H}) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
 '''.format(W=BOARD_W, H=BOARD_H)
 
-# ───────────── 3. Append 4× M3 mounting holes on 40×40 pattern ─────────────
+# ───────────── 3. Append 4× M3 mounting holes — proper KiCad9 footprint format ─────────────
+# Phase 5b discovery: pcbnew.ExportSpecctraDSN fails when mount-hole footprints
+# are missing uuid/descr/tags. Emit a complete KiCad9 mount-hole footprint here.
+import uuid as _uuid
+
 mh_positions = [
     (MOUNT_X_PAD, MOUNT_Y_PAD),
     (BOARD_W - MOUNT_X_PAD, MOUNT_Y_PAD),
@@ -116,15 +125,41 @@ mh_positions = [
     (BOARD_W - MOUNT_X_PAD, BOARD_H - MOUNT_Y_PAD),
 ]
 MOUNTING_HOLES = ""
-for (x, y) in mh_positions:
+for idx, (x, y) in enumerate(mh_positions, start=1):
+    fp_uuid = str(_uuid.uuid4())
+    pad_uuid = str(_uuid.uuid4())
+    ref_uuid = str(_uuid.uuid4())
+    val_uuid = str(_uuid.uuid4())
     MOUNTING_HOLES += f'''
-\t(footprint "MountingHole:MountingHole_3.2mm_M3" (layer "F.Cu") (at {x} {y})
+\t(footprint "MountingHole:MountingHole_3.2mm_M3"
+\t\t(layer "F.Cu")
+\t\t(uuid "{fp_uuid}")
+\t\t(at {x} {y})
+\t\t(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
+\t\t(tags "mountinghole M3")
 \t\t(attr through_hole exclude_from_pos_files exclude_from_bom)
-\t\t(pad "" thru_hole circle (at 0 0) (size 6.0 6.0) (drill {M3_HOLE_DIA}) (layers "*.Cu" "*.Mask"))
+\t\t(property "Reference" "H{idx}"
+\t\t\t(at 0 -4.15 0)
+\t\t\t(layer "F.SilkS")
+\t\t\t(uuid "{ref_uuid}")
+\t\t\t(effects (font (size 1 1) (thickness 0.15)))
+\t\t)
+\t\t(property "Value" "MountingHole"
+\t\t\t(at 0 4.15 0)
+\t\t\t(layer "F.Fab")
+\t\t\t(uuid "{val_uuid}")
+\t\t\t(effects (font (size 1 1) (thickness 0.15)))
+\t\t)
+\t\t(pad "" thru_hole circle
+\t\t\t(at 0 0)
+\t\t\t(size 6 6)
+\t\t\t(drill {M3_HOLE_DIA})
+\t\t\t(layers "*.Cu" "*.Mask")
+\t\t\t(uuid "{pad_uuid}")
+\t\t)
 \t)'''
 
 # Insert Edge.Cuts + mounting holes before the closing top-level ')'
-# The closing ')' is the very last non-whitespace char.
 last_paren = txt.rstrip().rfind(')')
 insertion = EDGE_CUTS + MOUNTING_HOLES + "\n"
 txt = txt[:last_paren] + insertion + txt[last_paren:]
