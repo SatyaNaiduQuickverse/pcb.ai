@@ -4327,7 +4327,7 @@
 	(footprint "Resistor_SMD:R_2512_6332Metric"
 		(layer "F.Cu")
 		(uuid "06eb0d6b-2f48-4067-81df-e550b707af00")
-		(at 135.33477 -144.77825)
+		(at 10.00 15.00 180.0)
 		(descr "Resistor SMD 2512 (6332 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R134"
@@ -6659,7 +6659,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-363_SC-70-6"
 		(layer "F.Cu")
 		(uuid "0ce761b2-d923-431f-8551-6e0702b2496c")
-		(at 126.797627 -121.59875)
+		(at 15.00 30.00 180.0)
 		(descr "SOT-363, SC-70-6, SC-88")
 		(tags "SOT-363 SC-70-6 SC-88")
 		(property "Reference" "J31"
@@ -10202,7 +10202,7 @@
 	(footprint "Package_DFN_QFN:HVQFN-24-1EP_4x4mm_P0.5mm_EP2.6x2.6mm"
 		(layer "F.Cu")
 		(uuid "148e64da-3dbc-44f7-be76-6d4e58353827")
-		(at 12.030952 -107.33575)
+		(at 78.00 35.00 0.0)
 		(descr "HVQFN, 24 Pin (https://www.nxp.com/docs/en/package-information/SOT616-3.pdf), generated with kicad-footprint-generator ipc_noLead_generator.py")
 		(tags "HVQFN NoLead")
 		(property "Reference" "J34"
@@ -10843,9 +10843,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "151f94fa-7aa2-4d72-af3b-7d53e61dc0ad")
-		(at 73.600006 -79.26275)
+		(at 30.00 15.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q22"
@@ -11364,9 +11364,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "1624ea90-07fe-4779-a3bf-63853eba2f4f")
-		(at 2.3 -94.95925)
+		(at 70.00 58.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q14"
@@ -13109,7 +13109,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-353_SC-70-5"
 		(layer "F.Cu")
 		(uuid "1824436a-9ed4-49f8-bbaa-78fbbc521f7a")
-		(at 111.871437 -145.68825)
+		(at 63.00 25.00 0.0)
 		(descr "SOT-353, SC-70-5")
 		(tags "SOT-353 SC-70-5")
 		(property "Reference" "U13"
@@ -13543,7 +13543,7 @@
 	(footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
 		(layer "F.Cu")
 		(uuid "18c53dab-4331-4c12-964e-eaa8d827ac29")
-		(at 127.038103 -90.16925)
+		(at 72.00 21.00 0.0)
 		(descr "SOIC, 8 Pin (JEDEC MS-012AA, https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/soic_narrow-r/r_8.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOIC SO")
 		(property "Reference" "U12"
@@ -14750,7 +14750,7 @@
 	(footprint "LED_SMD:LED_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "1aa412cb-8ada-41b2-9728-bb15aebfe7cf")
-		(at 65.716674 -146.46475)
+		(at 28.00 26.00 180.0)
 		(descr "LED SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: http://www.tortai-tech.com/upload/download/2011102023233369053.pdf), generated with kicad-footprint-generator")
 		(tags "LED")
 		(property "Reference" "D21"
@@ -15542,7 +15542,7 @@
 	(footprint "Package_QFP:LQFP-32_7x7mm_P0.8mm"
 		(layer "F.Cu")
 		(uuid "1d724aa4-cfde-435b-8ca1-f20cd4cffb33")
-		(at 97.152384 -19.85975)
+		(at 32.00 33.00 180.0)
 		(descr "LQFP, 32 Pin (https://www.nxp.com/docs/en/package-information/SOT358-1.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "LQFP QFP")
 		(property "Reference" "J28"
@@ -18665,7 +18665,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "2388e44b-2db1-4654-8929-fc7377e6f366")
-		(at 120.528576 -2.37325)
+		(at 5.00 19.00 180.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP35"
@@ -20925,7 +20925,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "28555adf-bb3c-4080-a945-2e365e700e00")
-		(at 120.528576 -9.71975)
+		(at 5.00 29.00 180.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP34"
@@ -21119,7 +21119,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-363_SC-70-6"
 		(layer "F.Cu")
 		(uuid "28893dcf-4054-41b1-9ee1-1128c43b7fd3")
-		(at 128.152387 -58.91625)
+		(at 85.00 45.00 180.0)
 		(descr "SOT-363, SC-70-6, SC-88")
 		(tags "SOT-363 SC-70-6 SC-88")
 		(property "Reference" "J25"
@@ -23673,7 +23673,7 @@
 	(footprint "LED_SMD:LED_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "2bfb8cdf-93fb-4963-98a5-89a07c3cd367")
-		(at 135.011908 -36.91275)
+		(at 72.00 59.00 180.0)
 		(descr "LED SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: http://www.tortai-tech.com/upload/download/2011102023233369053.pdf), generated with kicad-footprint-generator")
 		(tags "LED")
 		(property "Reference" "D20"
@@ -23886,7 +23886,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "2ca9e283-ac58-4072-bfc7-56fde3bd6ae9")
-		(at 124.035722 -113.75225)
+		(at 95.00 46.00 180.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP26"
@@ -24466,7 +24466,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-363_SC-70-6"
 		(layer "F.Cu")
 		(uuid "2de1edf3-dcf7-41c7-a605-f1cda20ec391")
-		(at 115.916673 -81.80925)
+		(at 85.00 20.00 0.0)
 		(descr "SOT-363, SC-70-6, SC-88")
 		(tags "SOT-363 SC-70-6 SC-88")
 		(property "Reference" "J37"
@@ -26339,9 +26339,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "3181a26e-30de-47e9-ab35-adb9329cacd0")
-		(at 56.200006 -79.26275)
+		(at 88.00 40.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q23"
@@ -27388,7 +27388,7 @@
 	(footprint "Package_QFP:LQFP-32_7x7mm_P0.8mm"
 		(layer "F.Cu")
 		(uuid "333c6d51-9f5d-47d9-b89b-0aafecdd96a5")
-		(at 103.752387 -78.49275)
+		(at 68.00 52.00 180.0)
 		(descr "LQFP, 32 Pin (https://www.nxp.com/docs/en/package-information/SOT358-1.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "LQFP QFP")
 		(property "Reference" "J23"
@@ -28833,9 +28833,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "364cd341-478b-462d-9660-80b9c740fe6d")
-		(at 91.000006 -94.95925)
+		(at 88.00 58.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q13"
@@ -30128,7 +30128,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-363_SC-70-6"
 		(layer "F.Cu")
 		(uuid "3aeeaf2b-8b1e-479f-92aa-2913d5be35d7")
-		(at 66.002387 -134.89175)
+		(at 85.00 40.00 0.0)
 		(descr "SOT-363, SC-70-6, SC-88")
 		(tags "SOT-363 SC-70-6 SC-88")
 		(property "Reference" "J35"
@@ -30375,9 +30375,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "3be296d7-1f21-467f-8746-0bca5d8238fb")
-		(at 73.600006 -94.95925)
+		(at 70.00 70.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q16"
@@ -32821,9 +32821,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "3fb86463-6824-4516-bad2-eb7210cf7d8f")
-		(at 2.3 -79.26275)
+		(at 70.00 40.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q24"
@@ -34188,7 +34188,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-23"
 		(layer "F.Cu")
 		(uuid "4302a8e2-a182-4e91-92f3-21fee306941f")
-		(at 150.774294 -144.38825)
+		(at 35.00 21.00 180.0)
 		(descr "SOT, 3 Pin (JEDEC TO-236 Var AB https://www.jedec.org/document_search?search_api_views_fulltext=TO-236), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOT TO_SOT_SMD")
 		(property "Reference" "U8"
@@ -34897,7 +34897,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-23"
 		(layer "F.Cu")
 		(uuid "44945803-a792-4449-abb5-9bf5dfa39056")
-		(at 41.514051 -157.14125)
+		(at 65.00 64.00 180.0)
 		(descr "SOT, 3 Pin (JEDEC TO-236 Var AB https://www.jedec.org/document_search?search_api_views_fulltext=TO-236), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOT TO_SOT_SMD")
 		(property "Reference" "U5"
@@ -36161,7 +36161,7 @@
 	(footprint "Resistor_SMD:R_2512_6332Metric"
 		(layer "F.Cu")
 		(uuid "46c646ea-9766-4851-b2bd-3e044269bb5e")
-		(at 137.239532 -122.22875)
+		(at 90.00 35.00 0.0)
 		(descr "Resistor SMD 2512 (6332 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R170"
@@ -36547,7 +36547,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "476ef230-7dc5-418b-a903-ca391156152d")
-		(at 11.673811 -132.17525)
+		(at 62.00 68.00 180.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "TH2"
@@ -37162,9 +37162,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "479b8b5e-8e9b-45ea-94df-25e7aa389fc6")
-		(at 73.600006 -47.86975)
+		(at 30.00 27.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q20"
@@ -41456,7 +41456,7 @@
 	(footprint "LED_SMD:LED_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "5004ab03-34c3-48ca-97ce-fdf1d6b13b3e")
-		(at 132.216672 -17.79625)
+		(at 72.00 26.00 0.0)
 		(descr "LED SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: http://www.tortai-tech.com/upload/download/2011102023233369053.pdf), generated with kicad-footprint-generator")
 		(tags "LED")
 		(property "Reference" "D22"
@@ -44742,9 +44742,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "5619c8ee-2888-4360-9375-060fb3870c96")
-		(at 91.000006 -63.56625)
+		(at 88.00 45.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q11"
@@ -45070,9 +45070,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "568d1501-36a8-426b-be8d-560198f0e3fa")
-		(at 67.000003 -22.16975)
+		(at 70.00 27.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q26"
@@ -47697,7 +47697,7 @@
 	(footprint "Resistor_SMD:R_2512_6332Metric"
 		(layer "F.Cu")
 		(uuid "5a64ab43-c6ed-48c2-b1b8-585637782591")
-		(at 135.318103 -97.05575)
+		(at 90.00 60.00 180.0)
 		(descr "Resistor SMD 2512 (6332 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R95"
@@ -48937,7 +48937,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "5beca40c-5b12-40e8-a7d5-0ea145d5d022")
-		(at 112.919056 -129.69525)
+		(at 95.00 56.00 180.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP27"
@@ -49227,7 +49227,7 @@
 	(footprint "Resistor_SMD:R_2512_6332Metric"
 		(layer "F.Cu")
 		(uuid "5cdf67fb-e392-48b7-a48a-1754d4f11082")
-		(at 49.830006 -28.85325)
+		(at 90.00 25.00 0.0)
 		(descr "Resistor SMD 2512 (6332 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R171"
@@ -50529,7 +50529,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-363_SC-70-6"
 		(layer "F.Cu")
 		(uuid "5f2c9804-a415-4c9f-9df0-cb2858eb5d1e")
-		(at 127.723816 -74.61275)
+		(at 85.00 65.00 180.0)
 		(descr "SOT-363, SC-70-6, SC-88")
 		(tags "SOT-363 SC-70-6 SC-88")
 		(property "Reference" "J27"
@@ -53255,7 +53255,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-363_SC-70-6"
 		(layer "F.Cu")
 		(uuid "66243513-cf26-49d3-a6ff-309a055a4b48")
-		(at 51.86191 -137.69175)
+		(at 85.00 55.00 180.0)
 		(descr "SOT-363, SC-70-6, SC-88")
 		(tags "SOT-363 SC-70-6 SC-88")
 		(property "Reference" "J26"
@@ -61219,9 +61219,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "78e0f2eb-2157-4500-8f4d-ea8a03a5ed0d")
-		(at 2.3 -63.56625)
+		(at 70.00 15.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q28"
@@ -63131,7 +63131,7 @@
 	(footprint "LED_SMD:LED_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "7e5573e3-932a-4d21-be95-a48e44ba3d4c")
-		(at 145.697628 -158.73125)
+		(at 90.00 43.00 180.0)
 		(descr "LED SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: http://www.tortai-tech.com/upload/download/2011102023233369053.pdf), generated with kicad-footprint-generator")
 		(tags "LED")
 		(property "Reference" "D16"
@@ -66435,7 +66435,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "85581ec3-645a-40d1-92fc-346833e50176")
-		(at 12.697621 -126.20875)
+		(at 95.00 29.00 0.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP41"
@@ -67183,7 +67183,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "87011c68-5b8d-400a-ba73-a072f07a7946")
-		(at 24.411908 -126.24875)
+		(at 95.00 19.00 0.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP42"
@@ -68510,7 +68510,7 @@
 	(footprint "LED_SMD:LED_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "8b00e6b8-6b02-4c86-9718-8d1c2a45ed74")
-		(at 23.528571 -159.48125)
+		(at 10.00 42.00 180.0)
 		(descr "LED SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: http://www.tortai-tech.com/upload/download/2011102023233369053.pdf), generated with kicad-footprint-generator")
 		(tags "LED")
 		(property "Reference" "D17"
@@ -69592,7 +69592,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "8cc13e1c-2441-4f23-b17d-425e65c8b0c6")
-		(at 13.838095 -83.37925)
+		(at 62.00 17.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "TH4"
@@ -70171,7 +70171,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-363_SC-70-6"
 		(layer "F.Cu")
 		(uuid "8da79673-927e-43a9-adb6-597ef650a146")
-		(at 98.945244 -136.14175)
+		(at 15.00 20.00 180.0)
 		(descr "SOT-363, SC-70-6, SC-88")
 		(tags "SOT-363 SC-70-6 SC-88")
 		(property "Reference" "J32"
@@ -71420,7 +71420,7 @@
 	(footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
 		(layer "F.Cu")
 		(uuid "8f97bb9e-adfb-4b5b-b1ac-20c6a0eb2d62")
-		(at 111.257151 -137.89175)
+		(at 28.00 21.00 180.0)
 		(descr "SOIC, 8 Pin (JEDEC MS-012AA, https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/soic_narrow-r/r_8.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOIC SO")
 		(property "Reference" "U9"
@@ -74093,7 +74093,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-353_SC-70-5"
 		(layer "F.Cu")
 		(uuid "959fd6e2-f915-4039-ad16-e33a6d1464a5")
-		(at -3.585714 -145.24825)
+		(at 37.00 25.00 180.0)
 		(descr "SOT-353, SC-70-5")
 		(tags "SOT-353 SC-70-5")
 		(property "Reference" "U10"
@@ -74334,7 +74334,7 @@
 	(footprint "Resistor_SMD:R_2512_6332Metric"
 		(layer "F.Cu")
 		(uuid "9611395d-797e-443c-beee-54258fa92a53")
-		(at 135.318103 -104.71225)
+		(at 90.00 50.00 180.0)
 		(descr "Resistor SMD 2512 (6332 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R94"
@@ -76683,7 +76683,7 @@
 	(footprint "Package_DFN_QFN:HVQFN-24-1EP_4x4mm_P0.5mm_EP2.6x2.6mm"
 		(layer "F.Cu")
 		(uuid "9c32a961-e825-4399-81f1-6f3ae4f5c59c")
-		(at 62.685717 -34.54625)
+		(at 78.00 50.00 180.0)
 		(descr "HVQFN, 24 Pin (https://www.nxp.com/docs/en/package-information/SOT616-3.pdf), generated with kicad-footprint-generator ipc_noLead_generator.py")
 		(tags "HVQFN NoLead")
 		(property "Reference" "J24"
@@ -77517,9 +77517,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "9d0bd969-4594-45d6-9e0d-013f67dc5ec4")
-		(at 29.250003 -78.56275)
+		(at 88.00 27.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q25"
@@ -77847,7 +77847,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "9de1f64f-d978-4845-8c31-468131a65a95")
-		(at 36.052384 -132.69525)
+		(at 5.00 39.00 180.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP33"
@@ -78595,7 +78595,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-23"
 		(layer "F.Cu")
 		(uuid "a1e64697-805d-4f73-935d-b79323b7f989")
-		(at 151.695247 -152.20475)
+		(at 65.00 21.00 0.0)
 		(descr "SOT, 3 Pin (JEDEC TO-236 Var AB https://www.jedec.org/document_search?search_api_views_fulltext=TO-236), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOT TO_SOT_SMD")
 		(property "Reference" "U11"
@@ -79111,7 +79111,7 @@
 	(footprint "Resistor_SMD:R_2512_6332Metric"
 		(layer "F.Cu")
 		(uuid "a23c12b3-25ed-4495-9942-16671e62f0c1")
-		(at 137.975247 -50.64625)
+		(at 10.00 25.00 180.0)
 		(descr "Resistor SMD 2512 (6332 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R133"
@@ -80122,9 +80122,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "a428153b-55f7-4abc-a623-93afbf5adf97")
-		(at 56.200006 -94.95925)
+		(at 88.00 70.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q15"
@@ -81475,7 +81475,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-363_SC-70-6"
 		(layer "F.Cu")
 		(uuid "a5b4c08e-bbb2-4a66-86e9-9753aa97161b")
-		(at 81.190483 -134.89175)
+		(at 85.00 30.00 0.0)
 		(descr "SOT-363, SC-70-6, SC-88")
 		(tags "SOT-363 SC-70-6 SC-88")
 		(property "Reference" "J36"
@@ -81724,7 +81724,7 @@
 	(footprint "Resistor_SMD:R_2512_6332Metric"
 		(layer "F.Cu")
 		(uuid "a5f7eaaa-fa59-43ee-8118-c3682a8a3a27")
-		(at 13.33 -51.50625)
+		(at 90.00 15.00 0.0)
 		(descr "Resistor SMD 2512 (6332 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R172"
@@ -82110,7 +82110,7 @@
 	(footprint "LED_SMD:LED_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "a66f0112-6b7b-4916-a329-674a86dd3840")
-		(at 4.983334 -130.68525)
+		(at 65.00 42.00 0.0)
 		(descr "LED SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: http://www.tortai-tech.com/upload/download/2011102023233369053.pdf), generated with kicad-footprint-generator")
 		(tags "LED")
 		(property "Reference" "D78"
@@ -84721,7 +84721,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-353_SC-70-5"
 		(layer "F.Cu")
 		(uuid "ac9e8865-b511-4284-98c0-3931692f2d03")
-		(at 137.723818 -129.25525)
+		(at 63.00 60.00 180.0)
 		(descr "SOT-353, SC-70-5")
 		(tags "SOT-353 SC-70-5")
 		(property "Reference" "U7"
@@ -86651,9 +86651,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "afb253eb-f46a-4cfb-bcb9-23d0e463c684")
-		(at 73.600006 -63.56625)
+		(at 12.00 15.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q21"
@@ -88355,7 +88355,7 @@
 	(footprint "LED_SMD:LED_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "b274120f-b4bc-4da9-b7b4-b20f373d6420")
-		(at 148.983339 -16.09625)
+		(at 90.00 42.00 0.0)
 		(descr "LED SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: http://www.tortai-tech.com/upload/download/2011102023233369053.pdf), generated with kicad-footprint-generator")
 		(tags "LED")
 		(property "Reference" "D18"
@@ -95411,7 +95411,7 @@
 	(footprint "Resistor_SMD:R_2512_6332Metric"
 		(layer "F.Cu")
 		(uuid "be11ab7c-e44e-48af-aebd-2d6eb8bc4f04")
-		(at 22.496666 -145.52825)
+		(at 10.00 35.00 180.0)
 		(descr "Resistor SMD 2512 (6332 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R132"
@@ -98360,7 +98360,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-363_SC-70-6"
 		(layer "F.Cu")
 		(uuid "c6189c83-fa52-4cd7-b09c-0ae642b88429")
-		(at 124.892865 -136.49175)
+		(at 15.00 40.00 180.0)
 		(descr "SOT-363, SC-70-6, SC-88")
 		(tags "SOT-363 SC-70-6 SC-88")
 		(property "Reference" "J30"
@@ -98800,9 +98800,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "c68d65f8-5646-42bb-867f-7701fdf8637d")
-		(at 91.000006 -47.86975)
+		(at 70.00 45.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q12"
@@ -101460,7 +101460,7 @@
 	(footprint "Resistor_SMD:R_2512_6332Metric"
 		(layer "F.Cu")
 		(uuid "ccab1cd8-38b6-4e17-bb41-275d6acb5a72")
-		(at 135.318103 -89.39925)
+		(at 90.00 70.00 180.0)
 		(descr "Resistor SMD 2512 (6332 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R96"
@@ -107875,7 +107875,7 @@
 	(footprint "LED_SMD:LED_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "daa58940-44fb-469c-8cfc-b039f8b0bc08")
-		(at 175.414293 -28.02925)
+		(at 35.00 42.00 180.0)
 		(descr "LED SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: http://www.tortai-tech.com/upload/download/2011102023233369053.pdf), generated with kicad-footprint-generator")
 		(tags "LED")
 		(property "Reference" "D63"
@@ -108086,9 +108086,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "db774a2b-d371-4d82-966b-5f17072dbeb3")
-		(at 29.250003 -94.25925)
+		(at 12.00 40.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q17"
@@ -114298,9 +114298,9 @@
 		(embedded_fonts no)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "e3d6e6a0-e5b6-4806-9462-bd32c09d6f6e")
-		(at 84.400003 -22.16975)
+		(at 12.00 27.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q19"
@@ -115961,7 +115961,7 @@
 	(footprint "Package_DFN_QFN:HVQFN-24-1EP_4x4mm_P0.5mm_EP2.6x2.6mm"
 		(layer "F.Cu")
 		(uuid "e5ee9178-4602-4ed5-b93d-de1ad411c45c")
-		(at 80.085717 -34.54625)
+		(at 22.00 35.00 180.0)
 		(descr "HVQFN, 24 Pin (https://www.nxp.com/docs/en/package-information/SOT616-3.pdf), generated with kicad-footprint-generator ipc_noLead_generator.py")
 		(tags "HVQFN NoLead")
 		(property "Reference" "J29"
@@ -116604,7 +116604,7 @@
 	(footprint "LED_SMD:LED_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "e625727a-2cb4-414e-ab4b-1ddec305164b")
-		(at 175.678819 -121.02875)
+		(at 65.00 43.00 180.0)
 		(descr "LED SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: http://www.tortai-tech.com/upload/download/2011102023233369053.pdf), generated with kicad-footprint-generator")
 		(tags "LED")
 		(property "Reference" "D48"
@@ -117434,7 +117434,7 @@
 	(footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
 		(layer "F.Cu")
 		(uuid "e84ba79a-b9d9-401b-89b6-befeb782ab3b")
-		(at 130.340481 -10.56975)
+		(at 72.00 64.00 180.0)
 		(descr "SOIC, 8 Pin (JEDEC MS-012AA, https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/soic_narrow-r/r_8.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOIC SO")
 		(property "Reference" "U6"
@@ -119362,7 +119362,7 @@
 	(footprint "Package_QFP:LQFP-32_7x7mm_P0.8mm"
 		(layer "F.Cu")
 		(uuid "eda12f10-8f0d-4829-a9ae-115c462abd07")
-		(at 97.152384 -5.70325)
+		(at 68.00 33.00 0.0)
 		(descr "LQFP, 32 Pin (https://www.nxp.com/docs/en/package-information/SOT358-1.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "LQFP QFP")
 		(property "Reference" "J33"
@@ -120421,9 +120421,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "eee222b8-68f1-4146-8d6b-dcf4e9de5590")
-		(at 84.400003 -6.47325)
+		(at 30.00 40.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q18"
@@ -120749,9 +120749,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "eef7abeb-f306-4c16-a341-95b4c074135e")
-		(at 67.000003 -6.47325)
+		(at 88.00 15.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q27"
@@ -123525,7 +123525,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "f606da61-da9b-4cec-9ff9-dde760135212")
-		(at 40.788098 -98.37575)
+		(at 38.00 17.00 180.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "TH3"
@@ -126643,7 +126643,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "fa0b5782-01dc-4b52-b2b8-bbf926b40514")
-		(at -2.609524 -131.80525)
+		(at 95.00 39.00 0.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP40"
@@ -126740,7 +126740,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "fbd9156d-fbbf-457f-bc1c-5768c2a9ae16")
-		(at 120.528576 -17.06625)
+		(at 95.00 66.00 180.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP28"
