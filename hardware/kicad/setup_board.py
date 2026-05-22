@@ -39,7 +39,7 @@ from pathlib import Path
 
 PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb")
 BOARD_W = 100.0                # Phase 4b-REDO3: grew 90 → 100 for signal-density (Freerouting Pass #1 failed at 90×75)
-BOARD_H = 85.0                 # grew 75 → 85
+BOARD_H = 95.0                 # PR-A4 Sai-approved 2026-05-23: grew 85 → 95 (Option A board grow for 4-channel template P=12 fit)
 # Custom mount-hole pattern for 90×75 board: 80×65 spacing (5mm inset from each edge).
 # No standard FPV stack pattern fits 90×75 — commercial-product-class custom pattern.
 MOUNT_X_PAD = 5.0              # inset from board edges in X

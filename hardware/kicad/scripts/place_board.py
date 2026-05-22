@@ -256,14 +256,14 @@ def place_supervisor_hall(fps_by_ref, placements):
 # kill LEDs" are part of S4 channel template, not S6 — honest deviation flag)
 # ────────────────────────────────────────────────────────────────────
 S6_POSITIONS = {
-    'J12': (15.0, 80.0, 'F.Cu',   0.0),    # AUX BM06B-SRSS-TB west top
-    'J14': (50.0, 80.0, 'F.Cu',   0.0),    # FC SM08B-SRSS-TB central top
-    'J15': (40.0, 75.0, 'F.Cu',   0.0),    # USBLC6 ESD ch1+ch2 DShot
-    'J16': (60.0, 75.0, 'F.Cu',   0.0),    # USBLC6 ESD ch3+ch4 DShot
-    'J17': (75.0, 75.0, 'F.Cu',   0.0),    # USBLC6 ESD TLM + spare
-    'R36': (47.0, 76.0, 'F.Cu',   0.0),    # VBAT divider top 100K
-    'R37': (47.0, 74.0, 'F.Cu',   0.0),    # VBAT divider bot 14K
-    'C49': (45.0, 74.0, 'F.Cu',   0.0),    # VBAT filter 100nF
+    'J12': (15.0, 90.0, 'F.Cu',   0.0),    # AUX BM06B-SRSS-TB west top
+    'J14': (50.0, 90.0, 'F.Cu',   0.0),    # FC SM08B-SRSS-TB central top
+    'J15': (40.0, 85.0, 'F.Cu',   0.0),    # USBLC6 ESD ch1+ch2 DShot
+    'J16': (60.0, 85.0, 'F.Cu',   0.0),    # USBLC6 ESD ch3+ch4 DShot
+    'J17': (75.0, 85.0, 'F.Cu',   0.0),    # USBLC6 ESD TLM + spare
+    'R36': (47.0, 86.0, 'F.Cu',   0.0),    # VBAT divider top 100K
+    'R37': (47.0, 84.0, 'F.Cu',   0.0),    # VBAT divider bot 14K
+    'C49': (45.0, 84.0, 'F.Cu',   0.0),    # VBAT filter 100nF
 }
 S6_EXPECTED_VALUES = {
     'J12': 'BM06B',
@@ -329,31 +329,31 @@ S5_POSITIONS = {
     # ── Bucks 1-4 + inductors + LDO RELOCATED to SPINE POCKET (PR-A2 Option A) ──
     # 4 bucks F.Cu in 2×2 arrangement; 4 inductors B.Cu underneath (stack via layers).
     # Buck #1 V5_FC + L1
-    'J2':  (43.0, 62.0, 'F.Cu', 0.0),
-    'L1':  (43.0, 62.0, 'B.Cu', 0.0),
+    'J2': (43.0, 72.0, 'F.Cu', 0.0),
+    'L1': (43.0, 72.0, 'B.Cu', 0.0),
     # Buck #2 V5_PI5 + L2
-    'J3':  (43.0, 70.0, 'F.Cu', 0.0),
-    'L2':  (43.0, 70.0, 'B.Cu', 0.0),
+    'J3': (43.0, 80.0, 'F.Cu', 0.0),
+    'L2': (43.0, 80.0, 'B.Cu', 0.0),
     # Buck #3 V5_AI + L3
-    'J4':  (57.0, 62.0, 'F.Cu', 0.0),
-    'L3':  (57.0, 62.0, 'B.Cu', 0.0),
+    'J4': (57.0, 72.0, 'F.Cu', 0.0),
+    'L3': (57.0, 72.0, 'B.Cu', 0.0),
     # Buck #4 V9_VTX1 + L4
-    'J5':  (57.0, 70.0, 'F.Cu', 0.0),
-    'L4':  (57.0, 70.0, 'B.Cu', 0.0),
+    'J5': (57.0, 80.0, 'F.Cu', 0.0),
+    'L4': (57.0, 80.0, 'B.Cu', 0.0),
     # FB resistors — 0402 in top strip Y=70-72 lateral area (outside spine pocket bucks)
-    'R6':  (24.0, 70.0, 'F.Cu', 0.0),    # V5_FC FB top 52K3
-    'R7':  (24.0, 72.0, 'F.Cu', 0.0),    # V5_FC FB bot 10K
-    'R8':  (28.0, 70.0, 'F.Cu', 0.0),    # V5_PI5 FB top 52K3
-    'R9':  (28.0, 72.0, 'F.Cu', 0.0),    # V5_PI5 FB bot 10K
-    'R10': (70.0, 70.0, 'F.Cu', 0.0),    # V5_AI FB top 52K3
-    'R11': (70.0, 72.0, 'F.Cu', 0.0),    # V5_AI FB bot 10K
-    'R12': (76.0, 70.0, 'F.Cu', 0.0),    # V9_VTX1 FB top 102K
-    'R13': (76.0, 72.0, 'F.Cu', 0.0),    # V9_VTX1 FB bot 10K
+    'R6': (24.0, 80.0, 'F.Cu', 0.0),    # V5_FC FB top 52K3
+    'R7': (24.0, 82.0, 'F.Cu', 0.0),    # V5_FC FB bot 10K
+    'R8': (28.0, 80.0, 'F.Cu', 0.0),    # V5_PI5 FB top 52K3
+    'R9': (28.0, 82.0, 'F.Cu', 0.0),    # V5_PI5 FB bot 10K
+    'R10': (70.0, 80.0, 'F.Cu', 0.0),    # V5_AI FB top 52K3
+    'R11': (70.0, 82.0, 'F.Cu', 0.0),    # V5_AI FB bot 10K
+    'R12': (76.0, 80.0, 'F.Cu', 0.0),    # V9_VTX1 FB top 102K
+    'R13': (76.0, 82.0, 'F.Cu', 0.0),    # V9_VTX1 FB bot 10K
     # Boot caps — 0402 in top strip Y=76 (close to S6 BAT/USBLC6 row but between gaps)
-    'C7':  (30.0, 76.0, 'F.Cu', 0.0),    # Buck 1 boot 100nF
-    'C11': (52.0, 76.0, 'F.Cu', 0.0),    # Buck 2 boot
-    'C14': (65.0, 76.0, 'F.Cu', 0.0),    # Buck 3 boot
-    'C17': (80.0, 76.0, 'F.Cu', 0.0),    # Buck 4 boot
+    'C7': (30.0, 86.0, 'F.Cu', 0.0),    # Buck 1 boot 100nF
+    'C11': (52.0, 86.0, 'F.Cu', 0.0),    # Buck 2 boot
+    'C14': (65.0, 86.0, 'F.Cu', 0.0),    # Buck 3 boot
+    'C17': (80.0, 86.0, 'F.Cu', 0.0),    # Buck 4 boot
     # ── INPUT-side strip Y=12-19 between S1 components (per master amendment 2026-05-23) ──
     # 4× Schottky D5-D8 — between S1 Q3/Q4 FET columns + east of R2 NTC
     'D5':  (48.0, 14.0, 'F.Cu', 0.0),    # V5_FC catch diode SS54
@@ -367,20 +367,20 @@ S5_POSITIONS = {
     'F1':  (88.0, 18.0, 'F.Cu', 0.0),    # V9_VTX1 polyfuse MF-MSMF200
     # ── OUTPUT-side strip Y=70-77 (per master amendment 2026-05-23) ──
     # 4× ferrites (LC filter) on F.Cu at y=73 row (between spine pocket south edge and S6 USBLC6)
-    'L6':  (35.0, 73.0, 'F.Cu', 0.0),    # V5_FC ferrite 600Ω
-    'L7':  (50.0, 73.0, 'F.Cu', 0.0),    # V5_PI5 ferrite (in spine-pocket center column gap)
-    'L8':  (65.0, 73.0, 'F.Cu', 0.0),    # V5_AI ferrite
-    'L9':  (82.0, 73.0, 'F.Cu', 0.0),    # V9_VTX1 ferrite
+    'L6': (35.0, 83.0, 'F.Cu', 0.0),    # V5_FC ferrite 600Ω
+    'L7': (50.0, 83.0, 'F.Cu', 0.0),    # V5_PI5 ferrite (in spine-pocket center column gap)
+    'L8': (65.0, 83.0, 'F.Cu', 0.0),    # V5_AI ferrite
+    'L9': (82.0, 83.0, 'F.Cu', 0.0),    # V9_VTX1 ferrite
     # 4× C_OUT (22µF post-ferrite) — spine pocket center + top strip edges
-    'C8':  (50.0, 62.0, 'F.Cu', 0.0),    # V5_FC C_OUT (spine pocket center, between J2/J4 row)
-    'C12': (50.0, 70.0, 'F.Cu', 0.0),    # V5_PI5 C_OUT (spine pocket center, between J3/J5 row)
-    'C15': (22.0, 75.0, 'F.Cu', 0.0),    # V5_AI C_OUT (top strip west, clears R7 FB resistor)
-    'C18': (88.0, 73.0, 'F.Cu', 0.0),    # V9_VTX1 C_OUT (top strip east)
+    'C8': (50.0, 72.0, 'F.Cu', 0.0),    # V5_FC C_OUT (spine pocket center, between J2/J4 row)
+    'C12': (50.0, 80.0, 'F.Cu', 0.0),    # V5_PI5 C_OUT (spine pocket center, between J3/J5 row)
+    'C15': (22.0, 85.0, 'F.Cu', 0.0),    # V5_AI C_OUT (top strip west, clears R7 FB resistor)
+    'C18': (88.0, 83.0, 'F.Cu', 0.0),    # V9_VTX1 C_OUT (top strip east)
     # 4× output TVS on B.Cu y=78 row (clears S4 CH1 Q9/Q10 B.Cu y_max=75.675; S6 all F.Cu)
-    'D10': (35.0, 78.0, 'B.Cu', 0.0),    # V5_FC TVS SMAJ5.0A
-    'D11': (50.0, 78.0, 'B.Cu', 0.0),    # V5_PI5 TVS
-    'D12': (65.0, 78.0, 'B.Cu', 0.0),    # V5_AI TVS
-    'D13': (82.0, 78.0, 'B.Cu', 0.0),    # V9_VTX1 TVS SMAJ9.0A
+    'D10': (35.0, 88.0, 'B.Cu', 0.0),    # V5_FC TVS SMAJ5.0A
+    'D11': (50.0, 88.0, 'B.Cu', 0.0),    # V5_PI5 TVS
+    'D12': (65.0, 88.0, 'B.Cu', 0.0),    # V5_AI TVS
+    'D13': (82.0, 88.0, 'B.Cu', 0.0),    # V9_VTX1 TVS SMAJ9.0A
     # ── Buck #5 V9_VTX2 SW (2A VTX #2, isolated from #1) — vertical column x=5 ──
     'J6':  (12.0, 22.0, 'F.Cu', 0.0),    # buck IC AOZ1284
     'L5':  (12.0, 30.0, 'F.Cu', 0.0),    # 10uH
@@ -393,8 +393,8 @@ S5_POSITIONS = {
     'D14': (5.0,  34.0, 'F.Cu', 0.0),    # V9_VTX2 TVS SMAJ9.0A
     'C21': (5.0,  40.0, 'F.Cu', 0.0),    # C_OUT 22uF
     # ── LDO + Supervisor (central spine pocket) ──
-    'J13': (50.0, 66.0, 'F.Cu', 0.0),    # LDO — center spine pocket (between 4 bucks)
-    'J10': (50.0, 67.0, 'B.Cu', 0.0),    # V5_PI5 supervisor on B.Cu in spine pocket center (clears all F.Cu and B.Cu inductors)
+    'J13': (50.0, 76.0, 'F.Cu', 0.0),    # LDO — center spine pocket (between 4 bucks)
+    'J10': (50.0, 77.0, 'B.Cu', 0.0),    # V5_PI5 supervisor on B.Cu in spine pocket center (clears all F.Cu and B.Cu inductors)
 }
 S5_EXPECTED_VALUES = {
     'J2':  'TPS54560', 'J3':  'TPS54560', 'J4':  'TPS54560',
@@ -462,19 +462,20 @@ def place_bec(fps_by_ref, placements):
 #   - Current shunts on B.Cu near Q lo-side FETs
 # ────────────────────────────────────────────────────────────────────
 S4_CH1_POSITIONS = {
-    # Motor phase pads — west edge x=5
-    'TP19': (5.0,  46.0, 'F.Cu', 0.0),    # MOTOR_A_CH1 (phase A motor pad)
-    'TP20': (5.0,  56.0, 'F.Cu', 0.0),    # MOTOR_B_CH1
-    'TP21': (5.0,  66.0, 'F.Cu', 0.0),    # MOTOR_C_CH1
+    # Motor phase pads — west edge x=5 (P=12 spacing, shifted +5 from 100x85 layout)
+    'TP19': (5.0,  54.0, 'F.Cu', 0.0),    # MOTOR_A_CH1 (P=12 row 1)
+    'TP20': (5.0,  66.0, 'F.Cu', 0.0),    # MOTOR_B_CH1 (row 2)
+    'TP21': (5.0,  78.0, 'F.Cu', 0.0),    # MOTOR_C_CH1 (row 3)
     # 6× AOTL66912 MOSFETs on B.Cu (2 columns × 3 phase rows)
     # Hi-side west col x=12 (near motor pad), Lo-side east col x=28
-    # CH1 NW P=9 pitch per master PR-A4 Option F: Y=49/58/67 (was 45/58/70 at P=13)
-    'Q5':  (12.0, 49.0, 'B.Cu', 0.0),     # Phase A hi
-    'Q6':  (30.0, 49.0, 'B.Cu', 0.0),     # Phase A lo
-    'Q7':  (12.0, 58.0, 'B.Cu', 0.0),     # Phase B hi
-    'Q8':  (30.0, 58.0, 'B.Cu', 0.0),     # Phase B lo
-    'Q9':  (12.0, 67.0, 'B.Cu', 0.0),     # Phase C hi
-    'Q10': (30.0, 67.0, 'B.Cu', 0.0),     # Phase C lo
+    # CH1 NW P=12 pitch per Sai-approved 100×95 board grow (master PR-A4 Option F):
+    # Pad-only bbox TO-263 10.8mm tall + P=12 → 1.2mm clearance (8× JLC minimum)
+    'Q5':  (12.0, 54.0, 'B.Cu', 0.0),     # Phase A hi
+    'Q6':  (30.0, 54.0, 'B.Cu', 0.0),     # Phase A lo
+    'Q7':  (12.0, 66.0, 'B.Cu', 0.0),     # Phase B hi
+    'Q8':  (30.0, 66.0, 'B.Cu', 0.0),     # Phase B lo
+    'Q9':  (12.0, 78.0, 'B.Cu', 0.0),     # Phase C hi
+    'Q10': (30.0, 78.0, 'B.Cu', 0.0),     # Phase C lo
     # MCU + DRV8300 on F.Cu (interior — east of FET cluster)
     'J18': (32.0, 52.0, 'F.Cu', 0.0),     # AT32F421 MCU LQFP-32 (y=52 clears S2 C3 bbox y_max=45.5)
     'J19': (22.0, 50.0, 'F.Cu', 0.0),     # DRV8300 gate driver HVQFN-24
@@ -616,39 +617,39 @@ S4_CHX_POSITIONS = {
     # CH3 (SW quadrant Y=15-42 per master step 2) — Y-mirror with 5mm offset
     # Original CH1 NW Y=42-72 (30mm tall); CH3 SW Y=15-42 (27mm tall).
     # Mirror y → 80-y instead of 85-y to fit in narrower SW zone clear of S1 Y=0-15.
-    'TP33': (5.0, 34.0, 'F.Cu', 180.0), 'TP34': (5.0, 24.0, 'F.Cu', 180.0),
-    'TP35': (5.0, 17.0, 'F.Cu', 180.0),
+    'TP33': (5.0, 49.0, 'F.Cu', 180.0), 'TP34': (5.0, 39.0, 'F.Cu', 180.0),
+    'TP35': (5.0, 32.0, 'F.Cu', 180.0),
     # CH3 P=9: mirror y → 85-y of CH1 P=9. CH1 Y=49/58/67 → CH3 Y=36/27/18
-    'Q17': (12.0, 36.0, 'B.Cu', 180.0), 'Q18': (30.0, 36.0, 'B.Cu', 180.0),
-    'Q19': (12.0, 27.0, 'B.Cu', 180.0), 'Q20': (30.0, 27.0, 'B.Cu', 180.0),
-    'Q21': (12.0, 18.0, 'B.Cu', 180.0), 'Q22': (30.0, 18.0, 'B.Cu', 180.0),
-    'J28': (32.0, 28.0, 'F.Cu', 180.0), 'J29': (22.0, 30.0, 'F.Cu', 180.0),
-    'J30': (15.0, 35.0, 'F.Cu', 180.0), 'J31': (15.0, 25.0, 'F.Cu', 180.0),
-    'J32': (15.0, 17.0, 'F.Cu', 180.0),
-    'U8': (35.0, 16.0, 'F.Cu', 180.0), 'U9': (28.0, 16.0, 'F.Cu', 180.0),
-    'U10': (37.0, 20.0, 'F.Cu', 180.0),
-    'D17': (10.0, 37.0, 'F.Cu', 180.0), 'D21': (28.0, 21.0, 'F.Cu', 180.0),
-    'D63': (35.0, 37.0, 'F.Cu', 180.0),
-    'TH3': (38.0, 16.0, 'F.Cu', 180.0),
-    'R132': (10.0, 30.0, 'F.Cu', 180.0), 'R133': (10.0, 20.0, 'F.Cu', 180.0),
-    'R134': (10.0, 16.0, 'F.Cu', 180.0),
+    'Q17': (12.0, 51.0, 'B.Cu', 180.0), 'Q18': (30.0, 51.0, 'B.Cu', 180.0),
+    'Q19': (12.0, 42.0, 'B.Cu', 180.0), 'Q20': (30.0, 42.0, 'B.Cu', 180.0),
+    'Q21': (12.0, 33.0, 'B.Cu', 180.0), 'Q22': (30.0, 33.0, 'B.Cu', 180.0),
+    'J28': (32.0, 43.0, 'F.Cu', 180.0), 'J29': (22.0, 45.0, 'F.Cu', 180.0),
+    'J30': (15.0, 50.0, 'F.Cu', 180.0), 'J31': (15.0, 40.0, 'F.Cu', 180.0),
+    'J32': (15.0, 32.0, 'F.Cu', 180.0),
+    'U8': (35.0, 31.0, 'F.Cu', 180.0), 'U9': (28.0, 31.0, 'F.Cu', 180.0),
+    'U10': (37.0, 35.0, 'F.Cu', 180.0),
+    'D17': (10.0, 52.0, 'F.Cu', 180.0), 'D21': (28.0, 36.0, 'F.Cu', 180.0),
+    'D63': (35.0, 52.0, 'F.Cu', 180.0),
+    'TH3': (38.0, 31.0, 'F.Cu', 180.0),
+    'R132': (10.0, 45.0, 'F.Cu', 180.0), 'R133': (10.0, 35.0, 'F.Cu', 180.0),
+    'R134': (10.0, 31.0, 'F.Cu', 180.0),
     # CH4 (SE quadrant Y=15-42) — XY-mirrored with 5mm offset
-    'TP40': (95.0, 34.0, 'F.Cu', 0.0), 'TP41': (95.0, 24.0, 'F.Cu', 0.0),
-    'TP42': (95.0, 17.0, 'F.Cu', 0.0),
+    'TP40': (95.0, 49.0, 'F.Cu', 0.0), 'TP41': (95.0, 39.0, 'F.Cu', 0.0),
+    'TP42': (95.0, 32.0, 'F.Cu', 0.0),
     # CH4 P=9: same Y as CH3 (mirror)
-    'Q23': (88.0, 36.0, 'B.Cu', 0.0), 'Q24': (70.0, 36.0, 'B.Cu', 0.0),
-    'Q25': (88.0, 27.0, 'B.Cu', 0.0), 'Q26': (70.0, 27.0, 'B.Cu', 0.0),
-    'Q27': (88.0, 18.0, 'B.Cu', 0.0), 'Q28': (70.0, 18.0, 'B.Cu', 0.0),
-    'J33': (68.0, 28.0, 'F.Cu', 0.0), 'J34': (78.0, 30.0, 'F.Cu', 0.0),
-    'J35': (85.0, 35.0, 'F.Cu', 0.0), 'J36': (85.0, 25.0, 'F.Cu', 0.0),
-    'J37': (85.0, 17.0, 'F.Cu', 0.0),
-    'U11': (65.0, 16.0, 'F.Cu', 0.0), 'U12': (72.0, 16.0, 'F.Cu', 0.0),
-    'U13': (63.0, 20.0, 'F.Cu', 0.0),
-    'D18': (90.0, 37.0, 'F.Cu', 0.0), 'D22': (72.0, 21.0, 'F.Cu', 0.0),
-    'D78': (65.0, 37.0, 'F.Cu', 0.0),
-    'TH4': (62.0, 16.0, 'F.Cu', 0.0),
-    'R170': (90.0, 30.0, 'F.Cu', 0.0), 'R171': (90.0, 20.0, 'F.Cu', 0.0),
-    'R172': (90.0, 16.0, 'F.Cu', 0.0),
+    'Q23': (88.0, 51.0, 'B.Cu', 0.0), 'Q24': (70.0, 51.0, 'B.Cu', 0.0),
+    'Q25': (88.0, 42.0, 'B.Cu', 0.0), 'Q26': (70.0, 42.0, 'B.Cu', 0.0),
+    'Q27': (88.0, 33.0, 'B.Cu', 0.0), 'Q28': (70.0, 33.0, 'B.Cu', 0.0),
+    'J33': (68.0, 43.0, 'F.Cu', 0.0), 'J34': (78.0, 45.0, 'F.Cu', 0.0),
+    'J35': (85.0, 50.0, 'F.Cu', 0.0), 'J36': (85.0, 40.0, 'F.Cu', 0.0),
+    'J37': (85.0, 32.0, 'F.Cu', 0.0),
+    'U11': (65.0, 31.0, 'F.Cu', 0.0), 'U12': (72.0, 31.0, 'F.Cu', 0.0),
+    'U13': (63.0, 35.0, 'F.Cu', 0.0),
+    'D18': (90.0, 52.0, 'F.Cu', 0.0), 'D22': (72.0, 36.0, 'F.Cu', 0.0),
+    'D78': (65.0, 52.0, 'F.Cu', 0.0),
+    'TH4': (62.0, 31.0, 'F.Cu', 0.0),
+    'R170': (90.0, 45.0, 'F.Cu', 0.0), 'R171': (90.0, 35.0, 'F.Cu', 0.0),
+    'R172': (90.0, 31.0, 'F.Cu', 0.0),
 }
 
 
