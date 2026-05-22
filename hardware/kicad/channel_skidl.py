@@ -130,10 +130,10 @@ def make_channel(ch_num, vmotor, v5, v3v3, v3v3a, gnd, dshot_in, tlm, swdio, swc
     def half_bridge(gh_net, gl_net, motor_net, shunt_top_net):
         r_gh = Part("Device", "R", value="15R", footprint="Resistor_SMD:R_0402_1005Metric")
         r_gl = Part("Device", "R", value="15R", footprint="Resistor_SMD:R_0402_1005Metric")
-        qh = Part("Device", "Q_NMOS", value="AON6260",
-                  footprint="Package_DFN_QFN:W-PDFN-8-1EP_6x5mm_P1.27mm_EP3x3mm")
-        ql = Part("Device", "Q_NMOS", value="AON6260",
-                  footprint="Package_DFN_QFN:W-PDFN-8-1EP_6x5mm_P1.27mm_EP3x3mm")
+        qh = Part("Device", "Q_NMOS", value="AOTL66912",
+                  footprint="Package_TO_SOT_SMD:TO-263-3_TabPin2")
+        ql = Part("Device", "Q_NMOS", value="AOTL66912",
+                  footprint="Package_TO_SOT_SMD:TO-263-3_TabPin2")
         qh["D"] += vmotor
         qh["S"] += motor_net
         r_gh[1] += gh_net; r_gh[2] += qh["G"]

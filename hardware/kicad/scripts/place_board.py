@@ -19,18 +19,18 @@ from pathlib import Path
 from collections import defaultdict
 
 PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb")
-BOARD_W = 50.0
-BOARD_H = 50.0
+BOARD_W = 85.0   # Phase 4c-resume Option C rectangular
+BOARD_H = 70.0
 
 # ───────────── Placement regions (per Phase 2.5 sketch) ─────────────
 
-# Channel corner anchors (F.Cu): (mcu_x, mcu_y, ch_label)
+# Channel corner anchors (F.Cu): scaled for 85×70 board
 # CH1 BL, CH2 BR, CH3 TL, CH4 TR
 CHANNEL_CORNERS = {
-    1: (3.0,  3.0,  'BL'),       # bottom-left
-    2: (38.0, 3.0,  'BR'),       # bottom-right
-    3: (3.0,  32.0, 'TL'),       # top-left
-    4: (38.0, 32.0, 'TR'),       # top-right
+    1: (3.0,  3.0,  'BL'),
+    2: (73.0, 3.0,  'BR'),
+    3: (3.0,  52.0, 'TL'),
+    4: (73.0, 52.0, 'TR'),
 }
 # Each channel "footprint zone" is ~12×15 mm centered around the MCU; we cluster
 # the per-channel passives in a 10×10 mm sub-region adjacent to the MCU.
@@ -40,60 +40,60 @@ CHANNEL_CORNERS = {
 MOSFET_GRID = {
     'cols': 6,
     'rows': 4,
-    'cell_w': 7.0,
-    'cell_h': 7.5,
-    'origin_x': 4.0,    # board (50-42)/2 = 4
-    'origin_y': 10.0,   # leaves room for bulk caps + RP FETs above + shunts below
+    'cell_w': 12.5,     # TOLL-8L ~9.5×11 + 1.5mm spacing
+    'cell_h': 13.0,
+    'origin_x': 5.0,    # 85 - 6×12.5 = 10, so 5mm border each side
+    'origin_y': 15.0,   # leaves room for bulk caps + RP FETs + shunts below/above
 }
 
-# Bulk caps at left/right edges of B.Cu
-BULK_POS = [(7.0, 42.0), (43.0, 42.0)]   # 470uF radials, centered around y=42
+# Bulk caps at left/right edges of B.Cu (scaled for 85×70)
+BULK_POS = [(8.0, 62.0), (77.0, 62.0)]
 
-# Reverse-polarity FETs (4× AON6260) — in a row at bottom of B.Cu
-RP_FET_ROW_Y = 4.0
-RP_FET_X0 = 15.0
-RP_FET_DX = 7.0   # spacing
+# Reverse-polarity FETs (4× AON6260) — bottom row B.Cu
+RP_FET_ROW_Y = 5.0
+RP_FET_X0 = 25.0
+RP_FET_DX = 7.0
 
-# TVS — near battery input
-TVS_POS = (43.0, 4.0)
+# TVS near battery input
+TVS_POS = (75.0, 5.0)
 
-# Battery solder pads (Conn_01x02) — bottom edge, B.Cu
-BATT_PAD_POS = (8.0, 4.0)
+# Battery solder pads — bottom edge B.Cu
+BATT_PAD_POS = (10.0, 5.0)
 
-# FC connector (top of F.Cu, centered)
-FC_POS = (21.0, 46.0)
+# FC connector — top of F.Cu, centered
+FC_POS = (38.0, 66.0)
 
-# Buck + LDO + their support — right side of F.Cu
-BUCK_POS = (40.0, 22.0)
-LDO_POS = (40.0, 26.0)
-BUCK_IND_POS = (44.0, 22.0)
+# Buck + LDO + support — right side of F.Cu
+BUCK_POS = (70.0, 30.0)
+LDO_POS = (70.0, 34.0)
+BUCK_IND_POS = (75.0, 30.0)
 
 # 3× ESD near FC
-ESD_POS = [(17.0, 41.0), (22.0, 41.0), (27.0, 41.0)]
+ESD_POS = [(31.0, 61.0), (37.0, 61.0), (43.0, 61.0)]
 
-# Status LEDs on F.Cu: 1× power-good (green) + 4× channel status (red)
-LED_PG_POS = (25.0, 24.0)
-LED_STATUS_POS = {1: (10.0, 18.0), 2: (40.0, 18.0), 3: (10.0, 30.0), 4: (40.0, 30.0)}
+# Status LEDs
+LED_PG_POS = (42.0, 35.0)
+LED_STATUS_POS = {1: (15.0, 25.0), 2: (70.0, 25.0), 3: (15.0, 45.0), 4: (70.0, 45.0)}
 
 # Motor solder pads: 3 per edge, one channel per edge (T7).
 # Edge maps to (CH, edge, anchor positions).
 MOTOR_PADS = {
-    # CH1 → bottom edge: pads at (10,1), (12,1), (14,1)
-    (1, 'A'): (10.0, 1.0),  (1, 'B'): (12.0, 1.0),  (1, 'C'): (14.0, 1.0),
+    # CH1 → bottom edge (scaled for 85×70)
+    (1, 'A'): (15.0, 1.0),  (1, 'B'): (18.0, 1.0),  (1, 'C'): (21.0, 1.0),
     # CH2 → right edge
-    (2, 'A'): (49.0, 10.0), (2, 'B'): (49.0, 12.0), (2, 'C'): (49.0, 14.0),
+    (2, 'A'): (84.0, 15.0), (2, 'B'): (84.0, 18.0), (2, 'C'): (84.0, 21.0),
     # CH3 → left edge
-    (3, 'A'): (1.0, 36.0),  (3, 'B'): (1.0, 38.0),  (3, 'C'): (1.0, 40.0),
+    (3, 'A'): (1.0, 50.0),  (3, 'B'): (1.0, 53.0),  (3, 'C'): (1.0, 56.0),
     # CH4 → top edge
-    (4, 'A'): (36.0, 49.0), (4, 'B'): (38.0, 49.0), (4, 'C'): (40.0, 49.0),
+    (4, 'A'): (62.0, 69.0), (4, 'B'): (65.0, 69.0), (4, 'C'): (68.0, 69.0),
 }
 
 # SWD test pads: 2 per channel (SWDIO + SWCLK), on left edge of F.Cu near each MCU
 SWD_PADS = {
-    (1, 'SWDIO'): (1.0, 10.0),  (1, 'SWCLK'): (1.0, 12.0),
-    (2, 'SWDIO'): (1.0, 14.0),  (2, 'SWCLK'): (1.0, 16.0),
-    (3, 'SWDIO'): (1.0, 26.0),  (3, 'SWCLK'): (1.0, 28.0),
-    (4, 'SWDIO'): (1.0, 30.0),  (4, 'SWCLK'): (1.0, 32.0),
+    (1, 'SWDIO'): (1.0, 14.0),  (1, 'SWCLK'): (1.0, 17.0),
+    (2, 'SWDIO'): (84.0, 28.0), (2, 'SWCLK'): (84.0, 31.0),
+    (3, 'SWDIO'): (1.0, 36.0),  (3, 'SWCLK'): (1.0, 39.0),
+    (4, 'SWDIO'): (84.0, 50.0), (4, 'SWCLK'): (84.0, 53.0),
 }
 
 # ───────────── Per-channel passive cluster offsets ─────────────
@@ -162,11 +162,13 @@ def categorize(fp):
     if 'MountingHole' in lib:
         return ('mount_hole', None)
 
-    # MOSFETs — distinguish reverse-pol (Q1-Q4) vs phase (Q5+)
+    # MOSFETs — reverse-pol (Q1-Q4, AON6260 stays per Phase 2e) vs phase (AOTL66912 per 4c-resume Option C)
+    if 'AOTL66912' in val:
+        return ('phase_fet', ref)
     if 'AON6260' in val:
         if ref in ('Q1', 'Q2', 'Q3', 'Q4'):
             return ('rp_fet', int(ref[1:]))
-        return ('phase_fet', ref)
+        return ('phase_fet', ref)  # legacy fallback
 
     # Shunts
     if val == '0.2mR':
@@ -362,10 +364,10 @@ def main():
     passives = [fp for fp, _ in groups.get('passive', [])]
     # Per-channel zone starts (right of MCU for CH1+CH3 bottom; left of MCU for CH2+CH4)
     zones = {
-        1: (12.0, 14.0),  # CH1 zone start (TL of zone)
-        2: (24.0, 14.0),  # CH2
-        3: (12.0, 24.0),  # CH3
-        4: (24.0, 24.0),  # CH4
+        1: (15.0, 14.0),
+        2: (55.0, 14.0),
+        3: (15.0, 45.0),
+        4: (55.0, 45.0),
     }
     per_zone = (len(passives) + 3) // 4
     pg = CHANNEL_PASSIVE_GRID
