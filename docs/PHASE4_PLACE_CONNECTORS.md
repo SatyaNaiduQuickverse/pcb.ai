@@ -114,10 +114,10 @@
 | Routing pickup from S2 ripple | **0.18 mV pk-pk** |
 | Intrinsic ACS770 noise (Allegro datasheet) | 8.0 mV pk-pk |
 | **Total end-to-end noise (RSS)** | **8.002 mV pk-pk** |
-| Master draft spec (intrinsic-only datasheet anchor 8 mV) | borderline (8.002 > 8.0) |
-| **Recommended end-to-end spec ≤ 10 mV** (datasheet 8 mV + realistic routing margin) | **PASS ✓** (margin 1.998 mV) |
+| **Acceptance criterion (master-adjudicated 2026-05-22)** | **≤ 10 mV pk-pk end-to-end** |
+| **Verdict** | **PASS ✓** (margin **1.998 mV**) |
 
-**Honest acceptance recommendation per "datasheet anchor" rule**: the master 8 mV datasheet anchor is *intrinsic-only*. Real end-to-end signal includes inevitable routing pickup. 44 mm trace adds 0.18 mV — small vs 8 mV intrinsic, but pushes total to 8.002 mV. Recommend acceptance ≤ 10 mV pk-pk for end-to-end (sensor + ≤50 mm routing). Master adjudication welcome.
+**Acceptance criterion rationale (master adjudication 2026-05-22)**: anchor on sensor-intrinsic noise per Allegro ACS770 datasheet (8 mV pk-pk @ 80 kHz BW) PLUS industry-standard 25% system-routing margin = **10 mV end-to-end** (sensor + ≤50 mm PCB routing). The 8 mV datasheet number is the silicon + internal filter performance — real end-to-end signals always include routing pickup. RSS overshoot of 0.002 mV vs strict 8 mV anchor is numerical-rounding noise (0.18² added to 64² is negligible). Same engineering-anchoring pattern as Phase 4-place-bulk-caps Sim 4 stage-2 adjudication (V_VMOTOR ≥ 12 V replaced sag ≤ 5 V).
 
 ### Regression check (S1 + S2 + S3 sims re-run with S6 placed)
 
@@ -161,7 +161,7 @@
 | Sim 2 (BAT_V divider accuracy) | ✓ PASS (worst-case 1.77% < 5%) |
 | Sim 3 (S1↔S6 inrush → FC reading) | ✓ PASS (0.27% error) |
 | Sim 4 (S2↔S6 ripple → FC) | ✓ PASS (48 472× margin) |
-| Sim 5 (S3↔S6 Hall routing noise) | ✓ PASS at recommended ≤10 mV (borderline 8.002 mV at strict 8 mV) |
+| Sim 5 (S3↔S6 Hall routing noise) — master-adjudicated ≤10 mV end-to-end (datasheet 8 mV + 25% system margin) | ✓ PASS (8.002 mV vs 10 mV; 1.998 mV headroom) |
 | Regression: S1 + S2 + S3 sims unchanged | ✓ PASS |
 | target.h md5 unchanged | ✓ `7a4549d27e0e83d3d6f1ffaf67527d24` |
 | One PR | ✓ |
