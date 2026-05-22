@@ -64,7 +64,7 @@ D_Z[2] += GND
 RP_FETS = []
 for i in range(1, 5):
     Q = Part("Device", "Q_NMOS", value="AON6260",
-             footprint="Package_DFN_QFN:DFN-8-1EP_5x6mm_P1.27mm_EP3.4x5mm")
+             footprint="Package_DFN_QFN:W-PDFN-8-1EP_6x5mm_P1.27mm_EP3x3mm")
     Q["G"] += GATE_RP
     Q["S"] += BATGND
     Q["D"] += GND
@@ -74,9 +74,9 @@ for i in range(1, 5):
 VMOTOR += BATT
 
 CBULK1 = Part("Device", "C_Polarized", value="470uF_63V",
-              footprint="Capacitor_SMD:CP_Elec_12.5x13.5")
+              footprint="Capacitor_SMD:CP_Elec_10x14.3")
 CBULK2 = Part("Device", "C_Polarized", value="470uF_63V",
-              footprint="Capacitor_SMD:CP_Elec_12.5x13.5")
+              footprint="Capacitor_SMD:CP_Elec_10x14.3")
 CBULK1[1] += VMOTOR
 CBULK1[2] += GND
 CBULK2[1] += VMOTOR
@@ -242,41 +242,104 @@ R_LED_PG[2] += LED_PG_NODE
 LED_PG["A"] += LED_PG_NODE
 LED_PG["K"] += GND
 
-# ─────────── Per-channel boundary nets + motor + SWD pads ───────────
-# Phase 3a declares the boundary; Phase 3b populates channel.kicad_sch;
-# Phase 3c instantiates 4× and wires per-channel.
-channel_nets = {}
-for ch in range(1, 5):
-    channel_nets[ch] = {
-        'M_RAW': [M1_CLEAN, M2_CLEAN, M3_CLEAN, M4_CLEAN][ch-1],
-        'MOTOR_A': Net(f"MOTOR_A_CH{ch}"),
-        'MOTOR_B': Net(f"MOTOR_B_CH{ch}"),
-        'MOTOR_C': Net(f"MOTOR_C_CH{ch}"),
-        'SWD_DIO': Net(f"SWD_DIO_CH{ch}"),
-        'SWD_CLK': Net(f"SWD_CLK_CH{ch}"),
-    }
-    # Motor solder pads — 3× per channel (12 total)
-    for phase in ['A', 'B', 'C']:
-        pad = Part("Connector", "TestPoint", value=f"MOTOR_{phase}_CH{ch}",
-                   footprint="TestPoint:TestPoint_Pad_D3.0mm")
-        pad[1] += channel_nets[ch][f'MOTOR_{phase}']
-    # SWD pads — 2× per channel (8-16 total per inclusion of NRST)
-    swd_dio = Part("Connector", "TestPoint", value=f"SWDIO_CH{ch}",
-                   footprint="TestPoint:TestPoint_Pad_D1.0mm")
-    swd_clk = Part("Connector", "TestPoint", value=f"SWCLK_CH{ch}",
-                   footprint="TestPoint:TestPoint_Pad_D1.0mm")
-    swd_dio[1] += channel_nets[ch]['SWD_DIO']
-    swd_clk[1] += channel_nets[ch]['SWD_CLK']
+# ─────────── VBAT_SENSE divider (Phase 3c — closes 3a deferred item) ───────────
+# Battery voltage divider for FC pack-voltage monitoring (FC connector pin 2).
+# Ratio derivation (Rigor §10):
+#   6S worst case +BATT = 25.2 V (4.2 V × 6, CL-006 lock)
+#   FC analog input range = ~3.3 V max (Betaflight FC ADC)
+#   Target: VBAT=25.2 V → V_SENSE = 3.10 V (leaves 6.5% headroom under 3.3 V)
+#   Required ratio = 25.2 / 3.10 = 8.13
+#   Pick: R_TOP = 100 kΩ, R_BOT = 14 kΩ → ratio (100+14)/14 = 8.143
+#         → V_SENSE at +BATT=25.2 V: 25.2 × 14/114 = 3.094 V ✓
+#         → V_SENSE at +BATT=18.0 V (LiPo LVC): 18.0 × 14/114 = 2.21 V
+#   Standby current: 25.2 V / 114 kΩ = 221 µA (low; meets master's "low Iq" criterion)
+R_VBAT_TOP = Part("Device", "R", value="100K",
+                  footprint="Resistor_SMD:R_0402_1005Metric",
+                  description="VBAT_SENSE divider top (Phase 3c)")
+R_VBAT_BOT = Part("Device", "R", value="14K",
+                  footprint="Resistor_SMD:R_0402_1005Metric",
+                  description="VBAT_SENSE divider bottom")
+C_VBAT_FILT = Part("Device", "C", value="100nF",
+                   footprint="Capacitor_SMD:C_0402_1005Metric",
+                   description="VBAT_SENSE filter cap (anti-noise into FC ADC)")
+R_VBAT_TOP[1] += BATT
+R_VBAT_TOP[2] += VBAT_SENSE_OUT
+R_VBAT_BOT[1] += VBAT_SENSE_OUT
+R_VBAT_BOT[2] += GND
+C_VBAT_FILT[1] += VBAT_SENSE_OUT
+C_VBAT_FILT[2] += GND
 
-# Note: actual sheet INSTANCES (sheet block in .kicad_sch referencing
-# channel.kicad_sch with hierarchical pin connections) are created at
-# Phase 3c when channel.kicad_sch has been populated at Phase 3b.
+# ─────────── CURR_OUT decision (Phase 3c — closes 3a deferred item) ──────────
+# Master directive verified vs Betaflight 4-in-1 8-pin standard:
+#   The TLM (telemetry) single-wire UART (pin 4) carries per-channel current
+#   data reported by AM32 firmware (USE_SERIAL_TELEMETRY=yes per target.h
+#   Phase 2c lock). FC parses this via the "Esc_sensor" / "Telemetry" data
+#   stream. Analog CURR_OUT is NOT part of Betaflight's 4-in-1 standard.
+#
+# Decision: NO analog CURR aggregation hardware. The FC connector pin 3
+# (defined as CURR_OUT in Phase 3a) is left as a future-expansion pin (e.g.,
+# could carry RPM signal or auxiliary analog). For now, tie CURR_OUT to GND
+# through a 100 kΩ pull-down to provide a defined inactive level (so the
+# FC's analog input doesn't float when this ESC is connected; a floating
+# ADC pin can pick up noise on the FC side).
+R_CURR_PD = Part("Device", "R", value="100K",
+                 footprint="Resistor_SMD:R_0402_1005Metric",
+                 description="CURR_OUT inactive-state pull-down (analog CURR_OUT not used per Betaflight std; AM32 reports current via TLM telemetry)")
+R_CURR_PD[1] += CURR_OUT
+R_CURR_PD[2] += GND
+
+# ─────────── 4× channel instantiation (Phase 3c hierarchy) ────────────────────
+from channel_skidl import make_channel
+
+# Connect TLM_CLEAN to one shared TLM bus across all 4 channels (Betaflight
+# 4-in-1 convention — single TLM line, half-duplex multiplexed by FC config).
+TLM_BUS = TLM_CLEAN
+
+for ch_num in range(1, 5):
+    # Per-channel hierarchical-pin nets:
+    #   DShot input — one of M<n>_CLEAN from main (already wired to FC + ESD)
+    dshot_in = [M1_CLEAN, M2_CLEAN, M3_CLEAN, M4_CLEAN][ch_num - 1]
+    # SWD pads — one set per MCU (4 SWD test-point sets on board edge)
+    swdio = Net(f"SWDIO_CH{ch_num}")
+    swclk = Net(f"SWCLK_CH{ch_num}")
+    # Motor outputs returned by make_channel
+    motor_a, motor_b, motor_c = make_channel(
+        ch_num,
+        vmotor=VMOTOR,
+        v5=V5,
+        v3v3=V3V3,
+        v3v3a=V3V3A,
+        gnd=GND,
+        dshot_in=dshot_in,
+        tlm=TLM_BUS,
+        swdio=swdio,
+        swclk=swclk,
+    )
+
+    # Motor solder pads — 3× per channel (12 total). 3.0 mm dia exposed pads
+    # on board edge per Phase 2.5 placement.
+    for phase, motor_net in [('A', motor_a), ('B', motor_b), ('C', motor_c)]:
+        pad = Part("Connector", "TestPoint", value=f"MOTOR_{phase}_CH{ch_num}",
+                   footprint="TestPoint:TestPoint_Pad_D3.0mm")
+        pad[1] += motor_net
+
+    # SWD pads (per-MCU pattern) — 2 pads per channel (4 sets × 2 = 8 pads total).
+    swd_dio_pad = Part("Connector", "TestPoint", value=f"SWDIO_CH{ch_num}",
+                      footprint="TestPoint:TestPoint_Pad_D1.0mm")
+    swd_clk_pad = Part("Connector", "TestPoint", value=f"SWCLK_CH{ch_num}",
+                      footprint="TestPoint:TestPoint_Pad_D1.0mm")
+    swd_dio_pad[1] += swdio
+    swd_clk_pad[1] += swclk
 
 if __name__ == "__main__":
-    out = "/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1_phase3a.net"
+    out = "/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.net"
     generate_netlist(file_=out)
-    print(f"netlist written: {out}")
+    print(f"\n=== Phase 3c netlist export ===")
+    print(f"output: {out}")
     with open(out) as f:
         txt = f.read()
-    print(f"  refs: {txt.count(chr(40) + 'ref ')}")
-    print(f"  nets: {txt.count('(net (code ')}")
+    nrefs = txt.count(chr(40) + 'comp')
+    nnets = txt.count('(net (code')
+    print(f"  components (comp blocks): {nrefs}")
+    print(f"  nets (net blocks):        {nnets}")
+    print(f"  file size:                {len(txt):,} bytes")
