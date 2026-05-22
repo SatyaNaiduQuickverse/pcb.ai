@@ -107,16 +107,17 @@ def place_battery_input(fps_by_ref, placements):
 # These are NOT present in the netlist — flagged as Phase 5 SKiDL follow-up.
 # ────────────────────────────────────────────────────────────────────
 S2_POSITIONS = {
-    # CP_Elec_10x14.3 actual bbox (pads + silkscreen courtyard) is 13.59×11.05 mm
-    # — wider than the 10 mm cap body label. With 20 mm horizontal + 16 mm
-    # vertical spacing: ≥6 mm horizontal gap, ≥5 mm vertical gap edge-to-edge.
-    # SPEC DEVIATION: S2 zone X=42-58 (16 mm wide per master) is too narrow for
-    # 2 caps side-by-side. Expanded to X=33-67 (with caps centered at x=40, x=60).
-    # Master adjudication accepted similar S1 zone expansion (Y=0-13 → Y=0-20).
-    'C1': (40.0, 24.0, 'F.Cu', 0.0),
-    'C2': (60.0, 24.0, 'F.Cu', 0.0),
-    'C3': (40.0, 40.0, 'F.Cu', 0.0),
-    'C4': (60.0, 40.0, 'F.Cu', 0.0),
+    # CP_Elec_10x14.3 actual bbox = 13.59×11.05 mm. Master 2026-05-22 stage-3
+    # amendment: Hall (S3 U1) placed vertical at (50, 45) 0° rot → body bbox
+    # (42.1, 20.3)..(61.7, 46.0). S2 caps must clear this. Shifted outward:
+    # C1/C3 at x=30, C2/C4 at x=70 — outside Hall body bbox by ≥1mm.
+    # This pushes caps into what will become NW/NE channel zones (master
+    # amended channel inner-edges to X=39/61); Phase 4-place-channels-x4
+    # will coordinate (likely shifts channel passive zone to clear bulk caps).
+    'C1': (30.0, 24.0, 'F.Cu', 0.0),
+    'C2': (70.0, 24.0, 'F.Cu', 0.0),
+    'C3': (30.0, 40.0, 'F.Cu', 0.0),
+    'C4': (70.0, 40.0, 'F.Cu', 0.0),
 }
 S2_EXPECTED_VALUE = "EEHZS1V471P"
 
@@ -145,11 +146,105 @@ def place_bulk_caps(fps_by_ref, placements):
     return placed
 
 
+# ────────────────────────────────────────────────────────────────────
+# S3: Supervisor + Hall sensor (docs/PHASE4_SUBSYSTEMS.md §S3)
+# Central spine middle, zone X=42-58, Y=42-58.
+# Components:
+#   J11 TPS3700 supervisor (Conn_01x08 SOT-23-8 placeholder; Phase 5b SKiDL
+#     swap to real TPS3700 symbol)
+#   U1 ACS770ECB-200B Hall sensor (Allegro_CB_PFF; large body 13.6×27 mm —
+#     rotated 90° to fit horizontally in middle band; primary leads carry +VMOTOR)
+#   R19 348K + R20 23K2: VMOTOR OVP/UVP divider (27V trip / 18V trip via 0.0625 ratio)
+#   C41 100nF: 10 ms inrush delay cap (CT pin)
+#   R21 10K: PG_VMOTOR open-drain pull-up to +3V3
+#   R30 0R: Hall VCC bridge (V5 → HALL_VCC, optional filter location)
+#   C42 1uF, C43 100nF: Hall VCC bypass
+#   R31 10K + R32 20K: Hall VOUT divider 5V → 3.3V (FC-ADC compatible)
+#   C44 10nF: Hall output post-divider noise filter
+#   R33 0Ω 2512, R34 0Ω 2512: VMOTOR primary copper-bridge jumpers
+#     (placement-layout aids; physical realization is Phase 5b 3 oz copper bar
+#     through Hall primary)
+# Total: 14 components (10 in immediate zone + 2 VMOTOR jumpers + supervisor + Hall)
+# ────────────────────────────────────────────────────────────────────
+S3_POSITIONS = {
+    # Hall vertical orientation (0° rot) per master 2026-05-22 stage-3 amendment.
+    # Symmetric placement at central spine middle Y=45 — all 4 channels are
+    # equidistant ~30 mm from Hall (premium-ESC reference for thermal symmetry).
+    # Body bbox at 0° rot = (42.1, 20.3)..(61.7, 46.0); pad 4 (primary current)
+    # at (52.96, 22.97) extends north. Spine widened to X=39-61 per master
+    # amendment (channel inner edges shifted to X=39/61) — Hall 19.65mm fits.
+    'U1':  (50.0, 45.0, 'F.Cu', 0.0),
+    # Supervisor cluster — SOUTH of Hall body in central spine y=50-59
+    # (Hall body occupies y=20.3-46; spine middle y=46-58 is clear).
+    'J11': (50.0, 55.0, 'F.Cu', 0.0),    # TPS3700 supervisor SOT-23-8
+    'R19': (45.0, 53.0, 'F.Cu', 0.0),    # 348K OVP/UVP divider top
+    'R20': (55.0, 53.0, 'F.Cu', 0.0),    # 23K2 OVP/UVP divider bot
+    'C41': (50.0, 59.0, 'F.Cu', 0.0),    # 100nF 10ms inrush-delay cap
+    'R21': (45.0, 57.0, 'F.Cu', 0.0),    # 10K PG_VMOTOR pullup
+    # Hall VCC bridge + bypass — east of Hall pad 2/3 signal pads at y=45
+    # Pad 2 V_CC @ (51.91, 45), pad 3 GND @ (53.82, 45). Decouplers immediately east.
+    'R30': (54.0, 47.5, 'F.Cu', 0.0),    # 0Ω V5 → HALL_VCC bridge
+    'C42': (56.0, 47.5, 'F.Cu', 0.0),    # 1uF bypass
+    'C43': (58.0, 47.5, 'F.Cu', 0.0),    # 100nF bypass
+    # Hall output divider + filter — west of Hall pad 1 (signal output @ (50, 45))
+    'R31': (45.0, 47.5, 'F.Cu', 0.0),    # 10K div top (5V→3.3V)
+    'R32': (45.0, 49.5, 'F.Cu', 0.0),    # 20K div bot
+    'C44': (47.0, 49.5, 'F.Cu', 0.0),    # 10nF output filter
+    # VMOTOR copper-bridge jumpers (0Ω 2512) on B.Cu — Hall primary path
+    # Hall vertical at (50, 45) 0° rot → pad 4 (primary IN) at (52.96, 22.97).
+    # Pad 5 (primary OUT) at south end of body near y=46.
+    # Bridges placed on B.Cu to backside-route +VMOTOR via PTH to primary pads.
+    'R33': (50.0, 25.0, 'B.Cu', 0.0),    # +VMOTOR → Hall pad 4 (north end, IP+)
+    'R34': (50.0, 65.0, 'B.Cu', 0.0),    # Hall pad 5 (south end) → +VMOTOR_CH
+}
+S3_EXPECTED_VALUES = {
+    'U1':  'ACS770ECB',
+    'J11': 'TPS3700',
+    'R19': '348K',
+    'R20': '23K2',
+    'C41': '100nF',
+    'R21': '10K',
+    'R30': '0R',
+    'C42': '1uF',
+    'C43': '100nF',
+    'R31': '10K',
+    'R32': '20K',
+    'C44': '10nF',
+    'R33': '0R',
+    'R34': '0R',
+}
+
+
+def place_supervisor_hall(fps_by_ref, placements):
+    """S3 — supervisor + Hall sensor placement (docs/PHASE4_SUBSYSTEMS.md §S3)."""
+    placed = 0
+    missing = []
+    mismatched = []
+    for ref, pos in S3_POSITIONS.items():
+        fp = fps_by_ref.get(ref)
+        if not fp:
+            missing.append(ref)
+            continue
+        expected = S3_EXPECTED_VALUES[ref]
+        if expected not in fp['value']:
+            mismatched.append((ref, expected, fp['value']))
+            continue
+        x, y, layer, rot = pos
+        placements[ref] = (x, y, layer, rot)
+        placed += 1
+    if missing:
+        print(f"  WARN: S3 components missing in netlist: {missing}")
+    if mismatched:
+        for ref, exp, act in mismatched:
+            print(f"  WARN: S3 ref {ref} value mismatch — expected '{exp}', got '{act}'")
+    return placed
+
+
 # Registry of subsystem placers in spec order
 ALL_PLACERS = [
     ('S1', 'Battery input',         place_battery_input),
     ('S2', 'Bulk cap bank',         place_bulk_caps),
-    # ('S3', 'Supervisor + Hall',     place_supervisor_hall),   # PR after
+    ('S3', 'Supervisor + Hall',     place_supervisor_hall),
     # ('S4', 'Channel template (×4)', place_channels),          # PR ×2
     # ('S5', 'BEC subsystem',         place_bec),               # PR after
     # ('S6', 'FC + AUX',              place_connectors),        # PR after

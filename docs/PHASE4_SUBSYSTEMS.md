@@ -33,11 +33,11 @@ Y=0-13:  BOTTOM EDGE — battery XT30 + NTC inrush + 4× rev-pol FETs + TVS + fu
 ```
 
 Quadrants:
-- **NW** (X=5-45, Y=42-72): Channel 1 — motor pad at (5, 60), 6 FETs ringing it
-- **NE** (X=55-95, Y=42-72): Channel 2 — motor pad at (95, 60), mirror
-- **SW** (X=5-45, Y=13-42): Channel 3 — motor pad at (5, 22), mirror Y
-- **SE** (X=55-95, Y=13-42): Channel 4 — motor pad at (95, 22), mirror XY
-- **Central spine** (X=42-58, Y=0-85): power path (battery → bulk → supervisor → split)
+- **NW** (X=5-39, Y=42-72): Channel 1 — motor pad at (5, 60), 6 FETs ringing it
+- **NE** (X=61-95, Y=42-72): Channel 2 — motor pad at (95, 60), mirror
+- **SW** (X=5-39, Y=13-42): Channel 3 — motor pad at (5, 22), mirror Y
+- **SE** (X=61-95, Y=13-42): Channel 4 — motor pad at (95, 22), mirror XY
+- **Central spine** (X=39-61, Y=0-85): power path (battery → bulk → supervisor → split) — widened 2026-05-22 master stage-3 amendment from X=42-58 (16mm) to X=39-61 (22mm) to fit ACS770ECB vertical Hall body (19.65mm wide at 0° rot) symmetrically. NW/NE/SW/SE quadrant inner edges shifted by 3mm; each channel still ~34mm wide, sufficient for MCU + 6 FETs + per-channel passives.
 
 ## 3. Subsystem I/O contracts
 
@@ -61,9 +61,9 @@ Quadrants:
 - **Components**: TPS3700 supervisor, ACS770ECB-200B Hall sensor, voltage dividers (R + R for OVP threshold), inrush delay cap
 - **Inputs**: +VMOTOR, GND, +V3V3 (for supervisor logic)
 - **Outputs**: OVUV_KILL_BUS (to 4-channel kill rails), BUS_CURR_OUT (analog to FC AUX), +VMOTOR_HOTSIDE (post-Hall) → to 4-channel split
-- **Zone**: X=42-58, Y=42-58 (central spine middle)
-- **Adjacency**: between bulk caps (below) and channel split (above + sides)
-- **Acceptance**: Hall primary leads carry +VMOTOR with 3oz copper pour; supervisor divider accessible for test
+- **Zone**: X=39-61, Y=20-72 (amended 2026-05-22 master stage-3). Hall (ACS770ECB Allegro_CB_PFF) at (50, 45) 0° rot occupies y=20.3-46 in the spine (body bbox 19.65×25.7mm); supervisor cluster (TPS3700 SOT-23-8 + 4×0402) south of Hall at y=53-59. Original spec was X=42-58, Y=42-58 (16×16); Hall body fundamentally larger so spine widened (X=39-61) AND Hall Y-range extended (covers y=20-46, sharing zone-Y with S2 amended Y=20-42 conceptually — S2 caps physically shifted to x=30/70 outer corners to clear Hall body).
+- **Adjacency**: Hall primary current pad 4 (north end) feeds from S2 bulk caps via B.Cu jumper R33 at (50, 25); pad 5 (south end) feeds out to 4-channel split via R34 at (50, 65). All 4 channels equidistant ~30mm from Hall center (symmetric loss budget per premium-ESC reference).
+- **Acceptance**: Hall primary leads carry +VMOTOR with 3oz copper pour; supervisor divider accessible for test; vertical Hall orientation ensures channel-to-channel thermal symmetry
 
 ### S4: Channel template (instantiate × 4)
 - **Components per channel**:

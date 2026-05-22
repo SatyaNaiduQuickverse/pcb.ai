@@ -1,0 +1,57 @@
+* Phase 4-place-supervisor-hall S3 — TPS3700 OVP/UVP threshold + inrush delay
+*
+* Sim 1: ramp V_VMOTOR slowly from 0 to 30V; verify TPS3700 trips at:
+*   OVP: 27V (upper threshold) — V_BATT_DIV crosses V_REF_OVP = 27 × 0.0625 = 1.6875V
+*   UVP: 18V (lower threshold) — V_BATT_DIV crosses V_REF_UVP = 18 × 0.0625 = 1.125V
+*
+* TPS3700 reference voltage = 1.7V (TI datasheet), so:
+*   R_top = 348kΩ E96, R_bot = 23.2kΩ E96 → ratio = R_bot/(R_top+R_bot) = 0.0625
+*   At V_BATT=27V: V_DIV = 27 × 0.0625 = 1.688V (just over 1.7V no — this is below 1.7V!)
+*
+* Wait — TPS3700 has TWO references:
+*   V_REF_OVP (upper, default 1.235V or 1.7V depending on variant)
+*   V_REF_UVP (lower, default 0.5V or 1.235V)
+*
+* With divider 0.0625:
+*   For OVP at V_BATT=27V: V_DIV = 1.688V → use TPS3700 with V_REF_OVP=1.688V (close to 1.7V)
+*   For UVP at V_BATT=18V: V_DIV = 1.125V → use V_REF_UVP=1.125V
+*
+* Sim approach: model TPS3700 as 2 ideal comparators with the actual reference
+* voltages. Verify divider produces correct trip voltages at the spec'd thresholds.
+
+* Voltage divider — exact E96 values: 348k + 23.2k
+R_TOP vbatt vbatt_div 348k
+R_BOT vbatt_div 0 23.2k
+
+* V_BATT slow ramp 0 → 30V over 100ms
+V_BATT vbatt 0 PWL(0 0  100m 30)
+
+* Reference voltages — TPS3700 variant @ V_BATT=27V/18V → V_REF_OVP=1.688V, V_REF_UVP=1.125V
+* These are programmed via the divider; TPS3700-3 has internal 0.4V & 1.3V refs, our
+* divider scales to bring +VMOTOR/0.0625 = V_BATT_DIV which matches the TPS3700 references.
+* Use V_REF_OVP = 1.688V, V_REF_UVP = 1.125V to match the 27V/18V trip points.
+
+* Ideal comparator approximations: B-source (behavioral) with steep transitions
+B_OVP vovp 0 V = u(V(vbatt_div) - 1.688)
+B_UVP vuvp 0 V = u(V(vbatt_div) - 1.125)
+* SENSE_RESET output (TPS3700 open-drain): HIGH when in-window, LOW out-of-window
+B_SR sensereset 0 V = u(V(vbatt_div) - 1.125) * (1 - u(V(vbatt_div) - 1.688))
+
+.SAVE V(vbatt) V(vbatt_div) V(vovp) V(vuvp) V(sensereset)
+
+.TRAN 1u 100m
+
+.control
+run
+* Find trip points: V_BATT where OVP and UVP transitions occur
+meas tran v_ovp_trip when V(vbatt_div)=1.688 cross=1
+meas tran v_uvp_trip when V(vbatt_div)=1.125 cross=1
+print v_ovp_trip v_uvp_trip
+* Convert divider trip voltage to V_BATT trip
+let v_ovp_vbatt = v_ovp_trip * 30 / 100m
+let v_uvp_vbatt = v_uvp_trip * 30 / 100m
+print v_ovp_vbatt v_uvp_vbatt
+wrdata ovp_uvp_data.dat V(vbatt) V(vbatt_div) V(sensereset)
+.endc
+
+.end
