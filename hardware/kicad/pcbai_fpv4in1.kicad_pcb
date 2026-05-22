@@ -6426,7 +6426,7 @@
 	(footprint "Inductor_SMD:L_Sunlord_MWSA0503S"
 		(layer "F.Cu")
 		(uuid "0c81710a-85cd-4406-bd51-d35026dba954")
-		(at 39.700003 -75.51275)
+		(at 78.00 60.00 0.0)
 		(descr "Inductor, Sunlord, MWSA0503S, 5.4x5.2x2.8mm, (https://sunlordinc.com/Download.aspx?file=L1VwbG9hZEZpbGVzL1BERl9DYXQvMjAyMjExMTUxNDQ4MDU0NTQucGRm&lan=en), generated with kicad-footprint-generator gen_inductor.py")
 		(tags "Inductor mwsa")
 		(property "Reference" "L3"
@@ -18762,7 +18762,7 @@
 	(footprint "Inductor_SMD:L_Sunlord_MWSA0605S"
 		(layer "F.Cu")
 		(uuid "241db90f-b7cd-4d11-bbef-4100d173f951")
-		(at 110.14286 -32.43625)
+		(at 22.00 70.00 0.0)
 		(descr "Inductor, Sunlord, MWSA0605S, 7.0x6.6x4.8mm, (https://sunlordinc.com/Download.aspx?file=L1VwbG9hZEZpbGVzL1BERl9DYXQvMjAyMjExMTUxNDQ4MDU0NTQucGRm&lan=en), generated with kicad-footprint-generator gen_inductor.py")
 		(tags "Inductor mwsa")
 		(property "Reference" "L2"
@@ -35606,7 +35606,7 @@
 	(footprint "Diode_SMD:D_SMA"
 		(layer "F.Cu")
 		(uuid "4684b222-098c-4db7-b743-b52dbb0347c0")
-		(at 96.62834 -155.68125)
+		(at 32.00 70.00 0.0)
 		(descr "Diode SMA (DO-214AC)")
 		(tags "Diode SMA (DO-214AC)")
 		(property "Reference" "D6"
@@ -40995,7 +40995,7 @@
 	(footprint "Package_SO:SOIC-8-1EP_3.9x4.9mm_P1.27mm_EP2.29x3mm_ThermalVias"
 		(layer "F.Cu")
 		(uuid "4f870d58-7ce2-4d0f-a460-a76d6b111be8")
-		(at 103.966673 -60.31625)
+		(at 88.00 60.00 0.0)
 		(descr "SOIC, 8 Pin (https://www.analog.com/media/en/technical-documentation/data-sheets/ada4898-1_4898-2.pdf#page=29), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOIC SO")
 		(property "Reference" "J4"
@@ -52794,7 +52794,7 @@
 	(footprint "Package_SO:SOIC-8-1EP_3.9x4.9mm_P1.27mm_EP2.29x3mm_ThermalVias"
 		(layer "F.Cu")
 		(uuid "64c9c3db-a905-4838-8329-e33f8812f321")
-		(at 103.966673 -44.61975)
+		(at 12.00 70.00 0.0)
 		(descr "SOIC, 8 Pin (https://www.analog.com/media/en/technical-documentation/data-sheets/ada4898-1_4898-2.pdf#page=29), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOIC SO")
 		(property "Reference" "J3"
@@ -58316,7 +58316,7 @@
 	(footprint "Diode_SMD:D_SMA"
 		(layer "F.Cu")
 		(uuid "6fa292f9-7661-4024-9239-540e1addc429")
-		(at 147.640245 -74.50925)
+		(at 68.00 60.00 0.0)
 		(descr "Diode SMA (DO-214AC)")
 		(tags "Diode SMA (DO-214AC)")
 		(property "Reference" "D7"
@@ -70719,7 +70719,7 @@
 	(footprint "Inductor_SMD:L_Sunlord_MWSA0503S"
 		(layer "F.Cu")
 		(uuid "8e189832-96c7-4c17-8ef6-2517eebfa279")
-		(at 12.75 -76.21275)
+		(at 78.00 70.00 0.0)
 		(descr "Inductor, Sunlord, MWSA0503S, 5.4x5.2x2.8mm, (https://sunlordinc.com/Download.aspx?file=L1VwbG9hZEZpbGVzL1BERl9DYXQvMjAyMjExMTUxNDQ4MDU0NTQucGRm&lan=en), generated with kicad-footprint-generator gen_inductor.py")
 		(tags "Inductor mwsa")
 		(property "Reference" "L4"
@@ -72555,7 +72555,7 @@
 	(footprint "Inductor_SMD:L_Sunlord_MWSA0605S"
 		(layer "F.Cu")
 		(uuid "910bf6a4-9016-47bc-ad8e-cc793e950264")
-		(at 39.259529 -107.60575)
+		(at 22.00 60.00 0.0)
 		(descr "Inductor, Sunlord, MWSA0605S, 7.0x6.6x4.8mm, (https://sunlordinc.com/Download.aspx?file=L1VwbG9hZEZpbGVzL1BERl9DYXQvMjAyMjExMTUxNDQ4MDU0NTQucGRm&lan=en), generated with kicad-footprint-generator gen_inductor.py")
 		(tags "Inductor mwsa")
 		(property "Reference" "L1"
@@ -73439,7 +73439,7 @@
 	(footprint "Package_SO:SOIC-8-1EP_3.9x4.9mm_P1.27mm_EP2.29x3mm_ThermalVias"
 		(layer "F.Cu")
 		(uuid "93f876e0-d1d8-49ec-b9fc-1ff6753fe917")
-		(at 32.380954 -18.21975)
+		(at 12.00 22.00 0.0)
 		(descr "SOIC, 8 Pin (https://www.analog.com/media/en/technical-documentation/data-sheets/ada4898-1_4898-2.pdf#page=29), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOIC SO")
 		(property "Reference" "J6"
@@ -84962,7 +84962,7 @@
 	(footprint "Package_SO:SOIC-8-1EP_3.9x4.9mm_P1.27mm_EP2.29x3mm_ThermalVias"
 		(layer "F.Cu")
 		(uuid "adaf2bdb-28a1-41b2-aaa5-68101cff69de")
-		(at 86.566673 -114.60225)
+		(at 12.00 60.00 0.0)
 		(descr "SOIC, 8 Pin (https://www.analog.com/media/en/technical-documentation/data-sheets/ada4898-1_4898-2.pdf#page=29), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOIC SO")
 		(property "Reference" "J2"
@@ -85616,7 +85616,7 @@
 	(footprint "Diode_SMD:D_SMA"
 		(layer "F.Cu")
 		(uuid "aef689f6-0207-4752-8b7d-6110d266ff10")
-		(at 150.085482 -30.95925)
+		(at 32.00 60.00 0.0)
 		(descr "Diode SMA (DO-214AC)")
 		(tags "Diode SMA (DO-214AC)")
 		(property "Reference" "D5"
@@ -89147,7 +89147,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-23"
 		(layer "F.Cu")
 		(uuid "b4060c73-5350-4ee3-97fe-1e58562de6df")
-		(at 128.319056 -50.41625)
+		(at 50.00 65.00 0.0)
 		(descr "SOT, 3 Pin (JEDEC TO-236 Var AB https://www.jedec.org/document_search?search_api_views_fulltext=TO-236), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOT TO_SOT_SMD")
 		(property "Reference" "J10"
@@ -94802,7 +94802,7 @@
 	(footprint "Package_SO:SOIC-8-1EP_3.9x4.9mm_P1.27mm_EP2.29x3mm_ThermalVias"
 		(layer "F.Cu")
 		(uuid "bd97e3f7-128e-4dc9-8a92-95515d186e47")
-		(at 13.671428 -91.70925)
+		(at 88.00 70.00 0.0)
 		(descr "SOIC, 8 Pin (https://www.analog.com/media/en/technical-documentation/data-sheets/ada4898-1_4898-2.pdf#page=29), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOIC SO")
 		(property "Reference" "J5"
@@ -99323,7 +99323,7 @@
 	(footprint "Diode_SMD:D_SMA"
 		(layer "F.Cu")
 		(uuid "c81f8ada-b8dc-4f7d-8873-a29d7f796b54")
-		(at 145.364532 -122.19875)
+		(at 12.00 38.00 0.0)
 		(descr "Diode SMA (DO-214AC)")
 		(tags "Diode SMA (DO-214AC)")
 		(property "Reference" "D9"
@@ -102690,7 +102690,7 @@
 	(footprint "Package_SON:WSON-6-1EP_2x2mm_P0.65mm_EP1x1.6mm"
 		(layer "F.Cu")
 		(uuid "ce2154be-660e-45d6-b5fc-73a8ed2bc3e0")
-		(at 24.290476 -138.55175)
+		(at 38.00 70.00 0.0)
 		(descr "WSON, 6 Pin (http://www.ti.com/lit/ds/symlink/tps61040.pdf#page=35), generated with kicad-footprint-generator ipc_noLead_generator.py")
 		(tags "WSON NoLead")
 		(property "Reference" "J13"
@@ -112568,7 +112568,7 @@
 	(footprint "Diode_SMD:D_SMA"
 		(layer "F.Cu")
 		(uuid "dfd8be35-aba0-4a56-a05f-1c0768cbaebe")
-		(at 22.211666 -153.15475)
+		(at 68.00 70.00 0.0)
 		(descr "Diode SMA (DO-214AC)")
 		(tags "Diode SMA (DO-214AC)")
 		(property "Reference" "D8"
@@ -115149,7 +115149,7 @@
 	(footprint "Inductor_SMD:L_Sunlord_MWSA0503S"
 		(layer "F.Cu")
 		(uuid "e45d9693-b990-4d1c-8052-ec8f0f748c32")
-		(at 39.700003 -91.20925)
+		(at 12.00 30.00 0.0)
 		(descr "Inductor, Sunlord, MWSA0503S, 5.4x5.2x2.8mm, (https://sunlordinc.com/Download.aspx?file=L1VwbG9hZEZpbGVzL1BERl9DYXQvMjAyMjExMTUxNDQ4MDU0NTQucGRm&lan=en), generated with kicad-footprint-generator gen_inductor.py")
 		(tags "Inductor mwsa")
 		(property "Reference" "L5"

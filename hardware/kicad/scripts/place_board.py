@@ -302,14 +302,99 @@ def place_connectors(fps_by_ref, placements):
     return placed
 
 
+# ────────────────────────────────────────────────────────────────────
+# S5: BEC subsystem (docs/PHASE4_SUBSYSTEMS.md §S5)
+# 5 buck rails + LDO + V5_PI5 supervisor. Master 2026-05-22 dispatch
+# (Task #54): zone allocation flexible; worker's call to distribute
+# bucks for thermal separation from channel FETs.
+#
+# Strategy: NW + NE side-band strip at Y=58-72 (between S3 Hall body
+# y=20-46 and S6 connectors y=72-85). Buck #5 V9_VTX2 isolated from
+# Buck #4 V9_VTX1 by placing centrally between S3 supervisor cluster
+# (y≤59) and S6 connectors (y≥72). LDO + supervisor IC clustered
+# next to Buck #5 in central spine pocket.
+#
+# Components (17 — core BEC; eFuses/polyfuses/TVS/FB-resistors deferred
+# to subsequent passes where they cluster around the buck + load,
+# matching master's 15-25 estimate):
+#   J2 V5_FC TPS54560 + L1 4.7uH + D5 SS54
+#   J3 V5_PI5 TPS54560 + L2 4.7uH + D6 SS54
+#   J4 V5_AI TPS54560 + L3 8.2uH + D7 SS54
+#   J5 V9_VTX1 AOZ1284PI + L4 10uH + D8 SS54
+#   J6 V9_VTX2 AOZ1284PI + L5 10uH + D9 SS54 (isolated from #4)
+#   J13 LDO TLV76733DRVR (V5_FC → V3V3)
+#   J10 V5_PI5 supervisor (PG_RPI to FC)
+# ────────────────────────────────────────────────────────────────────
+S5_POSITIONS = {
+    # NW strip — Bucks 1+2 (5A FC + 5A RPi)
+    'J2':  (12.0, 60.0, 'F.Cu', 0.0),    # V5_FC buck IC TPS54560
+    'L1':  (22.0, 60.0, 'F.Cu', 0.0),    # 4.7uH MWSA0605S
+    'D5':  (32.0, 60.0, 'F.Cu', 0.0),    # SS54 Schottky
+    'J3':  (12.0, 70.0, 'F.Cu', 0.0),    # V5_PI5 buck IC TPS54560
+    'L2':  (22.0, 70.0, 'F.Cu', 0.0),    # 4.7uH MWSA0605S
+    'D6':  (32.0, 70.0, 'F.Cu', 0.0),    # SS54
+    # NE strip — Bucks 3+4 (3A AI + 2A VTX1)
+    'J4':  (88.0, 60.0, 'F.Cu', 0.0),    # V5_AI buck IC TPS54560
+    'L3':  (78.0, 60.0, 'F.Cu', 0.0),    # 8.2uH MWSA0503S
+    'D7':  (68.0, 60.0, 'F.Cu', 0.0),    # SS54
+    'J5':  (88.0, 70.0, 'F.Cu', 0.0),    # V9_VTX1 buck IC AOZ1284
+    'L4':  (78.0, 70.0, 'F.Cu', 0.0),    # 10uH MWSA0503S
+    'D8':  (68.0, 70.0, 'F.Cu', 0.0),    # SS54
+    # Buck 5 V9_VTX2 relocated to SW WEST EDGE (x=12, y=22-38) — fully isolated
+    # from Buck 4 V9_VTX1 (NE x=88) per master VTX1/VTX2 isolation requirement.
+    # Cluster fits cleanly between S1 (y_max=20) and S2 C3 (y_min=34.5) area;
+    # x=12 stays west of S2 C1/C3 cap bbox (x_min=23.1).
+    'J6':  (12.0, 22.0, 'F.Cu', 0.0),    # V9_VTX2 buck IC AOZ1284
+    'L5':  (12.0, 30.0, 'F.Cu', 0.0),    # 10uH (x clear of C1/C3 column at x=30)
+    'D9':  (12.0, 38.0, 'F.Cu', 0.0),    # SS54 (x clear of C3 column)
+    # LDO + supervisor in central spine pocket (between S3 Hall y_max=46 and S6 y=72)
+    'J13': (38.0, 70.0, 'F.Cu', 0.0),    # LDO TLV76733DRVR WSON-6 — V5_FC→V3V3
+    'J10': (50.0, 65.0, 'F.Cu', 0.0),    # V5_PI5 supervisor SOT-23 in spine pocket
+}
+S5_EXPECTED_VALUES = {
+    'J2':  'TPS54560', 'J3':  'TPS54560', 'J4':  'TPS54560',
+    'J5':  'AOZ1284',  'J6':  'AOZ1284',
+    'L1':  '4.7uH',    'L2':  '4.7uH',    'L3':  '8.2uH',
+    'L4':  '10uH',     'L5':  '10uH',
+    'D5':  'SS54',     'D6':  'SS54',     'D7':  'SS54',
+    'D8':  'SS54',     'D9':  'SS54',
+    'J13': 'TLV76733', 'J10': 'VSUP',
+}
+
+
+def place_bec(fps_by_ref, placements):
+    """S5 — BEC subsystem placement (docs/PHASE4_SUBSYSTEMS.md §S5)."""
+    placed = 0
+    missing = []
+    mismatched = []
+    for ref, pos in S5_POSITIONS.items():
+        fp = fps_by_ref.get(ref)
+        if not fp:
+            missing.append(ref)
+            continue
+        expected = S5_EXPECTED_VALUES[ref]
+        if expected not in fp['value']:
+            mismatched.append((ref, expected, fp['value']))
+            continue
+        x, y, layer, rot = pos
+        placements[ref] = (x, y, layer, rot)
+        placed += 1
+    if missing:
+        print(f"  WARN: S5 components missing in netlist: {missing}")
+    if mismatched:
+        for ref, exp, act in mismatched:
+            print(f"  WARN: S5 ref {ref} value mismatch — expected '{exp}', got '{act}'")
+    return placed
+
+
 # Registry of subsystem placers in spec order
 ALL_PLACERS = [
     ('S1', 'Battery input',         place_battery_input),
     ('S2', 'Bulk cap bank',         place_bulk_caps),
     ('S3', 'Supervisor + Hall',     place_supervisor_hall),
     ('S6', 'FC + AUX connectors',   place_connectors),
+    ('S5', 'BEC subsystem',         place_bec),
     # ('S4', 'Channel template (×4)', place_channels),          # PR ×2
-    # ('S5', 'BEC subsystem',         place_bec),               # PR after
 ]
 
 
