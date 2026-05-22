@@ -169,32 +169,40 @@ def main(in3_signal=False):
     insert_idx = via_match.start()
     new_txt = txt[:insert_idx] + "\n" + "\n".join(planes) + txt[insert_idx:]
 
-    # ─── 4. Update padstacks — add inner-layer shapes for through-hole pads ───
+    # ─── 4. Update padstacks — expand to ALL inner layers (option a per master) ───
+    # Phase 5b-retry: master adjudication 2026-05-22 directive #1 — pads need
+    # shapes on inner layers so Freerouting's plane-served-pad recognition fires.
+    # For SMD pads (F.Cu-only or B.Cu-only), add inner-layer shapes too so plane
+    # fanout works through the pad's logical "presence" on the plane layer.
+    # Freerouting auto-carves cutouts around non-matching-net pads.
     inner_layers = ["In1.Cu", "In2.Cu", "In3.Cu"] if in3_signal else ["In1.Cu", "In2.Cu"]
 
     def expand_padstack(match):
         body = match.group(0)
-        f_shape_m = re.search(r'\(shape \(circle F\.Cu (\d+)\)\)', body)
-        b_shape_m = re.search(r'\(shape \(circle B\.Cu (\d+)\)\)', body)
-        f_path_m = re.search(r'\(shape \(path F\.Cu (\d+)([^)]*)\)\)', body)
-        b_path_m = re.search(r'\(shape \(path B\.Cu (\d+)([^)]*)\)\)', body)
-        if f_shape_m and b_shape_m:
-            radius = f_shape_m.group(1)
-            inner = "".join(f"      (shape (circle {L} {radius}))\n" for L in inner_layers)
-            body = body.replace(
-                '(shape (circle B.Cu',
-                inner + '      (shape (circle B.Cu',
-                1,
-            )
-        elif f_path_m and b_path_m:
-            r = f_path_m.group(1)
-            rest = f_path_m.group(2)
-            inner = "".join(f"      (shape (path {L} {r}{rest}))\n" for L in inner_layers)
-            body = body.replace(
-                '(shape (path B.Cu',
-                inner + '      (shape (path B.Cu',
-                1,
-            )
+        # Find ANY F.Cu or B.Cu shape (circle / rect / path) and add same shape on inner layers
+        # Pattern matches '(shape (TYPE LAYER PARAMS))'
+        shape_pattern = re.compile(r'\(shape \((circle|rect|path|polygon) (F\.Cu|B\.Cu)([^)]+)\)\)')
+        # Collect existing inner-layer presence to avoid duplicating
+        existing_inner = set()
+        for L in inner_layers:
+            if f'circle {L}' in body or f'rect {L}' in body or f'path {L}' in body or f'polygon {L}' in body:
+                existing_inner.add(L)
+        # Find first F.Cu or B.Cu shape definition
+        m = shape_pattern.search(body)
+        if not m:
+            return body
+        shape_type, _, params = m.groups()
+        # Build inner-layer shapes
+        inner_lines = []
+        for L in inner_layers:
+            if L in existing_inner:
+                continue
+            inner_lines.append(f"      (shape ({shape_type} {L}{params}))")
+        if not inner_lines:
+            return body
+        inner_block = "\n".join(inner_lines) + "\n      "
+        # Insert inner shapes before the FIRST outer-Cu shape line for clean grouping
+        body = body.replace(m.group(0), inner_block + m.group(0), 1)
         return body
 
     new_txt = re.sub(r'\(padstack [^(]+\(.*?attach off\)\s+\)', expand_padstack, new_txt, flags=re.DOTALL)

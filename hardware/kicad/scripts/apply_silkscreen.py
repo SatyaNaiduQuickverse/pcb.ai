@@ -48,8 +48,8 @@ BEC_PAD_LABELS = {
     'V5_PI5_GND':   (97.0, 43.0, 'GND', 'Pi5'),
     'V5_AI_PLUS':   (97.0, 48.0, '+5V', 'AI'),
     'V5_AI_GND':    (97.0, 53.0, 'GND', 'AI'),
-    'V9_VTX1_PLUS': (3.0, 28.0, '+9V', 'VTX1'),
-    'V9_VTX1_GND':  (3.0, 33.0, 'GND', 'VTX1'),
+    'V9_VTX1_PLUS': (97.0, 58.0, '+9V', 'VTX1'),
+    'V9_VTX1_GND':  (97.0, 63.0, 'GND', 'VTX1'),
     'V9_VTX2_PLUS': (3.0, 45.0, '+9V', 'VTX2'),
     'V9_VTX2_GND':  (3.0, 50.0, 'GND', 'VTX2'),
     'V3V3_PLUS':    (85.0, 82.0, '+3V3', ''),
@@ -60,9 +60,9 @@ BEC_PAD_LABELS = {
     'GND_DIST_4':   (3.0, 80.0, 'GND', ''),
 }
 
-# Indicator LEDs (Phase 4b-REDO3 — moved with battery section)
-LED_PWR_POS = (32.0, 9.0)
-LED_RPOL_POS = (38.0, 9.0)
+# Indicator LEDs (Phase 5b-retry — battery section migrated to SE for NW relief)
+LED_PWR_POS = (45.0, 9.0)
+LED_RPOL_POS = (50.0, 9.0)
 
 # FC connector — pin 1 to pin 8 order per SKiDL J_FC (re-centered for 100×85)
 FC_POS = (50.0, 81.0)
@@ -78,8 +78,8 @@ SWD_PADS = {
 }
 
 # Battery solder pads
-BATT_POS = (10.0, 5.0)
-BATGND_POS = (10.0, 8.0)
+BATT_POS = (88.0, 5.0)
+BATGND_POS = (88.0, 8.0)
 
 # Mount holes (100×85 board — Phase 4b-redo3)
 MOUNT_HOLES = [(5.0, 5.0), (95.0, 5.0), (5.0, 80.0), (95.0, 80.0)]

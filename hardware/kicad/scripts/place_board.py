@@ -72,19 +72,21 @@ MOSFET_GRID = {
     'origin_y': 15.0,   # leaves room for bulk caps + RP FETs + shunts below/above
 }
 
-# Bulk caps at left/right edges of B.Cu (scaled for 100×85 — Phase 4b-REDO3)
-BULK_POS = [(10.0, 77.0), (90.0, 77.0)]
+# Phase 5b-retry NW relief: battery section migrated to SE corner. NW was the
+# hotspot quadrant; moving battery+RP_FETs+NTC+indicators out drops NW demand.
+# BATT_PAD at right edge for cable accessibility; rest of battery cluster nearby.
+BULK_POS = [(10.0, 77.0), (90.0, 77.0)]   # unchanged (on B.Cu, not NW signal load)
 
-# Reverse-polarity FETs (4× AON6260) — bottom row B.Cu (battery section)
+# Reverse-polarity FETs (4× AON6260) — moved from x=35 (NW) to x=58 (SE)
 RP_FET_ROW_Y = 5.0
-RP_FET_X0 = 35.0     # shifted 5mm right (board grew 10mm wider, center-aligned)
+RP_FET_X0 = 58.0
 RP_FET_DX = 7.0
 
-# TVS near battery input
-TVS_POS = (88.0, 5.0)
+# TVS — moved left to avoid overlap with relocated BATT_PAD
+TVS_POS = (80.0, 5.0)
 
-# Battery solder pads — bottom edge B.Cu
-BATT_PAD_POS = (10.0, 5.0)
+# Battery solder pads — moved from (10, 5) (NW corner) to (88, 5) (SE corner)
+BATT_PAD_POS = (88.0, 5.0)
 
 # FC connector — top of F.Cu, centered (board height grew, recentered for 100×85)
 FC_POS = (50.0, 81.0)
@@ -97,15 +99,15 @@ LED_STATUS_POS = {1: (16.0, 18.0), 2: (84.0, 18.0), 3: (16.0, 67.0), 4: (84.0, 6
 # Power-good LED (existing, on V3V3 — channel-shared)
 LED_PG_POS = (50.0, 21.0)
 
-# ─── Phase 4b-REDO3 NEW BEC component positions (100×85 board) ───
-# NTC pair (2× MF72 5D25 in parallel) — top of board, between battery pads and bulk caps.
-NTC_POS = {1: (18.0, 9.0), 2: (23.0, 9.0)}
+# ─── Battery section components (Phase 5b-retry NW relief — moved to SE) ───
+# NTC pair (2× MF72 5D25 in parallel) — between BATT_PAD (88,5) and RP_FETs (58-81)
+NTC_POS = {1: (70.0, 9.0), 2: (75.0, 9.0)}
 
-# Indicator LEDs (LED_PWR green = battery present; LED_RPOL red = polarity reversed)
-LED_PWR_POS = (32.0, 9.0)
-LED_RPOL_POS = (38.0, 9.0)
-R_LED_PWR_POS = (32.0, 12.0)
-R_LED_RPOL_POS = (38.0, 12.0)
+# Indicator LEDs (LED_PWR green / LED_RPOL red) — adjacent to NTC in SE battery zone
+LED_PWR_POS = (45.0, 9.0)        # left of RP FET row for visibility
+LED_RPOL_POS = (50.0, 9.0)
+R_LED_PWR_POS = (45.0, 12.0)
+R_LED_RPOL_POS = (50.0, 12.0)
 
 # BEC zone — REDO3 redistribution (+5mm relief between buck columns and BEC passives):
 # Middle band y=29..45 on F.Cu (was y=24..40 in REDO2; shifted +5mm down for relief).
@@ -116,18 +118,18 @@ BEC_BUCK_ZONE = {
     'col_w': 15.0,                # widened from 13mm for board-grew breathing room
     'col_y_spacing': 4.0,
 }
-# Per-buck column origins (5 bucks × 15mm pitch starting at x=15; ends at x=75)
-# Total span 60mm vs 52mm in REDO2 (+8mm thanks to wider board)
+# Per-buck column origins — Phase 5b-retry maximum NW relief: all bucks x≥50.
+# Pushes BEC strip fully into NE quadrant. NW only has CH1 channel components.
 BEC_BUCK_COL_X = {
-    1: 15.0,   # V5_FC
-    2: 30.0,   # V5_PI5
-    3: 45.0,   # V5_AI
-    4: 60.0,   # V9_VTX1
-    5: 75.0,   # V9_VTX2
+    1: 50.0,   # V5_FC — NE start
+    2: 60.0,   # V5_PI5
+    3: 70.0,   # V5_AI
+    4: 80.0,   # V9_VTX1
+    5: 90.0,   # V9_VTX2 — NE end (edge clearance 100-97.5=2.5mm tight)
 }
-
+# Buck pitch narrowed from 15→10mm to fit 5 bucks in x=50..95 range.
 # Voltage supervisor for V5_PI5 — adjacent to Buck #2 column
-SUPERVISOR_POS = (30.0, 44.0)
+SUPERVISOR_POS = (60.0, 44.0)
 
 # Schottky catch diodes (1 per buck) — placed below each buck IC
 # BEC solder pads — distributed on board edges per T7, with proper edge clearance.
@@ -145,10 +147,11 @@ BEC_PAD_POS = {
     # V5_AI: right edge, lower-mid (adjacent V5_PI5)
     'V5_AI_PLUS':  (97.0, 48.0),
     'V5_AI_GND':   (97.0, 53.0),
-    # V9_VTX1: left edge, mid (between CH1 SWD and CH3 motors)
-    'V9_VTX1_PLUS': (3.0, 28.0),
-    'V9_VTX1_GND':  (3.0, 33.0),
-    # V9_VTX2: left edge, mid-lower
+    # V9_VTX1: RIGHT edge (Phase 5b-retry NW relief — buck #4 is at x=60 [SE side]
+    # so left-edge pads created cross-board HPWL pulling demand into NW)
+    'V9_VTX1_PLUS': (97.0, 58.0),
+    'V9_VTX1_GND':  (97.0, 63.0),
+    # V9_VTX2: left edge, mid-lower (stays — V9_VTX2 buck #5 at x=75 NE-ish)
     'V9_VTX2_PLUS': (3.0, 45.0),
     'V9_VTX2_GND':  (3.0, 50.0),
     # V3V3: top edge, right side (away from CH4 motors)
@@ -694,14 +697,12 @@ def main():
         grid_half_h = (pg['rows'] - 1) * pg['cell_h'] / 2.0
         zones[ch] = (mx + dx * PASSIVE_ZONE_OFFSET_MM - grid_half_w,
                      my + dy * PASSIVE_ZONE_OFFSET_MM - grid_half_h)
-    # Phase 4b-REDO3: BEC passive band shifted +3.5mm down (was y=44..56 in REDO2; now y=51..63)
-    # for additional relief between buck strip (now y=29..45) and BEC supporting passives.
-    # 100×85 board provides extra width — grid widens to 30 columns × 6 rows.
-    BEC_PASSIVE_COUNT = 65            # first N passives go to BEC zone
-    BEC_PASSIVE_ORIGIN = (15.0, 51.0)   # +3.5mm relief vs REDO2's (12, 44)
-    BEC_PASSIVE_COLS = 30                # widened from 25 (extra board width)
+    # Phase 5b-retry aggressive NW relief: BEC passive band centered (x=30..75).
+    BEC_PASSIVE_COUNT = 65
+    BEC_PASSIVE_ORIGIN = (30.0, 51.0)
+    BEC_PASSIVE_COLS = 30
     BEC_PASSIVE_ROWS = 6
-    BEC_PASSIVE_CELL = 1.5               # +0.1mm pitch for breathing room
+    BEC_PASSIVE_CELL = 1.5
     pg = CHANNEL_PASSIVE_GRID
 
     # Channel passives = passives[BEC_PASSIVE_COUNT:]

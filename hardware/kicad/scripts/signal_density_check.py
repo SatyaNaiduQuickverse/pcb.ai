@@ -31,13 +31,13 @@ from collections import defaultdict
 
 PCB_FILE = "/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb"
 
-# Plane-served nets (excluded from signal demand)
+# Plane-served nets — Phase 5b-retry: list refined to match Freerouting empirical
+# behavior (grep'd from freerouting.log "Queuing item" lines). Only GND + +VMOTOR
+# are fully plane-served by current dsn_inject_planes.py. The 5V/9V/3V3 rails
+# remain routed as signal traces (no dedicated inner plane defined for them).
 PLANE_NETS = {
-    "GND", "BATGND", "+BATT", "+BATT_NTC",   # ground / battery raw
-    "+VMOTOR",                                # main power
-    "+V5_FC", "+V5_PI5", "+V5_AI",            # 5V rails
-    "+V9_VTX1", "+V9_VTX2",                   # 9V rails
-    "+3V3", "+3V3A",                          # 3V3 rails
+    "GND",          # In1.Cu full-board plane
+    "+VMOTOR",      # In2.Cu top-half plane
 }
 
 # Routing model constants (master-locked)
@@ -160,14 +160,38 @@ def main(num_signal_layers=2):
         exit_code = 2
     print(f"Verdict: {verdict}")
 
-    # ─── Per-zone ───
-    print(f"\nPer-zone D/S (quadrants):")
-    s_per_zone_total = s_total / 4   # naive equal split; refine via per-quadrant pad area later
+    # ─── Per-zone (Phase 5b-retry path iii — refine per-zone supply) ───
+    # Compute per-zone pad area separately (was naive s_total/4 — overstated NW
+    # which has higher battery+buck pad density than other quadrants).
+    print(f"\nPer-zone D/S (quadrants — refined per-zone supply):")
+    A_zone = A_board / 4
+    pad_area_per_zone_fcu = defaultdict(float)
+    pad_area_per_zone_bcu = defaultdict(float)
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            pos = pad.GetPosition()
+            x_mm = pos.x / 1e6
+            y_mm = pos.y / 1e6
+            for name, x0, x1, y0, y1 in zone_bounds:
+                if x0 <= x_mm < x1 and y0 <= y_mm < y1:
+                    sz = pad.GetSize()
+                    area = (sz.x / 1e6) * (sz.y / 1e6)
+                    if pad.IsOnLayer(pcbnew.F_Cu):
+                        pad_area_per_zone_fcu[name] += area
+                    if pad.IsOnLayer(pcbnew.B_Cu):
+                        pad_area_per_zone_bcu[name] += area
+                    break
     for name, *_ in zone_bounds:
+        f_zone_fcu = pad_area_per_zone_fcu[name] / A_zone
+        f_zone_bcu = pad_area_per_zone_bcu[name] / A_zone
+        s_zone_fcu = A_zone * max(0, 1 - f_zone_fcu) * eta
+        s_zone_bcu = A_zone * max(0, 1 - f_zone_bcu) * eta
+        s_zone_in3 = A_zone * 0.95 * eta if num_signal_layers == 3 else 0
+        s_zone = s_zone_fcu + s_zone_bcu + s_zone_in3
         d = per_zone_demand.get(name, 0)
-        r = d / s_per_zone_total if s_per_zone_total > 0 else 0
+        r = d / s_zone if s_zone > 0 else 0
         flag = " ← hotspot" if r > GATE_PASS else ""
-        print(f"  {name}: D={d:.0f} mm², S={s_per_zone_total:.0f} mm², D/S={r:.3f}{flag}")
+        print(f"  {name}: D={d:.0f}; f_F={f_zone_fcu:.2f}, f_B={f_zone_bcu:.2f}; S={s_zone:.0f}; D/S={r:.3f}{flag}")
 
     return exit_code
 

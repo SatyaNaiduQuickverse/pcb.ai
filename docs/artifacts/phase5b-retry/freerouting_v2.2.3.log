@@ -1,0 +1,12 @@
+2026-05-22 14:10:30.679 INFO   Freerouting v2.2.3 (build-date: 2026-05-08)
+2026-05-22 14:10:30.962 WARN   Couldn't get screen resolution. If you are running in a headless environment, disable the GUI by setting gui.enabled to false.
+2026-05-22 14:10:32.142 INFO   Settings merged successfully from 4 source(s)
+2026-05-22 14:10:33.393 INFO   Settings merged successfully from 5 source(s)
+2026-05-22 14:10:34.649 INFO   New version available: v2.2.4
+2026-05-22 14:10:34.683 WARN   Analytics tracking: first delivery failure in this window - /v1/analytics/identify - IOException: Server returned HTTP response code: 501 for URL: https://api.freerouting.app/v1/analytics/identify | Server response: {"error":"The operation is not implemented."}. Further failures will be aggregated and reported every 60 minutes.
+2026-05-22 14:10:38.887 INFO   Settings merged successfully from 5 source(s)
+2026-05-22 14:10:38.907 INFO   [3A85F4\0C62AC] Job '3A85F4\0C62AC' started at 2026-05-22T08:40:38.900794530Z.
+2026-05-22 15:10:34.683 WARN   Analytics tracking: 1 event(s) failed to deliver in the last 60 minutes. Breakdown by error:
+  • /v1/analytics/identify - IOException: Server returned HTTP response code: 501 for URL: https://api.freerouting.app/v1/analytics/identify: 1×
+      Server response: {"error":"The operation is not implemented."}
+
