@@ -584,7 +584,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "0014a384-89aa-42ce-81be-09e53f73696c")
-		(at 22.00 36.00 0.0)
+		(at 54.00 30.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R70"
@@ -4134,7 +4134,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "06be8873-ac3c-4e73-9ccf-463014bcea52")
-		(at 30.00 40.00 0.0)
+		(at 54.00 34.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R76"
@@ -10843,9 +10843,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "151f94fa-7aa2-4d72-af3b-7d53e61dc0ad")
-		(at 73.600006 -79.26275)
+		(at 70.00 19.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q22"
@@ -11364,9 +11364,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "1624ea90-07fe-4779-a3bf-63853eba2f4f")
-		(at 2.3 -94.95925)
+		(at 70.00 66.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q14"
@@ -12916,7 +12916,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "17c6568c-efd4-405f-a9d9-000308efa52e")
-		(at 22.00 28.00 0.0)
+		(at 42.00 24.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R61"
@@ -14099,7 +14099,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "197544b1-967b-4f83-950f-f96cd52ad1bb")
-		(at 34.00 36.00 0.0)
+		(at 45.00 34.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R73"
@@ -18665,7 +18665,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "2388e44b-2db1-4654-8929-fc7377e6f366")
-		(at 120.528576 -2.37325)
+		(at 95.00 17.00 0.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP35"
@@ -20346,7 +20346,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "275fed65-d180-49c5-bfd8-e5c297eddfc6")
-		(at 26.00 20.00 0.0)
+		(at 45.00 22.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R51"
@@ -20925,7 +20925,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "28555adf-bb3c-4080-a945-2e365e700e00")
-		(at 120.528576 -9.71975)
+		(at 95.00 29.00 0.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP34"
@@ -23886,7 +23886,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "2ca9e283-ac58-4072-bfc7-56fde3bd6ae9")
-		(at 124.035722 -113.75225)
+		(at 95.00 54.00 180.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP26"
@@ -24273,7 +24273,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "2de1ace5-541a-48bc-bc9a-d8a7a0afdfca")
-		(at 26.00 36.00 0.0)
+		(at 57.00 30.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R71"
@@ -24715,7 +24715,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "2e100bfd-888b-44e1-8351-ad72b7f4a0a0")
-		(at 22.00 40.00 0.0)
+		(at 48.00 34.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R74"
@@ -26339,9 +26339,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "3181a26e-30de-47e9-ab35-adb9329cacd0")
-		(at 56.200006 -79.26275)
+		(at 12.00 41.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q23"
@@ -28833,9 +28833,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "364cd341-478b-462d-9660-80b9c740fe6d")
-		(at 91.000006 -94.95925)
+		(at 88.00 66.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q13"
@@ -29549,7 +29549,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "38bcd873-bd35-42b7-844b-b23b3e72c205")
-		(at 5.00 18.00 0.0)
+		(at 8.00 18.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R14"
@@ -30375,9 +30375,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "3be296d7-1f21-467f-8746-0bca5d8238fb")
-		(at 73.600006 -94.95925)
+		(at 70.00 78.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q16"
@@ -32821,9 +32821,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "3fb86463-6824-4516-bad2-eb7210cf7d8f")
-		(at 2.3 -79.26275)
+		(at 30.00 41.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q24"
@@ -33151,7 +33151,7 @@
 	(footprint "Diode_SMD:D_SMA"
 		(layer "F.Cu")
 		(uuid "3fd498df-b87b-4947-81e1-60267ab08244")
-		(at 5.00 34.00 0.0)
+		(at 5.00 36.00 0.0)
 		(descr "Diode SMA (DO-214AC)")
 		(tags "Diode SMA (DO-214AC)")
 		(property "Reference" "D14"
@@ -37162,9 +37162,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "479b8b5e-8e9b-45ea-94df-25e7aa389fc6")
-		(at 73.600006 -47.86975)
+		(at 70.00 30.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q20"
@@ -39200,7 +39200,7 @@
 	(footprint "Capacitor_SMD:CP_Elec_10x14.3"
 		(layer "F.Cu")
 		(uuid "4aa58eb6-ee68-4f12-a85d-0a72604b838e")
-		(at 30.00 28.00 0.0)
+		(at 22.00 28.00 0.0)
 		(descr "SMD capacitor, aluminum electrolytic, Vishay 1014, 10.0x14.3mm, http://www.vishay.com/docs/28395/150crz.pdf")
 		(tags "capacitor electrolytic")
 		(property "Reference" "C1"
@@ -40609,7 +40609,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "4eb39cdb-1050-435e-8e0b-26682c9c1781")
-		(at 34.00 20.00 0.0)
+		(at 51.00 22.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R53"
@@ -44093,7 +44093,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "555357a8-edbf-4a61-bca2-49f29af14c77")
-		(at 30.00 32.00 0.0)
+		(at 48.00 30.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R68"
@@ -44742,9 +44742,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "5619c8ee-2888-4360-9375-060fb3870c96")
-		(at 91.000006 -63.56625)
+		(at 88.00 54.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q11"
@@ -45070,9 +45070,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "568d1501-36a8-426b-be8d-560198f0e3fa")
-		(at 67.000003 -22.16975)
+		(at 30.00 30.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q26"
@@ -48937,7 +48937,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "5beca40c-5b12-40e8-a7d5-0ea145d5d022")
-		(at 112.919056 -129.69525)
+		(at 95.00 66.00 180.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP27"
@@ -55055,7 +55055,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "698875ed-bfa2-491d-99d4-e1b6e52eebab")
-		(at 26.00 28.00 0.0)
+		(at 51.00 23.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R62"
@@ -58123,7 +58123,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "6f4db4c7-f123-42bd-97f7-96fbb2d214a4")
-		(at 22.00 32.00 0.0)
+		(at 42.00 30.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R66"
@@ -59049,7 +59049,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "72d9a4f6-444d-437e-a60f-2d375c823f73")
-		(at 26.00 24.00 0.0)
+		(at 57.00 22.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R55"
@@ -60835,7 +60835,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "78177846-2442-4113-8475-77a3be22c84e")
-		(at 30.00 28.00 0.0)
+		(at 54.00 23.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R63"
@@ -61219,9 +61219,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "78e0f2eb-2157-4500-8f4d-ea8a03a5ed0d")
-		(at 2.3 -63.56625)
+		(at 30.00 19.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q28"
@@ -66435,7 +66435,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "85581ec3-645a-40d1-92fc-346833e50176")
-		(at 12.697621 -126.20875)
+		(at 5.00 29.00 180.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP41"
@@ -67183,7 +67183,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "87011c68-5b8d-400a-ba73-a072f07a7946")
-		(at 24.411908 -126.24875)
+		(at 5.00 17.00 180.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP42"
@@ -77517,9 +77517,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "9d0bd969-4594-45d6-9e0d-013f67dc5ec4")
-		(at 29.250003 -78.56275)
+		(at 12.00 30.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q25"
@@ -77847,7 +77847,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "9de1f64f-d978-4845-8c31-468131a65a95")
-		(at 36.052384 -132.69525)
+		(at 95.00 41.00 0.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP33"
@@ -80122,9 +80122,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "a428153b-55f7-4abc-a623-93afbf5adf97")
-		(at 56.200006 -94.95925)
+		(at 88.00 78.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q15"
@@ -82791,7 +82791,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "a6c50bc5-55f9-446f-8633-377fce7cfd57")
-		(at 34.00 32.00 0.0)
+		(at 51.00 30.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R69"
@@ -86651,9 +86651,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "afb253eb-f46a-4cfb-bcb9-23d0e463c684")
-		(at 73.600006 -63.56625)
+		(at 88.00 19.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q21"
@@ -91086,7 +91086,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "b719f620-00cc-4c7f-abc8-60ae4ef24082")
-		(at 22.00 20.00 0.0)
+		(at 42.00 22.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R50"
@@ -95990,7 +95990,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "be884c3c-d3e5-476e-b5bf-541652804713")
-		(at 30.00 36.00 0.0)
+		(at 42.00 34.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R72"
@@ -98167,7 +98167,7 @@
 	(footprint "Capacitor_SMD:C_0805_2012Metric"
 		(layer "F.Cu")
 		(uuid "c614cc62-221a-4509-bf63-ff03d39f1937")
-		(at 5.00 40.00 0.0)
+		(at 8.00 40.00 0.0)
 		(descr "Capacitor SMD 0805 (2012 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf, https://docs.google.com/spreadsheets/d/1BsfQQcO9C6DZCsRaXUlFlo91Tg2WpOkGARC1WS5S8t0/edit?usp=sharing), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C21"
@@ -98800,9 +98800,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "c68d65f8-5646-42bb-867f-7701fdf8637d")
-		(at 91.000006 -47.86975)
+		(at 70.00 54.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q12"
@@ -106314,7 +106314,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "d5838420-c736-4cee-83fd-87f135c93719")
-		(at 30.00 24.00 0.0)
+		(at 42.00 26.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R59"
@@ -106772,7 +106772,7 @@
 	(footprint "Inductor_SMD:L_0805_2012Metric"
 		(layer "F.Cu")
 		(uuid "d58be048-132e-4750-bc67-2515e3a57e4a")
-		(at 5.00 30.00 0.0)
+		(at 5.00 38.00 0.0)
 		(descr "Inductor SMD 0805 (2012 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 80, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "inductor")
 		(property "Reference" "L10"
@@ -108086,9 +108086,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "db774a2b-d371-4d82-966b-5f17072dbeb3")
-		(at 29.250003 -94.25925)
+		(at 88.00 41.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q17"
@@ -113431,7 +113431,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "e0bd9813-62a6-4869-8de2-b2c24735c904")
-		(at 34.00 24.00 0.0)
+		(at 45.00 26.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R60"
@@ -114298,9 +114298,9 @@
 		(embedded_fonts no)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "e3d6e6a0-e5b6-4806-9462-bd32c09d6f6e")
-		(at 84.400003 -22.16975)
+		(at 88.00 30.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q19"
@@ -115149,7 +115149,7 @@
 	(footprint "Inductor_SMD:L_Sunlord_MWSA0503S"
 		(layer "F.Cu")
 		(uuid "e45d9693-b990-4d1c-8052-ec8f0f748c32")
-		(at 12.00 30.00 0.0)
+		(at 12.00 33.00 0.0)
 		(descr "Inductor, Sunlord, MWSA0503S, 5.4x5.2x2.8mm, (https://sunlordinc.com/Download.aspx?file=L1VwbG9hZEZpbGVzL1BERl9DYXQvMjAyMjExMTUxNDQ4MDU0NTQucGRm&lan=en), generated with kicad-footprint-generator gen_inductor.py")
 		(tags "Inductor mwsa")
 		(property "Reference" "L5"
@@ -115575,7 +115575,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "e4b99e24-9b19-45f1-b70b-ea8736b05acd")
-		(at 30.00 20.00 0.0)
+		(at 48.00 22.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R52"
@@ -117010,7 +117010,7 @@
 	(footprint "Capacitor_SMD:CP_Elec_10x14.3"
 		(layer "F.Cu")
 		(uuid "e7e7af4c-c1c3-42d7-86d7-a056b9eb71e4")
-		(at 70.00 28.00 0.0)
+		(at 85.00 28.00 0.0)
 		(descr "SMD capacitor, aluminum electrolytic, Vishay 1014, 10.0x14.3mm, http://www.vishay.com/docs/28395/150crz.pdf")
 		(tags "capacitor electrolytic")
 		(property "Reference" "C2"
@@ -119169,7 +119169,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "ed71d0e2-06b1-45f1-a0f0-a73d90f7fd0c")
-		(at 26.00 40.00 0.0)
+		(at 51.00 34.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R75"
@@ -120421,9 +120421,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "eee222b8-68f1-4146-8d6b-dcf4e9de5590")
-		(at 84.400003 -6.47325)
+		(at 70.00 41.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q18"
@@ -120749,9 +120749,9 @@
 		)
 	)
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
-		(layer "F.Cu")
+		(layer "B.Cu")
 		(uuid "eef7abeb-f306-4c16-a341-95b4c074135e")
-		(at 67.000003 -6.47325)
+		(at 12.00 19.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q27"
@@ -122213,7 +122213,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "f11d8d20-3915-473e-a8ae-ab1d482e0010")
-		(at 22.00 24.00 0.0)
+		(at 54.00 22.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R54"
@@ -126257,7 +126257,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "f99a681b-e8ae-4a0f-802c-e9d8a9150386")
-		(at 26.00 32.00 0.0)
+		(at 45.00 30.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R67"
@@ -126643,7 +126643,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "fa0b5782-01dc-4b52-b2b8-bbf926b40514")
-		(at -2.609524 -131.80525)
+		(at 5.00 41.00 180.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP40"
@@ -126740,7 +126740,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "fbd9156d-fbbf-457f-bc1c-5768c2a9ae16")
-		(at 120.528576 -17.06625)
+		(at 95.00 78.00 180.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP28"
@@ -127320,7 +127320,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "B.Cu")
 		(uuid "fc9f255f-7b33-4e43-a0cd-06f15ee25f12")
-		(at 34.00 28.00 0.0)
+		(at 57.00 26.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R64"
@@ -128421,9 +128421,30 @@
 
 	(gr_rect (start 0 0) (end 100.0 95.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
 
+
+	(gr_rect (start 0 0) (end 100.0 95.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 95.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 95.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 95.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 95.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 95.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 95.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "a07fcbd2-8fde-4644-a7ed-68a151f48100")
+		(uuid "0856472b-46bd-4446-8a95-9bc6e313a655")
 		(at 5.0 5.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128431,13 +128452,13 @@
 		(property "Reference" "H1"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "246e94bf-1cf1-4096-a97a-4d4135baa085")
+			(uuid "3e2387a5-5726-4e33-926b-89f586d056dd")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "939bfd01-a3a4-496d-baee-b417c65f68e9")
+			(uuid "3c89d19e-2995-43ed-9346-1889de2e4adc")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128445,12 +128466,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "f77ff8c2-7577-4288-be64-a1a1d2393d3f")
+			(uuid "bb6d4b7c-c137-4ab7-b31c-a2888cf98eca")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "da0a7261-2f25-432e-926e-53f4f22f72d0")
+		(uuid "660fa60a-f1df-4de8-a8dd-2e2a8a19c0d0")
 		(at 95.0 5.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128458,13 +128479,13 @@
 		(property "Reference" "H2"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "778f70f3-5f7c-44e9-89de-4b6116a10ca1")
+			(uuid "1f555a3b-37ca-43c3-bf3d-36dac1607f98")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "7891fced-e1af-43ef-9f9b-5f170213c999")
+			(uuid "f78632bc-efc1-4e36-803f-e485f01a469f")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128472,12 +128493,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "92578e77-7746-4c35-9b4f-13097601c2d6")
+			(uuid "b0302a37-0323-40d5-a543-51fb053c1f62")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "0772885b-65df-461c-9e3f-fcb9efa0ecbd")
+		(uuid "352d7721-c840-47d2-9f48-3e2730264273")
 		(at 5.0 90.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128485,13 +128506,13 @@
 		(property "Reference" "H3"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "93d343ec-4a0f-43a1-b57f-63820eadffa7")
+			(uuid "b8aaa571-d4f1-4608-8df5-6f1699fe5963")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "f427dffb-9b12-4956-a764-de280507a6be")
+			(uuid "2beb5f0a-26aa-4400-a02d-6ec51a446b66")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128499,12 +128520,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "6997a085-9008-43cc-9325-959c77e6e72f")
+			(uuid "42c9e5ef-ea3e-4d8a-a366-853e961b87ea")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "0264cdc3-7a48-4e03-b628-87c8e8d2311d")
+		(uuid "cdeba2a9-d022-4345-a1b6-2fd6a1950be6")
 		(at 95.0 90.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128512,13 +128533,13 @@
 		(property "Reference" "H4"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "b68d0f7b-2b7a-4033-a619-3fb8afb0ff83")
+			(uuid "749db6f4-b1dc-428e-babc-b226b1766d26")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "64e8d8f6-b6a0-494e-af21-8fe51205ace6")
+			(uuid "7227e2e1-1e27-44e3-a15e-ca916a6d6df5")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128526,7 +128547,7 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "2efa4325-b47b-4935-8311-800f7d2d81d4")
+			(uuid "c2b89ab3-4697-43e5-84ec-e7ab3030c433")
 		)
 	)
 )
