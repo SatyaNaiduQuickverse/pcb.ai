@@ -107,16 +107,17 @@ def place_battery_input(fps_by_ref, placements):
 # These are NOT present in the netlist — flagged as Phase 5 SKiDL follow-up.
 # ────────────────────────────────────────────────────────────────────
 S2_POSITIONS = {
-    # CP_Elec_10x14.3 actual bbox (pads + silkscreen courtyard) is 13.59×11.05 mm
-    # — wider than the 10 mm cap body label. With 20 mm horizontal + 16 mm
-    # vertical spacing: ≥6 mm horizontal gap, ≥5 mm vertical gap edge-to-edge.
-    # SPEC DEVIATION: S2 zone X=42-58 (16 mm wide per master) is too narrow for
-    # 2 caps side-by-side. Expanded to X=33-67 (with caps centered at x=40, x=60).
-    # Master adjudication accepted similar S1 zone expansion (Y=0-13 → Y=0-20).
-    'C1': (40.0, 24.0, 'F.Cu', 0.0),
-    'C2': (60.0, 24.0, 'F.Cu', 0.0),
-    'C3': (40.0, 40.0, 'F.Cu', 0.0),
-    'C4': (60.0, 40.0, 'F.Cu', 0.0),
+    # CP_Elec_10x14.3 actual bbox = 13.59×11.05 mm. Master 2026-05-22 stage-3
+    # amendment: Hall (S3 U1) placed vertical at (50, 45) 0° rot → body bbox
+    # (42.1, 20.3)..(61.7, 46.0). S2 caps must clear this. Shifted outward:
+    # C1/C3 at x=30, C2/C4 at x=70 — outside Hall body bbox by ≥1mm.
+    # This pushes caps into what will become NW/NE channel zones (master
+    # amended channel inner-edges to X=39/61); Phase 4-place-channels-x4
+    # will coordinate (likely shifts channel passive zone to clear bulk caps).
+    'C1': (30.0, 24.0, 'F.Cu', 0.0),
+    'C2': (70.0, 24.0, 'F.Cu', 0.0),
+    'C3': (30.0, 40.0, 'F.Cu', 0.0),
+    'C4': (70.0, 40.0, 'F.Cu', 0.0),
 }
 S2_EXPECTED_VALUE = "EEHZS1V471P"
 
@@ -166,38 +167,35 @@ def place_bulk_caps(fps_by_ref, placements):
 # Total: 14 components (10 in immediate zone + 2 VMOTOR jumpers + supervisor + Hall)
 # ────────────────────────────────────────────────────────────────────
 S3_POSITIONS = {
-    # ACS770ECB-200B Allegro_CB_PFF actual KiCad bbox at 90° rot = 27×19.6 mm,
-    # extending WEST and SOUTH of anchor (signal pad layout + silkscreen).
-    # Master spec'd S3 zone X=42-58, Y=42-58 (16×16) is fundamentally too
-    # small for this part. Relocated Hall to (75, 65) 90° rot — bbox
-    # (49.1, 53.3)..(76.0, 72.9). This is OUT of the master S3 spec zone
-    # but is the only position that clears already-placed S1 + S2 with
-    # bbox-clean acceptance. Honest spec deviation flag in PHASE4_PLACE_*.md.
-    # Future S4 channel placement (planned x=55-95, y=58-72 NE channel) will
-    # need to coordinate around Hall body — likely shifts NE channel
-    # quadrant slightly or extends S3 zone footprint into NE area.
-    'U1':  (75.0, 65.0, 'F.Cu', 90.0),
-    # TPS3700 supervisor + VMOTOR divider + delay cap + PG-pullup cluster:
-    # Original S3 spec X=42-58 zone preserves these in the central spine
-    # (clear of Hall body now relocated to NE).
-    'J11': (50.0, 45.0, 'F.Cu', 0.0),
-    'R19': (47.0, 48.0, 'F.Cu', 0.0),    # moved south to clear C3 bbox (y>45.5)
-    'R20': (54.0, 48.0, 'F.Cu', 0.0),    # moved south to clear C4 bbox
-    'C41': (50.0, 49.5, 'F.Cu', 0.0),    # shifted south of R19/R20 row
-    'R21': (44.0, 48.0, 'F.Cu', 0.0),
-    # Hall VCC bridge + bypass caps — adjacent to Hall body (east of central spine)
-    'R30': (78.0, 60.0, 'F.Cu', 0.0),    # 0Ω V5 → HALL_VCC bridge
-    'C42': (80.0, 60.0, 'F.Cu', 0.0),    # 1uF bypass
-    'C43': (82.0, 60.0, 'F.Cu', 0.0),    # 100nF bypass
-    # Hall output divider + filter — east of Hall body
-    'R31': (78.0, 70.0, 'F.Cu', 0.0),    # 10K div top
-    'R32': (80.0, 70.0, 'F.Cu', 0.0),    # 20K div bot
-    'C44': (82.0, 70.0, 'F.Cu', 0.0),    # 10nF filter
+    # Hall vertical orientation (0° rot) per master 2026-05-22 stage-3 amendment.
+    # Symmetric placement at central spine middle Y=45 — all 4 channels are
+    # equidistant ~30 mm from Hall (premium-ESC reference for thermal symmetry).
+    # Body bbox at 0° rot = (42.1, 20.3)..(61.7, 46.0); pad 4 (primary current)
+    # at (52.96, 22.97) extends north. Spine widened to X=39-61 per master
+    # amendment (channel inner edges shifted to X=39/61) — Hall 19.65mm fits.
+    'U1':  (50.0, 45.0, 'F.Cu', 0.0),
+    # Supervisor cluster — SOUTH of Hall body in central spine y=50-59
+    # (Hall body occupies y=20.3-46; spine middle y=46-58 is clear).
+    'J11': (50.0, 55.0, 'F.Cu', 0.0),    # TPS3700 supervisor SOT-23-8
+    'R19': (45.0, 53.0, 'F.Cu', 0.0),    # 348K OVP/UVP divider top
+    'R20': (55.0, 53.0, 'F.Cu', 0.0),    # 23K2 OVP/UVP divider bot
+    'C41': (50.0, 59.0, 'F.Cu', 0.0),    # 100nF 10ms inrush-delay cap
+    'R21': (45.0, 57.0, 'F.Cu', 0.0),    # 10K PG_VMOTOR pullup
+    # Hall VCC bridge + bypass — east of Hall pad 2/3 signal pads at y=45
+    # Pad 2 V_CC @ (51.91, 45), pad 3 GND @ (53.82, 45). Decouplers immediately east.
+    'R30': (54.0, 47.5, 'F.Cu', 0.0),    # 0Ω V5 → HALL_VCC bridge
+    'C42': (56.0, 47.5, 'F.Cu', 0.0),    # 1uF bypass
+    'C43': (58.0, 47.5, 'F.Cu', 0.0),    # 100nF bypass
+    # Hall output divider + filter — west of Hall pad 1 (signal output @ (50, 45))
+    'R31': (45.0, 47.5, 'F.Cu', 0.0),    # 10K div top (5V→3.3V)
+    'R32': (45.0, 49.5, 'F.Cu', 0.0),    # 20K div bot
+    'C44': (47.0, 49.5, 'F.Cu', 0.0),    # 10nF output filter
     # VMOTOR copper-bridge jumpers (0Ω 2512) on B.Cu — Hall primary path
-    # Hall body at (75, 65) → pad 4 (IP+) at (97.03, 67.96), pad 5 (IP-) at ~
-    # (97.03, 62.04) (90° rotation). Position bridges at the rail entry/exit.
-    'R33': (60.0, 65.0, 'B.Cu', 0.0),    # +VMOTOR → Hall pad 4 (IP+)
-    'R34': (90.0, 65.0, 'B.Cu', 0.0),    # Hall pad 5 (IP-) → +VMOTOR_CH
+    # Hall vertical at (50, 45) 0° rot → pad 4 (primary IN) at (52.96, 22.97).
+    # Pad 5 (primary OUT) at south end of body near y=46.
+    # Bridges placed on B.Cu to backside-route +VMOTOR via PTH to primary pads.
+    'R33': (50.0, 25.0, 'B.Cu', 0.0),    # +VMOTOR → Hall pad 4 (north end, IP+)
+    'R34': (50.0, 65.0, 'B.Cu', 0.0),    # Hall pad 5 (south end) → +VMOTOR_CH
 }
 S3_EXPECTED_VALUES = {
     'U1':  'ACS770ECB',

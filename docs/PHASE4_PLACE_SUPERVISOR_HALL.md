@@ -3,39 +3,55 @@
 **Sub-phase 3 of `docs/PHASE4_SUBSYSTEMS.md` §S3.**
 **Branch**: `phase4-place-supervisor-hall/subsystem-s3`.
 **Master directive**: Task #51 dispatch 2026-05-22.
+**Stage-3 amendment**: master 2026-05-22 — Hall **vertical** orientation + spine widened from 16mm to 22mm for symmetric channel placement.
 
-## What's placed (14 components in this PR; S1 + S2 preserved)
+## What's placed (14 components in this PR; S1 preserved; S2 shifted)
 
 | Ref | Value | Footprint | Layer | Position (x, y) mm | Notes |
 |---|---|---|---|---|---|
-| U1 | ACS770ECB-200B-PFF-T | `Sensor_Current:Allegro_CB_PFF` | F.Cu (90° rot) | (75, 65) | Hall bus-current sensor; bbox 27×19.6 mm |
-| J11 | TPS3700_VMOTOR_27V_18V | `Package_TO_SOT_SMD:SOT-23-8` | F.Cu | (50, 45) | Window-comparator supervisor |
-| R19 | 348K (E96) | R_0603_1608Metric | F.Cu | (47, 48) | VMOTOR OVP/UVP divider top |
-| R20 | 23K2 (E96) | R_0402_1005Metric | F.Cu | (54, 48) | VMOTOR OVP/UVP divider bottom (ratio 0.0625) |
-| C41 | 100nF | C_0402_1005Metric | F.Cu | (50, 49.5) | 10ms inrush-delay cap (CT pin) |
-| R21 | 10K | R_0402_1005Metric | F.Cu | (44, 48) | PG_VMOTOR pull-up to +3V3 |
-| R30 | 0R | R_0402_1005Metric | F.Cu | (78, 60) | Hall VCC bridge (V5 → HALL_VCC) |
-| C42 | 1uF | C_0402_1005Metric | F.Cu | (80, 60) | Hall VCC bypass |
-| C43 | 100nF | C_0402_1005Metric | F.Cu | (82, 60) | Hall VCC bypass |
-| R31 | 10K | R_0402_1005Metric | F.Cu | (78, 70) | Hall VOUT divider top (5V→3.3V) |
-| R32 | 20K | R_0402_1005Metric | F.Cu | (80, 70) | Hall VOUT divider bottom |
-| C44 | 10nF | C_0402_1005Metric | F.Cu | (82, 70) | Hall output noise filter |
-| R33 | 0R 2512 | R_2512 jumper | B.Cu | (60, 65) | +VMOTOR → Hall pad 4 (IP+) bridge |
-| R34 | 0R 2512 | R_2512 jumper | B.Cu | (90, 65) | Hall pad 5 (IP-) → +VMOTOR_CH bridge |
+| U1 | ACS770ECB-200B-PFF-T | `Sensor_Current:Allegro_CB_PFF` | F.Cu (0° rot) | (50, 45) | Hall bus-current sensor, **vertical** body 19.65×25.7 mm centered on spine |
+| J11 | TPS3700_VMOTOR_27V_18V | `Package_TO_SOT_SMD:SOT-23-8` | F.Cu | (50, 55) | Window-comparator supervisor, south of Hall |
+| R19 | 348K (E96) | R_0603_1608Metric | F.Cu | (45, 53) | VMOTOR OVP/UVP divider top |
+| R20 | 23K2 (E96) | R_0402_1005Metric | F.Cu | (55, 53) | VMOTOR OVP/UVP divider bottom (ratio 0.0625) |
+| C41 | 100nF | C_0402_1005Metric | F.Cu | (50, 59) | 10ms inrush-delay cap (CT pin) |
+| R21 | 10K | R_0402_1005Metric | F.Cu | (45, 57) | PG_VMOTOR pull-up to +3V3 |
+| R30 | 0R | R_0402_1005Metric | F.Cu | (54, 47.5) | Hall VCC bridge (V5 → HALL_VCC) |
+| C42 | 1uF | C_0402_1005Metric | F.Cu | (56, 47.5) | Hall VCC bypass |
+| C43 | 100nF | C_0402_1005Metric | F.Cu | (58, 47.5) | Hall VCC bypass |
+| R31 | 10K | R_0402_1005Metric | F.Cu | (45, 47.5) | Hall VOUT divider top (5V→3.3V) |
+| R32 | 20K | R_0402_1005Metric | F.Cu | (45, 49.5) | Hall VOUT divider bottom |
+| C44 | 10nF | C_0402_1005Metric | F.Cu | (47, 49.5) | Hall output noise filter |
+| R33 | 0R 2512 | R_2512 jumper | B.Cu | (50, 25) | +VMOTOR → Hall pad 4 (north end, IP+) bridge |
+| R34 | 0R 2512 | R_2512 jumper | B.Cu | (50, 65) | Hall pad 5 (south end) → +VMOTOR_CH bridge |
 
-**S1 components** (J1, D26, R1-R2, Q1-Q4) **and S2 components** (C1-C4) preserved at PR #32 + PR #34 positions.
+**S1 components** (J1, D26, R1-R2, Q1-Q4) preserved at PR #32 positions.
+**S2 components** (C1-C4) **shifted outward** to (30, 24)/(70, 24)/(30, 40)/(70, 40) to clear Hall body bbox.
 
-## Honest spec deviation flag
+## Master stage-3 amendment — symmetric placement
 
-Master spec §S3 zone is X=42-58, Y=42-58 (16×16 mm). The ACS770ECB-200B-PFF-T `Allegro_CB_PFF` footprint actual bbox at 90° rotation is **27×19.6 mm** (signal pads + body silkscreen + courtyard). The Hall body fundamentally exceeds the spec'd S3 zone.
+Prior version of this PR placed Hall at (75, 65) NE corner (90° rot) due to body size exceeding spec'd 16×16 mm zone. Master rejected as asymmetric:
+- Hall→NE channel ≈ 5 mm copper path
+- Hall→SW channel ≈ 78 mm copper path → ~4 W loss at 100 A continuous
+- Channel-to-channel thermal mismatch
 
-**Resolution applied here**: Hall (U1) relocated to (75, 65) — NE area of the board, currently free (S4/S5/S6 not placed yet). Bbox (49.1, 53.3)..(76, 72.9) is clear of S1+S2. Supporting components (Hall VCC bridge, divider, filter) follow Hall to the NE area at x=78-82. TPS3700 + VMOTOR-divider + delay cap stay in the original spec'd central spine X=42-58 area (these are small SOT-23-8 + 0402 parts that fit the 16×16 zone fine).
+**Stage-3 fix**:
+1. Hall rotated to **0° (vertical)** — body now 19.65 mm wide × 25.7 mm tall
+2. Central spine widened **X=42-58 → X=39-61** (22 mm) — fits Hall vertical
+3. Channel inner edges shifted **X=45/55 → X=39/61** — each channel still ~34 mm wide
+4. Hall body occupies y=20.3-46 in spine
+5. All 4 channels equidistant ~30 mm from Hall center — **symmetric loss budget per premium-ESC reference**
 
-**Future coordination needed (Phase 4-place-channels-x4)**: the NE channel quadrant (master spec'd X=55-95, Y=42-72 or similar) will need to coordinate with Hall at (75, 65). Either NE channel boundary shifts to clear Hall's bbox, or Hall is moved again in a later sub-phase. Honest forward-flag.
+S2 bulk caps (originally at central spine x=40/60) shifted outward to x=30/70 to clear Hall body. This pushes S2 caps into what will become NW/NE channel zones (after channel inner-edge shift). Future Phase 4-place-channels-x4 will coordinate by either (a) channel passive cluster avoiding caps, or (b) caps re-placed inside narrower spine via 1×4 column.
 
-**Alternative paths considered**:
-- Choose a smaller Hall sensor (e.g. ACS780 in SOIC-8, TLI4971 in TISON-8): would require SKiDL change + Phase 3-redo amendment. Master locked ACS770 in PR #26.
-- Re-spec §S3 zone to be wider (e.g. X=42-80 to fit Hall body): doc update only; would still need NE channel coordination. **Recommended**.
+## I/O contract (per spec §S3 amended)
+
+| Direction | Net | Source / Sink |
+|---|---|---|
+| Input | +VMOTOR (post-S2) | S2 bulk caps → R33 bridge B.Cu → Hall pad 4 (north) |
+| Input | V5 (BEC rail) | R30 0Ω bridge → Hall pad 2 (V_CC) |
+| Output | +VMOTOR_HOTSIDE | Hall pad 5 (south) → R34 bridge B.Cu → 4-channel split |
+| Output | OVUV_KILL_BUS | J11 pin 1 (PG_VMOTOR) → 4 channel kill rails |
+| Output | BUS_CURR_OUT | Hall pad 1 (V_OUT) → R31/R32 divider → C44 filter → FC AUX |
 
 ## Verification
 
@@ -48,15 +64,15 @@ Master spec §S3 zone is X=42-58, Y=42-58 (16×16 mm). The ACS770ECB-200B-PFF-T 
   - S2↔S3: 0
   - S1+S2+S3 vs other-placed: 0
 - ✓ `target.h` md5 unchanged: `7a4549d27e0e83d3d6f1ffaf67527d24`
-- ✓ Only S3 components moved from kinet2pcb-default (14); S1+S2 preserved
+- ✓ Only S3 components moved from kinet2pcb-default (14); S1 preserved; S2 shifted outward to clear Hall
 - ✓ 559 footprints remain unplaced (will be placed in subsequent sub-phase PRs)
 
 ## 3D renders
 
-- [`docs/renders/phase4_place_supervisor_hall/top.png`](renders/phase4_place_supervisor_hall/top.png) (F.Cu — Hall body visible NE, TPS3700 + dividers at central spine)
-- [`docs/renders/phase4_place_supervisor_hall/bottom.png`](renders/phase4_place_supervisor_hall/bottom.png) (B.Cu — R33/R34 jumpers under Hall primary path)
+- [`docs/renders/phase4_place_supervisor_hall/top.png`](renders/phase4_place_supervisor_hall/top.png) (F.Cu — Hall vertical at spine center, TPS3700 + dividers south, supporting caps east)
+- [`docs/renders/phase4_place_supervisor_hall/bottom.png`](renders/phase4_place_supervisor_hall/bottom.png) (B.Cu — R33/R34 2512 jumpers at north + south primary current pad locations)
 
-## Sim verdicts (4 sims per master spec)
+## Sim verdicts (4 sims per master spec, datasheet-anchored)
 
 ### Sim 1 — TPS3700 OVP/UVP threshold + delay (ngspice)
 
@@ -121,19 +137,18 @@ Source: `sims/phase4_place_supervisor_hall/pairwise_s1_s3.py`
 
 Source: `sims/phase4_place_supervisor_hall/pairwise_s2_s3.py`
 
-### Regression check (S1 + S2 sims re-run with S3 placed)
+### Regression check (S1 + S2 sims re-run with S3 placed at stage-3 amended position)
 
 - S1 inrush: peak 9.86 A unchanged from PR #32 — no regression
 - S2 ripple: V_VMOTOR pk-pk 65 mV unchanged from PR #34 — no regression
-
-S3 placement does not affect S1/S2 sim behavior (different subsystems; S3 just observes S1+S2 outputs).
+- All 4 S3 sims regenerate identically (placement doesn't affect circuit-level sim behavior)
 
 ## Sim methodology notes + limitations
 
 - **OVP/UVP sim**: TPS3700 modeled as 2 ideal comparators with V_REF values derived from divider ratio × spec'd trip voltages. Real device has ±1% reference accuracy + temperature drift; sim assumes nominal.
 - **Hall linearity**: analytical sinusoidal model of worst-case ±2% deviation per datasheet envelope. Real device characterized at room temp; over operating range (-40 to +125 °C) datasheet spec includes temp drift.
 - **S2↔S3 ripple injection**: simplified single-frequency 30 kHz sine assumed; real PWM ripple has harmonics extending into MHz range, attenuated by V_CC bypass caps (C42+C43 at 0402 pitch = ~10 nH ESL).
-- **Regression check**: sim deck level (no PR-#26 placement-aware parasitics modeled); placement-induced parasitics will be characterized in Phase 5b autoroute.
+- **Symmetric placement loss budget**: anchored on premium-ESC reference (channel-to-channel ≤ 1.5 W copper-path loss imbalance). Actual loss numbers re-verified after Phase 4-place-channels-x4 with measured trace geometry.
 
 ## What's NOT placed (deferred per spec §5)
 
@@ -145,17 +160,20 @@ S3 placement does not affect S1/S2 sim behavior (different subsystems; S3 just o
 
 559 footprints remain at kinet2pcb-default. Placed in subsequent sub-phase PRs.
 
-## Open items (track to Phase 4-place-channels or later)
+## Open items (track to Phase 4-place-channels-x4)
 
-- **S3 zone spec deviation flagged in §S3 of docs/PHASE4_SUBSYSTEMS.md**: Hall body 27×19.6 mm doesn't fit 16×16 mm spec. Recommend updating §S3 spec from "X=42-58, Y=42-58" to "X=42-58 for supervisor cluster + Hall body at (75, 65) in NE area with X=49-76, Y=53-73 effective". Master adjudication welcome.
-- **NE channel coordination**: Phase 4-place-channels-x4 NE quadrant placement must avoid Hall body bbox at (49.1, 53.3)..(76, 72.9). Either NE channel boundary shifts inward, or Hall relocates again.
+- **S2 cap location flagged**: caps shifted from spine (x=40/60) outward to (x=30/70) to clear Hall body. Now sit inside what will become NW/NE channel zones (X=5-39 / X=61-95 after stage-3 amendment). Phase 4-place-channels-x4 will need to (a) reserve a small strip at x=27-33 / x=67-73 around y=24-40 for the caps, OR (b) re-place caps in a 1×4 column inside spine (tighter pitch but in-spine).
+- **Per-channel +VMOTOR routing**: post-Hall +VMOTOR exits south at R34 (50, 65) then must fan out to 4 channels via 4 routed traces or copper-pour distribution. Phase 4-place-channels-x4 thermal sim should verify channel-to-channel I·R imbalance ≤ 1.5W per channel (matches symmetric placement intent).
 
 ## Acceptance gates (per spec §6 + locked rules)
 
 | Gate | Status |
 |---|---|
-| S1 + S2 placement preserved | ✓ |
+| S1 placement preserved (PR #32) | ✓ |
+| S2 placement shifted outward to clear Hall body (re-bbox-clean) | ✓ |
 | ONLY S3 components placed (14) | ✓ |
+| Hall vertical orientation per master stage-3 amendment | ✓ |
+| Spine widened X=42-58 → X=39-61 in docs/PHASE4_SUBSYSTEMS.md | ✓ |
 | 0 same-layer bbox overlaps (all subsystem-internal + boundary + vs other) | ✓ |
 | 3D render PNG (top + bottom) attached | ✓ |
 | Sim 1 (OVP/UVP ngspice) — per-threshold accuracy | ✓ PASS (OVP +0.03% / UVP 0.00%) |

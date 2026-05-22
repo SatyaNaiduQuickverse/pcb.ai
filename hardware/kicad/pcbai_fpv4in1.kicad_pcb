@@ -21561,7 +21561,7 @@
 	(footprint "Capacitor_SMD:CP_Elec_10x14.3"
 		(layer "F.Cu")
 		(uuid "28f0192e-37fb-4930-8262-7d3c3210ce82")
-		(at 40.00 40.00 0.0)
+		(at 30.00 40.00 0.0)
 		(descr "SMD capacitor, aluminum electrolytic, Vishay 1014, 10.0x14.3mm, http://www.vishay.com/docs/28395/150crz.pdf")
 		(tags "capacitor electrolytic")
 		(property "Reference" "C3"
@@ -26669,7 +26669,7 @@
 	(footprint "Capacitor_SMD:C_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "31e86dfe-0ac7-4bf3-bc3e-15e5e4355f08")
-		(at 82.00 60.00 0.0)
+		(at 58.00 47.50 0.0)
 		(descr "Capacitor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C43"
@@ -31463,7 +31463,7 @@
 	(footprint "Package_TO_SOT_SMD:SOT-23-8"
 		(layer "F.Cu")
 		(uuid "3e52c05c-7124-4ec6-a071-64014d58c85d")
-		(at 50.00 45.00 0.0)
+		(at 50.00 55.00 0.0)
 		(descr "SOT, 8 Pin (JEDEC MO-178 Var BA https://www.jedec.org/document_search?search_api_views_fulltext=MO-178), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOT TO_SOT_SMD")
 		(property "Reference" "J11"
@@ -33416,7 +33416,7 @@
 	(footprint "Capacitor_SMD:C_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "400941d7-0c79-483f-bead-a17363b71c82")
-		(at 50.00 49.50 0.0)
+		(at 50.00 59.00 0.0)
 		(descr "Capacitor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C41"
@@ -37685,7 +37685,7 @@
 	(footprint "Capacitor_SMD:C_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "47b4fded-1762-4d53-90ce-07cbb544a0aa")
-		(at 80.00 60.00 0.0)
+		(at 56.00 47.50 0.0)
 		(descr "Capacitor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C42"
@@ -39200,7 +39200,7 @@
 	(footprint "Capacitor_SMD:CP_Elec_10x14.3"
 		(layer "F.Cu")
 		(uuid "4aa58eb6-ee68-4f12-a85d-0a72604b838e")
-		(at 40.00 24.00 0.0)
+		(at 30.00 24.00 0.0)
 		(descr "SMD capacitor, aluminum electrolytic, Vishay 1014, 10.0x14.3mm, http://www.vishay.com/docs/28395/150crz.pdf")
 		(tags "capacitor electrolytic")
 		(property "Reference" "C1"
@@ -47504,7 +47504,7 @@
 	(footprint "Resistor_SMD:R_2512_6332Metric"
 		(layer "B.Cu")
 		(uuid "5a60b080-0be7-47c4-bb7d-bcd702c5e955")
-		(at 60.00 65.00 0.0)
+		(at 50.00 25.00 0.0)
 		(descr "Resistor SMD 2512 (6332 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R33"
@@ -56681,7 +56681,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "6cf60e00-d8d6-4104-9a9b-14f2ecb83e53")
-		(at 78.00 60.00 0.0)
+		(at 54.00 47.50 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R30"
@@ -61549,7 +61549,7 @@
 	(footprint "Capacitor_SMD:CP_Elec_10x14.3"
 		(layer "F.Cu")
 		(uuid "79348db9-7375-4c0d-87b0-922481509512")
-		(at 60.00 40.00 0.0)
+		(at 70.00 40.00 0.0)
 		(descr "SMD capacitor, aluminum electrolytic, Vishay 1014, 10.0x14.3mm, http://www.vishay.com/docs/28395/150crz.pdf")
 		(tags "capacitor electrolytic")
 		(property "Reference" "C4"
@@ -69206,7 +69206,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "8be601f1-3248-497f-b857-1ca3a0709442")
-		(at 80.00 70.00 0.0)
+		(at 45.00 49.50 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R32"
@@ -78918,7 +78918,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "a20f4f62-6793-4e54-8a5e-57c069717a3f")
-		(at 44.00 48.00 0.0)
+		(at 45.00 57.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R21"
@@ -86074,7 +86074,7 @@
 	(footprint "Capacitor_SMD:C_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "af78dbed-741e-4004-9838-3c0af819bc69")
-		(at 82.00 70.00 0.0)
+		(at 47.00 49.50 0.0)
 		(descr "Capacitor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C44"
@@ -93765,7 +93765,7 @@
 	(footprint "Resistor_SMD:R_2512_6332Metric"
 		(layer "B.Cu")
 		(uuid "bae6a61b-12d7-4635-a135-9daf47d6e32d")
-		(at 90.00 65.00 0.0)
+		(at 50.00 65.00 0.0)
 		(descr "Resistor SMD 2512 (6332 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R34"
@@ -95797,7 +95797,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "be61c3cd-6f82-4968-89d5-0340255cc9b2")
-		(at 78.00 70.00 0.0)
+		(at 45.00 47.50 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R31"
@@ -102304,7 +102304,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "cda26a9e-9ae0-4652-b3fa-70423379a15e")
-		(at 54.00 48.00 0.0)
+		(at 55.00 53.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R20"
@@ -113624,7 +113624,7 @@
 	(footprint "Resistor_SMD:R_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "e1df3123-ccc7-4e26-944d-503a285361c9")
-		(at 47.00 48.00 0.0)
+		(at 45.00 53.00 0.0)
 		(descr "Resistor SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R19"
@@ -117010,7 +117010,7 @@
 	(footprint "Capacitor_SMD:CP_Elec_10x14.3"
 		(layer "F.Cu")
 		(uuid "e7e7af4c-c1c3-42d7-86d7-a056b9eb71e4")
-		(at 60.00 24.00 0.0)
+		(at 70.00 24.00 0.0)
 		(descr "SMD capacitor, aluminum electrolytic, Vishay 1014, 10.0x14.3mm, http://www.vishay.com/docs/28395/150crz.pdf")
 		(tags "capacitor electrolytic")
 		(property "Reference" "C2"
@@ -125305,7 +125305,7 @@
 	(footprint "Sensor_Current:Allegro_CB_PFF"
 		(layer "F.Cu")
 		(uuid "f96caa4f-5abe-47cc-8110-2ac8bf406249")
-		(at 75.00 65.00 90.0)
+		(at 50.00 45.00 0.0)
 		(descr "Allegro MicroSystems, CB-PFF Package (http://www.allegromicro.com/en/Products/Current-Sensor-ICs/Fifty-To-Two-Hundred-Amp-Integrated-Conductor-Sensor-ICs/ACS758.aspx) !PADS 4-5 DO NOT MATCH DATASHEET!")
 		(tags "Allegro CB-PFF")
 		(property "Reference" "U1"
