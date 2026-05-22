@@ -21561,7 +21561,7 @@
 	(footprint "Capacitor_SMD:CP_Elec_10x14.3"
 		(layer "F.Cu")
 		(uuid "28f0192e-37fb-4930-8262-7d3c3210ce82")
-		(at 30.00 40.00 0.0)
+		(at 25.00 40.00 0.0)
 		(descr "SMD capacitor, aluminum electrolytic, Vishay 1014, 10.0x14.3mm, http://www.vishay.com/docs/28395/150crz.pdf")
 		(tags "capacitor electrolytic")
 		(property "Reference" "C3"
@@ -61549,7 +61549,7 @@
 	(footprint "Capacitor_SMD:CP_Elec_10x14.3"
 		(layer "F.Cu")
 		(uuid "79348db9-7375-4c0d-87b0-922481509512")
-		(at 70.00 40.00 0.0)
+		(at 75.00 40.00 0.0)
 		(descr "SMD capacitor, aluminum electrolytic, Vishay 1014, 10.0x14.3mm, http://www.vishay.com/docs/28395/150crz.pdf")
 		(tags "capacitor electrolytic")
 		(property "Reference" "C4"
