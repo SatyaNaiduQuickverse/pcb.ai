@@ -1,0 +1,43 @@
+Designator,Function,Manufacturer,PartNumber,JLC_C_Number,Tier,Stock_2026_05_22,Qty,Package,Datasheet,Notes
+U_NTC1,Inrush limiter #1 (parallel with #2),Nanjing Shiheng,MF72 5D25,C116485,Extended,0-min-order-24,1,Disc_11mm_THT,https://www.cantherm.com/wp-content/uploads/2018/08/MF72_AUG_2018.pdf,8A I_max single; 16A combined ×2
+U_NTC2,Inrush limiter #2 (parallel with #1),Nanjing Shiheng,MF72 5D25,C116485,Extended,0-min-order-24,1,Disc_11mm_THT,https://www.cantherm.com/wp-content/uploads/2018/08/MF72_AUG_2018.pdf,paired with U_NTC1 for 16A I_max combined
+LED_PWR,Power-on green indicator,std,LED_0603_GREEN,TBD-Basic,Basic,high,1,0603,std,5.1kΩ series; lit when polarity correct
+R_LED_PWR,LED_PWR series resistor,std,R_5K1,std,Basic,high,1,0603,std,~3mA @ 25V
+LED_RPOL,Reverse-polarity red indicator,std,LED_0603_RED,TBD-Basic,Basic,high,1,0603,std,5.1kΩ series; lit when polarity reversed
+R_LED_RPOL,LED_RPOL series resistor,std,R_5K1,std,Basic,high,1,0603,std,~1mA safe
+U_BUCK1,+V5_FC 5A buck,Texas Instruments,TPS54560DDAR,C31966,Extended,13703,1,SOIC-8-EP-DDA,https://www.ti.com/lit/ds/symlink/tps54560.pdf,VIN 4.5-60V; non-sync needs Schottky
+U_BUCK2,+V5_PI5 5A buck (RPi 5),Texas Instruments,TPS54560DDAR,C31966,Extended,13703,1,SOIC-8-EP-DDA,https://www.ti.com/lit/ds/symlink/tps54560.pdf,independent rail per Sai's sensitive-electronics directive
+U_BUCK3,+V5_AI 3A buck (AI HAT),Texas Instruments,TPS54560DDAR,C31966,Extended,13703,1,SOIC-8-EP-DDA,https://www.ti.com/lit/ds/symlink/tps54560.pdf,split from old V5_RPI per master adjudication URGENT #1
+U_BUCK4,+V9_VTX1 2A buck,AOS,AOZ1284PI,C48060,Extended,10902,1,SOIC-8-EP,Search AOZ1284 Alpha Omega,VIN 3-36V; 4A capable
+U_BUCK5,+V9_VTX2 2A buck,AOS,AOZ1284PI,C48060,Extended,10902,1,SOIC-8-EP,Search AOZ1284 Alpha Omega,independent rail (Sai's isolation)
+D_BUCK1_CATCH,Schottky catch diode buck #1,Vishay,SS54,TBD-Basic,Basic,high,1,SMA,Vishay SS54,60V/5A; non-sync requirement
+D_BUCK2_CATCH,Schottky catch diode buck #2,Vishay,SS54,TBD-Basic,Basic,high,1,SMA,Vishay SS54,
+D_BUCK3_CATCH,Schottky catch diode buck #3,Vishay,SS54,TBD-Basic,Basic,high,1,SMA,Vishay SS54,
+D_BUCK4_CATCH,Schottky catch diode buck #4,Vishay,SS54,TBD-Basic,Basic,high,1,SMA,Vishay SS54,
+D_BUCK5_CATCH,Schottky catch diode buck #5,Vishay,SS54,TBD-Basic,Basic,high,1,SMA,Vishay SS54,
+U_EFUSE_V5_FC,5V eFuse on V5_FC,Texas Instruments,TPS259251DRCR,C527680,Extended,2507,1,VSON-10,https://www.ti.com/product/TPS25925,5A 4.5-5.5V; auto-recovery
+U_EFUSE_V5_PI5,5V eFuse on V5_PI5,Texas Instruments,TPS259251DRCR,C527680,Extended,2507,1,VSON-10,https://www.ti.com/product/TPS25925,
+U_EFUSE_V5_AI,5V eFuse on V5_AI,Texas Instruments,TPS259251DRCR,C527680,Extended,2507,1,VSON-10,https://www.ti.com/product/TPS25925,
+U_PFUSE_V9_VTX1,9V polyfuse on VTX1,Bourns,MF-MSMF200,TBD-BOM-lock,Basic/Extended,TBD,1,1206_SMD,Bourns MF-MSMF series,2A hold ~4A trip
+U_PFUSE_V9_VTX2,9V polyfuse on VTX2,Bourns,MF-MSMF200,TBD-BOM-lock,Basic/Extended,TBD,1,1206_SMD,Bourns MF-MSMF series,
+D_TVS_V5_FC,5V rail TVS,MDD Microdiode,SMAJ5.0A,C113952,Extended,1013255,1,SMA,Littelfuse SMAJ series datasheet,Vrwm 5V; Vbr 6.4V
+D_TVS_V5_PI5,5V rail TVS,MDD Microdiode,SMAJ5.0A,C113952,Extended,1013255,1,SMA,Littelfuse SMAJ series datasheet,
+D_TVS_V5_AI,5V rail TVS,MDD Microdiode,SMAJ5.0A,C113952,Extended,1013255,1,SMA,Littelfuse SMAJ series datasheet,
+D_TVS_V9_VTX1,9V rail TVS,MDD Microdiode,SMAJ9.0A,C113955,Extended,1220,1,SMA,Littelfuse SMAJ series datasheet,Vrwm 9V; Vbr 11.1V
+D_TVS_V9_VTX2,9V rail TVS,MDD Microdiode,SMAJ9.0A,C113955,Extended,1220,1,SMA,Littelfuse SMAJ series datasheet,
+U_SUPERVISOR,V5_PI5 voltage supervisor,Diodes (TBD),APX803-46-family,TBD-BOM-lock,Basic/Extended,TBD,1,SOT-23,Diodes Inc APX803 datasheet,4.65V threshold; asserts PG_RPI
+C_POL_V5_PI5,Enhanced LC polymer cap,std polymer,100uF_6.3V_low-ESR,TBD-Basic,Basic,high,1,Polymer-Elec-6.3x7.7,std,RPi5 PSRR enhancement
+C_POL_V5_AI,Enhanced LC polymer cap,std polymer,100uF_6.3V_low-ESR,TBD-Basic,Basic,high,1,Polymer-Elec-6.3x7.7,std,AI HAT PSRR enhancement
+L_BUCK1,V5_FC inductor,Sunlord,MWSA0630-4R7MT,TBD-Basic,Basic,high,1,Shielded-6.3x6.3,Sunlord MWSA series,4.7µH I_sat ≥10A
+L_BUCK2,V5_PI5 inductor,Sunlord,MWSA0630-4R7MT,TBD-Basic,Basic,high,1,Shielded-6.3x6.3,Sunlord MWSA series,4.7µH I_sat ≥10A
+L_BUCK3,V5_AI inductor,Sunlord,MWSA0630-8R2MT,TBD-Basic,Basic,high,1,Shielded-6.3x6.3,Sunlord MWSA series,8.2µH I_sat ≥6A
+L_BUCK4,V9_VTX1 inductor,Sunlord,MWSA0503S-100MT,TBD-Basic,Basic,high,1,Shielded-5x5,Sunlord MWSA series,10µH I_sat ≥3.5A
+L_BUCK5,V9_VTX2 inductor,Sunlord,MWSA0503S-100MT,TBD-Basic,Basic,high,1,Shielded-5x5,Sunlord MWSA series,10µH I_sat ≥3.5A
+J_BEC_OUT,BEC AUX power-out header,std,Conn_01x10_P2.54mm,TBD-Basic,Basic,high,1,PinHeader_1x10,std,Exposes 6 rails + 3× GND
+,,,,,,,,,,
+NOTES,,,,,,,,,,
+,All component qty counts are per board.,,,,,,,,,
+,Capacitors (filter caps + decoupling) per rail use std multi-stage ceramic (22µF/10µF/100nF) — value-only no specific PN locked at Phase 2d.,,,,,,,,,
+,Resistors (feedback dividers + ILIM) use std E96 0402 — value-only.,,,,,,,,,
+,All TBD-BOM-lock entries are pickable Basic/Extended tier — chosen by worker at next BOM-freeze (Phase 6) with current JLC stock.,,,,,,,,,
+,Stock counts captured 2026-05-22; re-verify at fab order time.,,,,,,,,,
