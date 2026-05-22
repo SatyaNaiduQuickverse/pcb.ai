@@ -19,24 +19,27 @@ Central spine: battery → bulk caps → supervisor + Hall → 4-channel +VMOTOR
 
 ## 2. Board geometry (100×85 mm, 8L stackup)
 
-Coordinate system: X = 0..100 (long axis), Y = 0..85 (short axis). Mount holes: (5,5), (95,5), (5,80), (95,80) at 4 corners.
+Coordinate system: X = 0..100 (long axis), Y = 0..95 (short axis — amended PR-A4-a 2026-05-23 board grow). Mount holes: (5,5), (95,5), (5,90), (95,90) at 4 corners.
 
-Proposed zone allocation:
+Zone allocation (PR-A4-b 2026-05-23 amendment for 100×95 board, P=12 FET pitch):
 
 ```
-Y=72-85: TOP EDGE — FC connector + AUX header + 4× protection-status LEDs + DShot TVS
-Y=58-72: NW Channel 1 (MOTOR_A) | center: bulk caps + supervisor + Hall | NE Channel 2 (MOTOR_B)
-Y=42-58: NW continued    | center: BEC subsystem (5 bucks + LDO) | NE continued
-Y=27-42: SW Channel 3 (MOTOR_C) | center: BEC distributed | SE Channel 4 (MOTOR_D)
-Y=13-27: SW continued | center: V_REG path | SE continued
-Y=0-13:  BOTTOM EDGE — battery XT30 + NTC inrush + 4× rev-pol FETs + TVS + fuse
+Y=82-95: TOP EDGE — FC connector + AUX header + USBLC6 ESD + BAT_V divider
+Y=80-87: S5 OUTPUT-STRIP — 4× ferrites + C_OUT + TVS (B.Cu) + FB resistors + boot caps
+Y=68-82: S5 SPINE POCKET — 4× buck ICs + LDO + supervisor + 4× inductors B.Cu
+Y=47-80: CH1 NW + CH2 NE — 33mm tall channel quadrants (motor + 6 FETs + MCU + driver + INA + protection)
+Y=24-46: S2 BULK CAPS row — 4× polymer caps at x=25/75 (+ Hall body envelope X=42-62 spine)
+Y=20-58: S3 SUPERVISOR + HALL — central spine pocket
+Y=15-47: CH3 SW + CH4 SE — 32mm tall channel quadrants
+Y=14-19: S5 INPUT STRIP — 4× Schottky + eFuses + polyfuse
+Y=0-13:  S1 BATTERY — XT30 + NTC + single-row 4× rev-pol FETs + TVS
 ```
 
-Quadrants:
-- **NW** (X=5-39, Y=42-72): Channel 1 — motor pad at (5, 60), 6 FETs ringing it
-- **NE** (X=61-95, Y=42-72): Channel 2 — motor pad at (95, 60), mirror
-- **SW** (X=5-39, Y=13-42): Channel 3 — motor pad at (5, 22), mirror Y
-- **SE** (X=61-95, Y=13-42): Channel 4 — motor pad at (95, 22), mirror XY
+Quadrants (PR-A4-b new zones):
+- **NW** (X=5-39, Y=47-80): Channel 1 — motor pads x=5 at Y=54/66/78, 6 FETs at P=12 rows Y=54/66/78
+- **NE** (X=61-95, Y=47-80): Channel 2 — motor pads x=95 mirror, X-mirror transform
+- **SW** (X=5-39, Y=15-47): Channel 3 — motor pads x=5 at Y=17/29/41 (mirror y → 95-y)
+- **SE** (X=61-95, Y=15-47): Channel 4 — motor pads x=95 mirror, XY-mirror transform
 - **Central spine** (X=39-61, Y=0-85): power path (battery → bulk → supervisor → split) — widened 2026-05-22 master stage-3 amendment from X=42-58 (16mm) to X=39-61 (22mm) to fit ACS770ECB vertical Hall body (19.65mm wide at 0° rot) symmetrically. NW/NE/SW/SE quadrant inner edges shifted by 3mm; each channel still ~34mm wide, sufficient for MCU + 6 FETs + per-channel passives.
 
 ## 3. Subsystem I/O contracts
@@ -45,8 +48,8 @@ Quadrants:
 - **Components**: XT30 connector, 2× MF72 5D25 NTC, 4× Infineon BSC014N06NS (rev-pol cluster), SMBJ33A TVS, polyfuse (if present)
 - **Inputs**: +BATT_RAW, BATGND (from XT30 pins)
 - **Outputs**: +BATT_FUSED, GND (post-NTC, post-rev-pol)
-- **ALLOWED zone**: X=20-80, **Y=0-20** (amended 2026-05-22 from Y=0-13; SuperSO8 5×6mm body + 2×2 cluster requires ≥17mm vertical, exceeds spec'd 13mm. Master adjudicated zone expansion per PR #32 honest spec deviation flag. S2 bulk-cap zone shifts to Y=20-42.)
-- **FORBIDDEN zones** (added 2026-05-23 per root-cause prevention rule): all NW/NE/SW/SE channel zones; central spine pocket Y=58-72; S6 top edge Y=72-85
+- **ALLOWED zone**: X=20-80, **Y=0-13** (PR-A4-b 2026-05-23 single-row revert; 4× rev-pol FETs in single linear row at y=10, electrically identical to 2×2; saves 7mm vertical for CH3/CH4 zones at 100×95 board)
+- **FORBIDDEN zones** (PR-A4-b updated): all 4 channel zones (NW/NE Y=47-80, SW/SE Y=15-47); S5 spine pocket Y=68-82; S5 strips; S6 Y=82-95; S2 cap row Y=24-46; Hall spine X=39-61 Y=20-58
 - **Adjacency**: outputs feed bulk caps directly above (Y=20-42 center)
 - **Acceptance**: bbox-clean within subsystem, XT30 pad on board edge for soldering access
 
@@ -54,8 +57,8 @@ Quadrants:
 - **Components**: 4× Panasonic EEHZS1V471P CBULK1-4 (470µF 35V polymer) + 8× ceramic decoupling (100nF + 10nF in parallel ×4)
 - **Inputs**: +BATT_FUSED, GND
 - **Outputs**: +VMOTOR (clean), GND
-- **ALLOWED zone**: X=18-82, **Y=20-42** (expanded outward per stage-4 amendment PR-A1 2026-05-22; C3/C4 at x=25/75 to clear NW/NE channel zone inner edges)
-- **FORBIDDEN zones** (added 2026-05-23 per root-cause prevention rule): all 4 channel zones (NW X=5-39 Y=42-72; NE X=61-95 Y=42-72; SW X=5-39 Y=13-42; SE X=61-95 Y=13-42); central spine pocket Y=58-72; Hall body envelope X=42-62 Y=20-46; S1 battery zone Y=0-20; S6 top edge Y=72-85
+- **ALLOWED zone**: X=18-82, **Y=24-46** (PR-A4-b 2026-05-23 shifted +4mm for 100×95 board; C3/C4 stay at x=25/75 to clear NW/NE channel zone inner edges)
+- **FORBIDDEN zones** (PR-A4-b updated): all 4 channel zones (NW X=5-39 Y=47-80; NE X=61-95 Y=47-80; SW X=5-39 Y=15-47; SE X=61-95 Y=15-47); S5 spine pocket Y=68-82; Hall body envelope X=42-62 Y=20-46; S1 battery zone Y=0-13; S6 top edge Y=82-95
 - **Adjacency**: +VMOTOR output feeds Hall sensor primary directly above (Y=42-58 center)
 - **Acceptance**: 4 caps in linear or 2×2 arrangement, ESR-minimizing trace length to FETs
 
@@ -63,8 +66,8 @@ Quadrants:
 - **Components**: TPS3700 supervisor, ACS770ECB-200B Hall sensor, voltage dividers (R + R for OVP threshold), inrush delay cap
 - **Inputs**: +VMOTOR, GND, +V3V3 (for supervisor logic)
 - **Outputs**: OVUV_KILL_BUS (to 4-channel kill rails), BUS_CURR_OUT (analog to FC AUX), +VMOTOR_HOTSIDE (post-Hall) → to 4-channel split
-- **ALLOWED zone**: X=39-61, Y=20-58 (amended 2026-05-22 master stage-3). Hall (ACS770ECB Allegro_CB_PFF) at (50, 45) 0° rot occupies y=20.3-46 in the spine (body bbox 19.65×25.7mm); supervisor cluster (TPS3700 SOT-23-8 + 4×0402) south of Hall at y=53-59. R34 jumper (originally B.Cu at (50, 65) inside spine pocket Y=58-72) relocates to (50, 47) in PR-A2 root-cause amendment — frees spine pocket Y=58-72 for S5 BEC relocation.
-- **FORBIDDEN zones** (added 2026-05-23 per root-cause prevention rule): all 4 channel zones; spine pocket Y=58-72 (reserved for S5 BEC); S6 top edge Y=72-85; S1/S2 zones
+- **ALLOWED zone**: X=39-61, Y=20-58 (unchanged from prior — Hall + supervisor in central spine; PR-A4-b 100×95 board keeps S3 at this position; A4-c may shift if Hall positioning needs adjustment for new S5 pocket position)
+- **FORBIDDEN zones** (PR-A4-b updated): all 4 channel zones (NW/NE Y=47-80, SW/SE Y=15-47); S5 spine pocket Y=68-82 (reserved for S5 BEC); S6 top edge Y=82-95; S1/S2 zones
 - **Adjacency**: Hall primary current pad 4 (north end) feeds from S2 bulk caps via B.Cu jumper R33 at (50, 25); pad 5 (south end) feeds out to 4-channel split via R34 at (50, 47) B.Cu (moved from (50, 65) per PR-A2). All 4 channels equidistant ~30mm from Hall center (symmetric loss budget per premium-ESC reference).
 - **Acceptance**: Hall primary leads carry +VMOTOR with 3oz copper pour; supervisor divider accessible for test; vertical Hall orientation ensures channel-to-channel thermal symmetry
 
@@ -81,8 +84,8 @@ Quadrants:
   - ~20 BEMF and PWM passives
 - **Inputs**: +VMOTOR_HOTSIDE (from S3), GND, KILL_LOCAL_N (per-channel from supervisor OR-bus), DShot_CH_n (from FC), +V3V3 (MCU supply)
 - **Outputs**: MOTOR_A/B/C_CH_n (to motor pad), TLM_CH_n (to FC telemetry), HW_FAULT_LED_K_CH_n (visible on board)
-- **ALLOWED zone**: one channel quadrant (NW X=5-39 Y=42-72; NE X=61-95 Y=42-72; SW X=5-39 Y=13-42; SE X=61-95 Y=13-42 — per channel index)
-- **FORBIDDEN zones** (added 2026-05-23 per root-cause prevention rule): central spine X=39-61 (reserved for S2/S3/S5); other channels' quadrants; S6 top edge Y=72-85; S1 battery zone Y=0-20
+- **ALLOWED zone**: one channel quadrant (PR-A4-b 100×95 zones): NW X=5-39 Y=47-80 (33mm); NE X=61-95 Y=47-80; SW X=5-39 Y=15-47 (32mm); SE X=61-95 Y=15-47 — per channel index. Symmetric R6 motor-pad-anchored at P=12 FET pitch fits cleanly in these zones.
+- **FORBIDDEN zones** (PR-A4-b updated): central spine X=39-61 (reserved for S2/S3/S5); other channels' quadrants; S6 top edge Y=82-95; S1 battery zone Y=0-13
 - **Adjacency**: motor pad at outer edge of quadrant; MCU + gate drivers between motor pad and central spine; protection cluster between MCU and quadrant corner
 - **Acceptance per channel**: bbox-clean within quadrant; per-channel D/S < 0.85 in all sub-cells; thermal sim T_J ≤ 100°C at 70A continuous + 100A 10s burst; per-MCU pin-side connectivity (playbook T8) verified for the channel's rotation
 
@@ -90,17 +93,17 @@ Quadrants:
 - **Components**: 5× buck regulators (TPS54560 × 4 for V5_FC, V5_PI5, V5_AI, V9_VTX1; + 1 more for V9_VTX2 or shared) + 1× LDO for V3V3 + LC filters per output + protection diodes + bias passives
 - **Inputs**: +VMOTOR (from S3 output), GND
 - **Outputs**: +V5_FC, +V5_PI5, +V5_AI, +V9_VTX1, +V9_VTX2, +V3V3, +V3V3A
-- **ALLOWED zones** (amended 2026-05-23 stage-2 — spine pocket alone too small per master root-cause audit; 4-zone distribution required for 51 S5 components):
-  - **Zone A** — Central spine pocket X=39-61, Y=58-72 (308 mm²): 4× buck ICs (F.Cu) + 4× inductors (B.Cu) + LDO J13 + supervisor J10 (B.Cu) + boot caps where they fit
-  - **Zone B** — Bottom-edge S5 strip X=12-92, Y=12-19 (between S1 components): input-side passives (4× Schottky catch diodes D5-D8, 3× eFuses J7-J9, 1× polyfuse F1)
-  - **Zone C** — Top-edge S5 strip X=20-90, Y=70-77 (between spine pocket and S6 USBLC6 row): output-side passives (4× ferrites L6-L9, 4× C_OUT C8/C12/C15/C18, 4× TVS D10-D13 on B.Cu, 8× FB resistors R6-R13, 4× boot caps)
-  - **Zone D** — SW corner X=2-22, Y=12-42: Buck 5 V9_VTX2 thermal-isolation cluster ONLY (J6, L5, D9, F2, R14, R15, C20, L10, D14, C21) — far from V9_VTX1 per Sai isolation directive
-- **FORBIDDEN zones** (added 2026-05-23 per root-cause prevention rule):
-  - All channel zones (NW/NE/SE/deep-SW Y=42-72) except the explicit Zone B/C strips above
-  - S1 main body zone X=20-80 Y=0-12 (S1 components dense)
-  - S2 cap envelope (avoid C1/C2 bbox y=18.5..29.5 + C3/C4 bbox y=34.5..45.5)
+- **ALLOWED zones** (PR-A4-b 2026-05-23 amended for 100×95 board — 4-zone distribution preserved, Y-coords shifted):
+  - **Zone A** — Central spine pocket X=39-61, **Y=68-82** (shifted +10 from Y=58-72; 308 mm²): 4× buck ICs F.Cu + 4× inductors B.Cu + LDO + supervisor (B.Cu) + boot caps
+  - **Zone B** — Bottom-edge S5 strip X=12-92, **Y=14-19** (unchanged Y; between S1 single-row and S2 cap row): input-side passives (4× Schottky D5-D8, 3× eFuses J7-J9, 1× polyfuse F1)
+  - **Zone C** — Top-edge S5 strip X=20-90, **Y=80-87** (shifted +10 from Y=70-77; between spine pocket and S6 USBLC6 row): output-side passives (4× ferrites L6-L9, 4× C_OUT, 4× TVS B.Cu, 8× FB resistors, 4× boot caps)
+  - **Zone D** — SW corner X=2-22, **Y=22-38** (unchanged Y; Buck 5 V9_VTX2 cluster) — far from V9_VTX1 per Sai isolation directive
+- **FORBIDDEN zones** (PR-A4-b updated):
+  - All channel zones (NW/NE Y=47-80, SW/SE Y=15-47) except explicit Zone B/D strips above
+  - S1 main body Y=0-13
+  - S2 cap envelope Y=18.5..29.5 + Y=38.5..49.5 (post +4mm shift)
   - S3 supervisor cluster X=39-61 Y=42-58 + Hall body X=42-62 Y=20-46
-  - S6 connector zone X≥20 Y≥77.5
+  - S6 connector zone X≥20 Y≥82
 - **Adjacency**: outputs feed FC connector + AUX header (above) + 4 MCU subsystems (per-channel V3V3)
 - **Acceptance**: thermal separation from FET clusters (channel quadrants); bbox-clean; output trace ampacity for each rail. ROOT-CAUSE PREVENTION: spine pocket is reserved S5 territory; channels are forbidden zone for BEC.
 
@@ -108,8 +111,8 @@ Quadrants:
 - **Components**: FC connector (existing pin header), BM06B-SRSS-TB AUX 6-pin (Hall + NTC + spare GPIO + BEC outs), 4× protection-status LEDs (per-channel kill indicator), DShot TVS × 4, BAT_V divider
 - **Inputs**: DShot_CH1-4 (from MCUs), TLM_CH1-4 (from MCUs), BUS_CURR_OUT (from S3 Hall), BAT_V (from S2 divider), +V5_FC (from S5)
 - **Outputs**: (to FC and user)
-- **ALLOWED zone**: top edge, Y=72-85 (with ≥3mm clearance from H3/H4 mount holes at (5,80)/(95,80))
-- **FORBIDDEN zones** (added 2026-05-23 per root-cause prevention rule): all channel zones; spine pocket Y=58-72; S1/S2/S3/S5 zones
+- **ALLOWED zone**: top edge, **Y=82-95** (PR-A4-b shifted +10 from Y=72-85 for 100×95 board) (with ≥3mm clearance from H3/H4 mount holes at (5,90)/(95,90))
+- **FORBIDDEN zones** (PR-A4-b updated): all channel zones; spine pocket Y=68-82; S5 top strip Y=80-87 (overlapping but on different layers); S1/S2/S3 zones
 - **Acceptance**: bbox-clean; LEDs visible from top; FC pins accessible
 
 ### S7: Edge.Cuts + mount holes (already in setup_board.py)
