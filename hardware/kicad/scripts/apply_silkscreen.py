@@ -24,77 +24,73 @@ PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad
 SENTINEL_START = '(gr_text "PHASE3B-SILK-BEGIN" (at 0 0 0) (layer "Cmts.User") (effects (font (size 0.1 0.1) (thickness 0.05))))'
 SENTINEL_END = '(gr_text "PHASE3B-SILK-END" (at 0 0 0) (layer "Cmts.User") (effects (font (size 0.1 0.1) (thickness 0.05))))'
 
-# Per-channel MCU corner positions (matches place_board.py CHANNEL_CORNERS)
+# Per-channel MCU corner positions (matches place_board.py CHANNEL_CORNERS for 100×85)
 CHANNEL_CORNERS = {
     1: (8.0, 8.0),
-    2: (82.0, 8.0),
-    3: (8.0, 67.0),
-    4: (82.0, 67.0),
+    2: (92.0, 8.0),
+    3: (8.0, 77.0),
+    4: (92.0, 77.0),
 }
 
-# Motor pad positions (matches place_board.py MOTOR_PADS)
+# Motor pad positions (matches place_board.py MOTOR_PADS for 100×85)
 MOTOR_PADS = {
     (1, 'A'): (15.0, 2.0),  (1, 'B'): (18.0, 2.0),  (1, 'C'): (21.0, 2.0),
-    (2, 'A'): (88.0, 15.0), (2, 'B'): (88.0, 18.0), (2, 'C'): (88.0, 21.0),
-    (3, 'A'): (2.0, 55.0),  (3, 'B'): (2.0, 58.0),  (3, 'C'): (2.0, 61.0),
-    (4, 'A'): (62.0, 73.0), (4, 'B'): (65.0, 73.0), (4, 'C'): (68.0, 73.0),
+    (2, 'A'): (98.0, 15.0), (2, 'B'): (98.0, 18.0), (2, 'C'): (98.0, 21.0),
+    (3, 'A'): (2.0, 65.0),  (3, 'B'): (2.0, 68.0),  (3, 'C'): (2.0, 71.0),
+    (4, 'A'): (70.0, 83.0), (4, 'B'): (73.0, 83.0), (4, 'C'): (76.0, 83.0),
 }
 
-# BEC pad positions (matches place_board.py BEC_PAD_POS)
-# Each entry: (x, y, polarity, rail_tag)
+# BEC pad positions (matches place_board.py BEC_PAD_POS for 100×85)
 BEC_PAD_LABELS = {
-    'V5_FC_PLUS':   (10.0, 72.0, '+5V', 'FC'),
-    'V5_FC_GND':    (15.0, 72.0, 'GND', 'FC'),
-    'V5_PI5_PLUS':  (87.0, 35.0, '+5V', 'Pi5'),
-    'V5_PI5_GND':   (87.0, 40.0, 'GND', 'Pi5'),
-    'V5_AI_PLUS':   (87.0, 45.0, '+5V', 'AI'),
-    'V5_AI_GND':    (87.0, 50.0, 'GND', 'AI'),
-    'V9_VTX1_PLUS': (3.0, 25.0, '+9V', 'VTX1'),
-    'V9_VTX1_GND':  (3.0, 30.0, 'GND', 'VTX1'),
-    'V9_VTX2_PLUS': (3.0, 42.0, '+9V', 'VTX2'),
-    'V9_VTX2_GND':  (3.0, 47.0, 'GND', 'VTX2'),
-    'V3V3_PLUS':    (75.0, 72.0, '+3V3', ''),
-    'V3V3_GND':     (80.0, 72.0, 'GND', ''),
-    'GND_DIST_1':   (85.0, 72.0, 'GND', ''),
-    'GND_DIST_2':   (87.0, 18.0, 'GND', ''),
-    'GND_DIST_3':   (3.0, 18.0, 'GND', ''),
-    'GND_DIST_4':   (3.0, 70.0, 'GND', ''),
+    'V5_FC_PLUS':   (12.0, 82.0, '+5V', 'FC'),
+    'V5_FC_GND':    (18.0, 82.0, 'GND', 'FC'),
+    'V5_PI5_PLUS':  (97.0, 38.0, '+5V', 'Pi5'),
+    'V5_PI5_GND':   (97.0, 43.0, 'GND', 'Pi5'),
+    'V5_AI_PLUS':   (97.0, 48.0, '+5V', 'AI'),
+    'V5_AI_GND':    (97.0, 53.0, 'GND', 'AI'),
+    'V9_VTX1_PLUS': (3.0, 28.0, '+9V', 'VTX1'),
+    'V9_VTX1_GND':  (3.0, 33.0, 'GND', 'VTX1'),
+    'V9_VTX2_PLUS': (3.0, 45.0, '+9V', 'VTX2'),
+    'V9_VTX2_GND':  (3.0, 50.0, 'GND', 'VTX2'),
+    'V3V3_PLUS':    (85.0, 82.0, '+3V3', ''),
+    'V3V3_GND':     (90.0, 82.0, 'GND', ''),
+    'GND_DIST_1':   (95.0, 82.0, 'GND', ''),
+    'GND_DIST_2':   (97.0, 20.0, 'GND', ''),
+    'GND_DIST_3':   (3.0, 20.0, 'GND', ''),
+    'GND_DIST_4':   (3.0, 80.0, 'GND', ''),
 }
 
-# Indicator LEDs (Phase 2d-REDO)
-LED_PWR_POS = (28.0, 9.0)
-LED_RPOL_POS = (33.0, 9.0)
+# Indicator LEDs (Phase 4b-REDO3 — moved with battery section)
+LED_PWR_POS = (32.0, 9.0)
+LED_RPOL_POS = (38.0, 9.0)
 
-# FC connector — pin 1 to pin 8 order per SKiDL J_FC:
-# [1]=GND, [2]=VBAT_SENSE, [3]=CURR, [4]=TLM, [5]=M4_RAW, [6]=M3_RAW, [7]=M2_RAW, [8]=M1_RAW
-FC_POS = (40.0, 71.0)
+# FC connector — pin 1 to pin 8 order per SKiDL J_FC (re-centered for 100×85)
+FC_POS = (50.0, 81.0)
 FC_PIN_PITCH = 1.0   # JST SH 1.0mm pitch (8 pins × 1mm = 7mm span)
 FC_LABELS_ORDER = ['GND', 'VBAT', 'CURR', 'TLM', 'M4', 'M3', 'M2', 'M1']
 
 # SWD pad positions (matches place_board.py SWD_PADS)
 SWD_PADS = {
     (1, 'SWDIO'): (2.0, 14.0),  (1, 'SWCLK'): (2.0, 17.0),
-    (2, 'SWDIO'): (88.0, 28.0), (2, 'SWCLK'): (88.0, 31.0),
-    (3, 'SWDIO'): (2.0, 64.0),  (3, 'SWCLK'): (2.0, 67.0),
-    (4, 'SWDIO'): (88.0, 55.0), (4, 'SWCLK'): (88.0, 58.0),
+    (2, 'SWDIO'): (98.0, 28.0), (2, 'SWCLK'): (98.0, 31.0),
+    (3, 'SWDIO'): (2.0, 74.0),  (3, 'SWCLK'): (2.0, 77.0),
+    (4, 'SWDIO'): (98.0, 60.0), (4, 'SWCLK'): (98.0, 63.0),
 }
 
 # Battery solder pads
 BATT_POS = (10.0, 5.0)
-BATGND_POS = (10.0, 8.0)  # near battery, approximate (GND distribution)
+BATGND_POS = (10.0, 8.0)
 
-# Mount holes
-MOUNT_HOLES = [(5.0, 5.0), (85.0, 5.0), (5.0, 70.0), (85.0, 70.0)]
+# Mount holes (100×85 board — Phase 4b-redo3)
+MOUNT_HOLES = [(5.0, 5.0), (95.0, 5.0), (5.0, 80.0), (95.0, 80.0)]
 
-# MOSFET grid positions (6×4 grid — for thermal-pad orientation markers, 24 total)
+# MOSFET grid positions (unchanged — heatsink preserved through 4b-redo3)
 MOSFET_X = [5.0, 17.5, 30.0, 42.5, 55.0, 67.5]
 MOSFET_Y = [15.0, 28.0, 41.0, 54.0]
 
-# Fiducials: 3 F.Cu + 3 B.Cu. Position at clear board corners (avoid components).
-# Looking at Phase 4b-redo2 layout: TL (5,3) has mount hole + battery; TR (87,3) has
-# mount hole + TVS. Available clear corners: between component zones.
-FIDUCIALS_F = [(5.0, 30.0), (85.0, 18.0), (45.0, 72.5)]   # F.Cu
-FIDUCIALS_B = [(5.0, 36.0), (85.0, 36.0), (45.0, 6.0)]    # B.Cu
+# Fiducials: 3 F.Cu + 3 B.Cu on 100×85 board, at clear positions
+FIDUCIALS_F = [(5.0, 30.0), (95.0, 22.0), (50.0, 82.5)]   # F.Cu
+FIDUCIALS_B = [(5.0, 36.0), (95.0, 36.0), (50.0, 6.0)]    # B.Cu
 
 
 def gr_text(text, x, y, layer, size=1.0, rot=0, mirror=False):

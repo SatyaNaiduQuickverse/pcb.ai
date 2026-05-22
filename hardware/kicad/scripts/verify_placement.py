@@ -20,8 +20,8 @@ EXPECTED_MCU_ROTATION = {1: 0, 2: 90, 3: 270, 4: 180}
 EXPECTED_MOSFET_X = [5.0, 17.5, 30.0, 42.5, 55.0, 67.5]
 EXPECTED_MOSFET_Y = [15.0, 28.0, 41.0, 54.0]
 
-EXPECTED_BOARD_W = 90.0   # Phase 4b-REDO2: grew 85 → 90
-EXPECTED_BOARD_H = 75.0   # grew 70 → 75
+EXPECTED_BOARD_W = 100.0  # Phase 4b-REDO3: grew 90 → 100 for signal-density
+EXPECTED_BOARD_H = 85.0   # grew 75 → 85
 
 
 def parse_footprints(txt):
@@ -112,7 +112,7 @@ def main():
     # 4) Mount holes — exactly 4 at corners. Phase 4b-REDO2: 90×75 board → corners
     # at (5,5), (85,5), (5,70), (85,70) — custom 80×65 spacing pattern.
     mount_holes = [fp for fp in fps if 'MountingHole' in (fp['lib'] or '')]
-    expected_mh_positions = {(5.0, 5.0), (85.0, 5.0), (5.0, 70.0), (85.0, 70.0)}
+    expected_mh_positions = {(5.0, 5.0), (95.0, 5.0), (5.0, 80.0), (95.0, 80.0)}
     actual_mh_positions = set((round(fp['x'], 1), round(fp['y'], 1)) for fp in mount_holes)
     if len(mount_holes) != 4:
         fails.append(f"  Expected 4 mount holes (post-dedup), found {len(mount_holes)}")
