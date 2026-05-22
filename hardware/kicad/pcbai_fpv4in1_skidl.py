@@ -16,7 +16,9 @@ Scope of main sheet (Phase 2d-REDO expanded contract):
     +V9_VTX2: buck #5, +VMOTOR → 9V/2A,  VTX #2 (isolated from #1)
     +V3V3   : LDO,     +V5_FC  → 3.3V/1A (existing TLV76733DRVR — kept)
   PER-RAIL SAFETY: eFuse + TVS + LC filter on each rail.
-  AUX OUT: BEC_OUT header exposes all 4 rails + 3V3 + GND.
+  AUX OUT: 6× solder pad pairs (one per rail) + 4× GND distribution pads —
+    per Phase 2e-REDO solder-first strategy. Optional JST SH / XT30 connector
+    footprints OVERLAID at Phase 3b-detail (not in this netlist).
   FC CONNECTOR: JST SM08B-SRSS-TB 8-pin (Betaflight standard pinout).
   ESD: 3× USBLC6-2SC6 covering 4× DShot + 1× TLM + 1× spare.
   STATUS LED: 1× green power-good LED + 1 kΩ R on +3V3.
@@ -388,23 +390,48 @@ U_SUPERVISOR[1] += V5_PI5   # VCC
 U_SUPERVISOR[2] += GND
 U_SUPERVISOR[3] += PG_RPI   # RESET / PG output
 
-# ─────────── BEC OUT — AUX header exposing 4 rails + 3V3 + GND ───────────
-# 8-pin header to expose BEC rails for external load connection (autonomous-drone
-# power-hub class — RPi 5, AI HAT, VTX, FC, peripherals plug in via this header).
-# 10-pin header to expose 6 rails + GNDs (final architecture after V5_AI split)
-J_BEC_OUT = Part("Connector_Generic", "Conn_01x10", value="BEC_OUT_HEADER",
-                 footprint="Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical",
-                 description="BEC AUX power-out: GND, +V5_FC, GND, +V5_PI5, GND, +V5_AI, GND, +V9_VTX1, +V9_VTX2, +V3V3")
-J_BEC_OUT[1]  += GND
-J_BEC_OUT[2]  += V5_FC
-J_BEC_OUT[3]  += GND
-J_BEC_OUT[4]  += V5_PI5
-J_BEC_OUT[5]  += GND
-J_BEC_OUT[6]  += V5_AI
-J_BEC_OUT[7]  += GND
-J_BEC_OUT[8]  += V9_VTX1
-J_BEC_OUT[9]  += V9_VTX2
-J_BEC_OUT[10] += V3V3
+# ─────────── BEC OUT — Solder pad pairs per rail (Phase 2e-REDO) ───────────
+# Per Sai's 2026-05-22 user-POV direction: SOLDER PADS FIRST, optional connector
+# footprints OVERLAID at Phase 3b-detail. Per-rail pad-pair sized per current:
+#   5V rails (5A/5A/3A): D4.0mm (TestPoint_Pad_D4.0mm) — generous solder area
+#   9V rails (2A each):  D3.0mm — medium
+#   3V3 rail (1A):       D2.5mm — low
+# Additional standalone GND pads (×4) distribute return current.
+# Silkscreen requirements for Phase 3b-detail forward-listed in PHASE2E_REDO_CONNECTORS.md §3.
+
+def bec_pad_pair(rail_name, rail_net, gnd_net, pad_diameter_mm):
+    """Emit a +V and GND solder pad pair for one BEC rail.
+
+    pad_diameter_mm: 4.0 for ≥3A rails, 3.0 for 2A, 2.5 for 1A.
+    Value strings get silkscreen labels applied at Phase 3b-detail (see doc §3).
+    """
+    fp = f"TestPoint:TestPoint_Pad_D{pad_diameter_mm:.1f}mm"
+    pad_v = Part("Connector", "TestPoint", value=f"PAD_{rail_name}_PLUS",
+                 footprint=fp,
+                 description=f"Solder pad for +{rail_name} (Phase 2e-REDO; optional JST SH / XT30 connector overlay per spec)")
+    pad_v[1] += rail_net
+    pad_g = Part("Connector", "TestPoint", value=f"PAD_{rail_name}_GND",
+                 footprint=fp,
+                 description=f"GND pad paired with +{rail_name}")
+    pad_g[1] += gnd_net
+
+
+# 6 BEC rails — solder pads per rail
+bec_pad_pair("V5_FC",   V5_FC,   GND, 4.0)   # 5A — large
+bec_pad_pair("V5_PI5",  V5_PI5,  GND, 4.0)   # 5A — large (RPi 5)
+bec_pad_pair("V5_AI",   V5_AI,   GND, 4.0)   # 3A — large (AI HAT, also sensitive)
+bec_pad_pair("V9_VTX1", V9_VTX1, GND, 3.0)   # 2A — medium
+bec_pad_pair("V9_VTX2", V9_VTX2, GND, 3.0)   # 2A — medium
+bec_pad_pair("V3V3",    V3V3,    GND, 2.5)   # 1A — small (no connector option per contract)
+
+# Additional GND distribution pads (×4) for return-current spreading. Per
+# master spec: "additional GND pads spread across the pad sets for return-current
+# distribution".
+for i in range(1, 5):
+    pad_gnd_dist = Part("Connector", "TestPoint", value=f"PAD_GND_DIST_{i}",
+                        footprint="TestPoint:TestPoint_Pad_D3.0mm",
+                        description=f"GND return-current distribution pad #{i}")
+    pad_gnd_dist[1] += GND
 
 # ─────────── BEC — LDO stage (TLV76733DRVR) ───────────
 # Now derived from +V5_FC (filtered rail) — same load domain as FC/MCU.

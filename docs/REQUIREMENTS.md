@@ -148,11 +148,23 @@ Closed at Phase 2e — see `docs/PHASE2E_CONNECTORS_PROTECTION.md`.
 
 ### Connectors
 
-Closed at Phase 2e — see `docs/PHASE2E_CONNECTORS_PROTECTION.md`.
+Closed at Phase 2e (original); refined at Phase 2e-REDO per Sai's 2026-05-22 solder-first directive — see `docs/PHASE2E_REDO_CONNECTORS.md`.
 
-- **FC connector**: JST SM08B-SRSS-TB (JLC C160407) — Open-4in1 reference. Betaflight 4-in-1 8-pin pinout: 1=GND, 2=VBAT, 3=CURR, 4=TLM, 5-8=M4/M3/M2/M1.
-- **Motor pads**: 12 × 3.0 mm dia SMD pads (4 channels × 3 phases). Accommodates 20-26 AWG wire by user choice.
-- **SWD per-MCU**: 4 × {SWDIO + SWCLK + GND} = 12 test pads minimum (NRST optional adds 4). Per-MCU one-at-a-time flash (Open-4in1 pattern).
+- **FC connector** (UNCHANGED): JST SM08B-SRSS-TB (JLC C160407) — Open-4in1 reference. Betaflight 4-in-1 8-pin pinout: 1=GND, 2=VBAT, 3=CURR, 4=TLM, 5-8=M4/M3/M2/M1.
+- **BEC output — SOLDER PADS FIRST** (Phase 2e-REDO strategy):
+  - 6 rail solder pad pairs, sized per current:
+    - +V5_FC / +V5_PI5 / +V5_AI: D 4.0 mm pads (5A/5A/3A)
+    - +V9_VTX1 / +V9_VTX2: D 3.0 mm pads (2A each)
+    - +V3V3: D 2.5 mm pads (1A)
+  - 4× standalone D 3.0 mm GND distribution pads spread across pad cluster.
+  - Total: 16 BEC pad components.
+- **Optional connector overlays** (Phase 3b-detail layout work, NOT in netlist):
+  - +V5_FC, +V5_AI, +V9_VTX1, +V9_VTX2: JST SH 2-pin BM/SM02B (1.0 mm pitch, 1A per contact)
+  - +V5_PI5: XT30 2-pin (30A rated, robust for sensitive RPi 5 load) — custom symbol needed in `components.kicad_sym`
+  - +V3V3: pads-only (no connector — low current)
+- **Motor pads** (UNCHANGED): 12 × 3.0 mm dia SMD pads (4 channels × 3 phases). Accommodates 20-26 AWG wire.
+- **SWD per-MCU** (UNCHANGED): 4 × {SWDIO + SWCLK} = 8 test pads minimum. Per-MCU one-at-a-time flash (Open-4in1 pattern).
+- **Silkscreen requirements**: per-pad +/- polarity markings + rail labels (+5V_FC, +5V_PI5, +5V_AI, +9V_VTX1, +9V_VTX2, +3.3V, GND). Forward-listed in `docs/PHASE2E_REDO_CONNECTORS.md` §3 for Phase 3b-detail application.
 
 ### Schematic (KiCad 9)
 
@@ -188,7 +200,7 @@ Closed at Phase 2.5 — see `docs/PHASE2_5_FITCHECK.md`.
 - **F.Cu / B.Cu split**: F.Cu = signal side (4 MCUs, 4 drivers, 12 CSAs, buck+LDO, ESD, decoupling, LEDs, FC connector, motor pads, SWD pads); B.Cu = power side (24+4 MOSFETs, 12 shunts, 2 bulk caps, TVS, buck inductor).
 - **Heatsink**: **80 × 55 mm Al6061-T6, 4 mm thick** (re-locked at Phase 4c-resume — bigger heatsink possible on 85 × 70 board; covers 24× TOLL 6×4 grid with 2 mm border). Finned with **10× area multiplier** (fin geometry: practical 25-30 mm tall fins at ~3 mm pitch). Silicone thermal pad 0.5 mm, 4 W/m·K conservative (datasheet 4-6 range). Mounted via M2 screws (through-PCB tap or adhesive — Phase 4 GUI decides).
 - **Edge.Cuts outline**: 85 × 70 mm rectangular. Edge.Cuts layer stroke 0.05 mm.
-- **Connectors**: FC connector (JST SM08B-SRSS-TB) on F.Cu top edge, centered. 12 motor pads (3.0 mm dia) distributed 3-per-edge across all 4 board edges, one channel per edge. SWD pads (12-16 total, castellated-edge style preferred) on F.Cu left edge.
+- **Connectors / pads**: FC connector (JST SM08B-SRSS-TB) on F.Cu top edge, centered. 12 motor pads (3.0 mm dia) distributed 3-per-edge across all 4 board edges, one channel per edge. SWD pads on F.Cu left edge. 16 BEC solder pads (Phase 2e-REDO) on board edges per T7 accessibility (tentative allocation in `docs/PHASE2E_REDO_CONNECTORS.md` §5; final placement at Phase 4b-redo-II).
 - **Z-axis budget**: 14-22 mm total board+heatsink+bulk-cap stack depending on bulk-cap placement (B.Cu preferred; F.Cu fallback). FPV stack compatibility needs a custom dual-standoff structure OR low-profile polymer bulk caps (~6 mm tall vs 13.5 mm aluminum electrolytic) — Phase 4 placement decides.
 - **Mounting**: Bolt pattern matches the converged form factor's standard once Phase 2.5 lands
 
