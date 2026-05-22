@@ -116,9 +116,50 @@ Same per-FET power (10W burst), but v4 allows more lateral heat spreading into c
 
 **Physical interpretation**: v3 single-channel was a CONSERVATIVE estimate (small thermal envelope). v4_v2 4-channel with full board area is the MORE REALISTIC physical scenario. The actual fabricated 100×95 board will see v4_v2 behavior, not v3.
 
-**Master adjudication needed**: is -10°C delta acceptable given larger mesh = more lateral spread? OR should v3 single-channel be re-run with 100×95 board mesh to match (would show similar peak ~87°C, eliminating the apparent "drop")?
+## BC consistency analysis (master rebuke validation 2026-05-23)
 
-Either way: ALL 24 FETs PASS with comfortable margins on the realistic board geometry.
+Per master's option B: build CH1-only sim using SAME 100×95 mesh + BCs as v4_v2 (`ch1only_on_full_board.sif`).
+
+### 4-point evidence
+1. Artifacts: `full4ch_mesh_v2/ch1only_on_full_board.{result, vtu_t0001/t0002.vtu}` committed
+2. Timestamp: mtime **2026-05-23 03:02:57** > sif mtime
+3. Extract: meshio reads vtu_t0002, samples at CH1 Q5-Q10 pad centers
+4. Command: `/home/novatics64/local/elmer/bin/ElmerSolver ch1only_on_full_board.sif`
+
+### Apples-to-apples baseline comparison
+
+| FET | CH1-only (100×95 mesh) | v4_v2 (4-channel) | Δ (4-ch − CH1-only) |
+|---|---:|---:|---:|
+| Q5 hi-A | 77.696°C | 87.149°C | **+9.45°C** |
+| Q6 lo-A | 74.852°C | 83.549°C | **+8.70°C** |
+| Q7 hi-B | 80.650°C | 85.394°C | **+4.74°C** |
+| Q8 lo-B | 77.310°C | 82.098°C | **+4.79°C** |
+| Q9 hi-C | 78.511°C | 80.450°C | **+1.94°C** |
+| Q10 lo-C | 75.461°C | 77.919°C | **+2.46°C** |
+
+### Diagnosis confirmed
+
+Cross-channel coupling adds +1.9 to +9.5°C to CH1 FETs depending on position (phase A row closest to CH2/CH3, most affected). This is EXPECTED physics: more active channels = more heat in the board.
+
+**Master's "more heat = hotter" rule verified once baseline aligned**:
+- A4-c v3 standalone (small 30×30 mesh, single channel): 97.29°C — was a CONSERVATIVE small-domain BC artifact (limited lateral cooling area)
+- CH1-only on 100×95 mesh (realistic, 1 channel): 77.7°C
+- 4-channel on 100×95 mesh (realistic, all 4): 87.15°C — +9.5°C cross-channel coupling
+
+The v4_v2 numbers ARE the realistic baseline. A4-c's higher single-channel value was artificial domain limitation.
+
+## Phase 7-prep heatsink dependency flag
+
+v4_v2 assumes whole-back heatsink (h_bot=1500 across full 100×95 mm B.Cu surface). If actual mechanical design uses localized cluster heatsinks (e.g. only over FET clusters), h_bot would be heterogeneous (1500 over FETs, low natural-convection elsewhere). Per-FET T_J would be higher in that case.
+
+**Queue for Sai/Phase 7-prep**: confirm whole-back heatsink commitment in mechanical design (TIM + heatsink mass covering full B.Cu plate, not just cluster patches).
+
+### Final per-FET acceptance (v4_v2)
+
+ALL 24 FETs PASS spec:
+- Burst: max 90.109°C (margin 60°C to 150°C)
+- Continuous: max 74.753°C (margin 25°C to 100°C)
+- Realistic 4-channel coupling captured (+1.9 to +9.5°C vs single-channel baseline on same mesh)
 
 ## Sim 2 — Pair-wise EMI ngspice (placement gate, not final EMC)
 
