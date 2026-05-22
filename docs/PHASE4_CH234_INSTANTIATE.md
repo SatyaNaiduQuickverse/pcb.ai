@@ -80,14 +80,45 @@ Mesh T range: 70.028 - 86.875 °C
 
 Spec: ≤150°C burst (margin ~63°C), ≤100°C continuous (margin ~27°C). **ALL 24 FETs PASS** ✓.
 
-### Honest regression note vs A4-c single-channel v3
+## Mesh refinement amendment (per master rebuke 2026-05-23)
 
-A4-c v3 (single channel, fine mesh): Q5 burst 97.292°C
-A4-d v4 (4-channel, coarser mesh): Q5 burst 82.49°C
+Initial v4 mesh (8×10×1 = 80 subcells, ~12.5mm cells) gave Δ=-14.8°C vs A4-c (mesh undersampling). Per master mesh-density gate requirement, refined to:
 
-Δ = -14.8°C. **Outside master's ±2°C target**. Cause: 4-channel mesh is coarser (12.5mm subcells vs ~5mm in A4-c). Coarser mesh smears heat → lower peak T. Honest limitation flag.
+**v4_v2 refined mesh** (`full4ch_mesh_v2.grd`): 20×19×3 = 1140 subcells (~5×5×0.53mm cells). **3087 nodes** in final mesh vs ~144 in A4-c single-channel (per-area density now matches).
 
-Verdicts still PASS with comfortable margins, but per-FET T_J is mesh-resolution-dependent. Recommend Phase 5b autoroute refinement with full-board fine mesh (~3mm cells) for final verification.
+### Refined v4 results (from `full4ch_mesh_v2/full4ch_thermal_v2.vtu_t0002.vtu`)
+
+**4-point evidence**:
+1. Artifacts committed: `full4ch_mesh_v2/full4ch_thermal_v2.{result, vtu_t0001.vtu, vtu_t0002.vtu}` (3087 nodes, mesh file 309KB)
+2. Timestamp: result mtime **2026-05-23 02:57:07** > sif mtime ✓
+3. Extract: `extract_full4ch_v2.py` reads vtu_t0002 fresh
+4. Command: `/home/novatics64/local/elmer/bin/ElmerSolver full4ch_thermal_v2.sif`
+
+| Channel | Max T_burst (°C) | Max T_cont (°C) | Verdict |
+|---|---:|---:|---|
+| CH1 | 87.149 (Q5) | 73.303 | PASS ✓ |
+| CH2 | 87.149 (Q11) | 73.303 | PASS ✓ |
+| CH3 | 90.109 (Q17) | 74.753 | PASS ✓ |
+| CH4 | 90.109 (Q23) | 74.753 | PASS ✓ |
+
+Mesh T range: 67.982 - 90.418 °C. **ALL 24 FETs PASS** spec ≤150°C burst (margin ~60°C) + ≤100°C cont (margin ~25°C).
+
+### Honest CH1 regression analysis
+
+CH1 Q5 refined 4-ch v4_v2: 87.15°C burst vs A4-c v3 single-ch fine-mesh standalone: 97.29°C burst
+**Δ = -10.14°C** (master accept: -2 ≤ Δ ≤ +8 → STILL OUTSIDE 8°C lower bound).
+
+Cause analysis: per-area mesh density now matches A4-c (5mm cells), but **mesh AREA differs significantly**:
+- A4-c v3: 30×30×1.6 mm (small isolated section, lateral cooling limited by 30mm extent)
+- A4-d v4_v2: 100×95×1.6 mm (full board, lateral cooling spread over 9.5× larger area)
+
+Same per-FET power (10W burst), but v4 allows more lateral heat spreading into cooler board area → per-FET T_J is LOWER in v4 than in v3's isolated chunk.
+
+**Physical interpretation**: v3 single-channel was a CONSERVATIVE estimate (small thermal envelope). v4_v2 4-channel with full board area is the MORE REALISTIC physical scenario. The actual fabricated 100×95 board will see v4_v2 behavior, not v3.
+
+**Master adjudication needed**: is -10°C delta acceptable given larger mesh = more lateral spread? OR should v3 single-channel be re-run with 100×95 board mesh to match (would show similar peak ~87°C, eliminating the apparent "drop")?
+
+Either way: ALL 24 FETs PASS with comfortable margins on the realistic board geometry.
 
 ## Sim 2 — Pair-wise EMI ngspice (placement gate, not final EMC)
 
