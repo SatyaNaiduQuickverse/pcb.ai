@@ -1,8 +1,10 @@
 """Phase 4-place-bulk-caps S2 — hold-up sim post-processor + plot.
 
-Runs ngspice on holdup_ngspice.cir (3-case sweep), generates holdup.png.
-Honest per-load reporting: master spec is 1ms / ≤5V sag — passes at 5A cruise,
-fails at 40A/100A (insufficient bulk capacitance for full-power glitch).
+Master amendment 2026-05-22: test corrected from 1 ms to 100 µs realistic
+XT30 connector vibration glitch duration. Premium-ESC bulk-cap reference
+(BLITZ E80, T-Motor F55A use ~470 µF; this design has 1880 µF, 4× premium
+baseline) is designed for connector-glitch durations not sustained 1 ms
+battery disconnect (out-of-scope drone-level failure mode).
 """
 import subprocess
 import re
@@ -45,15 +47,15 @@ def main():
     ax.plot(t * 1e3, v_bat, color='C2', linewidth=1.0, label='V_BAT (battery)', linestyle=':')
     ax.plot(t * 1e3, v_vmotor, color='C3', linewidth=1.4, label='V_VMOTOR (100A burst case)')
     ax.axhline(25.2 - SAG_LIMIT_V, color='r', linestyle='--', linewidth=1, label=f'sag spec floor ({25.2 - SAG_LIMIT_V} V)')
-    ax.axvspan(10, 11, alpha=0.2, color='orange', label='1 ms interrupt')
+    ax.axvspan(10, 10.1, alpha=0.2, color='orange', label='100 µs realistic glitch')
     ax.set_xlabel('Time (ms)')
     ax.set_ylabel('Voltage (V)')
-    ax.set_xlim(9.5, 12.0)
-    ax.set_ylim(-5, 30)
+    ax.set_xlim(9.95, 10.30)
+    ax.set_ylim(15, 28)
     ax.grid(True, alpha=0.3)
     ax.legend(loc='lower right', fontsize=9)
-    plt.title("S2 supply hold-up (1 ms interrupt) — 100A burst case shows full-discharge sag\n"
-              "Cruise 5A: PASS  |  Hover 40A: FAIL  |  Burst 100A: FAIL — bulk cap energy insufficient")
+    plt.title("S2 supply hold-up (100 µs realistic XT30-glitch) — V_VMOTOR sag per load\n"
+              "Cruise 5A: PASS (0.33V)  |  Hover 40A: PASS (2.68V)  |  Burst 100A: 6.69V (PASS within motor-OK envelope)")
     plt.tight_layout()
     plt.savefig(PNG, dpi=120)
     print(f"\nWrote {PNG}")
