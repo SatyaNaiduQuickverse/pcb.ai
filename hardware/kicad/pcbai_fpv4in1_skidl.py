@@ -120,16 +120,16 @@ VMOTOR += BATT_NTC
 #   vs worst-case uncorrelated ripple 10.7 A: 1.03× FoS (meets bare ripple;
 #     worst-case is statistical brief-transient, thermal mass absorbs it)
 CBULK1 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
-              footprint="Capacitor_SMD:CP_Elec_10x16.5",
+              footprint="Capacitor_SMD:CP_Elec_10x14.3",
               description="Panasonic EEHZS1V471P (JLC C403803) hybrid polymer-Al, 470µF 35V, 4A RMS @100kHz @125°C, 11mΩ ESR, AEC-Q200")
 CBULK2 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
-              footprint="Capacitor_SMD:CP_Elec_10x16.5",
+              footprint="Capacitor_SMD:CP_Elec_10x14.3",
               description="Panasonic EEHZS1V471P (cap #2 of 4)")
 CBULK3 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
-              footprint="Capacitor_SMD:CP_Elec_10x16.5",
+              footprint="Capacitor_SMD:CP_Elec_10x14.3",
               description="Panasonic EEHZS1V471P (cap #3 of 4)")
 CBULK4 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
-              footprint="Capacitor_SMD:CP_Elec_10x16.5",
+              footprint="Capacitor_SMD:CP_Elec_10x14.3",
               description="Panasonic EEHZS1V471P (cap #4 of 4 — added per master amendment 2026-05-22 for strict 2× FoS over typical ripple)")
 CBULK1[1] += VMOTOR; CBULK1[2] += GND
 CBULK2[1] += VMOTOR; CBULK2[2] += GND
@@ -566,26 +566,28 @@ BUS_CURR_HALL_OUT = Net("BUS_CURR_HALL_OUT")  # AUX header pin 3 (to FC)
 VMOTOR_HALL_HI = Net("VMOTOR_HALL_HI")   # primary side IN (from CBULK output side)
 VMOTOR_HALL_LO = Net("VMOTOR_HALL_LO")   # primary side OUT (to 4-channel split)
 
-U_HALL = Part("Connector_Generic", "Conn_01x08", value="ACS770ECB-200B-PFF-T",
-              footprint="Package_TO_SOT_SMD:TO-220-5_Vertical",
+U_HALL = Part("Sensor_Current", "ACS758xCB-150B-PSS",
+              value="ACS770ECB-200B-PFF-T",
+              footprint="Sensor_Current:Allegro_CB_PFF",
               description="ACS770ECB-200B Hall current sensor (JLC C696103) — ±200A, 10mV/A, 5V ratiometric, 4800Vrms iso, AEC-Q100 Grade 1; placement in VMOTOR rail between CBULK and 4-channel split")
-# CB-5 package pinout (per Allegro ACS770 datasheet):
-#   pins 1,2 = primary current input (IP+)
-#   pins 3,4 = primary current output (IP-)
-#   pin 5 (left of body) = GND
-#   pin 6 (center) = VCC
-#   pin 7 (filter cap pin) = FILTER (external 1nF for noise filter)
-#   pin 8 (rightmost signal) = VIOUT
-# Using Conn_01x08 placeholder; Phase 4 swap to custom ACS770 symbol from
-# components.kicad_sym.
-U_HALL[1] += VMOTOR_HALL_HI
-U_HALL[2] += VMOTOR_HALL_HI
-U_HALL[3] += VMOTOR_HALL_LO
-U_HALL[4] += VMOTOR_HALL_LO
-U_HALL[5] += GND
-U_HALL[6] += HALL_VCC
-U_HALL[7] += Net("HALL_FILTER_CAP")   # FILTER pin (1nF to GND for noise filter)
-U_HALL[8] += HALL_VOUT_RAW
+# CB-5 package pinout — Allegro Current Sensor library convention (verified
+# from /usr/share/kicad/symbols/Sensor_Current.kicad_sym ACS758xCB-150B-PSS):
+#   pin 1 = VCC (signal-side power)
+#   pin 2 = GND (signal-side ground)
+#   pin 3 = VIOUT (analog ratiometric output)
+#   pin 4 = IP+ (primary current input, high-current pad)
+#   pin 5 = IP- (primary current output, high-current pad)
+# Using ACS758 symbol (pin-compatible CB-package family) since KiCad's
+# stock library has no ACS770 symbol. Value override = "ACS770ECB-200B-PFF-T".
+# Footprint = Sensor_Current:Allegro_CB_PFF (the exact CB-5 PFF form-factor).
+# Note: ACS770 has no external FILTER pin (unlike ACS758) — internal fixed
+# filter at 120 kHz. The HALL_FILTER_CAP net from prior Conn_01x08 placeholder
+# is dropped; only on-board V_OUT noise filter (10 nF post-divider) remains.
+U_HALL[4] += VMOTOR_HALL_HI    # IP+ primary current in
+U_HALL[5] += VMOTOR_HALL_LO    # IP- primary current out
+U_HALL[2] += GND               # GND
+U_HALL[1] += HALL_VCC          # VCC (5V supply)
+U_HALL[3] += HALL_VOUT_RAW     # VIOUT (analog ratiometric)
 
 # HALL_VCC from V5 (board's 5V rail). Local bypass.
 R_HALL_VCC = Part("Device", "R", value="0R",
@@ -604,12 +606,10 @@ C_HALL_VCC_100n = Part("Device", "C", value="100nF",
 C_HALL_VCC_100n[1] += HALL_VCC
 C_HALL_VCC_100n[2] += GND
 
-# Hall FILTER pin cap (per datasheet — 1nF sets ~120kHz BW corner)
-C_HALL_FILTER = Part("Device", "C", value="1nF",
-                     footprint="Capacitor_SMD:C_0402_1005Metric",
-                     description="Hall FILTER pin cap 1nF (sets ~120kHz BW corner)")
-C_HALL_FILTER[1] += U_HALL[7]
-C_HALL_FILTER[2] += GND
+# Hall FILTER pin cap removed: ACS770ECB has no external FILTER pin
+# (internal fixed 120 kHz filter). ACS758 had a separate FILTER pin; ACS770
+# replaces it with an internal stage. Output noise filter (10nF post-divider
+# at C_HALL_OUT_FILT below) gives the only on-board V_OUT smoothing.
 
 # Hall VOUT (0-5V ratiometric, 2.5V centered) → level shift to 0-3.3V for FC ADC.
 # Resistor divider: 3.3V_out = 5V × R_low / (R_high + R_low). Want 5V → 3.3V
