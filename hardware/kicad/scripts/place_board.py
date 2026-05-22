@@ -109,15 +109,20 @@ def place_battery_input(fps_by_ref, placements):
 S2_POSITIONS = {
     # CP_Elec_10x14.3 actual bbox = 13.59×11.05 mm. Master 2026-05-22 stage-3
     # amendment: Hall (S3 U1) placed vertical at (50, 45) 0° rot → body bbox
-    # (42.1, 20.3)..(61.7, 46.0). S2 caps must clear this. Shifted outward:
-    # C1/C3 at x=30, C2/C4 at x=70 — outside Hall body bbox by ≥1mm.
-    # This pushes caps into what will become NW/NE channel zones (master
-    # amended channel inner-edges to X=39/61); Phase 4-place-channels-x4
-    # will coordinate (likely shifts channel passive zone to clear bulk caps).
+    # (42.1, 20.3)..(61.7, 46.0). Initial outward shift: C1/C3 at x=30, C2/C4
+    # at x=70 cleared Hall body but C3/C4 bbox y_max=45.5 intruded into S4
+    # channel lower strip (y=42-58), blocking channel template placement
+    # (PR-A1 stage from Option A adjudication 2026-05-22).
+    # Stage-4 amendment: C3 → (25, 40), C4 → (75, 40). Pushes outward by 5mm
+    # so C3/C4 bbox falls outside NW/NE channel-zone inner edges (X=39/61).
+    # C3 bbox now (18.1, 34.5)..(31.7, 45.5) — x_max=31.7 well under channel
+    # NW inner edge x=39. C4 bbox (68.1, 34.5)..(81.9, 45.5) — x_min=68.1
+    # well over channel NE inner edge x=61. Cleared for S4 channel placement.
+    # C1/C2 at y=24 left at (30, 24)/(70, 24) — clear of S4 (S4 starts y=42).
     'C1': (30.0, 24.0, 'F.Cu', 0.0),
     'C2': (70.0, 24.0, 'F.Cu', 0.0),
-    'C3': (30.0, 40.0, 'F.Cu', 0.0),
-    'C4': (70.0, 40.0, 'F.Cu', 0.0),
+    'C3': (25.0, 40.0, 'F.Cu', 0.0),
+    'C4': (75.0, 40.0, 'F.Cu', 0.0),
 }
 S2_EXPECTED_VALUE = "EEHZS1V471P"
 
