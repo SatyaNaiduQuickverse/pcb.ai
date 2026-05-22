@@ -45,15 +45,15 @@ Quadrants:
 - **Components**: XT30 connector, 2× MF72 5D25 NTC, 4× Infineon BSC014N06NS (rev-pol cluster), SMBJ33A TVS, polyfuse (if present)
 - **Inputs**: +BATT_RAW, BATGND (from XT30 pins)
 - **Outputs**: +BATT_FUSED, GND (post-NTC, post-rev-pol)
-- **Zone**: X=20-80, Y=0-13 (bottom edge)
-- **Adjacency**: outputs feed bulk caps directly above (Y=13-27 center)
+- **Zone**: X=20-80, **Y=0-20** (amended 2026-05-22 from Y=0-13; SuperSO8 5×6mm body + 2×2 cluster requires ≥17mm vertical, exceeds spec'd 13mm. Master adjudicated zone expansion per PR #32 honest spec deviation flag. S2 bulk-cap zone shifts to Y=20-42.)
+- **Adjacency**: outputs feed bulk caps directly above (Y=20-42 center)
 - **Acceptance**: bbox-clean within subsystem, XT30 pad on board edge for soldering access
 
 ### S2: Bulk cap bank
 - **Components**: 4× Panasonic EEHZS1V471P CBULK1-4 (470µF 35V polymer) + 8× ceramic decoupling (100nF + 10nF in parallel ×4)
 - **Inputs**: +BATT_FUSED, GND
 - **Outputs**: +VMOTOR (clean), GND
-- **Zone**: X=42-58, Y=13-42 (central spine lower) — central bank per premium reference
+- **Zone**: X=42-58, **Y=20-42** (amended; was Y=13-42; shifted to accommodate S1 zone expansion to Y=0-20)
 - **Adjacency**: +VMOTOR output feeds Hall sensor primary directly above (Y=42-58 center)
 - **Acceptance**: 4 caps in linear or 2×2 arrangement, ESR-minimizing trace length to FETs
 

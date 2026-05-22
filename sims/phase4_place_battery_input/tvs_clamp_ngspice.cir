@@ -1,0 +1,71 @@
+* Phase 4-place-battery-input S1 — SMBJ33A TVS clamp response
+*
+* Test: 30 V/µs slew rate transient applied to +BATT input. Verify
+* SMBJ33A clamps below 60 V (BSC014N06NS VDS rating).
+*
+* SMBJ33A datasheet (Vishay/Littelfuse SMBJ series):
+*   V_RWM (reverse working voltage)    = 33 V
+*   V_BR  (breakdown at I_T = 1 mA)    = 36.7 V min, 40.6 V max
+*   V_CL  (clamping voltage at I_PP=10A peak) = 53.3 V max
+*   Peak pulse current I_PP @ 10/1000µs = 11.3 A
+*
+* Modeled as a TVS using piecewise-linear .MODEL with breakdown:
+*   Below V_BR: leakage ~1 µA
+*   At V_BR (36.7V): knee
+*   Above V_BR: dynamic R = (V_CL - V_BR) / I_PP = (53.3 - 36.7) / 10 = 1.66 Ω
+*
+* This SPICE behavioral model captures TVS clamping with V_BR + R_dyn.
+* Vishay's official SPICE library uses similar approach; we replicate the
+* essential transfer characteristic.
+
+* ── Voltage source: 30 V/µs slew 25 V → 60 V (inductive-spike overvoltage) ──
+* Models a wire-harness inductive disconnect or hot-plug spike: 6S nominal
+* 25.2 V baseline plus 35 V transient over ~1.17 µs (30 V/µs spec slew).
+V_TRANS in 0 PWL(0 25.2  100n 25.2  1.27u 60)
+
+* ── Source impedance: 10 Ω (realistic battery-wire + connector + PCB trace at HF) ──
+* This impedance limits TVS current to within rated I_PP=11.3 A:
+*   I_TVS = (V_source - V_clamp) / 10
+* Keeps the test within TVS's rated operating envelope per SMBJ33A datasheet.
+R_SRC in vbus 10.0
+
+* ── SMBJ33A TVS model ──
+* Cathode (vbus) connects to series R_dyn → anode of ideal Zener-like
+* breakdown diode → ground. In ngspice, diode RS does NOT apply in
+* reverse breakdown — R_dyn must be EXTERNAL series resistor.
+*
+* Model breakdown knee at V_BR = 36.7 V. Effective clamp at I_PP=10 A:
+*   V_clamp(I) = V_BR + I × R_dyn
+*   Datasheet V_CL @ 10 A = 53.3 V → R_dyn = (53.3 - 36.7) / 10 = 1.66 Ω
+.MODEL DTVS D(IS=1e-12 N=1.0 BV=36.7 IBV=1e-3 CJO=300p)
+* SPICE diode syntax: D_NAME ANODE CATHODE MODEL.
+* For SMBJ33A protecting positive +BATT rail: ANODE at GND, CATHODE at +BATT
+* via R_dyn. Normal operation = reverse-biased (no conduction). Breakdown at
+* V_cathode > BV+V_anode → clamps.
+R_DYN vbus tvs_ck 1.66
+D_TVS 0 tvs_ck DTVS
+
+* ── Test load: small capacitive load representing CBULK input ──
+C_LOAD vbus 0 100n
+
+* ── Probes ──
+.SAVE V(in) V(vbus) V(tvs_ck) I(V_TRANS)
+
+* No UIC — let ngspice find DC operating point (V(vbus) = 25.2 V steady-state
+* via TVS sub-breakdown leakage through R_SRC + R_dyn). Then transient begins
+* with the system at quiescent and the source-step pushes the input upward.
+.TRAN 10n 5u
+
+.control
+run
+let v_in = V(in)
+let v_clamped = V(vbus)
+let v_zknee = V(tvs_ck)
+meas tran v_clamp_peak max v_clamped from=100n to=5u
+meas tran v_in_peak max v_in from=100n to=5u
+print v_clamp_peak v_in_peak
+
+wrdata tvs_data.dat V(in) V(vbus) V(tvs_ck)
+.endc
+
+.end

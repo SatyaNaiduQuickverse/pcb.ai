@@ -1,0 +1,79 @@
+* Phase 4-place-battery-input S1 — battery-connect inrush transient
+*
+* Model: connecting 6S LiPo (25.2 V charged) to ESC battery input.
+* Worst-case "hot-plug" inrush charges 4× 470 µF polymer bulk caps
+* through 2× MF72 5D25 NTC (parallel) + 4× BSC014N06NS body diodes
+* (during pre-gate-charge interval, the FETs are off; current flows
+* through their body diodes — Vf ~ 0.7 V each; 4 in parallel).
+*
+* Acceptance per REQUIREMENTS spec: peak ≤ 16 A.
+*
+* Component model basis:
+*   MF72 5D25 cold resistance: 5 Ω each ±20% (datasheet, 25°C);
+*     2 in parallel = 2.5 Ω. As current flows, NTC heats and drops
+*     to ~50 mΩ at steady-state — but during the inrush peak (first
+*     ~ms), R_NTC is dominantly cold. Use 2.5 Ω.
+*   4× CBULK Panasonic EEHZS1V471P (470 µF / 35 V hybrid polymer-Al):
+*     ESR = 11 mΩ each → 4 in parallel = 2.75 mΩ
+*     ESL = 5 nH each → 4 in parallel = 1.25 nH
+*     C = 470 µF × 4 = 1880 µF
+*   4× BSC014N06NS body diode forward (during inrush, FETs OFF):
+*     Vf ≈ 0.7 V, R_dyn ≈ 1 mΩ each → 4 in parallel = 0.25 mΩ at Vf
+*     Modeled as: Schottky-like 0.7V threshold, 0.25 mΩ dynamic
+*     resistance using `.MODEL` with .D + IS / N tuning.
+*   Battery internal R: ~10 mΩ at 6S 5000 mAh — included as small
+*     series for realistic dynamics.
+*
+* Topology:
+*   V_BAT --[R_BAT 10m]--[NTC 2.5]--[body diodes in parallel]--+ BAT_internal
+*                                                              |
+*                                              [ESR 2.75m][ESL 1.25n][C 1880u]
+*                                                              |
+*                                                              GND
+*
+* Use PWL voltage step from 0 → 25.2 V over 100 ns rise time
+* (representative of XT30 plug-in dynamics).
+
+* ── Voltage source: PWL step ──
+V_BAT vbat 0 PWL(0 0  100n 25.2)
+
+* ── Battery internal resistance ──
+R_BAT vbat n1 10m
+
+* ── 2× MF72 NTC in parallel (cold value) ──
+* Cold R = 5Ω each, 2 in parallel = 2.5Ω
+R_NTC n1 n2 2.5
+
+* ── 4× BSC014N06NS body diodes in parallel (worst-case inrush path) ──
+* Modeled as ideal diode with Vf ~0.7V, dynamic R = 0.25 mΩ
+.MODEL DBDY D(IS=1e-6 N=1.0 RS=0.25m BV=60 IBV=1e-3)
+D_BDY n2 n3 DBDY
+
+* ── 4× CBULK 470 µF polymer (parallel): ESR + ESL + C lumped ──
+R_ESR n3 n4 2.75m
+L_ESL n4 n5 1.25n
+C_BULK n5 0 1880u IC=0
+
+* ── Initial condition: cap fully discharged before plug ──
+.IC V(n5)=0
+
+* ── Probes ──
+.SAVE V(vbat) V(n1) V(n3) V(n5) I(V_BAT)
+
+* ── Transient analysis: 0-100 ms, 100 ns step ──
+.TRAN 1u 100m UIC
+
+.control
+run
+* Find peak inrush current
+let i_inrush_abs = abs(I(V_BAT))
+meas tran i_peak max i_inrush_abs from=100n to=100m
+meas tran v_cap_final find V(n5) at=99m
+meas tran t_settle when V(n5)=25.0 cross=1
+print i_peak v_cap_final t_settle
+
+* Write data for plotting
+wrdata inrush_data.dat V(vbat) V(n5) I(V_BAT)
+.endc
+
+.end
