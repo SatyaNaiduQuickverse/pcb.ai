@@ -302,14 +302,151 @@ def place_connectors(fps_by_ref, placements):
     return placed
 
 
+# ────────────────────────────────────────────────────────────────────
+# S5: BEC subsystem (docs/PHASE4_SUBSYSTEMS.md §S5)
+# 5 buck rails + LDO + V5_PI5 supervisor. Master 2026-05-22 dispatch
+# (Task #54): zone allocation flexible; worker's call to distribute
+# bucks for thermal separation from channel FETs.
+#
+# Strategy: NW + NE side-band strip at Y=58-72 (between S3 Hall body
+# y=20-46 and S6 connectors y=72-85). Buck #5 V9_VTX2 isolated from
+# Buck #4 V9_VTX1 by placing centrally between S3 supervisor cluster
+# (y≤59) and S6 connectors (y≥72). LDO + supervisor IC clustered
+# next to Buck #5 in central spine pocket.
+#
+# Components (17 — core BEC; eFuses/polyfuses/TVS/FB-resistors deferred
+# to subsequent passes where they cluster around the buck + load,
+# matching master's 15-25 estimate):
+#   J2 V5_FC TPS54560 + L1 4.7uH + D5 SS54
+#   J3 V5_PI5 TPS54560 + L2 4.7uH + D6 SS54
+#   J4 V5_AI TPS54560 + L3 8.2uH + D7 SS54
+#   J5 V9_VTX1 AOZ1284PI + L4 10uH + D8 SS54
+#   J6 V9_VTX2 AOZ1284PI + L5 10uH + D9 SS54 (isolated from #4)
+#   J13 LDO TLV76733DRVR (V5_FC → V3V3)
+#   J10 V5_PI5 supervisor (PG_RPI to FC)
+# ────────────────────────────────────────────────────────────────────
+S5_POSITIONS = {
+    # ── Buck #1 V5_FC NW (5A FC + cam + RX) ──
+    'J2':  (12.0, 60.0, 'F.Cu', 0.0),    # buck IC TPS54560
+    'L1':  (22.0, 60.0, 'F.Cu', 0.0),    # 4.7uH inductor
+    'D5':  (32.0, 60.0, 'F.Cu', 0.0),    # SS54 Schottky
+    'R6':  (5.0,  60.0, 'F.Cu', 0.0),    # FB top 52K3
+    'R7':  (5.0,  62.0, 'F.Cu', 0.0),    # FB bot 10K
+    'C7':  (5.0,  64.0, 'F.Cu', 0.0),    # boot 100nF
+    'C8':  (38.0, 60.0, 'F.Cu', 0.0),    # C_OUT 22uF
+    'J7':  (38.0, 55.0, 'F.Cu', 0.0),    # V5_FC eFuse TPS259251
+    'L6':  (28.0, 54.0, 'F.Cu', 0.0),    # V5_FC ferrite 600Ω
+    'D10': (44.0, 60.0, 'F.Cu', 0.0),    # V5_FC TVS SMAJ5.0A (east of C8)
+    # ── Buck #2 V5_PI5 NW (5A RPi 5) ──
+    'J3':  (12.0, 70.0, 'F.Cu', 0.0),    # buck IC
+    'L2':  (22.0, 70.0, 'F.Cu', 0.0),    # 4.7uH inductor
+    'D6':  (32.0, 70.0, 'F.Cu', 0.0),    # SS54
+    'R8':  (5.0,  70.0, 'F.Cu', 0.0),    # FB top 52K3
+    'R9':  (5.0,  72.0, 'F.Cu', 0.0),    # FB bot 10K
+    'C11': (5.0,  74.0, 'F.Cu', 0.0),    # boot 100nF
+    'C12': (38.0, 70.0, 'F.Cu', 0.0),    # C_OUT 22uF
+    'J8':  (35.0, 75.0, 'F.Cu', 0.0),    # V5_PI5 eFuse (east of L2)
+    'L7':  (52.0, 75.0, 'F.Cu', 0.0),    # V5_PI5 ferrite (clear S6 VBAT divider + FC connector)
+    'D11': (44.0, 70.0, 'F.Cu', 0.0),    # V5_PI5 TVS (east of C12)
+    # ── Buck #3 V5_AI NE (3A AI HAT) ──
+    'J4':  (88.0, 60.0, 'F.Cu', 0.0),    # buck IC
+    'L3':  (78.0, 60.0, 'F.Cu', 0.0),    # 8.2uH
+    'D7':  (68.0, 60.0, 'F.Cu', 0.0),    # SS54
+    'R10': (95.0, 60.0, 'F.Cu', 0.0),    # FB top 52K3
+    'R11': (95.0, 62.0, 'F.Cu', 0.0),    # FB bot 10K
+    'C14': (95.0, 64.0, 'F.Cu', 0.0),    # boot 100nF
+    'C15': (62.0, 60.0, 'F.Cu', 0.0),    # C_OUT 22uF
+    'J9':  (62.0, 55.0, 'F.Cu', 0.0),    # V5_AI eFuse
+    'L8':  (70.0, 54.0, 'F.Cu', 0.0),    # V5_AI ferrite
+    'D12': (56.0, 60.0, 'F.Cu', 0.0),    # V5_AI TVS (west of C15)
+    # ── Buck #4 V9_VTX1 NE (2A VTX #1) ──
+    'J5':  (88.0, 70.0, 'F.Cu', 0.0),    # buck IC AOZ1284
+    'L4':  (78.0, 70.0, 'F.Cu', 0.0),    # 10uH
+    'D8':  (68.0, 70.0, 'F.Cu', 0.0),    # SS54
+    'R12': (95.0, 70.0, 'F.Cu', 0.0),    # FB top 102K
+    'R13': (95.0, 72.0, 'F.Cu', 0.0),    # FB bot 10K
+    'C17': (95.0, 74.0, 'F.Cu', 0.0),    # boot 100nF
+    'C18': (62.0, 70.0, 'F.Cu', 0.0),    # C_OUT 22uF
+    'F1':  (62.0, 78.0, 'F.Cu', 0.0),    # V9_VTX1 polyfuse MF-MSMF200 (clear S6 J16)
+    'L9':  (70.0, 75.0, 'F.Cu', 0.0),    # V9_VTX1 ferrite
+    'D13': (56.0, 70.0, 'F.Cu', 0.0),    # V9_VTX1 TVS (west of C18)
+    # ── Buck #5 V9_VTX2 SW (2A VTX #2, isolated from #1) — vertical column x=5 ──
+    'J6':  (12.0, 22.0, 'F.Cu', 0.0),    # buck IC AOZ1284
+    'L5':  (12.0, 30.0, 'F.Cu', 0.0),    # 10uH
+    'D9':  (12.0, 38.0, 'F.Cu', 0.0),    # SS54
+    'F2':  (5.0,  14.0, 'F.Cu', 0.0),    # V9_VTX2 polyfuse (V_IN side)
+    'R14': (5.0,  18.0, 'F.Cu', 0.0),    # FB top 102K
+    'R15': (5.0,  22.0, 'F.Cu', 0.0),    # FB bot 10K
+    'C20': (5.0,  26.0, 'F.Cu', 0.0),    # boot 100nF
+    'L10': (5.0,  30.0, 'F.Cu', 0.0),    # V9_VTX2 ferrite
+    'D14': (5.0,  34.0, 'F.Cu', 0.0),    # V9_VTX2 TVS SMAJ9.0A
+    'C21': (5.0,  40.0, 'F.Cu', 0.0),    # C_OUT 22uF
+    # ── LDO + Supervisor (central spine pocket) ──
+    'J13': (38.0, 67.0, 'F.Cu', 0.0),    # LDO TLV76733 WSON-6 (V5_FC→V3V3)
+    'J10': (50.0, 65.0, 'F.Cu', 0.0),    # V5_PI5 supervisor SOT-23
+}
+S5_EXPECTED_VALUES = {
+    'J2':  'TPS54560', 'J3':  'TPS54560', 'J4':  'TPS54560',
+    'J5':  'AOZ1284',  'J6':  'AOZ1284',
+    'L1':  '4.7uH',    'L2':  '4.7uH',    'L3':  '8.2uH',
+    'L4':  '10uH',     'L5':  '10uH',
+    'D5':  'SS54',     'D6':  'SS54',     'D7':  'SS54',
+    'D8':  'SS54',     'D9':  'SS54',
+    'J13': 'TLV76733', 'J10': 'VSUP',
+    # FB pairs (52K3 + 10K for 5V; 102K + 10K for 9V)
+    'R6':  '52K3', 'R7':  '10K',
+    'R8':  '52K3', 'R9':  '10K',
+    'R10': '52K3', 'R11': '10K',
+    'R12': '102K', 'R13': '10K',
+    'R14': '102K', 'R15': '10K',
+    # Boot caps + C_OUT per buck
+    'C7':  '100nF', 'C8':  '22uF',
+    'C11': '100nF', 'C12': '22uF',
+    'C14': '100nF', 'C15': '22uF',
+    'C17': '100nF', 'C18': '22uF',
+    'C20': '100nF', 'C21': '22uF',
+    # Safety stacks per rail
+    'J7':  'TPS259251', 'J8':  'TPS259251', 'J9':  'TPS259251',
+    'F1':  'MF-MSMF200', 'F2':  'MF-MSMF200',
+    'L6':  '600ohm', 'L7':  '600ohm', 'L8':  '600ohm', 'L9':  '600ohm', 'L10': '600ohm',
+    'D10': 'SMAJ5.0A', 'D11': 'SMAJ5.0A', 'D12': 'SMAJ5.0A',
+    'D13': 'SMAJ9.0A', 'D14': 'SMAJ9.0A',
+}
+
+
+def place_bec(fps_by_ref, placements):
+    """S5 — BEC subsystem placement (docs/PHASE4_SUBSYSTEMS.md §S5)."""
+    placed = 0
+    missing = []
+    mismatched = []
+    for ref, pos in S5_POSITIONS.items():
+        fp = fps_by_ref.get(ref)
+        if not fp:
+            missing.append(ref)
+            continue
+        expected = S5_EXPECTED_VALUES[ref]
+        if expected not in fp['value']:
+            mismatched.append((ref, expected, fp['value']))
+            continue
+        x, y, layer, rot = pos
+        placements[ref] = (x, y, layer, rot)
+        placed += 1
+    if missing:
+        print(f"  WARN: S5 components missing in netlist: {missing}")
+    if mismatched:
+        for ref, exp, act in mismatched:
+            print(f"  WARN: S5 ref {ref} value mismatch — expected '{exp}', got '{act}'")
+    return placed
+
+
 # Registry of subsystem placers in spec order
 ALL_PLACERS = [
     ('S1', 'Battery input',         place_battery_input),
     ('S2', 'Bulk cap bank',         place_bulk_caps),
     ('S3', 'Supervisor + Hall',     place_supervisor_hall),
     ('S6', 'FC + AUX connectors',   place_connectors),
+    ('S5', 'BEC subsystem',         place_bec),
     # ('S4', 'Channel template (×4)', place_channels),          # PR ×2
-    # ('S5', 'BEC subsystem',         place_bec),               # PR after
 ]
 
 

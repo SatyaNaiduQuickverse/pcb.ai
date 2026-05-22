@@ -1,0 +1,42 @@
+* Sim 2 — Per-rail output ripple (worst-case rail: V5_PI5 5A buck)
+* TPS54560 f_sw = 600 kHz. Output cap C_OUT = 22µF MLCC (ceramic).
+* Inductor L = 4.7µH. Output current step 0→5A.
+* Output ripple = I_pk-pk × ESR + (I_pk-pk / 8 × f_sw × C_OUT)
+* I_pk-pk = V_IN × D × (1-D) / (f_sw × L) = 25 × 0.2 × 0.8 / (600k × 4.7µ) = 1.42 A
+*
+* Datasheet anchor:
+*   22µF X7R MLCC ESR @ 600kHz: ~2 mΩ
+*   ESR contribution: 1.42 A × 2 mΩ = 2.84 mV pk-pk
+*   Cap contribution: 1.42 / (8 × 600k × 22µ) = 13.4 µV pk-pk (negligible)
+*   Total: ~3 mV pk-pk
+*
+* Acceptance: ≤ 50 mV pk-pk per rail at full load (typical TPS54560-class spec).
+
+* Buck PWM model — current source represents switch action
+* Inductor current ripple driven by PWM duty cycle 0.2 at V_IN=25V, V_OUT=5V
+* V_RIPPLE_AVG = 5V output
+
+V_IN vin 0 25.0
+
+* Switch + inductor as ideal current source generator of I_pk-pk ripple
+* Model output: idealized 22µF MLCC with 2mΩ ESR
+I_SW vout 0 PWL(0 0 0.83u 1.42 1.66u 0 2.49u 1.42 3.33u 0)
+R_ESR vout vout_cap 2m
+C_OUT vout_cap 0 22u IC=5
+R_LOAD vout 0 1.0
+* 5V / 1Ω = 5A nominal load
+
+.SAVE V(vout) V(vout_cap)
+.TRAN 50n 5u UIC
+
+.control
+run
+* Compute pk-pk
+meas tran vmin MIN V(vout) FROM=1u TO=4u
+meas tran vmax MAX V(vout) FROM=1u TO=4u
+let vpkpk = vmax - vmin
+print vpkpk
+wrdata ripple_data.txt V(vout) V(vout_cap)
+.endc
+
+.END
