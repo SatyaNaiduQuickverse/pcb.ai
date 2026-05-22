@@ -161,6 +161,24 @@ def main():
             vals = [fp['value'] for fp in v[:3]]
             fails.append(f"    @ {k} : {refs[:5]} ({vals})")
 
+    # 7) Phase 3b-detail silkscreen presence check
+    pcb_txt = PCB.read_text()
+    silkscreen_text_count = pcb_txt.count('(gr_text "')
+    silkscreen_circle_count = pcb_txt.count('(gr_circle')
+    has_p3b_silk = 'PHASE3B-SILK-BEGIN' in pcb_txt
+    has_p3b_motor = 'PHASE3B-MOTOR-RELIEF-BEGIN' in pcb_txt
+    if not has_p3b_silk:
+        fails.append("  Phase 3b silkscreen NOT applied (no PHASE3B-SILK-BEGIN sentinel)")
+    if not has_p3b_motor:
+        fails.append("  Phase 3b motor strain-relief NOT applied (no PHASE3B-MOTOR-RELIEF-BEGIN sentinel)")
+    # Min expected: 60+ silkscreen labels (channel IDs + motor + BEC pads + FC + SWD + thermal markers)
+    if silkscreen_text_count < 100:
+        fails.append(f"  Silkscreen text count {silkscreen_text_count} < 100 expected")
+    else:
+        print(f"  Silkscreen labels: {silkscreen_text_count} gr_text + {silkscreen_circle_count} gr_circle ✓")
+    if has_p3b_silk and has_p3b_motor:
+        print("  Phase 3b silkscreen + motor strain-relief sentinels present ✓")
+
     print()
     if fails:
         print("FAILURES:")
@@ -169,11 +187,12 @@ def main():
         return 1
     else:
         print("All checks PASSED.")
-        print(f"  - {len(fps)} footprints placed (249 non-mount + 12 mount holes)")
+        print(f"  - {len(fps)} footprints placed")
         print(f"  - 24 phase MOSFETs on expected 6×4 B.Cu grid")
         print(f"  - 4 MCUs with per-channel rotations {EXPECTED_MCU_ROTATION}")
-        print(f"  - {len(motor_pads)} motor pads on board edges")
+        print(f"  - {len(motor_pads)} motor pads on board edges (with strain-relief copper)")
         print(f"  - 0 overlaps")
+        print(f"  - {silkscreen_text_count} silkscreen text labels applied (Phase 3b-detail)")
         return 0
 
 
