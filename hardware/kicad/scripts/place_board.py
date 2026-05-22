@@ -21,19 +21,22 @@ from pathlib import Path
 from collections import defaultdict
 
 PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb")
-BOARD_W = 90.0   # Phase 4b-REDO2: grew 85 → 90 mm for BEC absorption
-BOARD_H = 75.0   # grew 70 → 75 mm
+BOARD_W = 100.0  # Phase 4b-REDO3: grew 90 → 100 mm for signal-density (D/S gate failed at 90×75)
+BOARD_H = 85.0   # grew 75 → 85 mm
 
-# ───────────── Placement regions (Phase 4b-REDO2 per playbook trap T8) ─────────────
+# ───────────── Placement regions (Phase 4b-REDO3 per master 2026-05-22) ─────────────
+# +25 mm vertical distribution per master directive:
+#   +5 mm buck-column relief (BEC buck strip shifts up to y=29..45)
+#   +3.5 mm lower-band relief (BEC supporting passive band shifts to y=51..63)
+#   +6.5 mm channel-corner relief (CH3/CH4 shift to y=77)
+#   +10 mm overall board height
+# Plus +10 mm board width — channel CH2/CH4 shift to x=92.
 
-# Channel corner anchors (F.Cu): MCU CENTER coordinates. In KiCad screen
-# convention (+Y down), CH1=top-left, CH2=top-right, CH3=bottom-left, CH4=bottom-right.
-# Bumped to 8mm inset to keep LQFP-32 7×7mm body on-board with ~5mm clearance.
 CHANNEL_CORNERS = {
-    1: (8.0,  8.0,  'TL'),  # top-left in KiCad screen view
-    2: (82.0, 8.0,  'TR'),  # top-right (was 77 on 85-wide board)
-    3: (8.0,  67.0, 'BL'),  # bottom-left (was 62 on 70-tall board)
-    4: (82.0, 67.0, 'BR'),  # bottom-right
+    1: (8.0,  8.0,  'TL'),  # top-left — unchanged
+    2: (92.0, 8.0,  'TR'),  # top-right — moved +10 in X (board grew 90→100)
+    3: (8.0,  77.0, 'BL'),  # bottom-left — moved +10 in Y (board grew 75→85)
+    4: (92.0, 77.0, 'BR'),  # bottom-right — moved +10 in both
 }
 
 # Per-channel MCU rotation (KiCad CCW degrees) — derived from LQFP-32 pin-side
@@ -69,62 +72,62 @@ MOSFET_GRID = {
     'origin_y': 15.0,   # leaves room for bulk caps + RP FETs + shunts below/above
 }
 
-# Bulk caps at left/right edges of B.Cu (scaled for 90×75)
-BULK_POS = [(10.0, 67.0), (80.0, 67.0)]
+# Bulk caps at left/right edges of B.Cu (scaled for 100×85 — Phase 4b-REDO3)
+BULK_POS = [(10.0, 77.0), (90.0, 77.0)]
 
 # Reverse-polarity FETs (4× AON6260) — bottom row B.Cu (battery section)
 RP_FET_ROW_Y = 5.0
-RP_FET_X0 = 30.0
+RP_FET_X0 = 35.0     # shifted 5mm right (board grew 10mm wider, center-aligned)
 RP_FET_DX = 7.0
 
 # TVS near battery input
-TVS_POS = (78.0, 5.0)
+TVS_POS = (88.0, 5.0)
 
 # Battery solder pads — bottom edge B.Cu
 BATT_PAD_POS = (10.0, 5.0)
 
-# FC connector — top of F.Cu, centered (board height grew, recentered)
-FC_POS = (40.0, 71.0)
+# FC connector — top of F.Cu, centered (board height grew, recentered for 100×85)
+FC_POS = (50.0, 81.0)
 
 # 3× ESD near FC
-ESD_POS = [(33.0, 66.0), (39.0, 66.0), (45.0, 66.0)]
+ESD_POS = [(43.0, 76.0), (49.0, 76.0), (55.0, 76.0)]
 
 # Status LEDs (channel indicator LEDs near each MCU)
-LED_STATUS_POS = {1: (16.0, 18.0), 2: (74.0, 18.0), 3: (16.0, 57.0), 4: (74.0, 57.0)}
+LED_STATUS_POS = {1: (16.0, 18.0), 2: (84.0, 18.0), 3: (16.0, 67.0), 4: (84.0, 67.0)}
 # Power-good LED (existing, on V3V3 — channel-shared)
-LED_PG_POS = (45.0, 21.0)
+LED_PG_POS = (50.0, 21.0)
 
-# ─── Phase 4b-REDO2 NEW BEC component positions ───
+# ─── Phase 4b-REDO3 NEW BEC component positions (100×85 board) ───
 # NTC pair (2× MF72 5D25 in parallel) — top of board, between battery pads and bulk caps.
-# Battery line series element, so positioned in battery zone.
-NTC_POS = {1: (15.0, 9.0), 2: (20.0, 9.0)}
+NTC_POS = {1: (18.0, 9.0), 2: (23.0, 9.0)}
 
 # Indicator LEDs (LED_PWR green = battery present; LED_RPOL red = polarity reversed)
-LED_PWR_POS = (28.0, 9.0)        # green, near battery section
-LED_RPOL_POS = (33.0, 9.0)       # red, adjacent
-R_LED_PWR_POS = (28.0, 12.0)
-R_LED_RPOL_POS = (33.0, 12.0)
+LED_PWR_POS = (32.0, 9.0)
+LED_RPOL_POS = (38.0, 9.0)
+R_LED_PWR_POS = (32.0, 12.0)
+R_LED_RPOL_POS = (38.0, 12.0)
 
-# BEC zone: middle band y=24..40 on F.Cu, x=10..80 (over B.Cu MOSFET grid — different layer).
-# 5 buck columns + safety stack per column.
-# Buck IC + inductor + LC filter + safety stack each takes ~10×12 mm column.
+# BEC zone — REDO3 redistribution (+5mm relief between buck columns and BEC passives):
+# Middle band y=29..45 on F.Cu (was y=24..40 in REDO2; shifted +5mm down for relief).
+# 5 buck columns, each with: IC (y=29), Schottky (y=33), eFuse/polyfuse (y=37), TVS+ferrite (y=41-43).
 BEC_BUCK_ZONE = {
-    'origin_y': 24.0,             # top of band
-    'rows': 4,                    # 4 vertical positions per buck (IC, L, cap-stack, eFuse+TVS)
-    'col_w': 13.0,                # column width
-    'col_y_spacing': 4.0,         # vertical pitch within a column
+    'origin_y': 29.0,             # shifted +5mm down for relief (was 24.0 in REDO2)
+    'rows': 4,
+    'col_w': 15.0,                # widened from 13mm for board-grew breathing room
+    'col_y_spacing': 4.0,
 }
-# Per-buck column origins (5 bucks = 5 columns starting at x=12, spaced 13mm = ends at x=64)
+# Per-buck column origins (5 bucks × 15mm pitch starting at x=15; ends at x=75)
+# Total span 60mm vs 52mm in REDO2 (+8mm thanks to wider board)
 BEC_BUCK_COL_X = {
-    1: 12.0,   # V5_FC
-    2: 25.0,   # V5_PI5
-    3: 38.0,   # V5_AI
-    4: 51.0,   # V9_VTX1
-    5: 64.0,   # V9_VTX2
+    1: 15.0,   # V5_FC
+    2: 30.0,   # V5_PI5
+    3: 45.0,   # V5_AI
+    4: 60.0,   # V9_VTX1
+    5: 75.0,   # V9_VTX2
 }
 
 # Voltage supervisor for V5_PI5 — adjacent to Buck #2 column
-SUPERVISOR_POS = (25.0, 39.0)
+SUPERVISOR_POS = (30.0, 44.0)
 
 # Schottky catch diodes (1 per buck) — placed below each buck IC
 # BEC solder pads — distributed on board edges per T7, with proper edge clearance.
@@ -132,49 +135,50 @@ SUPERVISOR_POS = (25.0, 39.0)
 # All pads positioned ≥ 2 mm from any board edge to keep pad bodies on-board
 # (D 4.0mm pads have 2mm radius → need ≥2 mm inset).
 BEC_PAD_POS = {
-    # V5_FC: top edge (high Y in script = top in user view), left of FC connector
-    'V5_FC_PLUS':  (10.0, 72.0),
-    'V5_FC_GND':   (15.0, 72.0),
-    # V5_PI5: right edge, mid (between CH2 SWD and CH4 SWD)
-    'V5_PI5_PLUS': (87.0, 35.0),
-    'V5_PI5_GND':  (87.0, 40.0),
+    # Phase 4b-REDO3: positions updated for 100×85 board. Pads spread for cleaner edge access.
+    # V5_FC: top edge, left of FC connector
+    'V5_FC_PLUS':  (12.0, 82.0),
+    'V5_FC_GND':   (18.0, 82.0),
+    # V5_PI5: right edge, mid (between CH2 SWD and CH4 SWD; +5mm shift down on bigger board)
+    'V5_PI5_PLUS': (97.0, 38.0),
+    'V5_PI5_GND':  (97.0, 43.0),
     # V5_AI: right edge, lower-mid (adjacent V5_PI5)
-    'V5_AI_PLUS':  (87.0, 45.0),
-    'V5_AI_GND':   (87.0, 50.0),
+    'V5_AI_PLUS':  (97.0, 48.0),
+    'V5_AI_GND':   (97.0, 53.0),
     # V9_VTX1: left edge, mid (between CH1 SWD and CH3 motors)
-    'V9_VTX1_PLUS': (3.0, 25.0),
-    'V9_VTX1_GND':  (3.0, 30.0),
+    'V9_VTX1_PLUS': (3.0, 28.0),
+    'V9_VTX1_GND':  (3.0, 33.0),
     # V9_VTX2: left edge, mid-lower
-    'V9_VTX2_PLUS': (3.0, 42.0),
-    'V9_VTX2_GND':  (3.0, 47.0),
+    'V9_VTX2_PLUS': (3.0, 45.0),
+    'V9_VTX2_GND':  (3.0, 50.0),
     # V3V3: top edge, right side (away from CH4 motors)
-    'V3V3_PLUS':   (75.0, 72.0),
-    'V3V3_GND':    (80.0, 72.0),
-    # GND distribution × 4 — spread
-    'GND_DIST_1':  (85.0, 72.0),
-    'GND_DIST_2':  (87.0, 18.0),  # right edge, between motor pads + SWD
-    'GND_DIST_3':  (3.0, 18.0),   # left edge, between SWD and battery
-    'GND_DIST_4':  (3.0, 70.0),   # left edge, below CH3 motor pads
+    'V3V3_PLUS':   (85.0, 82.0),
+    'V3V3_GND':    (90.0, 82.0),
+    # GND distribution × 4 — spread on edges
+    'GND_DIST_1':  (95.0, 82.0),
+    'GND_DIST_2':  (97.0, 20.0),  # right edge, top
+    'GND_DIST_3':  (3.0, 20.0),   # left edge, top
+    'GND_DIST_4':  (3.0, 80.0),   # left edge, below CH3 motor pads
 }
 
-# Motor solder pads: 3 per edge, one channel per edge (T7). 2mm edge clearance.
+# Motor solder pads: 3 per edge, one channel per edge (T7). 2mm edge clearance, 100×85 board.
 MOTOR_PADS = {
-    # CH1 → bottom edge in user view (low Y in script)
+    # CH1 → bottom edge in user view (low Y in script). 2mm clearance.
     (1, 'A'): (15.0, 2.0),  (1, 'B'): (18.0, 2.0),  (1, 'C'): (21.0, 2.0),
-    # CH2 → right edge (board 90 wide → x=88 for 2mm clearance)
-    (2, 'A'): (88.0, 15.0), (2, 'B'): (88.0, 18.0), (2, 'C'): (88.0, 21.0),
-    # CH3 → left edge (board 75 tall, CH3 in upper region in user view)
-    (3, 'A'): (2.0, 55.0),  (3, 'B'): (2.0, 58.0),  (3, 'C'): (2.0, 61.0),
-    # CH4 → top edge in user view (high Y, board 75 tall → y=73 with 2mm clearance)
-    (4, 'A'): (62.0, 73.0), (4, 'B'): (65.0, 73.0), (4, 'C'): (68.0, 73.0),
+    # CH2 → right edge (board 100 wide → x=98 for 2mm clearance)
+    (2, 'A'): (98.0, 15.0), (2, 'B'): (98.0, 18.0), (2, 'C'): (98.0, 21.0),
+    # CH3 → left edge (board 85 tall, CH3 at y=77 in upper region)
+    (3, 'A'): (2.0, 65.0),  (3, 'B'): (2.0, 68.0),  (3, 'C'): (2.0, 71.0),
+    # CH4 → top edge in user view (high Y, board 85 tall → y=83 with 2mm clearance)
+    (4, 'A'): (70.0, 83.0), (4, 'B'): (73.0, 83.0), (4, 'C'): (76.0, 83.0),
 }
 
 # SWD test pads: 2 per channel (SWDIO + SWCLK), on board edges near each MCU
 SWD_PADS = {
     (1, 'SWDIO'): (2.0, 14.0),  (1, 'SWCLK'): (2.0, 17.0),
-    (2, 'SWDIO'): (88.0, 28.0), (2, 'SWCLK'): (88.0, 31.0),
-    (3, 'SWDIO'): (2.0, 64.0),  (3, 'SWCLK'): (2.0, 67.0),
-    (4, 'SWDIO'): (88.0, 55.0), (4, 'SWCLK'): (88.0, 58.0),
+    (2, 'SWDIO'): (98.0, 28.0), (2, 'SWCLK'): (98.0, 31.0),
+    (3, 'SWDIO'): (2.0, 74.0),  (3, 'SWCLK'): (2.0, 77.0),
+    (4, 'SWDIO'): (98.0, 60.0), (4, 'SWCLK'): (98.0, 63.0),
 }
 
 # ───────────── Per-channel passive cluster offsets ─────────────
@@ -384,10 +388,10 @@ def dedup_mount_holes(txt):
         txt = txt[:idx] + txt[end:]
         deleted += 1
 
-    # Reposition the kept 4 holes at proper corners for current 90×75 board
-    # (per setup_board.py MOUNT_X_PAD=5, MOUNT_Y_PAD=5, BOARD_W=90, BOARD_H=75).
-    # Custom 80×65 spacing pattern (Phase 4b-REDO2 commercial-product class).
-    corners = [(5.0, 5.0), (85.0, 5.0), (5.0, 70.0), (85.0, 70.0)]
+    # Reposition the kept 4 holes at proper corners for current 100×85 board
+    # (per setup_board.py MOUNT_X_PAD=5, MOUNT_Y_PAD=5, BOARD_W=100, BOARD_H=85).
+    # Custom 90×75 spacing pattern (Phase 4b-REDO3 — larger board for routability).
+    corners = [(5.0, 5.0), (95.0, 5.0), (5.0, 80.0), (95.0, 80.0)]
     # Re-scan after deletion to get fresh positions of the kept 4
     pos = 0
     kept = []
@@ -423,11 +427,11 @@ def dedup_mount_holes(txt):
 def main():
     txt = PCB.read_text()
 
-    # Pre-processing: dedup mount holes + reposition to proper corners (90×75 board)
+    # Pre-processing: dedup mount holes + reposition to proper corners (100×85 board)
     txt, mh_deleted = dedup_mount_holes(txt)
     if mh_deleted:
         print(f"Pre-processing: removed {mh_deleted} duplicate mount holes; "
-              f"4 remaining repositioned to corners (5,5), (85,5), (5,70), (85,70)")
+              f"4 remaining repositioned to corners (5,5), (95,5), (5,80), (95,80)")
 
     fps = parse_footprints(txt)
     print(f"Parsed {len(fps)} footprints")
@@ -690,15 +694,14 @@ def main():
         grid_half_h = (pg['rows'] - 1) * pg['cell_h'] / 2.0
         zones[ch] = (mx + dx * PASSIVE_ZONE_OFFSET_MM - grid_half_w,
                      my + dy * PASSIVE_ZONE_OFFSET_MM - grid_half_h)
-    # Phase 4b-REDO2: first ~65 "passive" components are BEC supporting passives
-    # (buck input/output caps, feedback divider resistors, LC filter caps).
-    # Send them to a dedicated BEC passive overflow zone in the lower-middle band
-    # (y=44..56). The remaining ~160 are channel-specific decoupling/BEMF parts.
+    # Phase 4b-REDO3: BEC passive band shifted +3.5mm down (was y=44..56 in REDO2; now y=51..63)
+    # for additional relief between buck strip (now y=29..45) and BEC supporting passives.
+    # 100×85 board provides extra width — grid widens to 30 columns × 6 rows.
     BEC_PASSIVE_COUNT = 65            # first N passives go to BEC zone
-    BEC_PASSIVE_ORIGIN = (12.0, 44.0)
-    BEC_PASSIVE_COLS = 25
+    BEC_PASSIVE_ORIGIN = (15.0, 51.0)   # +3.5mm relief vs REDO2's (12, 44)
+    BEC_PASSIVE_COLS = 30                # widened from 25 (extra board width)
     BEC_PASSIVE_ROWS = 6
-    BEC_PASSIVE_CELL = 1.4
+    BEC_PASSIVE_CELL = 1.5               # +0.1mm pitch for breathing room
     pg = CHANNEL_PASSIVE_GRID
 
     # Channel passives = passives[BEC_PASSIVE_COUNT:]
