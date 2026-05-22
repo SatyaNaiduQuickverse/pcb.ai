@@ -1,0 +1,24 @@
+! ElmerGrid spec for 4× BSC014N06NS in 2×2 cluster on B.Cu.
+! Coords in SI METERS to avoid Coordinate Scaling pitfalls in Elmer.
+! Board section: 30×21×1.6 mm = 0.030×0.021×0.0016 m around the cluster.
+Version = 210903
+Coordinate System = Cartesian 3D
+Subcell Divisions in 1D = 3 3 1
+Subcell Limits 1 = 0 0.010 0.020 0.030
+Subcell Limits 2 = 0 0.006 0.015 0.021
+Subcell Limits 3 = 0 0.0016
+Materials Interval = 1 1
+Boundary Definitions
+! type out int double
+  1     1   -1   1    ! z=0 (bottom — heatsink side, B.Cu)
+  2     2   -1   1    ! z=1.6 (top — F.Cu, prop-wash)
+  3     3   -1   1    ! sides (still-air convection)
+End
+Numbering = Horizontal
+Element Degree = 1
+Surface Elements = 6
+Volume Elements = 16
+Triangles = False
+Coordinate Ratios = 1 1 1
+Minimum Element Divisions = 12 8 4
+Reference Density = 1.0
