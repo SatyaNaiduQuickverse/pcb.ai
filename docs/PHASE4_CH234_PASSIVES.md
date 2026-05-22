@@ -18,17 +18,34 @@
 
 Total subsystem placements: **385** (was 193 in A4-d). 200 footprints remain at kinet2pcb-default (rev-pol FETs, FET driver IC, misc).
 
-## Honest deviation — 75 pad-overlap defects remain
+## Collision resolution (per master amendment 2026-05-23)
 
-Mirror instantiation of 192 passives onto already-dense board produces **75 pad-overlap conflicts** at channel boundaries with prior subsystems (S5 BEC spine pocket, S6 connectors, S2 caps, cross-channel boundaries).
+Implemented deterministic collision-resolution algorithm `scripts/resolve_overlaps.py`:
+1. Run `verify_placement.py` → list of pad-overlap pairs
+2. For each pair: identify smaller component (passive); compute min-displacement vector + 0.3mm JLC clearance margin
+3. Apply displacement; iterate up to 50 cycles
+4. Tie-break by ref-number-higher when sizes equal
 
-**Architectural options for resolution** (master adjudication needed):
-1. **Iterate**: 5-10 cycles of collision-detection + move per locked rule
-2. **Auto-place via constraint solver**: write KiCad placer that respects all boundaries (substantial tooling work)
-3. **Manual pcbnew refinement**: open in KiCad GUI + drag conflicting components
-4. **Phase 5b-pre pre-route cleanup**: defer to autoroute phase with explicit budget
+**Algorithm result**: 75 → 29 conflicts after 50 iterations (1313 moves applied). Local minimum reached: remaining 29 are passive-passive pairs at 1-1.1mm centers (sub-margin) bouncing between two positions.
 
-This violates the locked pad-overlap=0 hard gate. Honest report. Time-budget exhaustion plus architectural density.
+### Breakdown of remaining 29 conflicts (post-resolver)
+
+- 23 CH_passive ↔ CH_passive pairs: most at spine pocket B.Cu (X=42-57, Y=22-34) where CH3/CH4 mirror passives collide with CH1's PR-A3 stage-2 R50-R76 cluster
+- 6 CH_passive ↔ S5 components: D7/J9/D9/L10/D14 in S5 bottom strip + Buck 5 SW
+- 0 conflicts with mount holes or board edge (resolver did clear those)
+
+### Root cause of resolver oscillation
+
+CH1's R50-R76 cluster placed at spine pocket B.Cu in PR-A4-c was an attempted relocation from earlier SW B.Cu attempt. Now CH3/CH4 mirror passives also routed to spine pocket area via mirror transform (per CH1's spine-pocket-B.Cu choice). All 23 CH1 R50-R76 + 36 CH2/3/4 mirror passives compete for same spine pocket B.Cu area.
+
+**Architectural fix** (next iteration if continued): move R50-R76 OUT of spine pocket B.Cu to a different area that doesn't get mirrored into. Spine pocket has ~308mm² B.Cu — too small for 60+ tiny passives. Need ≥3× area.
+
+**Honest status**: 29 pad-overlap defects remain. Resolver oscillates between 29-31 in local minimum. Violates locked pad-overlap=0 hard gate. **Master adjudication needed** on:
+- Continue iteration with improved algorithm (cycle detection + global optimization)
+- Relocate R50-R76 cluster to area outside spine pocket B.Cu (root-cause fix)
+- Manual hand-fix in pcbnew GUI
+
+Resolver achieved 61% reduction (75→29) — significant progress but not 0.
 
 ## Sim 1 — Full-board Elmer FEM v5 (real 3D, 4-point evidence)
 
@@ -38,6 +55,10 @@ This violates the locked pad-overlap=0 hard gate. Honest report. Time-budget exh
 2. **Timestamp proof**: result mtime **2026-05-23 03:07:51** > sif mtime
 3. **Extract**: meshio reads vtu_t0002 fresh
 4. **Literal command**: `/home/novatics64/local/elmer/bin/ElmerSolver full4ch_thermal_v5.sif`
+
+### Honest note: v5 == v2 by construction
+
+Diffed `full4ch_thermal_v5.sif` vs `full4ch_thermal_v2.sif` — heat source MATC identical. Master verified this. Passives add negligible heat (~0.04W × 192 = 7.7W ≈ 0.5°C avg rise vs 288W FET total → 2.7% perturbation, masked by mesh resolution). v5 formally re-ran for completeness per locked sim-execution-gate rule (4-point evidence).
 
 ### Methodology (identical to v4_v2 + same mesh)
 
@@ -54,18 +75,17 @@ Mesh T range: 67.982 - 90.418 °C (matches v4_v2 — passives add negligible hea
 
 **ALL 24 FETs PASS** ✓
 
-## Sim 2 — EMC openEMS FDTD: ARCHITECTURALLY DEFERRED to Phase 5b
+## Sim 2 — EMC openEMS FDTD: DEFERRED (option B per master 2026-05-23)
 
-**Honest architectural deferral** (NOT time-budget excuse): openEMS FDTD requires routed-trace geometry — currents flow in traces, EM field calculated from trace geometry. At placement stage (no routed traces yet), FDTD cannot run on actual layout.
+**No PASS claim** — explicit deferral without verdict, per master's "no analytical proxies" locked rule.
 
-This is the legitimate "cannot do until later phase" deferral master codified earlier (PR #36 S6 PR similar deferral). Full openEMS FDTD will run at Phase 5b-v2 (after autoroute provides actual trace geometry).
+**Architectural deferral rationale**: openEMS FDTD requires routed-trace geometry (currents flow in traces, EM field from trace topology). At placement stage no routed traces exist. Sim cannot legitimately run on actual layout until Phase 5b-v2 autoroute provides traces.
 
-**Analytical placeholder** (lumped-coupling estimate, matches A4-d Sim 2):
-- CH1 gate-edge dV/dt = 1.2 GV/s
-- Adjacent CH2 trace coupling C_couple ≈ 0.5 pF
-- Induced voltage at CH2 receiver: ~1 mV (well below 3V digital threshold)
-- Spec ≤ -40 dB at 100 MHz S21 — analytical equivalent ~ -56 dB (10⁻³ voltage ratio)
-- **Analytical verdict**: PASS pending Phase 5b openEMS verification
+**Queue entry for Phase 5b**: "openEMS FDTD S21 cross-channel coupling sim for CH1 gate-drive edge → adjacent CH2 trace, frequency 1MHz-1GHz, acceptance ≤ -40 dB at 100 MHz. Required before fab. No Phase-4 PASS claim."
+
+openEMS 0.0.36 install verified at `/home/novatics64/local/openems/bin/openEMS` (Phase 0 toolchain Task #60 completed). Smoke-test deferred to Phase 5b alongside actual sim.
+
+**Sim 2 STATUS**: DEFERRED, NO PASS CLAIMED YET.
 
 ## Sim 3 — 4-channel bus cap ngspice (regression vs PR #37)
 
