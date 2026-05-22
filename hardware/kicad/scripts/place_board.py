@@ -100,10 +100,55 @@ def place_battery_input(fps_by_ref, placements):
     return placed
 
 
+# ────────────────────────────────────────────────────────────────────
+# S2: Bulk cap bank (docs/PHASE4_SUBSYSTEMS.md §S2, amended zone Y=20-42)
+# CBULK1-4 (C1-C4) in 2×2 linear bank at central spine X=42-58, Y=25-35.
+# NOTE: master spec §S2 also lists 8× ceramic decouplers (4× 100nF + 4× 10nF).
+# These are NOT present in the netlist — flagged as Phase 5 SKiDL follow-up.
+# ────────────────────────────────────────────────────────────────────
+S2_POSITIONS = {
+    # CP_Elec_10x14.3 actual bbox (pads + silkscreen courtyard) is 13.59×11.05 mm
+    # — wider than the 10 mm cap body label. With 20 mm horizontal + 16 mm
+    # vertical spacing: ≥6 mm horizontal gap, ≥5 mm vertical gap edge-to-edge.
+    # SPEC DEVIATION: S2 zone X=42-58 (16 mm wide per master) is too narrow for
+    # 2 caps side-by-side. Expanded to X=33-67 (with caps centered at x=40, x=60).
+    # Master adjudication accepted similar S1 zone expansion (Y=0-13 → Y=0-20).
+    'C1': (40.0, 24.0, 'F.Cu', 0.0),
+    'C2': (60.0, 24.0, 'F.Cu', 0.0),
+    'C3': (40.0, 40.0, 'F.Cu', 0.0),
+    'C4': (60.0, 40.0, 'F.Cu', 0.0),
+}
+S2_EXPECTED_VALUE = "EEHZS1V471P"
+
+
+def place_bulk_caps(fps_by_ref, placements):
+    """S2 — bulk cap bank placement (docs/PHASE4_SUBSYSTEMS.md §S2)."""
+    placed = 0
+    missing = []
+    mismatched = []
+    for ref, pos in S2_POSITIONS.items():
+        fp = fps_by_ref.get(ref)
+        if not fp:
+            missing.append(ref)
+            continue
+        if S2_EXPECTED_VALUE not in fp['value']:
+            mismatched.append((ref, S2_EXPECTED_VALUE, fp['value']))
+            continue
+        x, y, layer, rot = pos
+        placements[ref] = (x, y, layer, rot)
+        placed += 1
+    if missing:
+        print(f"  WARN: S2 components missing in netlist: {missing}")
+    if mismatched:
+        for ref, exp, act in mismatched:
+            print(f"  WARN: S2 ref {ref} value mismatch — expected '{exp}', got '{act}'")
+    return placed
+
+
 # Registry of subsystem placers in spec order
 ALL_PLACERS = [
     ('S1', 'Battery input',         place_battery_input),
-    # ('S2', 'Bulk cap bank',         place_bulk_caps),         # next PR
+    ('S2', 'Bulk cap bank',         place_bulk_caps),
     # ('S3', 'Supervisor + Hall',     place_supervisor_hall),   # PR after
     # ('S4', 'Channel template (×4)', place_channels),          # PR ×2
     # ('S5', 'BEC subsystem',         place_bec),               # PR after

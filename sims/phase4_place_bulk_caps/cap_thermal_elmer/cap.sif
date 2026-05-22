@@ -1,0 +1,72 @@
+! Single CBULK cap ESR thermal — Elmer FEM verification
+! Per-cap dissipation 1.55 mW (from ripple sim). Lifetime spec T_can ≤ 105°C.
+Header
+  Mesh DB "." "cap"
+End
+
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 20
+  Output Intervals = 1
+  Output File = "cap.result"
+  Post File = "cap.vtu"
+End
+
+Body 1
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+
+Equation 1
+  Name = "Heat Equation"
+  Active Solvers(1) = 1
+End
+
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Linear System Solver = "Iterative"
+  Linear System Iterative Method = "BiCGStab"
+  Linear System Max Iterations = 500
+  Linear System Convergence Tolerance = 1.0e-8
+End
+
+! Polymer-Al cap effective material (rough: Al can dominant)
+Material 1
+  Density = 2700.0        ! Al/electrolyte composite
+  Heat Conductivity = 50.0  ! Al can spreads internal heat well
+  Heat Capacity = 900.0
+End
+
+! P = 1.55 mW; V_body = 10×14.3×16.5 mm³ = 2.36e-6 m³; mass = 6.36e-3 kg
+! → Heat Source = 0.00155 / 6.36e-3 = 0.244 W/kg
+Body Force 1
+  Heat Source = 0.244
+End
+
+! PCB-mount face: conducts to B.Cu (cap leads ~5°C/W to B.Cu plane).
+! Model as effective convection h=200 (good thermal coupling to plane)
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 200.0
+  External Temperature = 60.0
+End
+
+! Top of can — natural convection in still air h=10
+Boundary Condition 2
+  Target Boundaries(1) = 2
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 10.0
+  External Temperature = 60.0
+End
+
+! Sides — natural convection
+Boundary Condition 3
+  Target Boundaries(1) = 3
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 10.0
+  External Temperature = 60.0
+End
