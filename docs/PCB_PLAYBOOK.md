@@ -93,3 +93,20 @@ Routing is the hardest, least-predictable phase. What works:
   plug cannot physically reach it. A board render does not make this obvious. At the
   placement gate, verify every connector's edge position and orientation explicitly,
   one by one — and confirm any mid-mount part has its required edge cutout.
+- **Placement not validated for routability** — the most expensive trap. A placement
+  can pass DRC, clearance, connector-access, and thermal checks and still be
+  *routing-hostile*: the autorouter plateaus far short of 100% and the residual nets
+  will not close. Routing difficulty is a *placement symptom*, not a routing problem —
+  do not try to out-engineer it with cleverer routers. Prevention:
+  - Do a **connectivity / net-flow analysis first** — tabulate which peripheral
+    connects to which *side* of the hub chip (MCU) by package pin.
+  - **Place each peripheral on the MCU side its pins exit.** A peripheral opposite its
+    pins forces every net across the chip — that congestion strands the residual.
+  - Identify **pin-locked vs movable** functions (e.g. SDMMC / USB / HSE crystal are
+    typically pin-locked — they anchor the placement; muxable buses flex around them).
+    Re-assigning MCU pins to suit the layout is normal, correct engineering.
+  - The **placement gate must include a route-validation**: run the autorouter; it
+    must reach ~100%. A low plateau is the diagnosis — re-place, do not brute-force.
+  - Placement is multi-physics: weigh routability, EMI (separate switching/clock/
+    high-speed aggressors from sensor/analog victims), thermal, SI, and mechanical
+    explicitly — and simulate candidates *during* placement, not only at the gate.
