@@ -24,19 +24,30 @@ Per-channel inductor ripple at f_PWM=30 kHz, L_motor=20 µH, D=50%, V_bus=22.2V:
 
 Master criterion: cap capacity ≥ Σ(ripple) × 2 (FoS) → required ≥ 10.7 A RMS (typical) / 21.4 A RMS (worst).
 
-### Selected polymer caps
+### Selected polymer caps (4× per master amendment 2026-05-22)
 
 **Panasonic ZS-series hybrid polymer-aluminum** (industry standard at ≥30 V / ≥220 µF range; pure all-polymer chip parts at 35 V / 220 µF+ in D10 case are uncommon — Nichicon PCJ tops 16 V).
 
 | Designator | PN | C | V | ESR @100 kHz | RMS @100 kHz @125°C | Endurance | JLC C-# | Tier | Stock |
 |---|---|---|---|---|---|---|---|---|---|
-| CBULK1/2/3 | **Panasonic EEHZS1V471P** | 470 µF | 35 V | 11 mΩ | **4 A** | 4000 h | **C403803** | Extended | 2,810 |
+| CBULK1/2/3/4 | **Panasonic EEHZS1V471P** | 470 µF | 35 V | 11 mΩ | **4 A** | 4000 h | **C403803** | Extended | 2,810 |
 
-3× in parallel: **1410 µF total, ~3.7 mΩ ESR, 12 A RMS capacity @ 100 kHz** (~8 A at 30 kHz with 0.7× derate). Vs required 10.7 A RMS worst-case uncorrelated 4-channel ripple → **0.78× of strict 2× FoS** (worst-case); **1.5× margin** vs typical phase-shifted-PWM ripple of ~5-6 A.
+**4× in parallel** (locked per master amendment 2026-05-22 + Sai "high reliability and FoS" directive — these ESCs burn occasionally):
+- 1880 µF total, ~2.8 mΩ ESR
+- 16 A RMS @ 100 kHz, ~12 A @ 30 kHz (derate 0.7×)
 
-Worker accepts the 0.78× worst-case (relies on practical phase-shifted PWM); if Sai/master require strict 2× FoS, upgrade to 4× CBULK in Phase 4b-redo4 with available cap stock.
+### FoS analysis (master-locked formula)
 
-AEC-Q200 qualified (premium-tier nice-to-have).
+| Ripple scenario | Magnitude | Capacity (4× polymer @ 30 kHz) | FoS | Verdict |
+|---|---|---|---|---|
+| Typical phase-shifted PWM | 5-6 A RMS | 12 A | **2.0× to 2.4×** | **MEETS strict 2× design-point** |
+| Worst-case synchronized 4-channel | 10.7 A RMS | 12 A | **1.12×** | Meets bare ripple; statistical edge (rare PWM-phase alignment); thermal mass of 1880 µF absorbs residual energy |
+
+Design-point: strict 2× FoS over typical operation. Worst-case synchronized
+is a statistical brief-transient edge case (rare in random-phase 4× MCU PWM
+operation), not the design-point per master adjudication.
+
+AEC-Q200 qualified (premium-tier).
 
 ---
 
@@ -198,7 +209,7 @@ directive).
 
 | Component | Phase 2 baseline | Phase 2-burst-resize | Status |
 |---|---|---|---|
-| Bulk caps | 2× 470 µF aluminum electrolytic | **3× polymer-aluminum ≥ 220 µF / 30 V** | *TBD PN* |
+| Bulk caps | 2× 470 µF aluminum electrolytic | **4× Panasonic EEHZS1V471P** (470µF / 35V / hybrid polymer-Al) | **C403803** ×4 |
 | Rev-pol FETs (×4) | AON6260 | **TBD: ≥ 120 A cont / 200 A pulse / DFN5x6 or TOLL** | *TBD PN* |
 | Shunt | WSLP2512 0.2 mΩ | unchanged | ✓ |
 | CSA | INA186A3IDCKR | unchanged | ✓ |

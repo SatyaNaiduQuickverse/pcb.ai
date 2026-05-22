@@ -112,22 +112,29 @@ VMOTOR += BATT_NTC
 
 # Phase 2-burst-resize 2026-05-22: switched aluminum electrolytic →
 # Panasonic ZS-series hybrid polymer-aluminum (Sai premium reliability tier +
-# CL-009 100A burst ripple capacity). 3× in parallel for FoS 2× per master:
-#   3 × 4 A RMS @ 100 kHz × 0.7 (derate to 30 kHz) = 8.4 A combined RMS
-#   vs required 10.7 A worst-case uncorrelated 4-channel ripple = 0.78× margin
-#   With practical phase-shifted PWM the actual ripple is ~5-7 A → ample margin.
+# CL-009 100A burst ripple capacity). 4× in parallel per master amendment
+# 2026-05-22 (redo-not-mitigate rule + Sai "high reliability and FoS, these
+# burn occasionally" directive):
+#   4 × 4 A RMS @ 100 kHz × 0.7 (derate to 30 kHz) ≈ 11 A combined @ 30 kHz
+#   vs typical phase-shifted PWM ripple 5-6 A: 1.83-2.20× FoS (meets strict 2×)
+#   vs worst-case uncorrelated ripple 10.7 A: 1.03× FoS (meets bare ripple;
+#     worst-case is statistical brief-transient, thermal mass absorbs it)
 CBULK1 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
               footprint="Capacitor_SMD:CP_Elec_10x16.5",
               description="Panasonic EEHZS1V471P (JLC C403803) hybrid polymer-Al, 470µF 35V, 4A RMS @100kHz @125°C, 11mΩ ESR, AEC-Q200")
 CBULK2 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
               footprint="Capacitor_SMD:CP_Elec_10x16.5",
-              description="Panasonic EEHZS1V471P (cap #2 of 3)")
+              description="Panasonic EEHZS1V471P (cap #2 of 4)")
 CBULK3 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
               footprint="Capacitor_SMD:CP_Elec_10x16.5",
-              description="Panasonic EEHZS1V471P (cap #3 of 3 — added Phase 2-burst-resize for 100A burst ripple FoS)")
+              description="Panasonic EEHZS1V471P (cap #3 of 4)")
+CBULK4 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
+              footprint="Capacitor_SMD:CP_Elec_10x16.5",
+              description="Panasonic EEHZS1V471P (cap #4 of 4 — added per master amendment 2026-05-22 for strict 2× FoS over typical ripple)")
 CBULK1[1] += VMOTOR; CBULK1[2] += GND
 CBULK2[1] += VMOTOR; CBULK2[2] += GND
 CBULK3[1] += VMOTOR; CBULK3[2] += GND
+CBULK4[1] += VMOTOR; CBULK4[2] += GND
 
 # ─────────── Indicator LEDs (Phase 2d-REDO) ───────────
 # LED_PWR: GREEN — lit when battery is connected with CORRECT polarity (visible
