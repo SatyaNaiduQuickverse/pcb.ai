@@ -1,4 +1,4 @@
-"""Phase 4b-redo4-R1 — verify placement.
+"""Phase 4 — verify placement.
 
 Checks:
 1. All footprints have a position (no part at origin), excluding mount holes.
@@ -7,14 +7,26 @@ Checks:
 4. Mount holes at 4 corners (5, 5)/(95, 5)/(5, 80)/(95, 80).
 5. FC connector near top edge.
 6. Motor pads (12×) on board edges.
-7. No position overlaps on F.Cu (allow B.Cu separately).
+7. **Bounding-box overlap detection (Phase 4-bbox-check-tool, master Task #38-pivot
+   2026-05-22)**: layer-aware pcbnew BOX2I::Intersects() audit. Catches stacked
+   component bodies that pad-position-only checks miss. Self-tested below.
 8. Per-channel T8 compliance: each channel's MCU + driver + 6 phase FETs +
    3 shunts + 3 CSAs + protection ICs + per-channel passives are all within
    that channel's quadrant.
 """
 import re
+import sys
 from pathlib import Path
 from collections import defaultdict
+
+# pcbnew is optional for the file-format-level checks but required for the
+# bbox-overlap check (uses pcbnew.LoadBoard + BOX2I::Intersects).
+try:
+    import pcbnew
+    _HAS_PCBNEW = True
+except ImportError:
+    pcbnew = None
+    _HAS_PCBNEW = False
 
 PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb")
 
@@ -171,21 +183,43 @@ def main():
     if not_edge:
         fails.append(f"  {len(not_edge)} motor pads NOT on board edge")
 
-    # 7) Overlap detection on F.Cu (allow B.Cu separately — MOSFET clusters
-    # have tight grid; same goes for shunts).
-    pos_to_fps = defaultdict(list)
-    for fp in fps:
-        if 'MountingHole' in (fp['lib'] or ''):
-            continue
-        key = (round(fp['x'], 1), round(fp['y'], 1), fp['layer'])
-        pos_to_fps[key].append(fp)
-    overlaps = {k: v for k, v in pos_to_fps.items() if len(v) > 1}
-    if overlaps:
-        fails.append(f"  {len(overlaps)} position-overlap clusters detected:")
-        for k, v in list(overlaps.items())[:10]:
-            refs = [fp['ref'] for fp in v]
-            vals = [fp['value'] for fp in v[:3]]
-            fails.append(f"    @ {k} : {refs[:5]} ({vals})")
+    # 7) Bounding-box overlap detection (Phase 4-bbox-check-tool, master Task #38
+    # pivot 2026-05-22). Uses pcbnew BOX2I::Intersects on each footprint pair.
+    # Layer-aware: F.Cu vs B.Cu cross-layer is physically fine (component bodies
+    # are on opposite faces of the PCB); only same-layer body intersection is a
+    # real defect. Mount holes occupy both layers (drill through hardware).
+    if _HAS_PCBNEW:
+        bbox_overlaps, bbox_cross_layer = bbox_overlap_check()
+        print(f"\nBbox-overlap audit (layer-aware):")
+        print(f"  Cross-layer F.Cu/B.Cu intersections (physically fine): {bbox_cross_layer}")
+        print(f"  Same-layer body overlaps (DEFECTS): {len(bbox_overlaps)}")
+        if bbox_overlaps:
+            # Aggregate per-ref overlap counts
+            ref_overlap_count = defaultdict(int)
+            for a, b in bbox_overlaps:
+                ref_overlap_count[a['ref']] += 1
+                ref_overlap_count[b['ref']] += 1
+            fails.append(f"  {len(bbox_overlaps)} same-layer bbox-overlap pairs detected.")
+            ref_to_row = {}
+            for a, b in bbox_overlaps:
+                ref_to_row[a['ref']] = a
+                ref_to_row[b['ref']] = b
+            fails.append(f"  Top 10 most-overlapping refs:")
+            for ref, count in sorted(ref_overlap_count.items(), key=lambda kv: -kv[1])[:10]:
+                a = ref_to_row[ref]
+                fails.append(f"    {ref:6s} ({a['value']:30s}) @ ({a['x']:5.1f},{a['y']:5.1f}) "
+                             f"on {'+'.join(sorted(a['layer_set']))}: {count} overlaps")
+            fails.append(f"  First 5 zero-distance stacks:")
+            zero_dist = sorted(
+                ((((a['x']-b['x'])**2 + (a['y']-b['y'])**2)**0.5, a['ref'], b['ref'], a, b)
+                 for a, b in bbox_overlaps),
+                key=lambda t: t[0]
+            )[:5]
+            for d, _ra, _rb, a, b in zero_dist:
+                fails.append(f"    {a['ref']:6s} ↔ {b['ref']:6s}  dist={d:.2f} mm  "
+                             f"({a['value'][:20]} ↔ {b['value'][:20]})")
+    else:
+        fails.append(f"  bbox-overlap check SKIPPED — pcbnew Python API not available")
 
     # 8) Per-channel T8 quadrant compliance — every footprint with inferred
     # channel membership should be inside its channel's quadrant (or on B.Cu,
@@ -233,11 +267,134 @@ def main():
         print(f"  - {len(fps)} footprints placed")
         print(f"  - 24 phase MOSFETs on R1 6×4 B.Cu grid")
         print(f"  - 4 MCUs in 2×2 center cluster with PWM-outward rotations")
-        print(f"  - 0 overlaps on F.Cu")
+        print(f"  - 0 same-layer bbox overlaps (layer-aware audit; cross-layer F/B OK)")
         print(f"  - T8 quadrant compliance verified for all 4 channels")
         return 0
 
 
+def bbox_overlap_check(pcb_path=None):
+    """Audit footprint bounding-box overlaps via pcbnew BOX2I::Intersects.
+
+    Layer-aware: F.Cu and B.Cu footprints can share (x, y) without conflict
+    (component bodies sit on opposite faces of the PCB). Mount holes occupy
+    both layers (drill goes through). Returns (same_layer_overlaps, cross_layer_count).
+
+    same_layer_overlaps: list of (a, b) dicts of footprints whose body bboxes
+    intersect AND share at least one mount layer.
+    """
+    if not _HAS_PCBNEW:
+        raise RuntimeError("pcbnew Python API not available; cannot run bbox check")
+    path = str(pcb_path) if pcb_path else str(PCB)
+    board = pcbnew.LoadBoard(path)
+    rows = []
+    for fp in board.GetFootprints():
+        ref = fp.GetReference()
+        value = fp.GetValue()
+        fpid_name = str(fp.GetFPID().GetLibItemName()) if fp.GetFPID() else ''
+        descr = fp.GetLibDescription() or ''
+        is_mh = ('MountingHole' in fpid_name or 'Mounting' in descr
+                 or 'mounting hole' in descr.lower())
+        if is_mh:
+            layer_set = {'F.Cu', 'B.Cu'}   # drill through hardware
+        elif fp.GetLayer() == pcbnew.F_Cu:
+            layer_set = {'F.Cu'}
+        elif fp.GetLayer() == pcbnew.B_Cu:
+            layer_set = {'B.Cu'}
+        else:
+            layer_set = {f'layer{fp.GetLayer()}'}
+        bbox = fp.GetBoundingBox(False, False)
+        rows.append({
+            'ref': ref, 'value': value, 'layer_set': layer_set,
+            'bbox': bbox,
+            'x': fp.GetPosition().x / 1e6,
+            'y': fp.GetPosition().y / 1e6,
+        })
+    same_layer = []
+    cross_layer = 0
+    n = len(rows)
+    for i in range(n):
+        bi = rows[i]['bbox']
+        li = rows[i]['layer_set']
+        for j in range(i + 1, n):
+            lj = rows[j]['layer_set']
+            shared = li & lj
+            if bi.Intersects(rows[j]['bbox']):
+                if shared:
+                    same_layer.append((rows[i], rows[j]))
+                else:
+                    cross_layer += 1
+    return same_layer, cross_layer
+
+
+def _self_test():
+    """Self-test: two known-overlapping footprints MUST be reported.
+
+    Builds a minimal kicad_pcb file with two 0402 resistor footprints at the
+    SAME position on F.Cu, then runs bbox_overlap_check. Asserts ≥1 same-layer
+    overlap. This proves the audit catches bbox collisions — guard against
+    the same trap-class as the kinet2pcb-silent-drop bug (tool reports clean
+    when reality is broken).
+    """
+    if not _HAS_PCBNEW:
+        print("SELF-TEST SKIPPED: pcbnew not available")
+        return True
+    import tempfile
+    fixture = tempfile.NamedTemporaryFile(mode='w', suffix='.kicad_pcb', delete=False)
+    # Minimal KiCad9 PCB with 2 footprints at same (50, 50) on F.Cu
+    fixture.write('''(kicad_pcb
+\t(version 20241229)
+\t(generator "pcbnew")
+\t(generator_version "9.0")
+\t(general (thickness 1.6) (legacy_teardrops no))
+\t(paper "A4")
+\t(layers
+\t\t(0 "F.Cu" signal)
+\t\t(31 "B.Cu" signal)
+\t\t(44 "Edge.Cuts" user)
+\t)
+\t(setup (pad_to_mask_clearance 0))
+\t(net 0 "")
+\t(footprint "Resistor_SMD:R_0402_1005Metric"
+\t\t(layer "F.Cu")
+\t\t(uuid "aaaaaaaa-1111-1111-1111-111111111111")
+\t\t(at 50 50)
+\t\t(property "Reference" "R1" (at 0 -1.4 0) (layer "F.SilkS") (uuid "ref-1") (effects (font (size 1 1) (thickness 0.15))))
+\t\t(property "Value" "10K" (at 0 1.4 0) (layer "F.Fab") (uuid "val-1") (effects (font (size 1 1) (thickness 0.15))))
+\t\t(pad "1" smd roundrect (at -0.5 0) (size 0.5 0.6) (layers "F.Cu" "F.Mask" "F.Paste") (uuid "pad1-1"))
+\t\t(pad "2" smd roundrect (at  0.5 0) (size 0.5 0.6) (layers "F.Cu" "F.Mask" "F.Paste") (uuid "pad2-1"))
+\t)
+\t(footprint "Resistor_SMD:R_0402_1005Metric"
+\t\t(layer "F.Cu")
+\t\t(uuid "bbbbbbbb-2222-2222-2222-222222222222")
+\t\t(at 50 50)
+\t\t(property "Reference" "R2" (at 0 -1.4 0) (layer "F.SilkS") (uuid "ref-2") (effects (font (size 1 1) (thickness 0.15))))
+\t\t(property "Value" "10K" (at 0 1.4 0) (layer "F.Fab") (uuid "val-2") (effects (font (size 1 1) (thickness 0.15))))
+\t\t(pad "1" smd roundrect (at -0.5 0) (size 0.5 0.6) (layers "F.Cu" "F.Mask" "F.Paste") (uuid "pad1-2"))
+\t\t(pad "2" smd roundrect (at  0.5 0) (size 0.5 0.6) (layers "F.Cu" "F.Mask" "F.Paste") (uuid "pad2-2"))
+\t)
+)
+''')
+    fixture.close()
+    try:
+        same_layer, cross_layer = bbox_overlap_check(fixture.name)
+        if not same_layer:
+            print(f"SELF-TEST FAILED: bbox_overlap_check returned {len(same_layer)} "
+                  f"same-layer overlaps for 2 stacked F.Cu 0402s; expected ≥1")
+            return False
+        refs = sorted({fp['ref'] for pair in same_layer for fp in pair})
+        if 'R1' not in refs or 'R2' not in refs:
+            print(f"SELF-TEST FAILED: expected R1+R2 in overlap, got {refs}")
+            return False
+        print(f"SELF-TEST PASSED: bbox_overlap_check correctly reported "
+              f"{len(same_layer)} same-layer overlap(s) for known-stacked 0402s "
+              f"(refs={refs})")
+        return True
+    finally:
+        Path(fixture.name).unlink()
+
+
 if __name__ == "__main__":
-    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == '--self-test':
+        ok = _self_test()
+        sys.exit(0 if ok else 1)
     sys.exit(main())
