@@ -163,6 +163,7 @@ Closed at Phase 2.5 — see `docs/PHASE2_5_FITCHECK.md`.
   - In4.Cu — +5V/+3V3 split plane
   - B.Cu — signal (power-side: 24+4 MOSFETs, 12 shunts, 2 bulk caps, TVS, buck inductor, heatsink interface)
 - **Edge.Cuts outline**: 50.0 × 50.0 mm square. Edge.Cuts layer stroke 0.05 mm.
+- **Placement** (Phase 4b PR #13): all 249 footprints positioned per Phase 2.5 sketch. 205 on F.Cu, 44 on B.Cu. 0 at origin, 0 out of bounds. T7 connector accessibility verified (FC top, motor pads on all 4 edges, SWD left edge, battery bottom edge). Heatsink zone (46 × 32 mm B.Cu center) clear of non-MOSFET components.
 - **F.Cu / B.Cu split**: F.Cu = signal side (4 MCUs, 4 drivers, 12 CSAs, buck+LDO, ESD, decoupling, LEDs, FC connector, motor pads, SWD pads); B.Cu = power side (24+4 MOSFETs, 12 shunts, 2 bulk caps, TVS, buck inductor).
 - **Heatsink**: ~46 × 32 mm aluminum 6061-T6, 3-5 mm thick, covering B.Cu MOSFET cluster. Mounted via M2 screws (through-PCB tap or adhesive bond — Phase 4 decides). Silicone thermal pad 0.5 mm thick, 4-6 W/m·K thermal conductivity, 1500 V isolation.
 - **Connectors**: FC connector (JST SM08B-SRSS-TB) on F.Cu top edge, centered. 12 motor pads (3.0 mm dia) distributed 3-per-edge across all 4 board edges, one channel per edge. SWD pads (12-16 total, castellated-edge style preferred) on F.Cu left edge.
