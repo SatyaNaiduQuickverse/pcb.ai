@@ -99,7 +99,7 @@ def make_channel(ch_num, vmotor, v5, v3v3, v3v3a, gnd, dshot_in, tlm, swdio, swc
 
     # Gate driver — DRV8300DRGER (functional stand-in: Conn_01x24 for pin-by-pin in Phase 4)
     drv = Part("Connector_Generic", "Conn_01x24", value="DRV8300DRGER",
-               footprint="Package_DFN_QFN:VQFN-24_4x4mm_P0.5mm_EP2.6x2.6mm")
+               footprint="Package_DFN_QFN:HVQFN-24-1EP_4x4mm_P0.5mm_EP2.6x2.6mm")
     drv[1] += pwm_inla; drv[2] += pwm_inlb; drv[3] += pwm_inlc
     drv[4] += v5
     drv[5] += gnd
@@ -151,7 +151,7 @@ def make_channel(ch_num, vmotor, v5, v3v3, v3v3a, gnd, dshot_in, tlm, swdio, swc
                    footprint="Resistor_SMD:R_2512_6332Metric")
         rsh[1] += shunt_top_net; rsh[2] += gnd
         csa = Part("Connector_Generic", "Conn_01x06", value="INA186A3IDCKR",
-                   footprint="Package_TO_SOT_SMD:SC-70-6_Handsoldering")
+                   footprint="Package_TO_SOT_SMD:SOT-363_SC-70-6")
         csa[1] += shunt_top_net
         csa[6] += gnd
         csa[2] += gnd

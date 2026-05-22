@@ -39,7 +39,7 @@ GND = Net("GND")
 
 # ─────────── Power input — battery solder pads ───────────
 BATT_PAD = Part("Connector_Generic", "Conn_01x02", value="BATT_PAD",
-                footprint="Connector:TerminalBlock_Phoenix_MPT-2.54mm_1x02_P2.54mm_Horizontal")
+                footprint="Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical")
 BATT_PAD[1] += BATT
 BATT_PAD[2] += BATGND
 
@@ -102,7 +102,7 @@ C_BUCK_OUT[1] += V5
 C_BUCK_OUT[2] += GND
 
 L_BUCK = Part("Device", "L", value="0.47uH",
-              footprint="Inductor_SMD:L_1608_0603Metric")
+              footprint="Inductor_SMD:L_0603_1608Metric")
 L_BUCK[1] += SW
 L_BUCK[2] += V5
 
@@ -132,7 +132,7 @@ U_BUCK[3] += FB
 
 # ─────────── BEC — LDO stage (TLV76733DRVR) ───────────
 U_LDO = Part("Connector_Generic", "Conn_01x06", value="TLV76733DRVR",
-             footprint="Package_SON:WSON-6-1EP_2x2mm_P0.65mm_EP0.9x1.6mm",
+             footprint="Package_SON:WSON-6-1EP_2x2mm_P0.65mm_EP1x1.6mm",
              description="TLV76733DRVR functional placeholder; Phase 4 GUI swaps to custom symbol")
 
 C_LDO_IN = Part("Device", "C", value="1uF",
