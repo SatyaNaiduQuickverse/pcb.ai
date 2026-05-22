@@ -1,10 +1,30 @@
-# Phase 4b-redo4-R1 — center-cluster placement of all 581 footprints
+# Phase 4b-redo4-R1 — center-cluster placement of all 581 components
 
 **Status:** complete on branch; pending master audit + PR review.
 **Branch:** `phase4b-redo4-R1/center-cluster-placement`.
-**Scope:** 581 footprints placed in R1 (center-cluster) topology on 100×85 board
+**Scope:** 581 components placed in R1 (center-cluster) topology on 100×85 board
 with 8L stackup (Phase 4a-restack-8L) + 3 oz on outer/In3 power layers.
 **Master directive:** Task #38 dispatch 2026-05-22.
+**Amendment 2026-05-22 (post-master-audit):** CBULK1–4 footprint corrected
+(`CP_Elec_10x16.5` → `CP_Elec_10x14.3`, library-available); Hall sensor
+placeholder replaced with real `Sensor_Current:Allegro_CB_PFF` + `ACS758xCB-150B-PSS`
+symbol (5-pin CB-package, pin-compatible with ACS770). See §11 below.
+
+## Component count audit
+
+**Netlist:** 581 unique components (`(comp (ref ...))` blocks in `pcbai_fpv4in1.net`).
+**KiCad PCB:** 585 footprints = 581 components from netlist + 4 mount holes
+(positioned by `setup_board.py`, not from the SKiDL netlist).
+**All placed:** 0 defects; 0 missing footprints; 0 unplaced components.
+
+The prior version of this doc cited "1,165 (SKiDL-overcount) / 581 (actual)".
+That framing was wrong. The "1,165" was a substring-count artifact from
+`txt.count("(comp")` in the SKiDL print: each component block contains
+both `(comp` (outer) and `(component_classes)` (inner), so the substring
+appears ~2× per unique component (~581 × 2 ≈ 1,162). The actual unique
+component count is 581 — every component in the netlist gets placed.
+Two amendments fixed the only two footprint-spec defects (bulk cap +
+Hall sensor placeholder); after amendment, no components are dropped.
 
 ---
 
@@ -292,7 +312,7 @@ None of these are needed at current D/S = 0.30.
 
 | Criterion | Status |
 |---|---|
-| 1,165 (SKiDL-overcount) / 581 (actual) footprints placed | ✓ (581 placed; 0 unplaced; 4 mount holes setup_board.py-positioned) |
+| 581 components placed (all unique components from netlist) | ✓ (585 footprints total = 581 + 4 mount holes; 0 unplaced; 0 missing footprints; all 42 unique footprint types resolved to KiCad9 library) |
 | 0 overlaps | ✓ |
 | Whole-board D/S < 0.85 PASS | ✓ (0.297 — 65% spare) |
 | All per-zone D/S ≤ 0.85 PASS | ✓ (max NW=0.276; max overall=SE 0.335) |
@@ -303,7 +323,41 @@ None of these are needed at current D/S = 0.30.
 
 ---
 
-## 11. Out-of-scope (deferred)
+## 11. Amendment 2026-05-22 (post-master-audit)
+
+### Defect #1: CBULK1–4 footprint missing
+
+**Issue:** `Capacitor_SMD:CP_Elec_10x16.5` doesn't exist in `/usr/share/kicad/footprints/Capacitor_SMD.pretty/`. Largest 10-mm-diameter elec cap available is `CP_Elec_10x14.3`. kinet2pcb silently dropped CBULK1–4 from the kicad_pcb (warning visible only in stderr).
+
+**Fix:** Switched SKiDL `footprint=` for all 4 CBULK to `Capacitor_SMD:CP_Elec_10x14.3`. Pad layout for 10-mm-dia polymer caps (Vishay 150 CRZ family + Panasonic EEHZS family) is standard across height variants — pads are identical between `10x14.3` and the hypothetical `10x16.5`. The 1.2-mm body-height shortfall is rendering-only; SMD reflow + mechanical fit are unaffected.
+
+**Verification:** netlist now has 4× EEHZS1V471P entries with `Capacitor_SMD:CP_Elec_10x14.3` footprint; kinet2pcb produces 4 CBULK footprints; all 4 placed by `place_board.py` at battery section on B.Cu (x=12–15, y=39–46).
+
+### Defect #2: Hall sensor placeholder (Conn_01x08 + TO-220-5_Vertical)
+
+**Issue:** SKiDL had `Part("Connector_Generic", "Conn_01x08", footprint="Package_TO_SOT_SMD:TO-220-5_Vertical")` — a generic 8-pin connector with a TO-220 vertical through-hole footprint. Neither matches the ACS770ECB-200B-PFF-T which is a CB-5 formed-lead surface-mount IC. This was a deliberate placeholder noted in the SKiDL comment but flagged by master audit as not fab-acceptable.
+
+**Fix:** Switched to:
+- Symbol: `Sensor_Current:ACS758xCB-150B-PSS` (5-pin CB-package family; pin-compatible with ACS770 per Allegro datasheet — pins VCC=1, GND=2, VIOUT=3, IP+=4, IP-=5 standardized across ACS756 / ACS758 / ACS770).
+- Footprint: `Sensor_Current:Allegro_CB_PFF` (matches the "PFF" suffix of ACS770ECB-200B-PFF-T; verified 5 unique pads at expected positions).
+- Value override: `"ACS770ECB-200B-PFF-T"` (clarifies real part in BOM despite ACS758 symbol).
+- Pin remap from 8-pin placeholder to 5-pin CB-5: dropped the HALL_FILTER_CAP block (ACS770 has no external FILTER pin — internal fixed 120 kHz filter; ACS758's FILTER pin was the predecessor design).
+
+**Verification:** netlist now has 1× ACS770ECB-200B-PFF-T with `Sensor_Current:Allegro_CB_PFF` footprint; placement at (32, 42.5) on F.Cu in the +VMOTOR path between bulk caps and 4-FET-cluster split per master R1 §3 strategy.
+
+### Re-validation after amendment
+
+- Footprint count: 581 → 581 in netlist (no change in count — same 4 CBULK + 1 Hall, just valid footprints now)
+- kicad_pcb: 585 footprints (581 + 4 mount holes)
+- D/S whole-board: 0.297 → **0.299** (essentially unchanged — 0.7% drift from minor demand/supply rebalancing with corrected CBULK + Hall positions)
+- Per-zone D/S: NW=0.265 / NE=0.277 / SW=0.338 / SE=0.314 (all PASS)
+- 0 overlaps on F.Cu
+- T8 quadrant compliance: PASS for all 4 channels
+- target.h md5: unchanged
+
+---
+
+## 12. Out-of-scope (deferred)
 
 - **Phase 5b-retry autoroute** on the new R1 placement with 8L geometry.
 - **+VMOTOR copper pour + via placement** post-autoroute (≥210 vias enforced).

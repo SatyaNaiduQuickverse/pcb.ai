@@ -345,32 +345,50 @@ def categorize(fp):
 def parse_net_channel_membership(pcb_text):
     """Return a dict ref → channel(1-4) by analyzing which CHn nets each
     component pin connects to. A component whose pads connect to 'X_CHn'
-    nets is assigned to channel n. Used to put per-channel passives into the
-    correct quadrant.
+    nets is assigned to channel n.
+
+    Reads the .net file (S-expression netlist) — kinet2pcb output kicad_pcb
+    files do NOT include per-pad net assignments, so we go to the source.
     """
-    result = {}
-    # Find nets block. (net (code N) "name") definitions then pin assignments.
-    # Pin assignments in KiCad netlist format: each (pad ...) inside (footprint ...)
-    # carries (net N "name"). Walk footprints; for each one, look at all pin nets.
-    fp_pat = re.compile(r"\(footprint .*?(?=\n\t\(footprint |\Z)", re.DOTALL)
-    ref_pat = re.compile(r'\(property "Reference" "([^"]+)"')
-    net_pat = re.compile(r'\(net \d+ "([^"]+)"\)')
-    for fp_match in fp_pat.finditer(pcb_text):
-        block = fp_match.group(0)
-        ref_m = ref_pat.search(block)
-        if not ref_m:
+    net_file = PCB.with_suffix('.net')
+    if not net_file.exists():
+        print(f"WARNING: {net_file} not found — channel membership inference will be empty")
+        return {}
+    txt = net_file.read_text()
+
+    # Walk (net (code N) (name "NAME") (node (ref "REFA") (pin "X"))* ) blocks.
+    result = defaultdict(lambda: defaultdict(int))  # ref → {ch → vote_count}
+    # Simpler form: find each net's name + each (ref "X") child.
+    # Net block starts with (net (code N) (name "NAME")) ... ends at depth-balanced ).
+    pos = 0
+    net_block_pat = re.compile(r'\(net\s+\(code (\d+)\)\s+\(name "([^"]+)"\)')
+    for m in net_block_pat.finditer(txt):
+        name = m.group(2)
+        ch_match = re.search(r'_CH([1-4])', name)
+        if not ch_match:
             continue
-        ref = ref_m.group(1)
-        ch_votes = defaultdict(int)
-        for net_m in net_pat.finditer(block):
-            netname = net_m.group(1)
-            m = re.search(r'_CH([1-4])', netname)
-            if m:
-                ch_votes[int(m.group(1))] += 1
-        if ch_votes:
-            best_ch = max(ch_votes.items(), key=lambda kv: kv[1])[0]
-            result[ref] = best_ch
-    return result
+        ch = int(ch_match.group(1))
+        # Walk forward from this net block, collecting (node (ref "REF")) until
+        # balanced paren returns. Simple bracket-counting from m.start().
+        i = m.end()
+        depth = 1  # we opened on (net
+        while i < len(txt) and depth > 0:
+            if txt[i] == '(':
+                depth += 1
+            elif txt[i] == ')':
+                depth -= 1
+            i += 1
+        net_block_end = i
+        # Find all (ref "X") within this block
+        for ref_m in re.finditer(r'\(ref "([^"]+)"\)', txt[m.start():net_block_end]):
+            ref = ref_m.group(1)
+            result[ref][ch] += 1
+    # Reduce: pick the channel with the most votes per ref
+    final = {}
+    for ref, votes in result.items():
+        best_ch = max(votes.items(), key=lambda kv: kv[1])[0]
+        final[ref] = best_ch
+    return final
 
 
 def pack_grid_iter(zone, pitch, exclusion_set=None, exclusion_radius=1.5):
