@@ -1,0 +1,25 @@
+##### ElmerGrid input for unit cube #####
+Version = 210903
+Coordinate System = Cartesian 3D
+Subcell Divisions in 1D = 1 1 1
+Subcell Limits 1 = 0 1
+Subcell Limits 2 = 0 1
+Subcell Limits 3 = 0 1
+Material Structure in 2D
+  1
+End
+Materials Interval = 1 1
+Boundary Definitions
+! type     out      int      double
+  1         1        -1       1
+  2         2        -1       1
+End
+Numbering = Horizontal
+Element Degree = 1
+Element Innernodes = False
+Triangles = False
+Surface Elements = 6
+Volume Elements = 27
+Coordinate Ratios = 1 1 1
+Minimum Element Divisions = 3 3 3
+Reference Density = 1.0
