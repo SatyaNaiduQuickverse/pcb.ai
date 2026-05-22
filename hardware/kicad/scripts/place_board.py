@@ -44,22 +44,19 @@ PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad
 # ────────────────────────────────────────────────────────────────────
 S1_POSITIONS = {
     # ref          (x,    y,   layer,  rot)   notes
-    # Bottom-edge row at y=4-5 — XT30 + TVS
+    # Per master PR-A4 step 1 amendment 2026-05-23: S1 zone amended Y=0-15.
+    # Single-row RP FET cluster (4 in parallel, electrically identical to 2×2).
+    # Saves 5mm vertical for CH3/CH4 channel template placement at Y=15-42.
     'J1':         (50.0,  4.0, 'F.Cu',  0.0),   # BATT_PAD (XT30) center-bottom
-    'D26':        (32.0,  5.0, 'B.Cu',  0.0),   # SMBJ33A TVS (D_SMB), left of XT30
-    # Second row at y=10 — NTCs flanking + FET 2×2 cluster centered
-    'R1':         (28.0, 10.0, 'F.Cu',  0.0),   # MF72_5D25 NTC inrush #1
-    'R2':         (72.0, 10.0, 'F.Cu',  0.0),   # MF72_5D25 NTC inrush #2
-    # 2×2 RP FET cluster around (50, 13.5)
-    'Q1':         (40.0, 10.0, 'B.Cu',  0.0),   # BSC014N06NS rev-pol #1 (top-left)
-    'Q2':         (60.0, 10.0, 'B.Cu',  0.0),   # BSC014N06NS rev-pol #2 (top-right)
-    'Q3':         (40.0, 17.0, 'B.Cu',  0.0),   # BSC014N06NS rev-pol #3 (bot-left)
-    'Q4':         (60.0, 17.0, 'B.Cu',  0.0),   # BSC014N06NS rev-pol #4 (bot-right)
-    # Note: Q3/Q4 spill into Y=13-17 (nominally bulk-cap S2 zone) — RP FET
-    # SuperSO8 5×6 body × 2 rows requires ≥12mm vertical span; spec'd Y=0-13
-    # zone is too tight. Per master spec §S1 the 2×2 cluster centers at (50, 11);
-    # we adopt a slightly south-offset cluster (50, 13.5) to keep ≥1mm gap to
-    # row-1 (J1, D26) bbox. S2 bulk caps will avoid the (40-60, 13-17) range.
+    'D26':        (15.0,  5.0, 'B.Cu',  0.0),   # SMBJ33A TVS (moved west to clear Q1)
+    # NTCs at row 1 west/east of XT30
+    'R1':         (22.0, 11.0, 'F.Cu',  0.0),   # MF72_5D25 NTC inrush #1 (west)
+    'R2':         (78.0, 11.0, 'F.Cu',  0.0),   # MF72_5D25 NTC inrush #2 (east)
+    # 4 RP FETs in single row at y=11 (B.Cu), 4× parallel BSC014N06NS
+    'Q1':         (30.0, 11.0, 'B.Cu',  0.0),
+    'Q2':         (45.0, 11.0, 'B.Cu',  0.0),
+    'Q3':         (55.0, 11.0, 'B.Cu',  0.0),
+    'Q4':         (70.0, 11.0, 'B.Cu',  0.0),
 }
 # Expected SKiDL values per ref (sanity check; abort if mismatched)
 S1_EXPECTED_VALUES = {
@@ -521,20 +518,24 @@ S4_CH1_POSITIONS = {
     'R45': (11.0, 62.0, 'F.Cu', 0.0), 'R46': (21.0, 64.5, 'F.Cu', 0.0),
     'R47': (4.0, 69.5, 'F.Cu', 0.0), 'R48': (33.5, 72.0, 'F.Cu', 0.0),
     'R49': (38.5, 72.0, 'F.Cu', 0.0),
-    # 23 remaining passives placed on SW B.Cu (S5 Buck 5 cluster is on F.Cu;
-    # B.Cu in SW area is free). Routed through B.Cu plane stitched to F.Cu signals.
-    'R50': (22.0, 14.0, 'B.Cu', 0.0), 'R51': (26.0, 14.0, 'B.Cu', 0.0),
-    'R52': (30.0, 14.0, 'B.Cu', 0.0), 'R53': (34.0, 14.0, 'B.Cu', 0.0),
-    'R54': (22.0, 18.0, 'B.Cu', 0.0), 'R55': (26.0, 18.0, 'B.Cu', 0.0),
-    'R59': (30.0, 18.0, 'B.Cu', 0.0), 'R60': (34.0, 18.0, 'B.Cu', 0.0),
-    'R61': (22.0, 22.0, 'B.Cu', 0.0), 'R62': (26.0, 22.0, 'B.Cu', 0.0),
-    'R63': (30.0, 22.0, 'B.Cu', 0.0), 'R64': (34.0, 22.0, 'B.Cu', 0.0),
-    'R66': (22.0, 26.0, 'B.Cu', 0.0), 'R67': (26.0, 26.0, 'B.Cu', 0.0),
-    'R68': (30.0, 26.0, 'B.Cu', 0.0), 'R69': (34.0, 26.0, 'B.Cu', 0.0),
-    'R70': (22.0, 30.0, 'B.Cu', 0.0), 'R71': (26.0, 30.0, 'B.Cu', 0.0),
-    'R72': (30.0, 30.0, 'B.Cu', 0.0), 'R73': (34.0, 30.0, 'B.Cu', 0.0),
-    'R74': (22.0, 34.0, 'B.Cu', 0.0), 'R75': (26.0, 34.0, 'B.Cu', 0.0),
-    'R76': (30.0, 34.0, 'B.Cu', 0.0),
+    # 23 passives RELOCATED from SW B.Cu → NW B.Cu per PR-A4 step 3 amendment.
+    # PR-A3 stage-2 placed these in SW B.Cu (SW empty at that time); now CH3 SW
+    # occupies that area. Move to NW B.Cu (under Q FETs but B.Cu is full so use
+    # NW B.Cu gaps between Q rows: y=51-52, y=64, y=75-76 thin strips OR
+    # NW F.Cu free area at y=65-72 + east edge x=35-39).
+    # Place on NW F.Cu in safe gaps (avoiding spine pocket x>=39):
+    'R50': (33.0, 65.0, 'F.Cu', 0.0), 'R51': (36.0, 65.0, 'F.Cu', 0.0),
+    'R52': (33.0, 67.0, 'F.Cu', 0.0), 'R53': (36.0, 67.0, 'F.Cu', 0.0),
+    'R54': (33.0, 69.0, 'F.Cu', 0.0), 'R55': (36.0, 69.0, 'F.Cu', 0.0),
+    'R59': (33.0, 71.0, 'F.Cu', 0.0), 'R60': (36.0, 71.0, 'F.Cu', 0.0),
+    'R61': (25.0, 67.0, 'F.Cu', 0.0), 'R62': (25.0, 69.0, 'F.Cu', 0.0),
+    'R63': (25.0, 71.0, 'F.Cu', 0.0), 'R64': (38.0, 70.0, 'F.Cu', 0.0),
+    'R66': (38.0, 65.0, 'F.Cu', 0.0), 'R67': (25.0, 65.0, 'F.Cu', 0.0),
+    'R68': (38.0, 72.0, 'F.Cu', 0.0), 'R69': (33.0, 72.0, 'F.Cu', 0.0),
+    'R70': (36.0, 72.0, 'F.Cu', 0.0), 'R71': (25.0, 72.0, 'F.Cu', 0.0),
+    'R72': (22.0, 65.0, 'F.Cu', 0.0), 'R73': (22.0, 67.0, 'F.Cu', 0.0),
+    'R74': (22.0, 69.0, 'F.Cu', 0.0), 'R75': (22.0, 71.0, 'F.Cu', 0.0),
+    'R76': (22.0, 72.0, 'F.Cu', 0.0),
 }
 S4_CH1_EXPECTED_VALUES = {
     'TP19': 'MOTOR_A_CH1', 'TP20': 'MOTOR_B_CH1', 'TP21': 'MOTOR_C_CH1',
@@ -613,38 +614,40 @@ S4_CHX_POSITIONS = {
     'TH2': (62.0, 68.0, 'F.Cu', 180.0),
     'R94': (90.0, 50.0, 'F.Cu', 180.0), 'R95': (90.0, 60.0, 'F.Cu', 180.0),
     'R96': (90.0, 70.0, 'F.Cu', 180.0),
-    # CH3 (SW quadrant) — Y-mirrored
-    'TP33': (5.0, 39.0, 'F.Cu', 180.0), 'TP34': (5.0, 29.0, 'F.Cu', 180.0),
-    'TP35': (5.0, 19.0, 'F.Cu', 180.0),
-    'Q17': (12.0, 40.0, 'B.Cu', 180.0), 'Q18': (30.0, 40.0, 'B.Cu', 180.0),
-    'Q19': (12.0, 27.0, 'B.Cu', 180.0), 'Q20': (30.0, 27.0, 'B.Cu', 180.0),
-    'Q21': (12.0, 15.0, 'B.Cu', 180.0), 'Q22': (30.0, 15.0, 'B.Cu', 180.0),
-    'J28': (32.0, 33.0, 'F.Cu', 180.0), 'J29': (22.0, 35.0, 'F.Cu', 180.0),
-    'J30': (15.0, 40.0, 'F.Cu', 180.0), 'J31': (15.0, 30.0, 'F.Cu', 180.0),
-    'J32': (15.0, 20.0, 'F.Cu', 180.0),
-    'U8': (35.0, 21.0, 'F.Cu', 180.0), 'U9': (28.0, 21.0, 'F.Cu', 180.0),
-    'U10': (37.0, 25.0, 'F.Cu', 180.0),
-    'D17': (10.0, 42.0, 'F.Cu', 180.0), 'D21': (28.0, 26.0, 'F.Cu', 180.0),
-    'D63': (35.0, 42.0, 'F.Cu', 180.0),
-    'TH3': (38.0, 17.0, 'F.Cu', 180.0),
-    'R132': (10.0, 35.0, 'F.Cu', 180.0), 'R133': (10.0, 25.0, 'F.Cu', 180.0),
-    'R134': (10.0, 15.0, 'F.Cu', 180.0),
-    # CH4 (SE quadrant) — XY-mirrored
-    'TP40': (95.0, 39.0, 'F.Cu', 0.0), 'TP41': (95.0, 29.0, 'F.Cu', 0.0),
-    'TP42': (95.0, 19.0, 'F.Cu', 0.0),
-    'Q23': (88.0, 40.0, 'B.Cu', 0.0), 'Q24': (70.0, 40.0, 'B.Cu', 0.0),
-    'Q25': (88.0, 27.0, 'B.Cu', 0.0), 'Q26': (70.0, 27.0, 'B.Cu', 0.0),
-    'Q27': (88.0, 15.0, 'B.Cu', 0.0), 'Q28': (70.0, 15.0, 'B.Cu', 0.0),
-    'J33': (68.0, 33.0, 'F.Cu', 0.0), 'J34': (78.0, 35.0, 'F.Cu', 0.0),
-    'J35': (85.0, 40.0, 'F.Cu', 0.0), 'J36': (85.0, 30.0, 'F.Cu', 0.0),
-    'J37': (85.0, 20.0, 'F.Cu', 0.0),
-    'U11': (65.0, 21.0, 'F.Cu', 0.0), 'U12': (72.0, 21.0, 'F.Cu', 0.0),
-    'U13': (63.0, 25.0, 'F.Cu', 0.0),
-    'D18': (90.0, 42.0, 'F.Cu', 0.0), 'D22': (72.0, 26.0, 'F.Cu', 0.0),
-    'D78': (65.0, 42.0, 'F.Cu', 0.0),
-    'TH4': (62.0, 17.0, 'F.Cu', 0.0),
-    'R170': (90.0, 35.0, 'F.Cu', 0.0), 'R171': (90.0, 25.0, 'F.Cu', 0.0),
-    'R172': (90.0, 15.0, 'F.Cu', 0.0),
+    # CH3 (SW quadrant Y=15-42 per master step 2) — Y-mirror with 5mm offset
+    # Original CH1 NW Y=42-72 (30mm tall); CH3 SW Y=15-42 (27mm tall).
+    # Mirror y → 80-y instead of 85-y to fit in narrower SW zone clear of S1 Y=0-15.
+    'TP33': (5.0, 34.0, 'F.Cu', 180.0), 'TP34': (5.0, 24.0, 'F.Cu', 180.0),
+    'TP35': (5.0, 17.0, 'F.Cu', 180.0),
+    'Q17': (12.0, 35.0, 'B.Cu', 180.0), 'Q18': (30.0, 35.0, 'B.Cu', 180.0),
+    'Q19': (12.0, 25.0, 'B.Cu', 180.0), 'Q20': (30.0, 25.0, 'B.Cu', 180.0),
+    'Q21': (12.0, 17.0, 'B.Cu', 180.0), 'Q22': (30.0, 17.0, 'B.Cu', 180.0),
+    'J28': (32.0, 28.0, 'F.Cu', 180.0), 'J29': (22.0, 30.0, 'F.Cu', 180.0),
+    'J30': (15.0, 35.0, 'F.Cu', 180.0), 'J31': (15.0, 25.0, 'F.Cu', 180.0),
+    'J32': (15.0, 17.0, 'F.Cu', 180.0),
+    'U8': (35.0, 16.0, 'F.Cu', 180.0), 'U9': (28.0, 16.0, 'F.Cu', 180.0),
+    'U10': (37.0, 20.0, 'F.Cu', 180.0),
+    'D17': (10.0, 37.0, 'F.Cu', 180.0), 'D21': (28.0, 21.0, 'F.Cu', 180.0),
+    'D63': (35.0, 37.0, 'F.Cu', 180.0),
+    'TH3': (38.0, 16.0, 'F.Cu', 180.0),
+    'R132': (10.0, 30.0, 'F.Cu', 180.0), 'R133': (10.0, 20.0, 'F.Cu', 180.0),
+    'R134': (10.0, 16.0, 'F.Cu', 180.0),
+    # CH4 (SE quadrant Y=15-42) — XY-mirrored with 5mm offset
+    'TP40': (95.0, 34.0, 'F.Cu', 0.0), 'TP41': (95.0, 24.0, 'F.Cu', 0.0),
+    'TP42': (95.0, 17.0, 'F.Cu', 0.0),
+    'Q23': (88.0, 35.0, 'B.Cu', 0.0), 'Q24': (70.0, 35.0, 'B.Cu', 0.0),
+    'Q25': (88.0, 25.0, 'B.Cu', 0.0), 'Q26': (70.0, 25.0, 'B.Cu', 0.0),
+    'Q27': (88.0, 17.0, 'B.Cu', 0.0), 'Q28': (70.0, 17.0, 'B.Cu', 0.0),
+    'J33': (68.0, 28.0, 'F.Cu', 0.0), 'J34': (78.0, 30.0, 'F.Cu', 0.0),
+    'J35': (85.0, 35.0, 'F.Cu', 0.0), 'J36': (85.0, 25.0, 'F.Cu', 0.0),
+    'J37': (85.0, 17.0, 'F.Cu', 0.0),
+    'U11': (65.0, 16.0, 'F.Cu', 0.0), 'U12': (72.0, 16.0, 'F.Cu', 0.0),
+    'U13': (63.0, 20.0, 'F.Cu', 0.0),
+    'D18': (90.0, 37.0, 'F.Cu', 0.0), 'D22': (72.0, 21.0, 'F.Cu', 0.0),
+    'D78': (65.0, 37.0, 'F.Cu', 0.0),
+    'TH4': (62.0, 16.0, 'F.Cu', 0.0),
+    'R170': (90.0, 30.0, 'F.Cu', 0.0), 'R171': (90.0, 20.0, 'F.Cu', 0.0),
+    'R172': (90.0, 16.0, 'F.Cu', 0.0),
 }
 
 
