@@ -240,14 +240,76 @@ def place_supervisor_hall(fps_by_ref, placements):
     return placed
 
 
+# ────────────────────────────────────────────────────────────────────
+# S6: FC + AUX connectors (docs/PHASE4_SUBSYSTEMS.md §S6)
+# Top edge zone Y=72-85 (avoid mount holes H3 at (5,80) and H4 at (95,80)
+# with ≥3mm clearance — keep S6 inside x=10..90).
+# Master reorder 2026-05-22: S6 before S5 (low-EMC tier-2 anchor before
+# introducing BEC tier-3 switching noise).
+# Components in netlist:
+#   J12 BM06B-SRSS-TB AUX 6-pin (Hall + NTC + AUX_GPIO)
+#   J14 SM08B-SRSS-TB FC 8-pin (DShot×4 + TLM + VBAT_SENSE + CURR + GND)
+#   J15/J16/J17 USBLC6-2SC6 ESD arrays (3 chips covering 4×DShot + TLM + spare)
+#   R36 100K, R37 14K VBAT_SENSE divider (8.143:1 ratio)
+#   C49 100nF VBAT filter cap
+# Total: 8 components (LEDs come from S1/S3 already; master "4 per-channel
+# kill LEDs" are part of S4 channel template, not S6 — honest deviation flag)
+# ────────────────────────────────────────────────────────────────────
+S6_POSITIONS = {
+    'J12': (15.0, 80.0, 'F.Cu',   0.0),    # AUX BM06B-SRSS-TB west top
+    'J14': (50.0, 80.0, 'F.Cu',   0.0),    # FC SM08B-SRSS-TB central top
+    'J15': (40.0, 75.0, 'F.Cu',   0.0),    # USBLC6 ESD ch1+ch2 DShot
+    'J16': (60.0, 75.0, 'F.Cu',   0.0),    # USBLC6 ESD ch3+ch4 DShot
+    'J17': (75.0, 75.0, 'F.Cu',   0.0),    # USBLC6 ESD TLM + spare
+    'R36': (47.0, 76.0, 'F.Cu',   0.0),    # VBAT divider top 100K
+    'R37': (47.0, 74.0, 'F.Cu',   0.0),    # VBAT divider bot 14K
+    'C49': (45.0, 74.0, 'F.Cu',   0.0),    # VBAT filter 100nF
+}
+S6_EXPECTED_VALUES = {
+    'J12': 'BM06B',
+    'J14': 'SM08B',
+    'J15': 'USBLC6',
+    'J16': 'USBLC6',
+    'J17': 'USBLC6',
+    'R36': '100K',
+    'R37': '14K',
+    'C49': '100nF',
+}
+
+
+def place_connectors(fps_by_ref, placements):
+    """S6 — FC + AUX connectors placement (docs/PHASE4_SUBSYSTEMS.md §S6)."""
+    placed = 0
+    missing = []
+    mismatched = []
+    for ref, pos in S6_POSITIONS.items():
+        fp = fps_by_ref.get(ref)
+        if not fp:
+            missing.append(ref)
+            continue
+        expected = S6_EXPECTED_VALUES[ref]
+        if expected not in fp['value']:
+            mismatched.append((ref, expected, fp['value']))
+            continue
+        x, y, layer, rot = pos
+        placements[ref] = (x, y, layer, rot)
+        placed += 1
+    if missing:
+        print(f"  WARN: S6 components missing in netlist: {missing}")
+    if mismatched:
+        for ref, exp, act in mismatched:
+            print(f"  WARN: S6 ref {ref} value mismatch — expected '{exp}', got '{act}'")
+    return placed
+
+
 # Registry of subsystem placers in spec order
 ALL_PLACERS = [
     ('S1', 'Battery input',         place_battery_input),
     ('S2', 'Bulk cap bank',         place_bulk_caps),
     ('S3', 'Supervisor + Hall',     place_supervisor_hall),
+    ('S6', 'FC + AUX connectors',   place_connectors),
     # ('S4', 'Channel template (×4)', place_channels),          # PR ×2
     # ('S5', 'BEC subsystem',         place_bec),               # PR after
-    # ('S6', 'FC + AUX',              place_connectors),        # PR after
 ]
 
 
