@@ -84,7 +84,7 @@ Quadrants (PR-A4-b new zones):
   - ~20 BEMF and PWM passives
 - **Inputs**: +VMOTOR_HOTSIDE (from S3), GND, KILL_LOCAL_N (per-channel from supervisor OR-bus), DShot_CH_n (from FC), +V3V3 (MCU supply)
 - **Outputs**: MOTOR_A/B/C_CH_n (to motor pad), TLM_CH_n (to FC telemetry), HW_FAULT_LED_K_CH_n (visible on board)
-- **ALLOWED zone**: one channel quadrant (PR-A4-b 100×95 zones): NW X=5-39 Y=47-80 (33mm); NE X=61-95 Y=47-80; SW X=5-39 Y=15-47 (32mm); SE X=61-95 Y=15-47 — per channel index. Symmetric R6 motor-pad-anchored at P=12 FET pitch fits cleanly in these zones.
+- **ALLOWED zone**: one channel quadrant (PR-A4-b 100×95 zones): NW X=5-39 Y=47-80 (33mm); NE X=61-95 Y=47-80; SW X=5-39 Y=15-47 (32mm); SE X=61-95 Y=15-47 — per channel index. Symmetric R6 motor-pad-anchored at P=12 FET pitch fits cleanly in these zones. **Channel passives MUST remain within parent channel quadrant (X-half + Y-half boundary) AND respect §S5 FORBIDDEN zones (especially spine pocket B.Cu)** — added A4-e amendment 2.
 - **FORBIDDEN zones** (PR-A4-b updated): central spine X=39-61 (reserved for S2/S3/S5); other channels' quadrants; S6 top edge Y=82-95; S1 battery zone Y=0-13
 - **Adjacency**: motor pad at outer edge of quadrant; MCU + gate drivers between motor pad and central spine; protection cluster between MCU and quadrant corner
 - **Acceptance per channel**: bbox-clean within quadrant; per-channel D/S < 0.85 in all sub-cells; thermal sim T_J ≤ 100°C at 70A continuous + 100A 10s burst; per-MCU pin-side connectivity (playbook T8) verified for the channel's rotation
@@ -98,12 +98,13 @@ Quadrants (PR-A4-b new zones):
   - **Zone B** — Bottom-edge S5 strip X=12-92, **Y=14-19** (unchanged Y; between S1 single-row and S2 cap row): input-side passives (4× Schottky D5-D8, 3× eFuses J7-J9, 1× polyfuse F1)
   - **Zone C** — Top-edge S5 strip X=20-90, **Y=80-87** (shifted +10 from Y=70-77; between spine pocket and S6 USBLC6 row): output-side passives (4× ferrites L6-L9, 4× C_OUT, 4× TVS B.Cu, 8× FB resistors, 4× boot caps)
   - **Zone D** — SW corner X=2-22, **Y=22-38** (unchanged Y; Buck 5 V9_VTX2 cluster) — far from V9_VTX1 per Sai isolation directive
-- **FORBIDDEN zones** (PR-A4-b updated):
+- **FORBIDDEN zones** (PR-A4-b + A4-e amendment 2 2026-05-23):
   - All channel zones (NW/NE Y=47-80, SW/SE Y=15-47) except explicit Zone B/D strips above
   - S1 main body Y=0-13
   - S2 cap envelope Y=18.5..29.5 + Y=38.5..49.5 (post +4mm shift)
   - S3 supervisor cluster X=39-61 Y=42-58 + Hall body X=42-62 Y=20-46
   - S6 connector zone X≥20 Y≥82
+  - **Channel passives FORBIDDEN in §S5 spine pocket B.Cu (X=38-62, Y=68-82)** — reserved exclusively for BEC R50-R76 cluster per A4-d emergency relocation. Mirror-instantiation of channel passives must check this zone.
 - **Adjacency**: outputs feed FC connector + AUX header (above) + 4 MCU subsystems (per-channel V3V3)
 - **Acceptance**: thermal separation from FET clusters (channel quadrants); bbox-clean; output trace ampacity for each rail. ROOT-CAUSE PREVENTION: spine pocket is reserved S5 territory; channels are forbidden zone for BEC.
 

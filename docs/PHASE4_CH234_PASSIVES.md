@@ -18,7 +18,25 @@
 
 Total subsystem placements: **385** (was 193 in A4-d). 200 footprints remain at kinet2pcb-default (rev-pol FETs, FET driver IC, misc).
 
-## Collision resolution (per master amendment 2026-05-23)
+## Collision resolution + spec amendment 2 (master amendment 2026-05-23)
+
+### Spec amendment 2 — §S5 FORBIDDEN zone for channel passives
+
+`docs/PHASE4_SUBSYSTEMS.md` §S5 FORBIDDEN zones updated:
+> "Channel passives FORBIDDEN in §S5 spine pocket B.Cu (X=38-62, Y=68-82) — reserved exclusively for BEC R50-R76 cluster per A4-d emergency relocation."
+
+§S4 channel ALLOWED zones updated:
+> "Channel passives MUST remain within parent channel quadrant AND respect §S5 FORBIDDEN zones (especially spine pocket B.Cu)."
+
+### Re-mirror with FORBIDDEN-aware redirect
+
+`build_ch234_passives.py` (regenerated) now checks each mirror-target position:
+- If in spine pocket B.Cu (X=38-62, Y=68-82) → redirect to parent channel quadrant via per-channel target zone (CH2 NE → 73-83, CH3 SE → 73-83, CH4 SW → 17-27)
+- Add per-ref deterministic jitter (0.05mm × seed) to break symmetric ties
+
+**Redirected**: 26 channel passives (CH2:2, CH3:12, CH4:12) → moved out of spine pocket.
+
+### Collision-resolution algorithm
 
 Implemented deterministic collision-resolution algorithm `scripts/resolve_overlaps.py`:
 1. Run `verify_placement.py` → list of pad-overlap pairs
@@ -26,7 +44,11 @@ Implemented deterministic collision-resolution algorithm `scripts/resolve_overla
 3. Apply displacement; iterate up to 50 cycles
 4. Tie-break by ref-number-higher when sizes equal
 
-**Algorithm result**: 75 → 29 conflicts after 50 iterations (1313 moves applied). Local minimum reached: remaining 29 are passive-passive pairs at 1-1.1mm centers (sub-margin) bouncing between two positions.
+**Algorithm result (amendment 1)**: 75 → 29 conflicts after 50 iterations.
+
+**After spec amendment 2 + re-mirror with FORBIDDEN redirect**: Initial state 80 (spine pocket redirects clustered new conflicts at NE/SE/SW redirect targets), resolver iterates to **44 pad-overlaps** (2005 moves). 
+
+Honest status: spec-locked FORBIDDEN-zone now enforced for future placements but still 44 pad-overlaps from architectural density. Resolver oscillates between equal-size passive pairs at new redirect-target clusters.
 
 ### Breakdown of remaining 29 conflicts (post-resolver)
 
