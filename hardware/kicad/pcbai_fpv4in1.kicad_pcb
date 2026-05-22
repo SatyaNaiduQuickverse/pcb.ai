@@ -128499,4 +128499,7 @@
 			(uuid "f2169db6-e2a0-4a5d-a97b-99e262039ab3")
 		)
 	)
+
+	(gr_rect (start 0 0) (end 100.0 95.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
 )
