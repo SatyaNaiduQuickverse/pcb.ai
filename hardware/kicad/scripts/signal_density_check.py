@@ -45,8 +45,23 @@ W_EFF_MM = 0.45             # trace_width (0.15) + 2 × clearance (0.15)
 DETOUR_FACTOR = 1.5         # HPWL × this = expected Manhattan-routed length
 ETA_ROUTER_2LAYER = 0.40    # Freerouting 2-signal-layer efficiency (empirical)
 ETA_ROUTER_3LAYER = 0.55    # if In3.Cu promoted to signal layer
+# Phase 4a-restack-8L: 5 signal layers (F.Cu, In2.Cu, In4.Cu, In6.Cu, B.Cu)
+# η scales with extra layers but diminishing returns due to vias + crosstalk
+# (each cross-layer transition costs +1 via, +~0.6mm². Extrapolation from
+# 2L=0.40 / 3L=0.55: 5L η ≈ 0.55 + 2 × 0.05 = 0.65 (conservative).
+ETA_ROUTER_5LAYER = 0.65    # 8L stackup with 5 signal layers (Phase 4a-restack-8L)
 GATE_PASS = 0.85
 GATE_MARGINAL = 1.00
+
+
+def _eta_for(num_signal_layers):
+    if num_signal_layers == 2:
+        return ETA_ROUTER_2LAYER
+    if num_signal_layers == 3:
+        return ETA_ROUTER_3LAYER
+    if num_signal_layers == 5:
+        return ETA_ROUTER_5LAYER
+    raise SystemExit(f"unsupported num_signal_layers={num_signal_layers}; expected 2, 3, or 5")
 
 
 def main(num_signal_layers=2):
@@ -55,11 +70,11 @@ def main(num_signal_layers=2):
     board_w_mm = bbox.GetWidth() / 1e6
     board_h_mm = bbox.GetHeight() / 1e6
     A_board = board_w_mm * board_h_mm
-    print(f"=== Phase 4b-redo3 signal-density check ===")
+    eta = _eta_for(num_signal_layers)
+    print(f"=== signal-density check ===")
     print(f"Board: {board_w_mm:.1f} × {board_h_mm:.1f} mm = {A_board:.0f} mm²")
     print(f"Layers used for signal routing: {num_signal_layers}")
-    print(f"W_eff = {W_EFF_MM:.2f} mm; detour factor = {DETOUR_FACTOR}; "
-          f"η_router = {ETA_ROUTER_2LAYER if num_signal_layers == 2 else ETA_ROUTER_3LAYER}")
+    print(f"W_eff = {W_EFF_MM:.2f} mm; detour factor = {DETOUR_FACTOR}; η_router = {eta}")
 
     # ─── Gather pad positions per net ───
     nets_by_name = board.GetNetsByName()
@@ -128,22 +143,29 @@ def main(num_signal_layers=2):
     # ─── Compute SUPPLY ───
     f_components_fcu = pad_area_by_layer["F.Cu"] / A_board
     f_components_bcu = pad_area_by_layer["B.Cu"] / A_board
-    eta = ETA_ROUTER_2LAYER if num_signal_layers == 2 else ETA_ROUTER_3LAYER
     s_fcu = A_board * (1 - f_components_fcu) * eta
     s_bcu = A_board * (1 - f_components_bcu) * eta
-    s_in3 = 0
+    s_inner_signal_total = 0.0
+    inner_signal_layers = []
     if num_signal_layers == 3:
-        # Assume In3.Cu has very few pad-blocked area (just through-hole pads)
-        s_in3 = A_board * (1 - 0.05) * eta
-    s_total = s_fcu + s_bcu + s_in3
+        s_inner = A_board * (1 - 0.05) * eta
+        s_inner_signal_total = s_inner
+        inner_signal_layers = [("In3.Cu", s_inner)]
+    elif num_signal_layers == 5:
+        # 8L Phase 4a-restack-8L: In2.Cu + In4.Cu + In6.Cu = 3 inner signal layers
+        # Through-hole pads block ~5% of inner-layer area (no SMD pads on inner).
+        s_inner = A_board * (1 - 0.05) * eta
+        inner_signal_layers = [("In2.Cu", s_inner), ("In4.Cu", s_inner), ("In6.Cu", s_inner)]
+        s_inner_signal_total = sum(s for _, s in inner_signal_layers)
+    s_total = s_fcu + s_bcu + s_inner_signal_total
 
     print(f"\nSUPPLY analysis:")
     print(f"  F.Cu pad-blocked fraction: {f_components_fcu:.3f} ({pad_area_by_layer['F.Cu']:.0f}/{A_board:.0f} mm²)")
     print(f"  B.Cu pad-blocked fraction: {f_components_bcu:.3f} ({pad_area_by_layer['B.Cu']:.0f}/{A_board:.0f} mm²)")
     print(f"  S_F.Cu = {s_fcu:.0f} mm² ({A_board:.0f} × (1−{f_components_fcu:.3f}) × {eta})")
     print(f"  S_B.Cu = {s_bcu:.0f} mm²")
-    if s_in3:
-        print(f"  S_In3.Cu = {s_in3:.0f} mm² (signal-promoted)")
+    for name, s in inner_signal_layers:
+        print(f"  S_{name} = {s:.0f} mm² (inner signal, ~5% pad-blocked)")
     print(f"  Total S = {s_total:.0f} mm²")
 
     # ─── Gate ───
@@ -186,8 +208,10 @@ def main(num_signal_layers=2):
         f_zone_bcu = pad_area_per_zone_bcu[name] / A_zone
         s_zone_fcu = A_zone * max(0, 1 - f_zone_fcu) * eta
         s_zone_bcu = A_zone * max(0, 1 - f_zone_bcu) * eta
-        s_zone_in3 = A_zone * 0.95 * eta if num_signal_layers == 3 else 0
-        s_zone = s_zone_fcu + s_zone_bcu + s_zone_in3
+        # Per-zone inner-signal supply (3 layers in 8L; 1 layer in 6L; 0 in 4L)
+        n_inner_signal = {2: 0, 3: 1, 5: 3}[num_signal_layers]
+        s_zone_inner = A_zone * 0.95 * eta * n_inner_signal
+        s_zone = s_zone_fcu + s_zone_bcu + s_zone_inner
         d = per_zone_demand.get(name, 0)
         r = d / s_zone if s_zone > 0 else 0
         flag = " ← hotspot" if r > GATE_PASS else ""

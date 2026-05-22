@@ -188,13 +188,18 @@ Closed at Phase 2.5 — see `docs/PHASE2_5_FITCHECK.md`.
 
 - **Form factor**: **100 × 85 mm rectangular** (re-locked at Phase 4b-REDO3 per master adjudication 2026-05-22 — signal-density D/S gate failed at 90×75; need bigger board + In3.Cu signal-promotion for autoroutability). Size history: 50×50 (initial) → 85×70 (4c-resume Option C, TOLL MOSFETs) → 90×75 (4b-REDO2, BEC absorption) → **100×85 (this phase, signal-density relief; +25.9% area, F.Cu pad-blocked fraction 49% vs 62% at 90×75)**. Master-locked D/S signal-density gate at 0.85 — current placement passes with In3.Cu signal-promoted (D/S = 0.83).
 - **Mounting**: 4 × M3 holes at corners (5, 5), (80, 5), (5, 65), (80, 65) — 75 × 60 mm custom pattern (no standard FPV match; accepted at Phase 4c-resume since Sai's direction enables custom mount). Drone integrator picks mount-bracket / adapter plate.
-- **Stack-up**: 6-layer per playbook §Routing — locked at Phase 4a (PR #12):
-  - F.Cu — signal (signal-side: MCUs, drivers, CSAs, decoupling, LEDs, FC connector, motor pads, SWD)
-  - In1.Cu — +VMOTOR power plane
-  - In2.Cu — GND plane
-  - In3.Cu — GND plane (return-path integrity)
-  - In4.Cu — +5V/+3V3 split plane
-  - B.Cu — signal (power-side: 24+4 MOSFETs, 12 shunts, 2 bulk caps, TVS, buck inductor, heatsink interface)
+- **Stack-up**: **8-layer** per Phase 4a-restack-8L master directive 2026-05-22 — locked at Phase 4a-restack-8L (Task #37, PR #27):
+  - F.Cu (3 oz) — signal (signal-side + high-current motor-phase traces + TOLL FET top pads + thermal face)
+  - In1.Cu (1 oz) — GND plane (full board, return-path for F.Cu/In2 signals)
+  - In2.Cu (1 oz) — signal (inner-routing #1)
+  - In3.Cu (3 oz) — +VMOTOR plane (full board, heavy-copper for ≥280 A continuous / 400 A peak)
+  - In4.Cu (1 oz) — signal (inner-routing #2)
+  - In5.Cu (1 oz) — GND plane (dual-GND sandwich on +VMOTOR for EMC + return-path symmetry)
+  - In6.Cu (1 oz) — signal (inner-routing #3)
+  - B.Cu (3 oz) — signal (power-side + secondary high-current + TOLL FET drain pads + thermal face)
+
+  5 signal layers (F, In2, In4, In6, B) + 3 plane layers (In1=GND, In3=+VMOTOR, In5=GND). Pre-Phase-4a-restack-8L stack was 6L; doubled signal-routing capacity to support +413 components from Phase 3-redo.
+- **+VMOTOR via stitching**: **≥ 210 vias** on +VMOTOR rail (F.Cu ↔ In3.Cu ↔ B.Cu through-vias), master-locked at Phase 4a-restack-8L (Task #43, amended from initial 200 per Sai's 1.5× FoS requirement). Distribution: ~20 at CBULK→VMOTOR entry, ~200 across 4 channels (FET drains + trace + bypass cap stacks), ~20 mid-trace stitching. **Critical layout requirement**: 3 oz copper pour must surround every via on F.Cu and B.Cu to sustain 2 A/via aggressive baseline (1.50× cont. FoS, 1.58× burst FoS). Phase 4b-redo4-R1 places; Phase 5b-retry verifies post-autoroute.
 - **Edge.Cuts outline**: 50.0 × 50.0 mm square. Edge.Cuts layer stroke 0.05 mm.
 - **Placement** (Phase 4b PR #13 → Phase 4b-REDO PR #16 → Phase 4b-REDO2 this PR): 348 footprints total on 90×75 board. Per-MCU rotation preserved from 4b-REDO (CH1 θ=0°, CH2 θ=90°, CH3 θ=270°, CH4 θ=180°). FETs in 3×2 corner sub-grids (25×13 mm clusters per channel). Phase 4b-REDO2 absorbed: 5 bucks (TPS54560 ×3 + AOZ1284PI ×2) in middle band y=24..40, NTC ICL + indicator LEDs in battery section, 16 BEC solder pads on board edges, ~65 BEC supporting passives in lower-middle band y=44..56. Mount holes at corners (5,5)/(85,5)/(5,70)/(85,70). T7 verified. Heatsink zone unchanged — Phase 4c thermal verdict preserved (T_J 79.8°C @ Envelope 2). See `docs/PHASE4B_REDO2_PLACEMENT.md`.
 - **F.Cu / B.Cu split**: F.Cu = signal side (4 MCUs, 4 drivers, 12 CSAs, buck+LDO, ESD, decoupling, LEDs, FC connector, motor pads, SWD pads); B.Cu = power side (24+4 MOSFETs, 12 shunts, 2 bulk caps, TVS, buck inductor).
@@ -213,7 +218,7 @@ Closed at Phase 2.5 — see `docs/PHASE2_5_FITCHECK.md`.
 | DRC ruleset | JLCPCB's published capability spec (authoritative; per Playbook §Manufacturability — pull fresh per Rigor §10) |
 | Assembly | JLCPCB SMT (production); BOM constrained to JLC parts library (basic + extended) or pre-flagged as hand-solder |
 | Surface finish | ENIG (gold) for fine-pitch and corrosion resistance |
-| Stack-up | JLC 6-layer standard (Phase 4 confirms specific layer thicknesses for impedance) |
+| Stack-up | **JLC 8-layer standard** (Phase 4a-restack-8L); F.Cu / In3.Cu / B.Cu = 3 oz (heavy-copper for motor + bus current); 5 signal + 3 plane layers |
 
 ### Validation regime — sim-heavy, single-fab-iteration target
 
