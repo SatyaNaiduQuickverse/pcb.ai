@@ -1,0 +1,22 @@
+! Single CBULK polymer-Al cap body model
+! Body: 10×14.3×16.5 mm. Coords in SI meters.
+Version = 210903
+Coordinate System = Cartesian 3D
+Subcell Divisions in 1D = 1 1 1
+Subcell Limits 1 = 0 0.010
+Subcell Limits 2 = 0 0.0143
+Subcell Limits 3 = 0 0.0165
+Materials Interval = 1 1
+Boundary Definitions
+  1 1 -1 1   ! z=0 PCB-mount face (pad area, conducts to B.Cu)
+  2 2 -1 1   ! z=top (cap can top, air-exposed)
+  3 3 -1 1   ! sides (air-exposed)
+End
+Numbering = Horizontal
+Element Degree = 1
+Surface Elements = 6
+Volume Elements = 1
+Triangles = False
+Coordinate Ratios = 1 1 1
+Minimum Element Divisions = 5 7 8
+Reference Density = 1.0

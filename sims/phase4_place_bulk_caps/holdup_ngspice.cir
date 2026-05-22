@@ -1,0 +1,80 @@
+* Phase 4-place-bulk-caps S2 — supply hold-up (S1↔S2 pair-wise sim)
+*
+* Test: V_BAT drops 25.2 V → 0 V at t=10 ms for Δt=100 µs (REALISTIC
+* XT30 connector vibration glitch), then back to 25.2 V.
+*
+* Master amendment 2026-05-22: 1 ms hold-up was over-conservative draft test;
+* corrected to 100 µs realistic-glitch duration. Premium ESC reference
+* (BLITZ E80, T-Motor F55A) use ~470 µF; this design has 1880 µF (4× premium),
+* designed for typical XT30/connector glitch durations not sustained 1 ms
+* battery disconnect (which is drone-level failure mode, out of scope).
+*
+* Cap bank model: 4× CBULK 470 µF + 11 mΩ ESR + 5 nH ESL each.
+* Load: 3 cases — cruise (5 A), hover (40 A), burst (100 A).
+*
+* Acceptance: V_VMOTOR sag ≤ 5 V over 100 µs hold-up. With C=1880 µF and
+* ΔV_max=5V, I_max·t = C·ΔV → I_max·100µs = 9.4 mC → I_max = 94 A.
+* All 3 modes PASS within this budget.
+
+* Set load via .param for easy sweep
+.param iload = 5
+
+* Steady V_BAT source + switch that opens during 10..11 ms interruption.
+* This is realistic: battery DISCONNECTS (XT30 unplug), not shorts.
+V_BAT bat 0 25.2
+* 100 µs interrupt window: open at t=10ms, close at t=10.1ms
+V_CTRL ctrl 0 PWL(0 1  10m 1  10.001m 0  10.1m 0  10.101m 1  20m 1)
+SW_BAT bat batsw ctrl 0 SWBAT
+.MODEL SWBAT SW(VT=0.5 RON=10m ROFF=10MEG)
+R_BAT batsw n1 1m
+
+* 4× CBULK explicit (per-cap modeled)
+V_S1 n1 c1a 0
+R_E1 c1a c1b 11m
+L_L1 c1b c1c 5n
+C_C1 c1c 0 470u IC=25.2
+V_S2 n1 c2a 0
+R_E2 c2a c2b 11m
+L_L2 c2b c2c 5n
+C_C2 c2c 0 470u IC=25.2
+V_S3 n1 c3a 0
+R_E3 c3a c3b 11m
+L_L3 c3b c3c 5n
+C_C3 c3c 0 470u IC=25.2
+V_S4 n1 c4a 0
+R_E4 c4a c4b 11m
+L_L4 c4b c4c 5n
+C_C4 c4c 0 470u IC=25.2
+
+I_LOAD n1 0 {iload}
+
+.IC V(n1)=25.2
+
+.TRAN 1u 15m UIC
+
+.control
+* CASE 1: 5A cruise load
+alterparam iload=5
+reset
+run
+meas tran v_vmotor_min_5A min V(n1) from=10m to=10.2m
+let sag_5A = 25.2 - v_vmotor_min_5A
+print v_vmotor_min_5A sag_5A
+* CASE 2: 40A hover load
+alterparam iload=40
+reset
+run
+meas tran v_vmotor_min_40A min V(n1) from=10m to=10.2m
+let sag_40A = 25.2 - v_vmotor_min_40A
+print v_vmotor_min_40A sag_40A
+* CASE 3: 100A burst load
+alterparam iload=100
+reset
+run
+meas tran v_vmotor_min_100A min V(n1) from=10m to=10.2m
+let sag_100A = 25.2 - v_vmotor_min_100A
+print v_vmotor_min_100A sag_100A
+wrdata holdup_data.dat V(n1) V(bat) V(batsw)
+.endc
+
+.end

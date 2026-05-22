@@ -1,0 +1,84 @@
+* Phase 4-place-bulk-caps S2 — V_VMOTOR ripple + per-cap ESR power
+*
+* Test: pulsed load on +VMOTOR rail. 4× CBULK polymer 470 µF in parallel
+* must keep V_VMOTOR ripple ≤ 200 mV and per-cap I_RMS ≤ 4 A rated (Panasonic
+* EEHZS1V471P).
+*
+* Per-cap model (Panasonic EEHZS datasheet):
+*   C = 470 µF
+*   ESR = 11 mΩ
+*   ESL = 5 nH (estimated for 10×14.3 mm SMD polymer-Al)
+*
+* Load: PWM-equivalent pulsed current sink at 30 kHz, 50% duty, mean 50 A,
+* peaks 100 A representing the 100A burst case.
+*
+* For ripple computation: pulsed sink Δi_pk-pk = 100A creates a current
+* triangular ripple at the cap bank. Bus ripple = i_RMS × ESR + ω·L·I.
+
+V_BAT bat 0 25.2
+R_BAT bat vbat_int 10m
+* 4 explicit caps in parallel — each with V_SENSE (0V ammeter) + ESR + ESL chain
+* CBULK1
+V_SENSE1 vbus n1s 0
+R_ESR1 n1s n1a 11m
+L_ESL1 n1a n1b 5n
+C_CAP1 n1b 0 470u IC=25.2
+* CBULK2
+V_SENSE2 vbus n2s 0
+R_ESR2 n2s n2a 11m
+L_ESL2 n2a n2b 5n
+C_CAP2 n2b 0 470u IC=25.2
+* CBULK3
+V_SENSE3 vbus n3s 0
+R_ESR3 n3s n3a 11m
+L_ESL3 n3a n3b 5n
+C_CAP3 n3b 0 470u IC=25.2
+* CBULK4
+V_SENSE4 vbus n4s 0
+R_ESR4 n4s n4a 11m
+L_ESL4 n4a n4b 5n
+C_CAP4 n4b 0 470u IC=25.2
+
+* Source to vbus through battery internal impedance
+R_VBUS_LINK vbat_int vbus 1m
+
+* Load: DC 100A burst + AC PWM ripple 6A pk-pk triangular @ 30 kHz
+* Realistic motor-channel load during burst: FETs are mostly conducting,
+* small ripple from PWM switching seen at bus caps. Per Phase 2-burst-resize
+* sims: ripple amplitude ≈ 5-6 A_RMS at typical PWM duty.
+* DC: 100 A; ripple: triangular 0→6→0 at 30 kHz (sawtooth via PULSE).
+I_LOAD vbus 0 PULSE(97 103 0 16.66u 16.66u 0 33.33u)
+
+* Use a 0V voltage source as ammeter in series with each ESR for current measurement
+* (no explicit .SAVE — ngspice auto-saves all node V + source-branch I)
+.OPTIONS savecurrents
+
+* Skip initial transient (5 PWM cycles for steady state)
+.TRAN 100n 200u UIC
+
+.control
+run
+* Measure V_VMOTOR pk-pk ripple after settling (skip first 100µs)
+meas tran v_min min V(vbus) from=100u to=200u
+meas tran v_max max V(vbus) from=100u to=200u
+let v_ripple_pk = v_max - v_min
+print v_ripple_pk
+
+* Per-cap RMS current — use the ESR resistor current as proxy
+meas tran i_c1_rms rms I(V_SENSE1) from=100u to=200u
+meas tran i_c2_rms rms I(V_SENSE2) from=100u to=200u
+meas tran i_c3_rms rms I(V_SENSE3) from=100u to=200u
+meas tran i_c4_rms rms I(V_SENSE4) from=100u to=200u
+print i_c1_rms i_c2_rms i_c3_rms i_c4_rms
+
+* Per-cap ESR power
+let p_esr_c1 = i_c1_rms*i_c1_rms*11e-3
+let p_esr_c2 = i_c2_rms*i_c2_rms*11e-3
+let p_esr_c3 = i_c3_rms*i_c3_rms*11e-3
+let p_esr_c4 = i_c4_rms*i_c4_rms*11e-3
+print p_esr_c1 p_esr_c2 p_esr_c3 p_esr_c4
+
+wrdata ripple_data.dat V(vbus) I(V_SENSE1) I(V_SENSE2) I(V_SENSE3) I(V_SENSE4)
+.endc
+
+.end
