@@ -200,7 +200,7 @@ S3_POSITIONS = {
     # Pad 5 (primary OUT) at south end of body near y=46.
     # Bridges placed on B.Cu to backside-route +VMOTOR via PTH to primary pads.
     'R33': (50.0, 25.0, 'B.Cu', 0.0),    # +VMOTOR → Hall pad 4 (north end, IP+)
-    'R34': (50.0, 65.0, 'B.Cu', 0.0),    # Hall pad 5 (south end) → +VMOTOR_CH
+    'R34': (50.0, 47.0, 'B.Cu', 0.0),    # Hall pad 5 bridge — moved from spine pocket (50, 65) per PR-A2 to free S5 BEC pocket Y=58-72
 }
 S3_EXPECTED_VALUES = {
     'U1':  'ACS770ECB',
@@ -331,50 +331,61 @@ def place_connectors(fps_by_ref, placements):
 #   J10 V5_PI5 supervisor (PG_RPI to FC)
 # ────────────────────────────────────────────────────────────────────
 S5_POSITIONS = {
-    # ── Buck #1 V5_FC NW (5A FC + cam + RX) ──
-    'J2':  (12.0, 60.0, 'F.Cu', 0.0),    # buck IC TPS54560
-    'L1':  (22.0, 60.0, 'F.Cu', 0.0),    # 4.7uH inductor
-    'D5':  (32.0, 60.0, 'F.Cu', 0.0),    # SS54 Schottky
-    'R6':  (5.0,  60.0, 'F.Cu', 0.0),    # FB top 52K3
-    'R7':  (5.0,  62.0, 'F.Cu', 0.0),    # FB bot 10K
-    'C7':  (5.0,  64.0, 'F.Cu', 0.0),    # boot 100nF
-    'C8':  (38.0, 60.0, 'F.Cu', 0.0),    # C_OUT 22uF
-    'J7':  (38.0, 55.0, 'F.Cu', 0.0),    # V5_FC eFuse TPS259251
-    'L6':  (28.0, 54.0, 'F.Cu', 0.0),    # V5_FC ferrite 600Ω
-    'D10': (44.0, 60.0, 'F.Cu', 0.0),    # V5_FC TVS SMAJ5.0A (east of C8)
-    # ── Buck #2 V5_PI5 NW (5A RPi 5) ──
-    'J3':  (12.0, 70.0, 'F.Cu', 0.0),    # buck IC
-    'L2':  (22.0, 70.0, 'F.Cu', 0.0),    # 4.7uH inductor
-    'D6':  (32.0, 70.0, 'F.Cu', 0.0),    # SS54
-    'R8':  (5.0,  70.0, 'F.Cu', 0.0),    # FB top 52K3
-    'R9':  (5.0,  72.0, 'F.Cu', 0.0),    # FB bot 10K
-    'C11': (5.0,  74.0, 'F.Cu', 0.0),    # boot 100nF
-    'C12': (38.0, 70.0, 'F.Cu', 0.0),    # C_OUT 22uF
-    'J8':  (35.0, 75.0, 'F.Cu', 0.0),    # V5_PI5 eFuse (east of L2)
-    'L7':  (52.0, 75.0, 'F.Cu', 0.0),    # V5_PI5 ferrite (clear S6 VBAT divider + FC connector)
-    'D11': (44.0, 70.0, 'F.Cu', 0.0),    # V5_PI5 TVS (east of C12)
-    # ── Buck #3 V5_AI NE (3A AI HAT) ──
-    'J4':  (88.0, 60.0, 'F.Cu', 0.0),    # buck IC
-    'L3':  (78.0, 60.0, 'F.Cu', 0.0),    # 8.2uH
-    'D7':  (68.0, 60.0, 'F.Cu', 0.0),    # SS54
-    'R10': (95.0, 60.0, 'F.Cu', 0.0),    # FB top 52K3
-    'R11': (95.0, 62.0, 'F.Cu', 0.0),    # FB bot 10K
-    'C14': (95.0, 64.0, 'F.Cu', 0.0),    # boot 100nF
-    'C15': (62.0, 60.0, 'F.Cu', 0.0),    # C_OUT 22uF
-    'J9':  (62.0, 55.0, 'F.Cu', 0.0),    # V5_AI eFuse
-    'L8':  (70.0, 54.0, 'F.Cu', 0.0),    # V5_AI ferrite
-    'D12': (56.0, 60.0, 'F.Cu', 0.0),    # V5_AI TVS (west of C15)
-    # ── Buck #4 V9_VTX1 NE (2A VTX #1) ──
-    'J5':  (88.0, 70.0, 'F.Cu', 0.0),    # buck IC AOZ1284
-    'L4':  (78.0, 70.0, 'F.Cu', 0.0),    # 10uH
-    'D8':  (68.0, 70.0, 'F.Cu', 0.0),    # SS54
-    'R12': (95.0, 70.0, 'F.Cu', 0.0),    # FB top 102K
-    'R13': (95.0, 72.0, 'F.Cu', 0.0),    # FB bot 10K
-    'C17': (95.0, 74.0, 'F.Cu', 0.0),    # boot 100nF
-    'C18': (62.0, 70.0, 'F.Cu', 0.0),    # C_OUT 22uF
-    'F1':  (62.0, 78.0, 'F.Cu', 0.0),    # V9_VTX1 polyfuse MF-MSMF200 (clear S6 J16)
-    'L9':  (70.0, 75.0, 'F.Cu', 0.0),    # V9_VTX1 ferrite
-    'D13': (56.0, 70.0, 'F.Cu', 0.0),    # V9_VTX1 TVS (west of C18)
+    # ── Bucks 1-4 + inductors + LDO RELOCATED to SPINE POCKET (PR-A2 Option A) ──
+    # 4 bucks F.Cu in 2×2 arrangement; 4 inductors B.Cu underneath (stack via layers).
+    # Buck #1 V5_FC + L1
+    'J2':  (43.0, 62.0, 'F.Cu', 0.0),
+    'L1':  (43.0, 62.0, 'B.Cu', 0.0),
+    # Buck #2 V5_PI5 + L2
+    'J3':  (43.0, 70.0, 'F.Cu', 0.0),
+    'L2':  (43.0, 70.0, 'B.Cu', 0.0),
+    # Buck #3 V5_AI + L3
+    'J4':  (57.0, 62.0, 'F.Cu', 0.0),
+    'L3':  (57.0, 62.0, 'B.Cu', 0.0),
+    # Buck #4 V9_VTX1 + L4
+    'J5':  (57.0, 70.0, 'F.Cu', 0.0),
+    'L4':  (57.0, 70.0, 'B.Cu', 0.0),
+    # FB resistors — 0402 in top strip Y=70-72 lateral area (outside spine pocket bucks)
+    'R6':  (24.0, 70.0, 'F.Cu', 0.0),    # V5_FC FB top 52K3
+    'R7':  (24.0, 72.0, 'F.Cu', 0.0),    # V5_FC FB bot 10K
+    'R8':  (28.0, 70.0, 'F.Cu', 0.0),    # V5_PI5 FB top 52K3
+    'R9':  (28.0, 72.0, 'F.Cu', 0.0),    # V5_PI5 FB bot 10K
+    'R10': (70.0, 70.0, 'F.Cu', 0.0),    # V5_AI FB top 52K3
+    'R11': (70.0, 72.0, 'F.Cu', 0.0),    # V5_AI FB bot 10K
+    'R12': (76.0, 70.0, 'F.Cu', 0.0),    # V9_VTX1 FB top 102K
+    'R13': (76.0, 72.0, 'F.Cu', 0.0),    # V9_VTX1 FB bot 10K
+    # Boot caps — 0402 in top strip Y=76 (close to S6 BAT/USBLC6 row but between gaps)
+    'C7':  (30.0, 76.0, 'F.Cu', 0.0),    # Buck 1 boot 100nF
+    'C11': (52.0, 76.0, 'F.Cu', 0.0),    # Buck 2 boot
+    'C14': (65.0, 76.0, 'F.Cu', 0.0),    # Buck 3 boot
+    'C17': (80.0, 76.0, 'F.Cu', 0.0),    # Buck 4 boot
+    # ── INPUT-side strip Y=12-19 between S1 components (per master amendment 2026-05-23) ──
+    # 4× Schottky D5-D8 — between S1 Q3/Q4 FET columns + east of R2 NTC
+    'D5':  (48.0, 14.0, 'F.Cu', 0.0),    # V5_FC catch diode SS54
+    'D6':  (48.0, 18.0, 'F.Cu', 0.0),    # V5_PI5 catch diode SS54
+    'D7':  (82.0, 14.0, 'F.Cu', 0.0),    # V5_AI catch diode
+    'D8':  (82.0, 18.0, 'F.Cu', 0.0),    # V9_VTX1 catch diode
+    # 3× eFuses + 1× polyfuse — input protection per rail
+    'J7':  (15.0, 14.0, 'F.Cu', 0.0),    # V5_FC eFuse TPS259251
+    'J8':  (22.0, 16.0, 'F.Cu', 0.0),    # V5_PI5 eFuse (moved east to clear J6 V9_VTX2 buck at (12, 22))
+    'J9':  (90.0, 14.0, 'F.Cu', 0.0),    # V5_AI eFuse (moved east to clear D7 SS54)
+    'F1':  (88.0, 18.0, 'F.Cu', 0.0),    # V9_VTX1 polyfuse MF-MSMF200
+    # ── OUTPUT-side strip Y=70-77 (per master amendment 2026-05-23) ──
+    # 4× ferrites (LC filter) on F.Cu at y=73 row (between spine pocket south edge and S6 USBLC6)
+    'L6':  (35.0, 73.0, 'F.Cu', 0.0),    # V5_FC ferrite 600Ω
+    'L7':  (50.0, 73.0, 'F.Cu', 0.0),    # V5_PI5 ferrite (in spine-pocket center column gap)
+    'L8':  (65.0, 73.0, 'F.Cu', 0.0),    # V5_AI ferrite
+    'L9':  (82.0, 73.0, 'F.Cu', 0.0),    # V9_VTX1 ferrite
+    # 4× C_OUT (22µF post-ferrite) — spine pocket center + top strip edges
+    'C8':  (50.0, 62.0, 'F.Cu', 0.0),    # V5_FC C_OUT (spine pocket center, between J2/J4 row)
+    'C12': (50.0, 70.0, 'F.Cu', 0.0),    # V5_PI5 C_OUT (spine pocket center, between J3/J5 row)
+    'C15': (22.0, 75.0, 'F.Cu', 0.0),    # V5_AI C_OUT (top strip west, clears R7 FB resistor)
+    'C18': (88.0, 73.0, 'F.Cu', 0.0),    # V9_VTX1 C_OUT (top strip east)
+    # 4× output TVS on B.Cu y=76 row (between spine pocket B.Cu inductors and S6)
+    'D10': (35.0, 76.0, 'B.Cu', 0.0),    # V5_FC TVS SMAJ5.0A
+    'D11': (50.0, 76.0, 'B.Cu', 0.0),    # V5_PI5 TVS
+    'D12': (65.0, 76.0, 'B.Cu', 0.0),    # V5_AI TVS
+    'D13': (82.0, 76.0, 'B.Cu', 0.0),    # V9_VTX1 TVS SMAJ9.0A
     # ── Buck #5 V9_VTX2 SW (2A VTX #2, isolated from #1) — vertical column x=5 ──
     'J6':  (12.0, 22.0, 'F.Cu', 0.0),    # buck IC AOZ1284
     'L5':  (12.0, 30.0, 'F.Cu', 0.0),    # 10uH
@@ -387,8 +398,8 @@ S5_POSITIONS = {
     'D14': (5.0,  34.0, 'F.Cu', 0.0),    # V9_VTX2 TVS SMAJ9.0A
     'C21': (5.0,  40.0, 'F.Cu', 0.0),    # C_OUT 22uF
     # ── LDO + Supervisor (central spine pocket) ──
-    'J13': (38.0, 67.0, 'F.Cu', 0.0),    # LDO TLV76733 WSON-6 (V5_FC→V3V3)
-    'J10': (50.0, 65.0, 'F.Cu', 0.0),    # V5_PI5 supervisor SOT-23
+    'J13': (50.0, 66.0, 'F.Cu', 0.0),    # LDO — center spine pocket (between 4 bucks)
+    'J10': (50.0, 67.0, 'B.Cu', 0.0),    # V5_PI5 supervisor on B.Cu in spine pocket center (clears all F.Cu and B.Cu inductors)
 }
 S5_EXPECTED_VALUES = {
     'J2':  'TPS54560', 'J3':  'TPS54560', 'J4':  'TPS54560',
