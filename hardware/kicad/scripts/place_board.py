@@ -21,20 +21,19 @@ from pathlib import Path
 from collections import defaultdict
 
 PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb")
-BOARD_W = 85.0   # Phase 4c-resume Option C rectangular
-BOARD_H = 70.0
+BOARD_W = 90.0   # Phase 4b-REDO2: grew 85 → 90 mm for BEC absorption
+BOARD_H = 75.0   # grew 70 → 75 mm
 
-# ───────────── Placement regions (Phase 4b-REDO per playbook trap T8) ─────────────
+# ───────────── Placement regions (Phase 4b-REDO2 per playbook trap T8) ─────────────
 
 # Channel corner anchors (F.Cu): MCU CENTER coordinates. In KiCad screen
 # convention (+Y down), CH1=top-left, CH2=top-right, CH3=bottom-left, CH4=bottom-right.
-# Bumped inward from Phase 4b's (3,3) corners to keep the 7×7mm LQFP-32 body
-# fully on-board with ~5mm margin.
+# Bumped to 8mm inset to keep LQFP-32 7×7mm body on-board with ~5mm clearance.
 CHANNEL_CORNERS = {
     1: (8.0,  8.0,  'TL'),  # top-left in KiCad screen view
-    2: (77.0, 8.0,  'TR'),  # top-right
-    3: (8.0,  62.0, 'BL'),  # bottom-left
-    4: (77.0, 62.0, 'BR'),  # bottom-right
+    2: (82.0, 8.0,  'TR'),  # top-right (was 77 on 85-wide board)
+    3: (8.0,  67.0, 'BL'),  # bottom-left (was 62 on 70-tall board)
+    4: (82.0, 67.0, 'BR'),  # bottom-right
 }
 
 # Per-channel MCU rotation (KiCad CCW degrees) — derived from LQFP-32 pin-side
@@ -70,54 +69,112 @@ MOSFET_GRID = {
     'origin_y': 15.0,   # leaves room for bulk caps + RP FETs + shunts below/above
 }
 
-# Bulk caps at left/right edges of B.Cu (scaled for 85×70)
-BULK_POS = [(8.0, 62.0), (77.0, 62.0)]
+# Bulk caps at left/right edges of B.Cu (scaled for 90×75)
+BULK_POS = [(10.0, 67.0), (80.0, 67.0)]
 
-# Reverse-polarity FETs (4× AON6260) — bottom row B.Cu
+# Reverse-polarity FETs (4× AON6260) — bottom row B.Cu (battery section)
 RP_FET_ROW_Y = 5.0
-RP_FET_X0 = 25.0
+RP_FET_X0 = 30.0
 RP_FET_DX = 7.0
 
 # TVS near battery input
-TVS_POS = (75.0, 5.0)
+TVS_POS = (78.0, 5.0)
 
 # Battery solder pads — bottom edge B.Cu
 BATT_PAD_POS = (10.0, 5.0)
 
-# FC connector — top of F.Cu, centered
-FC_POS = (38.0, 66.0)
-
-# Buck + LDO + support — right side of F.Cu
-BUCK_POS = (70.0, 30.0)
-LDO_POS = (70.0, 34.0)
-BUCK_IND_POS = (75.0, 30.0)
+# FC connector — top of F.Cu, centered (board height grew, recentered)
+FC_POS = (40.0, 71.0)
 
 # 3× ESD near FC
-ESD_POS = [(31.0, 61.0), (37.0, 61.0), (43.0, 61.0)]
+ESD_POS = [(33.0, 66.0), (39.0, 66.0), (45.0, 66.0)]
 
-# Status LEDs
-LED_PG_POS = (42.0, 35.0)
-LED_STATUS_POS = {1: (15.0, 25.0), 2: (70.0, 25.0), 3: (15.0, 45.0), 4: (70.0, 45.0)}
+# Status LEDs (channel indicator LEDs near each MCU)
+LED_STATUS_POS = {1: (16.0, 18.0), 2: (74.0, 18.0), 3: (16.0, 57.0), 4: (74.0, 57.0)}
+# Power-good LED (existing, on V3V3 — channel-shared)
+LED_PG_POS = (45.0, 21.0)
 
-# Motor solder pads: 3 per edge, one channel per edge (T7).
-# Edge maps to (CH, edge, anchor positions).
-MOTOR_PADS = {
-    # CH1 → bottom edge (scaled for 85×70)
-    (1, 'A'): (15.0, 1.0),  (1, 'B'): (18.0, 1.0),  (1, 'C'): (21.0, 1.0),
-    # CH2 → right edge
-    (2, 'A'): (84.0, 15.0), (2, 'B'): (84.0, 18.0), (2, 'C'): (84.0, 21.0),
-    # CH3 → left edge
-    (3, 'A'): (1.0, 50.0),  (3, 'B'): (1.0, 53.0),  (3, 'C'): (1.0, 56.0),
-    # CH4 → top edge
-    (4, 'A'): (62.0, 69.0), (4, 'B'): (65.0, 69.0), (4, 'C'): (68.0, 69.0),
+# ─── Phase 4b-REDO2 NEW BEC component positions ───
+# NTC pair (2× MF72 5D25 in parallel) — top of board, between battery pads and bulk caps.
+# Battery line series element, so positioned in battery zone.
+NTC_POS = {1: (15.0, 9.0), 2: (20.0, 9.0)}
+
+# Indicator LEDs (LED_PWR green = battery present; LED_RPOL red = polarity reversed)
+LED_PWR_POS = (28.0, 9.0)        # green, near battery section
+LED_RPOL_POS = (33.0, 9.0)       # red, adjacent
+R_LED_PWR_POS = (28.0, 12.0)
+R_LED_RPOL_POS = (33.0, 12.0)
+
+# BEC zone: middle band y=24..40 on F.Cu, x=10..80 (over B.Cu MOSFET grid — different layer).
+# 5 buck columns + safety stack per column.
+# Buck IC + inductor + LC filter + safety stack each takes ~10×12 mm column.
+BEC_BUCK_ZONE = {
+    'origin_y': 24.0,             # top of band
+    'rows': 4,                    # 4 vertical positions per buck (IC, L, cap-stack, eFuse+TVS)
+    'col_w': 13.0,                # column width
+    'col_y_spacing': 4.0,         # vertical pitch within a column
+}
+# Per-buck column origins (5 bucks = 5 columns starting at x=12, spaced 13mm = ends at x=64)
+BEC_BUCK_COL_X = {
+    1: 12.0,   # V5_FC
+    2: 25.0,   # V5_PI5
+    3: 38.0,   # V5_AI
+    4: 51.0,   # V9_VTX1
+    5: 64.0,   # V9_VTX2
 }
 
-# SWD test pads: 2 per channel (SWDIO + SWCLK), on left edge of F.Cu near each MCU
+# Voltage supervisor for V5_PI5 — adjacent to Buck #2 column
+SUPERVISOR_POS = (25.0, 39.0)
+
+# Schottky catch diodes (1 per buck) — placed below each buck IC
+# BEC solder pads — distributed on board edges per T7, with proper edge clearance.
+# 6 rail pads × 2 (V + GND) + 4 GND distribution = 16 total.
+# All pads positioned ≥ 2 mm from any board edge to keep pad bodies on-board
+# (D 4.0mm pads have 2mm radius → need ≥2 mm inset).
+BEC_PAD_POS = {
+    # V5_FC: top edge (high Y in script = top in user view), left of FC connector
+    'V5_FC_PLUS':  (10.0, 72.0),
+    'V5_FC_GND':   (15.0, 72.0),
+    # V5_PI5: right edge, mid (between CH2 SWD and CH4 SWD)
+    'V5_PI5_PLUS': (87.0, 35.0),
+    'V5_PI5_GND':  (87.0, 40.0),
+    # V5_AI: right edge, lower-mid (adjacent V5_PI5)
+    'V5_AI_PLUS':  (87.0, 45.0),
+    'V5_AI_GND':   (87.0, 50.0),
+    # V9_VTX1: left edge, mid (between CH1 SWD and CH3 motors)
+    'V9_VTX1_PLUS': (3.0, 25.0),
+    'V9_VTX1_GND':  (3.0, 30.0),
+    # V9_VTX2: left edge, mid-lower
+    'V9_VTX2_PLUS': (3.0, 42.0),
+    'V9_VTX2_GND':  (3.0, 47.0),
+    # V3V3: top edge, right side (away from CH4 motors)
+    'V3V3_PLUS':   (75.0, 72.0),
+    'V3V3_GND':    (80.0, 72.0),
+    # GND distribution × 4 — spread
+    'GND_DIST_1':  (85.0, 72.0),
+    'GND_DIST_2':  (87.0, 18.0),  # right edge, between motor pads + SWD
+    'GND_DIST_3':  (3.0, 18.0),   # left edge, between SWD and battery
+    'GND_DIST_4':  (3.0, 70.0),   # left edge, below CH3 motor pads
+}
+
+# Motor solder pads: 3 per edge, one channel per edge (T7). 2mm edge clearance.
+MOTOR_PADS = {
+    # CH1 → bottom edge in user view (low Y in script)
+    (1, 'A'): (15.0, 2.0),  (1, 'B'): (18.0, 2.0),  (1, 'C'): (21.0, 2.0),
+    # CH2 → right edge (board 90 wide → x=88 for 2mm clearance)
+    (2, 'A'): (88.0, 15.0), (2, 'B'): (88.0, 18.0), (2, 'C'): (88.0, 21.0),
+    # CH3 → left edge (board 75 tall, CH3 in upper region in user view)
+    (3, 'A'): (2.0, 55.0),  (3, 'B'): (2.0, 58.0),  (3, 'C'): (2.0, 61.0),
+    # CH4 → top edge in user view (high Y, board 75 tall → y=73 with 2mm clearance)
+    (4, 'A'): (62.0, 73.0), (4, 'B'): (65.0, 73.0), (4, 'C'): (68.0, 73.0),
+}
+
+# SWD test pads: 2 per channel (SWDIO + SWCLK), on board edges near each MCU
 SWD_PADS = {
-    (1, 'SWDIO'): (1.0, 14.0),  (1, 'SWCLK'): (1.0, 17.0),
-    (2, 'SWDIO'): (84.0, 28.0), (2, 'SWCLK'): (84.0, 31.0),
-    (3, 'SWDIO'): (1.0, 36.0),  (3, 'SWCLK'): (1.0, 39.0),
-    (4, 'SWDIO'): (84.0, 50.0), (4, 'SWCLK'): (84.0, 53.0),
+    (1, 'SWDIO'): (2.0, 14.0),  (1, 'SWCLK'): (2.0, 17.0),
+    (2, 'SWDIO'): (88.0, 28.0), (2, 'SWCLK'): (88.0, 31.0),
+    (3, 'SWDIO'): (2.0, 64.0),  (3, 'SWCLK'): (2.0, 67.0),
+    (4, 'SWDIO'): (88.0, 55.0), (4, 'SWCLK'): (88.0, 58.0),
 }
 
 # ───────────── Per-channel passive cluster offsets ─────────────
@@ -243,11 +300,42 @@ def categorize(fp):
     if 'USBLC6' in val:
         return ('esd', ref)
 
-    # LEDs
+    # LEDs (distinct values per Phase 4b-REDO2 — was ambiguous in Phase 4b)
     if val == 'GREEN':
-        return ('led_pg', ref)
+        return ('led_pg', ref)            # power-good (on V3V3)
     if val == 'RED':
-        return ('led_status', ref)
+        return ('led_status', ref)        # 4× channel status LEDs
+    if val == 'GREEN_PWR':
+        return ('led_pwr', ref)           # NEW: battery present indicator
+    if val == 'RED_RPOL':
+        return ('led_rpol', ref)          # NEW: rev-pol warning indicator
+
+    # Phase 4b-REDO2 new BEC components
+    if val == 'MF72_5D25':
+        return ('ntc_icl', ref)           # 2× NTC inrush limiter in parallel
+    if 'TPS54560' in val:
+        return ('bec_buck_5v', ref)        # 3× 5V bucks
+    if 'AOZ1284' in val:
+        return ('bec_buck_9v', ref)        # 2× 9V bucks
+    if val == 'SS54':
+        return ('bec_schottky', ref)       # 5× Schottky catch diodes
+    if 'TPS259251' in val:
+        return ('bec_efuse', ref)          # 3× 5V eFuses
+    if val == 'MF-MSMF200':
+        return ('bec_polyfuse', ref)       # 2× 9V polyfuses
+    if 'VSUP' in val or 'APX803' in val:
+        return ('bec_supervisor', ref)     # voltage supervisor for V5_PI5
+    if val == 'SMAJ5.0A' or val == 'SMAJ9.0A':
+        return ('bec_tvs', ref)            # 5× per-rail TVS
+    if val.startswith('100uF_'):
+        return ('bec_polymer_cap', ref)    # 2× polymer electrolytic (enhanced filter)
+    if val == '600ohm@100MHz':
+        return ('bec_ferrite', ref)        # 5× LC filter ferrite beads
+
+    # BEC solder pads — values like PAD_V5_FC_PLUS, PAD_V3V3_GND, PAD_GND_DIST_1
+    # Regex: PAD_ + (V<digits-letters>_<suffix> OR GND_DIST_<n>)
+    if val.startswith('PAD_'):
+        return ('bec_pad', val)            # key by full value for BEC_PAD_POS lookup
 
     # Motor + SWD pads (by value pattern from SKiDL)
     motor_m = re.match(r'MOTOR_([ABC])_CH([1-4])', val)
@@ -258,8 +346,6 @@ def categorize(fp):
         return ('swd_pad', (int(swd_m.group(2)), swd_m.group(1)))
 
     # Default: per-channel passive (cap / resistor / diode etc.)
-    # Determine channel from ref if possible — SKiDL assigns refs sequentially;
-    # we approximate by reading creation order encoded in higher ref numbers.
     return ('passive', ref)
 
 
@@ -298,9 +384,10 @@ def dedup_mount_holes(txt):
         txt = txt[:idx] + txt[end:]
         deleted += 1
 
-    # Reposition the kept 4 holes at proper corners for current 85×70 board
-    # (per setup_board.py MOUNT_X_PAD=5, MOUNT_Y_PAD=5, BOARD_W=85, BOARD_H=70).
-    corners = [(5.0, 5.0), (80.0, 5.0), (5.0, 65.0), (80.0, 65.0)]
+    # Reposition the kept 4 holes at proper corners for current 90×75 board
+    # (per setup_board.py MOUNT_X_PAD=5, MOUNT_Y_PAD=5, BOARD_W=90, BOARD_H=75).
+    # Custom 80×65 spacing pattern (Phase 4b-REDO2 commercial-product class).
+    corners = [(5.0, 5.0), (85.0, 5.0), (5.0, 70.0), (85.0, 70.0)]
     # Re-scan after deletion to get fresh positions of the kept 4
     pos = 0
     kept = []
@@ -336,11 +423,11 @@ def dedup_mount_holes(txt):
 def main():
     txt = PCB.read_text()
 
-    # Pre-processing: dedup mount holes + reposition to proper corners
+    # Pre-processing: dedup mount holes + reposition to proper corners (90×75 board)
     txt, mh_deleted = dedup_mount_holes(txt)
     if mh_deleted:
         print(f"Pre-processing: removed {mh_deleted} duplicate mount holes; "
-              f"4 remaining repositioned to corners (5,5), (80,5), (5,65), (80,65)")
+              f"4 remaining repositioned to corners (5,5), (85,5), (5,70), (85,70)")
 
     fps = parse_footprints(txt)
     print(f"Parsed {len(fps)} footprints")
@@ -452,15 +539,108 @@ def main():
         cy = my + dy * CSA_RADIAL_OFFSET_MM + ty * (sub - 1) * CSA_TANGENTIAL_SPACING_MM
         placements[fp['ref']] = (cx, cy, 'F.Cu', 0.0)
 
-    # 10) Buck + LDO + buck inductor + VDDA ferrite (F.Cu right side)
-    for fp, _ in groups.get('buck', []):
-        placements[fp['ref']] = (BUCK_POS[0], BUCK_POS[1], 'F.Cu', 0.0)
+    # 10a) Legacy single buck/LDO (now replaced by Phase 2d-redo BEC bucks below)
+    # — but old SKiDL refs still exist for ferrite_vdda + LDO. Keep LDO at original
+    # right-side position; ferrite_vdda near analog references.
     for fp, _ in groups.get('ldo', []):
-        placements[fp['ref']] = (LDO_POS[0], LDO_POS[1], 'F.Cu', 0.0)
-    for fp, _ in groups.get('buck_inductor', []):
-        placements[fp['ref']] = (BUCK_IND_POS[0], BUCK_IND_POS[1], 'F.Cu', 0.0)
+        placements[fp['ref']] = (75.0, 38.0, 'F.Cu', 0.0)
     for fp, _ in groups.get('ferrite_vdda', []):
-        placements[fp['ref']] = (38.0, 28.0, 'F.Cu', 0.0)
+        placements[fp['ref']] = (40.0, 30.0, 'F.Cu', 0.0)
+
+    # 10b) Phase 4b-REDO2 NEW BEC components — 5 bucks + safety stacks
+    # Layout: BEC strip in middle band y=24..40, 5 columns × 4 rows per column.
+    # Each column hosts: buck IC (row 0) + inductor (row 1) + cap-stack (row 2) +
+    # eFuse/polyfuse + TVS + ferrite (row 3).
+    # NOTE: this strip overlaps with B.Cu MOSFET grid (y=15..54). Different layer:
+    # F.Cu BEC components vs B.Cu MOSFETs → no physical conflict.
+
+    # 5V bucks (Buck #1, #2, #3 = TPS54560 × 3 for V5_FC, V5_PI5, V5_AI)
+    bec_buck_5v = [fp for fp, _ in groups.get('bec_buck_5v', [])]
+    for i, fp in enumerate(bec_buck_5v[:3]):
+        col_idx = i + 1   # buck cols 1, 2, 3
+        x = BEC_BUCK_COL_X[col_idx]
+        y = BEC_BUCK_ZONE['origin_y']
+        placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
+
+    # 9V bucks (Buck #4, #5 = AOZ1284 × 2 for V9_VTX1, V9_VTX2)
+    bec_buck_9v = [fp for fp, _ in groups.get('bec_buck_9v', [])]
+    for i, fp in enumerate(bec_buck_9v[:2]):
+        col_idx = i + 4   # buck cols 4, 5
+        x = BEC_BUCK_COL_X[col_idx]
+        y = BEC_BUCK_ZONE['origin_y']
+        placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
+
+    # 5× Schottky catch diodes (one per buck, placed below the buck IC)
+    bec_schottky = [fp for fp, _ in groups.get('bec_schottky', [])]
+    for i, fp in enumerate(bec_schottky[:5]):
+        col_idx = i + 1
+        x = BEC_BUCK_COL_X[col_idx]
+        y = BEC_BUCK_ZONE['origin_y'] + BEC_BUCK_ZONE['col_y_spacing']  # row 1
+        placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
+
+    # 3× eFuses (5V rails) — placed in row 2 of cols 1, 2, 3
+    bec_efuse = [fp for fp, _ in groups.get('bec_efuse', [])]
+    for i, fp in enumerate(bec_efuse[:3]):
+        col_idx = i + 1
+        x = BEC_BUCK_COL_X[col_idx]
+        y = BEC_BUCK_ZONE['origin_y'] + 2 * BEC_BUCK_ZONE['col_y_spacing']  # row 2
+        placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
+
+    # 2× Polyfuses (9V rails) — placed in row 2 of cols 4, 5
+    bec_polyfuse = [fp for fp, _ in groups.get('bec_polyfuse', [])]
+    for i, fp in enumerate(bec_polyfuse[:2]):
+        col_idx = i + 4
+        x = BEC_BUCK_COL_X[col_idx]
+        y = BEC_BUCK_ZONE['origin_y'] + 2 * BEC_BUCK_ZONE['col_y_spacing']  # row 2
+        placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
+
+    # 5× TVS (one per rail) — placed in row 3
+    bec_tvs = [fp for fp, _ in groups.get('bec_tvs', [])]
+    for i, fp in enumerate(bec_tvs[:5]):
+        col_idx = i + 1
+        x = BEC_BUCK_COL_X[col_idx]
+        y = BEC_BUCK_ZONE['origin_y'] + 3 * BEC_BUCK_ZONE['col_y_spacing']  # row 3
+        placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
+
+    # 5× Ferrite beads (LC filter, one per rail) — placed in row 3 + 2mm offset
+    bec_ferrite = [fp for fp, _ in groups.get('bec_ferrite', [])]
+    for i, fp in enumerate(bec_ferrite[:5]):
+        col_idx = i + 1
+        x = BEC_BUCK_COL_X[col_idx]
+        y = BEC_BUCK_ZONE['origin_y'] + 3 * BEC_BUCK_ZONE['col_y_spacing'] + 2.0
+        placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
+
+    # 2× Polymer electrolytic (enhanced filter for V5_PI5 + V5_AI) — below ferrite
+    bec_polymer = [fp for fp, _ in groups.get('bec_polymer_cap', [])]
+    for i, fp in enumerate(bec_polymer[:2]):
+        col_idx = i + 2   # cols 2 (V5_PI5), 3 (V5_AI)
+        x = BEC_BUCK_COL_X[col_idx]
+        y = BEC_BUCK_ZONE['origin_y'] + 3 * BEC_BUCK_ZONE['col_y_spacing'] + 4.5
+        placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
+
+    # Voltage supervisor for V5_PI5 — adjacent to buck #2 col
+    for fp, _ in groups.get('bec_supervisor', []):
+        placements[fp['ref']] = (SUPERVISOR_POS[0], SUPERVISOR_POS[1], 'F.Cu', 0.0)
+
+    # 2× NTC inrush limiters (in parallel) — top of board, battery section
+    bec_ntc = [fp for fp, _ in groups.get('ntc_icl', [])]
+    for i, fp in enumerate(bec_ntc[:2]):
+        x, y = NTC_POS[i + 1]
+        placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
+
+    # Indicator LEDs (battery + rev-pol) — in battery section
+    for fp, _ in groups.get('led_pwr', []):
+        placements[fp['ref']] = (LED_PWR_POS[0], LED_PWR_POS[1], 'F.Cu', 0.0)
+    for fp, _ in groups.get('led_rpol', []):
+        placements[fp['ref']] = (LED_RPOL_POS[0], LED_RPOL_POS[1], 'F.Cu', 0.0)
+
+    # 16× BEC solder pads — distributed on board edges (T7)
+    for fp, key in groups.get('bec_pad', []):
+        # key is the value string like "PAD_V5_FC_PLUS"; strip "PAD_" prefix
+        pad_key = key.replace('PAD_', '', 1)
+        if pad_key in BEC_PAD_POS:
+            x, y = BEC_PAD_POS[pad_key]
+            placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
 
     # 11) FC connector
     for fp, _ in groups.get('fc_connector', []):
@@ -510,22 +690,46 @@ def main():
         grid_half_h = (pg['rows'] - 1) * pg['cell_h'] / 2.0
         zones[ch] = (mx + dx * PASSIVE_ZONE_OFFSET_MM - grid_half_w,
                      my + dy * PASSIVE_ZONE_OFFSET_MM - grid_half_h)
-    per_zone = (len(passives) + 3) // 4
+    # Phase 4b-REDO2: first ~65 "passive" components are BEC supporting passives
+    # (buck input/output caps, feedback divider resistors, LC filter caps).
+    # Send them to a dedicated BEC passive overflow zone in the lower-middle band
+    # (y=44..56). The remaining ~160 are channel-specific decoupling/BEMF parts.
+    BEC_PASSIVE_COUNT = 65            # first N passives go to BEC zone
+    BEC_PASSIVE_ORIGIN = (12.0, 44.0)
+    BEC_PASSIVE_COLS = 25
+    BEC_PASSIVE_ROWS = 6
+    BEC_PASSIVE_CELL = 1.4
     pg = CHANNEL_PASSIVE_GRID
+
+    # Channel passives = passives[BEC_PASSIVE_COUNT:]
+    channel_passives = passives[BEC_PASSIVE_COUNT:]
+    per_zone = (len(channel_passives) + 3) // 4
+
     for i, fp in enumerate(passives):
-        ch = (i // per_zone) + 1
+        if i < BEC_PASSIVE_COUNT:
+            # BEC passive zone — lower-middle band, 25×6 grid
+            idx_in_bec = i
+            col = idx_in_bec % BEC_PASSIVE_COLS
+            row = idx_in_bec // BEC_PASSIVE_COLS
+            x = BEC_PASSIVE_ORIGIN[0] + col * BEC_PASSIVE_CELL
+            y = BEC_PASSIVE_ORIGIN[1] + row * BEC_PASSIVE_CELL
+            placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
+            continue
+        # Channel passive
+        ch_idx = i - BEC_PASSIVE_COUNT
+        ch = (ch_idx // per_zone) + 1
         ch = min(ch, 4)
-        idx_in_zone = i % per_zone
+        idx_in_zone = ch_idx % per_zone
         col = idx_in_zone % pg['cols']
         row = idx_in_zone // pg['cols']
         zx, zy = zones[ch]
         x = zx + col * pg['cell_w']
         y = zy + row * pg['cell_h']
-        # Skip if exceeds zone
         if row >= pg['rows']:
-            # Overflow — wrap to next available area
-            x = 22.0 + (idx_in_zone % 20) * 1.2
-            y = 5.0 + (idx_in_zone // 20) * 1.5
+            # Overflow — extend BEC passive overflow strip
+            extra = (i - BEC_PASSIVE_COUNT) - per_zone * pg['rows'] * pg['cols']
+            x = BEC_PASSIVE_ORIGIN[0] + (extra % 25) * 1.4
+            y = BEC_PASSIVE_ORIGIN[1] + BEC_PASSIVE_ROWS * BEC_PASSIVE_CELL + 1.5 + (extra // 25) * 1.5
         placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
 
     print(f"\nAssigned positions: {len(placements)} / {len(fps)} footprints")
