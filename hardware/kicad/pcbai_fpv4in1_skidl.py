@@ -493,15 +493,25 @@ C_VMOTOR_SUPER_CT = Part("Device", "C", value="100nF",
 C_VMOTOR_SUPER_CT[1] += U_VMOTOR_SUPER[6]
 C_VMOTOR_SUPER_CT[2] += GND
 
-# ─────────── Phase 2-burst-resize NEW: 4× per-channel protection LEDs ───────────
-# Per master 2026-05-22 Task #41 part 3. Per-channel "channel killed" indicator.
-# Wired to MCU GPIO PA11 (currently NC per PHASE2A_PIN_MAP) — hardware ready,
-# firmware unchanged (Sai locked AM32 unchanged); future firmware can drive these.
-# Phase 4b-redo4 places them; this PR adds BOM only.
+# ─────────── Phase 3-redo: global OV/UV → kill-bus interface ───────────
+# TPS3700 PG_VMOTOR is open-drain, active-low when out-of-window. Feeds each
+# channel's per-channel kill rail via diode-OR (handled inside make_channel).
+# Channel kill rails are passed in to channel instantiation below.
+GLOBAL_OVUV_N = PG_VMOTOR   # alias for clarity at channel-call site
+# 10kΩ pull-up on PG_VMOTOR (open-drain output of TPS3700)
+R_PG_VMOTOR_PU = Part("Device", "R", value="10K",
+                      footprint="Resistor_SMD:R_0402_1005Metric",
+                      description="PG_VMOTOR pull-up 10K → +3V3 (TPS3700 open-drain)")
+R_PG_VMOTOR_PU[1] += GLOBAL_OVUV_N
+R_PG_VMOTOR_PU[2] += V3V3
+
+# ─────────── Phase 2-burst-resize: 4× firmware-driven channel-status LEDs ──────
+# Wired to MCU PA11 (NC per PHASE2A_PIN_MAP). Firmware-future drives via PA11.
+# Phase 3-redo adds a SEPARATE hardware fault LED set below.
 for ch in range(1, 5):
-    led = Part("Device", "LED", value="RED_KILL",
+    led = Part("Device", "LED", value="RED_KILL_FW",
                footprint="LED_SMD:LED_0603_1608Metric",
-               description=f"Channel-killed indicator CH{ch} (red 0603) — driven by MCU PA11 future fw")
+               description=f"FW channel-status LED CH{ch} (red 0603, MCU PA11 driven, future fw)")
     r_led = Part("Device", "R", value="1K",
                  footprint="Resistor_SMD:R_0402_1005Metric")
     kill_node = Net(f"KILL_LED_NODE_CH{ch}")
@@ -511,11 +521,139 @@ for ch in range(1, 5):
     led["A"] += kill_node
     led["K"] += led_pa11   # MCU sinks to turn LED on (active-low)
 
+# ─────────── Phase 3-redo NEW: 4× hardware-driven protection-fault LEDs ────────
+# Per master Phase 3a additions. Tied directly to per-channel kill_local_n
+# (LM393 + 74LVC1G08 output of channel-internal trip logic). Lights when ANY
+# channel-local protection trips — independent of firmware/MCU state, so it
+# reports even if MCU is hung. Separate from the PA11-driven status LEDs above.
+KILL_LOCAL_N_BUS = []  # populated below by make_channel return values
+for ch in range(1, 5):
+    led_hw = Part("Device", "LED", value="RED_FAULT_HW",
+                  footprint="LED_SMD:LED_0603_1608Metric",
+                  description=f"HW protection fault LED CH{ch} (red 0603, lights on kill_local_n LOW)")
+    r_led_hw = Part("Device", "R", value="1K",
+                    footprint="Resistor_SMD:R_0402_1005Metric")
+    r_led_hw[1] += V3V3
+    r_led_hw[2] += led_hw["A"]
+    # Cathode tied to KILL_LOCAL_N_CH<ch> — wired up post-channel-instantiation
+    # via the KILL_LOCAL_N_BUS list (see channel loop below).
+    led_hw_kill_net = Net(f"HW_FAULT_LED_K_CH{ch}")
+    led_hw["K"] += led_hw_kill_net
+    KILL_LOCAL_N_BUS.append(led_hw_kill_net)
+
+# ─────────── Phase 3-redo: bus-current Hall sensor (ACS770ECB-200B) ───────────
+# Master adjudication 2026-05-22: GO ACS770ECB-200B over ACS772ECB-250B (sureshot
+# over consign-order). JLC C696103, Extended tier, 249 units in stock.
+#
+# Specs (Allegro datasheet ACS770 rev. cited via JLC partdetail):
+#   Range:       ±200 A bidirectional
+#   Sensitivity: 10 mV/A (V_OUT = V_CC/2 + I × 10 mV/A; V_CC = 5V → 2.5V centered)
+#   Bandwidth:   120 kHz (≥50 kHz spec ✓)
+#   Primary R:   100 µΩ (≤150 µΩ spec ✓)
+#   Isolation:   4800 Vrms withstand 60s (≥2 kV spec ✓ by 2.4×)
+#   AEC-Q100:    Grade 1 (-40 to +125°C)
+#   Package:     CB-5 (formed-lead surface-mount, 4 primary + 1 GND + 3 signal)
+#
+# Saturation behavior (master-documented): above ±200 A, V_OUT clips at 0V/5V
+# (rail). NOT damage — sensor recovers immediately when current drops back.
+# Per master adjudication: ±200A covers normal/aggressive flight (30-200 A bus)
+# and most burst events. Only saturates on rare statistical 4×100A aligned-burst
+# (<100ms duration). Per-motor DShot telemetry from AM32 gives FC redundant
+# data — bus saturation event is detectable from FC's per-motor sum vs bus.
+HALL_VCC = Net("HALL_VCC_5V")            # 5V supply for ACS770 (V5 rail)
+HALL_VOUT_RAW = Net("HALL_VOUT_RAW")     # 5V-domain ratiometric output
+BUS_CURR_HALL_OUT = Net("BUS_CURR_HALL_OUT")  # AUX header pin 3 (to FC)
+VMOTOR_HALL_HI = Net("VMOTOR_HALL_HI")   # primary side IN (from CBULK output side)
+VMOTOR_HALL_LO = Net("VMOTOR_HALL_LO")   # primary side OUT (to 4-channel split)
+
+U_HALL = Part("Connector_Generic", "Conn_01x08", value="ACS770ECB-200B-PFF-T",
+              footprint="Package_TO_SOT_SMD:TO-220-5_Vertical",
+              description="ACS770ECB-200B Hall current sensor (JLC C696103) — ±200A, 10mV/A, 5V ratiometric, 4800Vrms iso, AEC-Q100 Grade 1; placement in VMOTOR rail between CBULK and 4-channel split")
+# CB-5 package pinout (per Allegro ACS770 datasheet):
+#   pins 1,2 = primary current input (IP+)
+#   pins 3,4 = primary current output (IP-)
+#   pin 5 (left of body) = GND
+#   pin 6 (center) = VCC
+#   pin 7 (filter cap pin) = FILTER (external 1nF for noise filter)
+#   pin 8 (rightmost signal) = VIOUT
+# Using Conn_01x08 placeholder; Phase 4 swap to custom ACS770 symbol from
+# components.kicad_sym.
+U_HALL[1] += VMOTOR_HALL_HI
+U_HALL[2] += VMOTOR_HALL_HI
+U_HALL[3] += VMOTOR_HALL_LO
+U_HALL[4] += VMOTOR_HALL_LO
+U_HALL[5] += GND
+U_HALL[6] += HALL_VCC
+U_HALL[7] += Net("HALL_FILTER_CAP")   # FILTER pin (1nF to GND for noise filter)
+U_HALL[8] += HALL_VOUT_RAW
+
+# HALL_VCC from V5 (board's 5V rail). Local bypass.
+R_HALL_VCC = Part("Device", "R", value="0R",
+                  footprint="Resistor_SMD:R_0402_1005Metric",
+                  description="Hall VCC zero-ohm bridge (option for filter) — V5 to HALL_VCC_5V")
+R_HALL_VCC[1] += V5
+R_HALL_VCC[2] += HALL_VCC
+C_HALL_VCC_1u = Part("Device", "C", value="1uF",
+                     footprint="Capacitor_SMD:C_0402_1005Metric",
+                     description="Hall VCC bypass 1uF")
+C_HALL_VCC_1u[1] += HALL_VCC
+C_HALL_VCC_1u[2] += GND
+C_HALL_VCC_100n = Part("Device", "C", value="100nF",
+                       footprint="Capacitor_SMD:C_0402_1005Metric",
+                       description="Hall VCC bypass 100nF")
+C_HALL_VCC_100n[1] += HALL_VCC
+C_HALL_VCC_100n[2] += GND
+
+# Hall FILTER pin cap (per datasheet — 1nF sets ~120kHz BW corner)
+C_HALL_FILTER = Part("Device", "C", value="1nF",
+                     footprint="Capacitor_SMD:C_0402_1005Metric",
+                     description="Hall FILTER pin cap 1nF (sets ~120kHz BW corner)")
+C_HALL_FILTER[1] += U_HALL[7]
+C_HALL_FILTER[2] += GND
+
+# Hall VOUT (0-5V ratiometric, 2.5V centered) → level shift to 0-3.3V for FC ADC.
+# Resistor divider: 3.3V_out = 5V × R_low / (R_high + R_low). Want 5V → 3.3V
+# → ratio = 0.66 → R_high=10K, R_low=20K gives 0.66 ratio. Use 10K + 20K E12.
+R_HALL_DIV_HI = Part("Device", "R", value="10K",
+                     footprint="Resistor_SMD:R_0402_1005Metric",
+                     description="Hall VOUT divider top — 5V to 3.3V ratio (10K)")
+R_HALL_DIV_HI[1] += HALL_VOUT_RAW
+R_HALL_DIV_HI[2] += BUS_CURR_HALL_OUT
+R_HALL_DIV_LO = Part("Device", "R", value="20K",
+                     footprint="Resistor_SMD:R_0402_1005Metric",
+                     description="Hall VOUT divider bottom — 5V to 3.3V ratio (20K)")
+R_HALL_DIV_LO[1] += BUS_CURR_HALL_OUT
+R_HALL_DIV_LO[2] += GND
+C_HALL_OUT_FILT = Part("Device", "C", value="10nF",
+                       footprint="Capacitor_SMD:C_0402_1005Metric",
+                       description="Hall output post-divider noise filter 10nF")
+C_HALL_OUT_FILT[1] += BUS_CURR_HALL_OUT
+C_HALL_OUT_FILT[2] += GND
+
+# Splice VMOTOR through the Hall sensor: rename the VMOTOR net at the
+# CBULK→4-channel boundary. Conservative approach: tie VMOTOR_HALL_HI to VMOTOR
+# directly (with copper-rail trace passing through Hall primary on layout).
+# VMOTOR_HALL_LO becomes the actual rail powering the 4 channels.
+R_HALL_VMOTOR_BRIDGE = Part("Device", "R", value="0R",
+                            footprint="Resistor_SMD:R_2512_6332Metric",
+                            description="VMOTOR Hall sensor primary-side bridge (zero-ohm jumper for skidl wiring; layout uses copper bar through Hall primary)")
+R_HALL_VMOTOR_BRIDGE[1] += VMOTOR
+R_HALL_VMOTOR_BRIDGE[2] += VMOTOR_HALL_HI
+
+# VMOTOR_HALL_LO is the rail that feeds the 4 channels (referred to as VMOTOR
+# in the channel sub-circuit). In netlist terms we collapse the two — the Hall
+# primary in layout is a copper bar so RF/DC current path is continuous.
+R_HALL_VMOTOR_FORWARD = Part("Device", "R", value="0R",
+                              footprint="Resistor_SMD:R_2512_6332Metric",
+                              description="VMOTOR Hall sensor primary-side forward (zero-ohm jumper) — VMOTOR_HALL_LO out → VMOTOR_CH (rail to channels)")
+R_HALL_VMOTOR_FORWARD[1] += VMOTOR_HALL_LO
+VMOTOR_CH = Net("VMOTOR_CH")  # post-Hall channel-feed rail (functionally = VMOTOR)
+R_HALL_VMOTOR_FORWARD[2] += VMOTOR_CH
+
 # ─────────── Phase 2-burst-resize NEW: 6-pin AUX header ───────────
 # Per master 2026-05-22 Task #41 part 1. Adds Hall sensor input + spare GPIO.
 # (Phase 2e-REDO converted prior BEC_OUT 10-pin to solder pads; this is the
 # auxiliary expansion connector master expected.)
-BUS_CURR_HALL_OUT = Net("BUS_CURR_HALL_OUT")
 EXT_TEMP_NTC = Net("EXT_TEMP_NTC")
 AUX_GPIO_1 = Net("AUX_GPIO_1")
 AUX_GPIO_2 = Net("AUX_GPIO_2")
@@ -702,10 +840,12 @@ for ch_num in range(1, 5):
     # SWD pads — one set per MCU (4 SWD test-point sets on board edge)
     swdio = Net(f"SWDIO_CH{ch_num}")
     swclk = Net(f"SWCLK_CH{ch_num}")
-    # Motor outputs returned by make_channel
-    motor_a, motor_b, motor_c = make_channel(
+    # Per-channel kill bus (active-low) — open-drain wire-OR; pull-up inside channel
+    kill_bus_ch = Net(f"KILL_BUS_CH{ch_num}")
+    # Motor outputs + kill signals returned by make_channel
+    motor_a, motor_b, motor_c, kill_local_n_ch, kill_rail_ch_n = make_channel(
         ch_num,
-        vmotor=VMOTOR,
+        vmotor=VMOTOR_CH,         # post-Hall VMOTOR rail (Phase 3-redo)
         v5=V5,
         v3v3=V3V3,
         v3v3a=V3V3A,
@@ -714,7 +854,12 @@ for ch_num in range(1, 5):
         tlm=TLM_BUS,
         swdio=swdio,
         swclk=swclk,
+        global_ovuv_n=GLOBAL_OVUV_N,
+        kill_bus=kill_bus_ch,
     )
+
+    # Wire the per-channel HW fault LED cathode → kill_local_n of this channel.
+    KILL_LOCAL_N_BUS[ch_num - 1] += kill_local_n_ch
 
     # Motor solder pads — 3× per channel (12 total). 3.0 mm dia exposed pads
     # on board edge per Phase 2.5 placement.
