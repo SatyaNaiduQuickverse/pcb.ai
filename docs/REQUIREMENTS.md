@@ -26,7 +26,7 @@ Hardware design + reliability + brand are the IP; firmware is community-owned.
 | Input voltage | 6S LiPo / Li-ion (4.2 V × 6 = 25.2 V full; LVC at 3.5 V × 6 = 21 V) |
 | Channels | 4 |
 | Continuous current / channel | **70 A** |
-| Peak / burst current / channel | TBD at Phase 2 from MOSFET selection + thermal sim; target ≥ 1.5 × continuous |
+| Peak / burst current / channel | **100 A @ 10s pulse** (1.43× continuous; anchored on iFlight BLITZ E80 premium reference, top of 1.25-1.40× band — Sai delegation 2026-05-22, master adjudicated via sureshot-vs-SOTA rule). Supersedes Phase 2c/d use of "70A peak = continuous" (informal; now formalized) |
 | Bus capacitance | Sized at Phase 2 from ripple analysis (ngspice + datasheet ripple-current rating) |
 | Power topology | Single shared input rail → 4 × 3-phase half-bridges; independent low-side current shunts per phase per channel (12 shunts total) per AM32 hw-target convention |
 
@@ -95,8 +95,8 @@ trail in `docs/PHASE2B_MOSFET.md`.
 | Shunt | 0.2 mΩ ±1 % 1 W low-inductance (Vishay WSLP / WSL2512 / equivalent class); specific JLC part picked at Phase 3 schematic |
 | CSA part | **TI INA186A3IDCKR** (100 V/V gain, SC-70-6) — closed at Phase 2c; JLC C-number verified at Phase 3 schematic |
 | Effective gain | 20 mV/A (`MILLIVOLT_PER_AMP = 20` in `firmware/am32-target/PCBAI_FPV4IN1_F421.target.h`) |
-| ADC range usage | 70 A peak × 20 mV/A = 1.4 V at AT32F421 ADC (42 % of 3.3 V reference; comfortable headroom + noise floor) |
-| Shunt dissipation | 0.2 mΩ × 70² A = 0.98 W per shunt; 11.7 W board-total (included in Phase 6 thermal envelope) |
+| ADC range usage | **100 A burst × 20 mV/A = 2.0 V at AT32F421 ADC (61% of 3.3 V reference; 39% headroom — supersedes prior 70A-peak / 42% calc per CL-009 burst lock 2026-05-22)**. Continuous 70 A = 1.4 V / 42% remains the operating-state point. |
+| Shunt dissipation | 0.2 mΩ × 70² A = 0.98 W per shunt continuous; **0.2 mΩ × 100² A = 2.0 W per shunt @ 10s burst (Phase 2-burst-resize verifies shunt pulse-energy rating)**; 11.7 W board-total continuous (Phase 6 thermal envelope) |
 
 ### Power supply subsystem
 

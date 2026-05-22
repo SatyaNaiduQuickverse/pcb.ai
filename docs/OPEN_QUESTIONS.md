@@ -86,6 +86,18 @@ Cross-reference: locked specs live in `docs/REQUIREMENTS.md`; this file logs
 - **Rationale**: Sai's call. "Let physics dictate". Phase 2.5 converges: minimum-board-area for 4 × 70 A continuous + JLC trace/space density → take the larger of {physics-required, nearest standard FPV stack pattern (20×20 / 30.5×30.5 / 40×40 / 60×60 family)}. Start large, iterate down across subsequent revisions.
 - **Trade-offs**: First-rev board may be larger than direct competitors. Acceptable — Sai prioritizes margins via simulation confidence over first-rev compactness.
 
+### CL-009 — FPV 4-in-1 burst current — 100 A @ 10s pulse
+
+- **Raised**: 2026-05-22
+- **Closed**: 2026-05-22 — **100 A burst @ 10s pulse per channel** (1.43× the 70 A continuous of CL-007)
+- **Rationale**: Sai delegated to master, master adjudicated via sureshot-vs-SOTA rule. Anchored on iFlight BLITZ E80 = top of the premium-FPV 1.25–1.40× peak-to-continuous band. SOTA aggressive picks (1.5×+) carry validation risk; iFlight reference is field-proven on a comparable spec class. Sureshot wins.
+- **Effect on plan**: Supersedes Phase 2c/d's informal use of "70 A peak" (which was peak=continuous). Phase 2-burst-resize is the engineering re-survey:
+  - Bus caps ripple-current rating
+  - F.Cu motor-phase trace ampacity (IPC-2152 at 100 A 10s pulse — may force 2 oz or 3 oz copper)
+  - AON6260 rev-pol FET (67 A continuous max → 100 A burst exceeds — survey replacement ≥ 120 A continuous / ≥ 200 A pulse, 6S/30V class)
+  - Current-sense path (20 mV/A × 100 A = 2.0 V at AT32F421 ADC — 61% of 3.3 V reference; previously 1.4 V / 42%)
+- **Carry-forward**: AM32 firmware unchanged (rules out balance-lead telemetry / differential ADC / R3 single-MCU architectures); 4× MCU per-channel design preserved.
+
 ### OQ-006 — PL1 MCU family pick (closed)
 
 - **Raised + Closed**: 2026-05-22
