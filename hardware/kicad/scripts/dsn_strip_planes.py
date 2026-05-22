@@ -1,14 +1,16 @@
-"""Phase 5b — strip inner power-plane layers (In1.Cu .. In4.Cu) from DSN.
+"""Phase 4a-restack-8L — strip inner copper layers (In1.Cu .. In6.Cu) from DSN.
 
-Per playbook trap T1: Freerouting must NOT see plane layers in the (structure)
-section, otherwise it may route on them. Inner copper pours land via KiCad
-post-route (Phase 5c).
+Per playbook trap T1 + T8: Freerouting must NOT see plane layers in the
+(structure) section, otherwise it may route on them OR ExportSpecctraDSN silently
+fails. The Phase 4a-restack-8L workflow strips ALL 6 inner layers from the raw
+DSN, then dsn_inject_planes.py re-injects only the intended layout (5 signal +
+3 planes) with full plane definitions and padstack expansion.
 
 Input:  hardware/kicad/pcbai_fpv4in1_raw.dsn (from ExportSpecctraDSN)
 Output: hardware/kicad/pcbai_fpv4in1.dsn      (consumed by Freerouting)
 
-Idempotent: if no In*.Cu layers are present (current Phase 5b state — 2-layer
-.kicad_pcb), the script is a no-op pass-through.
+Idempotent: if no In*.Cu layers are present in the raw DSN, this script is a
+no-op pass-through.
 """
 import re
 import sys
@@ -19,11 +21,11 @@ PROCESSED_DSN = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv
 
 
 def strip_inner_layers(txt):
-    """Find each `(layer In[1-4].Cu ...)` block inside (structure ...) and remove it."""
+    """Find each `(layer In[1-6].Cu ...)` block inside (structure ...) and remove it."""
     stripped_count = 0
     while True:
-        # Find next (layer InN.Cu opening
-        m = re.search(r'\(layer In[1-4]\.Cu\b', txt)
+        # Find next (layer InN.Cu opening — supports 8L (In1..In6)
+        m = re.search(r'\(layer In[1-6]\.Cu\b', txt)
         if not m:
             break
         start = m.start()
