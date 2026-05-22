@@ -120,18 +120,14 @@ Cross-reference: locked specs live in `docs/REQUIREMENTS.md`; this file logs
 - **Sai's answer**: "we have time.. as much as we need.. quality matters a lot here."
 - **Effect on plan**: full P3.5 reference audit + full P6 sim regime + P6.5 external review all in scope without time-pressure trade-offs. Wall-clock for the FPV 4-in-1 will be 4–6 months as estimated in the dev plan, possibly more if sim re-loops surface design changes (Rigor §6 — expected). The development pace is bounded by quality gates, not calendar deadlines.
 
-### OQ-005 — Freerouting Java mismatch (resolution deferred to Phase 5 prep)
+### OQ-005 — Freerouting Java mismatch (CLOSED at Phase 5a)
 
-- **Raised**: 2026-05-22. **Deferred**: 2026-05-22.
-- **Question**: Pre-installed Freerouting jar (post-v2.2.4 build, compiled with JDK 25 / class file v69) cannot run on the system's Java 21. `PCB_PLAYBOOK.md` §Toolchain explicitly names v2.2.4. novapcb worker is currently using the install — uncoordinated change would disrupt their work.
-- **Options**:
-  - **(A)** Install JDK 25 to a worker-local path (e.g. `/home/novatics64/local/jdk25/`), wrap Freerouting invocation to use it. No system change, no novapcb impact.
-  - **(B)** Swap jar to the literal Freerouting v2.2.4 release when novapcb is free. Matches playbook spec exactly; sureshot per Sai's tiebreaker rule.
-  - **(C)** Wait for novapcb's JDK upgrade — passive, depends on their timeline.
-- **Recommendation**: A (lowest novapcb-disruption risk) OR B (matches playbook spec, sureshot) — both defensible. Phase 5 prep adjudicates.
-- **Trade-offs**: A keeps newer Freerouting (unverified for our routing recipe); B is the playbook-validated version but requires novapcb's window. C is the passive option, may delay Phase 5.
-- **Resolution-gate**: Phase 5 (routing) entry — must close before routing work begins.
-- **Risk accepted in deferral**: Freerouting unavailable in Phase 0; non-blocking for Phases 1-4 which don't use it. Phase 5 entry gated on resolution.
+- **Raised**: 2026-05-22. **Deferred**: 2026-05-22. **Closed**: 2026-05-22 — **Option A** executed.
+- **Resolution**: Worker-local Adoptium Temurin JDK 25.0.2+10 installed at `/home/novatics64/escworker/local/jdk25/`; worker-local Freerouting v2.2.4 jar at `/home/novatics64/escworker/local/freerouting/freerouting-v2.2.4.jar`. System Java 21 stays default; shared `/home/novatics64/local/freerouting/freerouting.jar` UNCHANGED (SHA256 + mtime verified pre/post). novapcb unaffected.
+- **Finding during execution**: Worker's downloaded Freerouting v2.2.4 release jar has the IDENTICAL SHA256 (`f5ed374182900ccc78e473518bbb9f6b869f4a07159495f663a76f52bb10523b`) to the shared jar novapcb uses; both built with JDK 25.0.2+10 per manifest. Master's Phase 5a prep research ("v2.2.4 requires Java ≥ 21") was based on source-Java-level claims; the actual release BINARY needs Java 25 (class file v69). Master's adjudication on the Phase 5a URGENT (2026-05-22) re-confirmed Option A as the path forward.
+- **Smoke tests**: Freerouting v2.2.4 starts cleanly on the worker-local JDK 25 (version line confirmed); 2-net DSN end-to-end smoke produced .ses output successfully. Toolchain ready for Phase 5b DSN routing.
+- **Cross-project insight surfaced for Sai**: novapcb's shared jar is the same JDK-25-built binary; they must either have their own worker-local JDK 25, or be hitting this same incompat. Worth coordinating if it helps unblock novapcb's reported routing pain.
+- **See**: `docs/PHASE5A_FREEROUTING_SETUP.md` for full execution record.
 
 ### OQ-003 — HV60 family ship target
 
