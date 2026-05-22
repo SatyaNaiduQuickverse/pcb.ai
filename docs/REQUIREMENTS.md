@@ -100,13 +100,32 @@ trail in `docs/PHASE2B_MOSFET.md`.
 
 ### Power supply subsystem
 
-Closed at Phase 2d — see `docs/PHASE2D_POWER.md` for the full part-by-part breakdown.
+Closed at Phase 2d (original); expanded at Phase 2d-REDO (PR #16's successor) — see `docs/PHASE2D_REDO_BEC_EXPANSION.md` for the full 6-rail breakdown after `feedback-anchor-on-most-capable-reference` rule application. Architecture: autonomous-drone power-hub (RPi 5 + AI HAT host), NOT premium FPV class.
 
-| Rail | Source | Part | JLC C# | Capability | Load (estimated) |
+| Rail | Source | Part | JLC C# | Capability | Load |
 |---|---|---|---|---|---|
-| +BATT (6S, 18.0–25.2 V) | LiPo battery direct | n/a | n/a | bus | 280 A peak / 70 A continuous per channel |
-| +5 V | LMR51420YDDCR buck from +BATT | TI buck SOT-23-6 | C7296200 | 2 A @ V_in 3.5–36 V | ~461 mA average (drivers + LDO input) |
-| +3.3 V | TLV76733DRVR LDO from +5 V | TI LDO WSON-6 | C2848334 | 1 A | ~421 mA average (4 MCUs + 12 CSAs) |
+| +BATT (6S, 18.0–25.2 V) | LiPo battery direct → 2× MF72 5D25 parallel NTC ICL → 4× AON6260 rev-pol FETs → bulk caps | NTC: MF72 5D25; rev-pol: AON6260; TVS: SMBJ33A | C116485 × 2; existing | bus (16 A inrush ceiling) | 280 A peak / 70 A continuous per channel |
+| +V5_FC | TPS54560DDAR buck from +VMOTOR | TI buck SOIC-8-EP | **C31966** | 5 A @ VIN 12-30 V | ~1 A typ (FC + cam + RX + LEDs) |
+| +V5_PI5 | TPS54560DDAR buck from +VMOTOR (independent rail per Sai's sensitive-electronics directive) | TI buck SOIC-8-EP | **C31966** | 5 A @ VIN 12-30 V | ~3 A typ, 5 A peak (RPi 5) |
+| +V5_AI | TPS54560DDAR buck from +VMOTOR (independent rail — split from old V5_RPI per master adjudication URGENT #1 2026-05-22) | TI buck SOIC-8-EP | **C31966** | 3 A @ VIN 12-30 V | ~1.5 A typ, 3 A peak (AI HAT) |
+| +V9_VTX1 | AOZ1284PI buck from +VMOTOR | AOS buck SOIC-8-EP | **C48060** | 2 A @ VIN 3-36 V | ~0.8 A typ (VTX #1) |
+| +V9_VTX2 | AOZ1284PI buck from +VMOTOR (full-isolation from #1) | AOS buck SOIC-8-EP | **C48060** | 2 A @ VIN 3-36 V | ~0.8 A typ (VTX #2) |
+| +V3V3 | TLV76733DRVR LDO from +V5_FC | TI LDO WSON-6 | C2848334 | 1 A | ~660 mA typ (4 MCUs + 12 CSAs + sensors) |
+
+**Per-rail safety (tier-matched per master adjudication 2026-05-22):**
+- 5V rails (sensitive RPi/AI/FC): TPS259251DRCR eFuse (C527680) on each + SMAJ5.0A TVS (C113952) + ferrite-LC filter
+- 9V rails (VTX): Bourns MF-MSMF200 polyfuse (2A hold) + SMAJ9.0A TVS (C113955) + ferrite-LC filter
+- 3V3: TLV76733 internal current-limit (no extra IC)
+- V5_PI5 + V5_AI: enhanced LC filter (100 µF polymer electrolytic + multi-ceramic) + voltage supervisor IC
+
+**Battery input:**
+- 2× MF72 5D25 NTC ICL in parallel (C116485 × 2) → 16 A I_max, 2.5 Ω cold, ~25 mΩ hot
+- Power-on green LED + reverse-polarity red LED (indicator hardware)
+- Existing rev-pol stack (4× AON6260) + SMBJ33A TVS preserved
+
+**BEC_OUT 10-pin AUX header** exposes all 6 rails + 3× GND for external loads.
+
+**Total BEC peak dissipation:** 13.6 W (master's "~12W" target ≈ matches).
 
 Bulk capacitance: **2 × 470 µF 63 V aluminum electrolytic SMD radial, low-ESR (≤ 30 mΩ at 100 kHz), ≥ 1.5 A RMS ripple per cap, parallel = 940 µF total bulk**. Specific JLC C-number picked at Phase 3 schematic against current stock; criteria fully constrain the pick.
 
