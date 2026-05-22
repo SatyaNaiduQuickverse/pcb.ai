@@ -9,9 +9,11 @@ import re
 from pathlib import Path
 
 PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb")
-BOARD_W = 50.0
-BOARD_H = 50.0
-MOUNT_PATTERN = 40.0           # M3 hole-center to hole-center
+BOARD_W = 85.0                 # Phase 4c-resume Option C: rectangular 85×70 (was 50×50)
+BOARD_H = 70.0
+# Custom mount-hole pattern for 85×70 board (no standard FPV fit; pick 75×60 inset)
+MOUNT_X_PAD = 5.0              # inset from board edges in X
+MOUNT_Y_PAD = 5.0              # inset from board edges in Y
 M3_HOLE_DIA = 3.2              # mm clearance through-hole
 
 txt = PCB.read_text()
@@ -99,12 +101,11 @@ EDGE_CUTS = '''
 '''.format(W=BOARD_W, H=BOARD_H)
 
 # ───────────── 3. Append 4× M3 mounting holes on 40×40 pattern ─────────────
-mh_inset = (BOARD_W - MOUNT_PATTERN) / 2.0       # 5 mm
 mh_positions = [
-    (mh_inset, mh_inset),
-    (BOARD_W - mh_inset, mh_inset),
-    (mh_inset, BOARD_H - mh_inset),
-    (BOARD_W - mh_inset, BOARD_H - mh_inset),
+    (MOUNT_X_PAD, MOUNT_Y_PAD),
+    (BOARD_W - MOUNT_X_PAD, MOUNT_Y_PAD),
+    (MOUNT_X_PAD, BOARD_H - MOUNT_Y_PAD),
+    (BOARD_W - MOUNT_X_PAD, BOARD_H - MOUNT_Y_PAD),
 ]
 MOUNTING_HOLES = ""
 for (x, y) in mh_positions:
@@ -119,7 +120,7 @@ for (x, y) in mh_positions:
 last_paren = txt.rstrip().rfind(')')
 insertion = EDGE_CUTS + MOUNTING_HOLES + "\n"
 txt = txt[:last_paren] + insertion + txt[last_paren:]
-print(f"[2/3] Added Edge.Cuts 50×50 mm + 4× M3 holes on 40×40 mm pattern at corners {mh_positions}")
+print(f"[2/3] Added Edge.Cuts {BOARD_W:.0f}×{BOARD_H:.0f} mm + 4× M3 holes at corners {mh_positions}")
 
 PCB.write_text(txt)
 print(f"[3/3] Wrote: {PCB}  ({PCB.stat().st_size:,} bytes)")

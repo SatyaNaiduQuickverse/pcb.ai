@@ -53,11 +53,13 @@ Hardware design + reliability + brand are the IP; firmware is community-owned.
 
 | Item | Spec |
 |---|---|
-| Specific part | **AOS AON6260** (closed at Phase 2b — see `docs/PHASE2B_MOSFET.md`) |
-| Package | DFN5x6-8 (single-FET; dual-package avoided for thermal isolation) |
-| Voltage class (V_DS) | ≥ 60 V (covers 25.2 V bus + motor back-EMF + factor-of-safety per playbook §Routing) — AON6260 = 60 V |
-| Continuous I_D rating (datasheet) | ≥ 80 A at T_C = 25 °C (sanity floor; sim is the real gate) — AON6260 = 85 A |
-| R_DS(on) | ≤ 2.0 mΩ typ @ V_GS = 10 V — AON6260 = 1.95 mΩ typ / 2.4 mΩ max |
+| Specific part (phase MOSFETs ×24) | **AOS AOTL66912** TOLL-8L (closed at Phase 4c-resume per Sai's Option C 2026-05-22 — see `docs/PHASE4C_RESUME_OPTIONC.md`). 100V over-spec, 1.4mΩ typ, **R_thJC = 0.2 °C/W** (5× better than DFN5x6), 269A @ T_C=100°C, JLC C3291324 |
+| Specific part (reverse-pol ×4) | **AOS AON6260** DFN5x6-8 (Phase 2e adjudication — stays for low-side ideal-diode) |
+| Package | TOLL-8L for phase (Sai's Option C, 2026-05-22 — thermal envelope requires it); DFN5x6 for reverse-pol |
+| Voltage class (V_DS) | ≥ 60 V — AOTL66912 = 100V (over-spec, no margin penalty); AON6260 = 60 V |
+| Continuous I_D rating (datasheet) | ≥ 200 A at T_C = 100°C — AOTL66912 = 269 A (well clear); AON6260 = 67 A (reverse-pol path, briefer load) |
+| R_DS(on) | ≤ 2.0 mΩ typ @ V_GS = 10 V — AOTL66912 = 1.4 mΩ typ / 1.7 max; AON6260 = 1.95 mΩ typ |
+| R_thJC (phase MOSFETs) | ≤ 0.3 °C/W — AOTL66912 = 0.2 typ / 0.3 max ✓ (the key reason for the Option C switch) |
 | **Operating thermal target** | T_J ≤ 100 °C at 70 A continuous per phase, 60 °C ambient, still-air, JLC stack-up with reasonable cu pour, Elmer FEM validated against analytical 1-D — **operate-condition criterion** |
 | Sourcing note | AOS-original AON6260 not in JLC SMT library. Prototype: hand-solder from DigiKey/Mouser. Production: consignment via JLC or qualify a second-source DFN5x6 60V part at Phase 2c |
 
@@ -153,8 +155,8 @@ Phase 4 (placement) renders the visual schematic in the KiCad GUI against the Ph
 
 Closed at Phase 2.5 — see `docs/PHASE2_5_FITCHECK.md`.
 
-- **Form factor**: **50 × 50 mm** (locked at Phase 2.5). 40 × 40 and 30 × 60 candidates failed B.Cu overflow on the locked-BOM area budget (24+4 AON6260 MOSFETs + 12 shunts + 2 × 470 µF bulk = ~1440 mm² pure component vs 1600 / 1800 mm² of those candidates). 50 × 50 mm gives F.Cu 64% margin / B.Cu 19% margin (≥ 15% per-side criterion).
-- **Mounting**: 4 × M3 holes on 40 × 40 mm Betaflight stack pattern, 5 mm inset from board corners.
+- **Form factor**: **85 × 70 mm rectangular** (re-locked at Phase 4c-resume per Sai's Option C 2026-05-22). Previous 50 × 50 was for 24× DFN5x6 MOSFETs (~1440 mm² B.Cu pure); with 24× TOLL phase MOSFETs (~2520 mm² B.Cu pure, 3.5× larger area each), B.Cu density requires larger board. 85 × 70 gives ~24% B.Cu margin after 40% routing overhead.
+- **Mounting**: 4 × M3 holes at corners (5, 5), (80, 5), (5, 65), (80, 65) — 75 × 60 mm custom pattern (no standard FPV match; accepted at Phase 4c-resume since Sai's direction enables custom mount). Drone integrator picks mount-bracket / adapter plate.
 - **Stack-up**: 6-layer per playbook §Routing — locked at Phase 4a (PR #12):
   - F.Cu — signal (signal-side: MCUs, drivers, CSAs, decoupling, LEDs, FC connector, motor pads, SWD)
   - In1.Cu — +VMOTOR power plane
@@ -165,7 +167,8 @@ Closed at Phase 2.5 — see `docs/PHASE2_5_FITCHECK.md`.
 - **Edge.Cuts outline**: 50.0 × 50.0 mm square. Edge.Cuts layer stroke 0.05 mm.
 - **Placement** (Phase 4b PR #13): all 249 footprints positioned per Phase 2.5 sketch. 205 on F.Cu, 44 on B.Cu. 0 at origin, 0 out of bounds. T7 connector accessibility verified (FC top, motor pads on all 4 edges, SWD left edge, battery bottom edge). Heatsink zone (46 × 32 mm B.Cu center) clear of non-MOSFET components.
 - **F.Cu / B.Cu split**: F.Cu = signal side (4 MCUs, 4 drivers, 12 CSAs, buck+LDO, ESD, decoupling, LEDs, FC connector, motor pads, SWD pads); B.Cu = power side (24+4 MOSFETs, 12 shunts, 2 bulk caps, TVS, buck inductor).
-- **Heatsink**: ~46 × 32 mm aluminum 6061-T6, 3-5 mm thick, covering B.Cu MOSFET cluster. Mounted via M2 screws (through-PCB tap or adhesive bond — Phase 4 decides). Silicone thermal pad 0.5 mm thick, 4-6 W/m·K thermal conductivity, 1500 V isolation.
+- **Heatsink**: **80 × 55 mm Al6061-T6, 4 mm thick** (re-locked at Phase 4c-resume — bigger heatsink possible on 85 × 70 board; covers 24× TOLL 6×4 grid with 2 mm border). Finned with **10× area multiplier** (fin geometry: practical 25-30 mm tall fins at ~3 mm pitch). Silicone thermal pad 0.5 mm, 4 W/m·K conservative (datasheet 4-6 range). Mounted via M2 screws (through-PCB tap or adhesive — Phase 4 GUI decides).
+- **Edge.Cuts outline**: 85 × 70 mm rectangular. Edge.Cuts layer stroke 0.05 mm.
 - **Connectors**: FC connector (JST SM08B-SRSS-TB) on F.Cu top edge, centered. 12 motor pads (3.0 mm dia) distributed 3-per-edge across all 4 board edges, one channel per edge. SWD pads (12-16 total, castellated-edge style preferred) on F.Cu left edge.
 - **Z-axis budget**: 14-22 mm total board+heatsink+bulk-cap stack depending on bulk-cap placement (B.Cu preferred; F.Cu fallback). FPV stack compatibility needs a custom dual-standoff structure OR low-profile polymer bulk caps (~6 mm tall vs 13.5 mm aluminum electrolytic) — Phase 4 placement decides.
 - **Mounting**: Bolt pattern matches the converged form factor's standard once Phase 2.5 lands
