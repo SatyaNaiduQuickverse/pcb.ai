@@ -4,7 +4,20 @@
 **Branch**: `phase4-place-bec/subsystem-s5`.
 **Master directive**: Task #54 dispatch 2026-05-22 (first conflict-tier-3 subsystem — switching noise generators at 500-600 kHz).
 
-## What's placed (17 components; S1+S2+S3+S6 preserved)
+## Stage-2 amendment 2026-05-22 — full S5 placement (51 components)
+
+Master GATE feedback: 17-core placement was incomplete. Stage-2 places ALL remaining S5 components per netlist per §S5 spec ("LC filters per output + protection diodes + bias passives"):
+- **+10 FB resistors** (R6/R7, R8/R9, R10/R11, R12/R13, R14/R15) — within 5 mm of each buck IC
+- **+5 boot caps** (C7, C11, C14, C17, C20) per buck
+- **+5 output caps** (C8, C12, C15, C18, C21) per buck
+- **+3 eFuses** (J7, J8, J9 TPS259251) — V5 rails V_IN protection
+- **+2 polyfuses** (F1, F2 MF-MSMF200) — V9 rails V_IN protection
+- **+5 ferrite beads** (L6-L10 600 Ω@100 MHz) — per-rail output filter
+- **+5 TVS** (D10-D12 SMAJ5.0A V5 rails; D13-D14 SMAJ9.0A V9 rails) — V_OUT clamp
+
+**S5 total: 51 components placed.** Sims regenerate IDENTICALLY (SPICE deck-level circuit topology unchanged; placement doesn't affect electrical sim results) — per master adjudication.
+
+## What's placed (51 components; S1+S2+S3+S6 preserved)
 
 | Ref | Value | Footprint | Layer | Position (x, y) mm | Notes |
 |---|---|---|---|---|---|
@@ -25,8 +38,38 @@
 | D9 | SS54 | D_SMA | F.Cu | (12, 38) | V9_VTX2 Schottky SW |
 | J13 | TLV76733DRVR | WSON-6 | F.Cu | (38, 70) | V3V3 LDO (V5_FC → V3V3) |
 | J10 | VSUP_5V_TBD | SOT-23 | F.Cu | (50, 65) | V5_PI5 supervisor |
+| R6 / R7 | 52K3 / 10K | R_0402 | F.Cu | (5, 60) / (5, 62) | V5_FC FB pair |
+| C7 / C8 | 100nF / 22uF | C_0402 / C_0805 | F.Cu | (5, 64) / (38, 60) | V5_FC boot + C_OUT |
+| J7 | TPS259251 | DFN-10-1EP | F.Cu | (38, 55) | V5_FC eFuse |
+| L6 | 600Ω@100MHz | L_0805 | F.Cu | (28, 54) | V5_FC ferrite filter |
+| D10 | SMAJ5.0A | D_SMA | F.Cu | (44, 60) | V5_FC TVS V_OUT clamp |
+| R8 / R9 | 52K3 / 10K | R_0402 | F.Cu | (5, 70) / (5, 72) | V5_PI5 FB pair |
+| C11 / C12 | 100nF / 22uF | C_0402 / C_0805 | F.Cu | (5, 74) / (38, 70) | V5_PI5 boot + C_OUT |
+| J8 | TPS259251 | DFN-10-1EP | F.Cu | (35, 75) | V5_PI5 eFuse |
+| L7 | 600Ω@100MHz | L_0805 | F.Cu | (52, 75) | V5_PI5 ferrite filter |
+| D11 | SMAJ5.0A | D_SMA | F.Cu | (44, 70) | V5_PI5 TVS |
+| R10 / R11 | 52K3 / 10K | R_0402 | F.Cu | (95, 60) / (95, 62) | V5_AI FB pair |
+| C14 / C15 | 100nF / 22uF | C_0402 / C_0805 | F.Cu | (95, 64) / (62, 60) | V5_AI boot + C_OUT |
+| J9 | TPS259251 | DFN-10-1EP | F.Cu | (62, 55) | V5_AI eFuse |
+| L8 | 600Ω@100MHz | L_0805 | F.Cu | (70, 54) | V5_AI ferrite |
+| D12 | SMAJ5.0A | D_SMA | F.Cu | (56, 60) | V5_AI TVS |
+| R12 / R13 | 102K / 10K | R_0402 | F.Cu | (95, 70) / (95, 72) | V9_VTX1 FB pair |
+| C17 / C18 | 100nF / 22uF | C_0402 / C_0805 | F.Cu | (95, 74) / (62, 70) | V9_VTX1 boot + C_OUT |
+| F1 | MF-MSMF200 | Fuse_1206 | F.Cu | (62, 78) | V9_VTX1 polyfuse |
+| L9 | 600Ω@100MHz | L_0805 | F.Cu | (70, 75) | V9_VTX1 ferrite |
+| D13 | SMAJ9.0A | D_SMA | F.Cu | (56, 70) | V9_VTX1 TVS |
+| R14 / R15 | 102K / 10K | R_0402 | F.Cu | (5, 18) / (5, 22) | V9_VTX2 FB pair |
+| C20 / C21 | 100nF / 22uF | C_0402 / C_0805 | F.Cu | (5, 26) / (5, 40) | V9_VTX2 boot + C_OUT |
+| F2 | MF-MSMF200 | Fuse_1206 | F.Cu | (5, 14) | V9_VTX2 polyfuse |
+| L10 | 600Ω@100MHz | L_0805 | F.Cu | (5, 30) | V9_VTX2 ferrite |
+| D14 | SMAJ9.0A | D_SMA | F.Cu | (5, 34) | V9_VTX2 TVS |
 
-**Spec deviation flag (honest)**: master estimated "15-25 components" including eFuses + polyfuses + TVS + FB resistors + bypass caps. This PR places 17 **core** components (5 buck ICs + 5 inductors + 5 Schottky + LDO + supervisor). Per-rail safety stacks (J7-J9 TPS259251 eFuses + F1-F2 polyfuses + D10-D14 TVS) and per-rail FB resistors + bypass caps remain at kinet2pcb-default — placed in Phase 4-place-channels-x4 alongside per-channel passives, OR in a Phase 4-place-bec-safety follow-up if master prefers. Master may adjudicate (recommend: defer to channels-x4 since safety stacks cluster around buck output near load).
+**Stage-2 layout principles (per master amendment guidance):**
+- FB resistors within ≤7 mm of each buck IC for feedback-loop stability
+- eFuses/polyfuses on V_IN side
+- TVS adjacent to each buck V_OUT for output transient clamp
+- Ferrite beads in safety LC filter path (after C_OUT, before BEC pad)
+- All within existing NW/NE/SW/central pocket zones — no spec zone expansion
 
 ## Master spec interpretation — zone allocation
 
@@ -49,8 +92,8 @@ S5 bucks placed at inner edges of each quadrant (x=12 NW; x=88 NE) — **adjacen
   - All 10 pair-wise combinations (S1↔S2, S1↔S3, S1↔S5, S1↔S6, S2↔S3, S2↔S5, S2↔S6, S3↔S5, S3↔S6, S5↔S6): **0**
 - ✓ Mount holes H1-H4 cleared (S5 SW Buck 5 cluster at y=22-38 vs H1 at (5, 5) — y gap ≥14 mm)
 - ✓ `target.h` md5 unchanged: `7a4549d27e0e83d3d6f1ffaf67527d24`
-- ✓ Only S5 components placed (17); S1+S2+S3+S6 preserved
-- ✓ 534 footprints remain at kinet2pcb-default
+- ✓ Only S5 components placed (51 — stage-2 amended); S1+S2+S3+S6 preserved
+- ✓ 499 footprints remain at kinet2pcb-default
 
 ## 3D renders
 
