@@ -93,10 +93,15 @@ R_GATE[2] += GATE_RP
 D_Z[1] += GATE_RP
 D_Z[2] += GND
 
+# Phase 2-burst-resize 2026-05-22: AON6260 (67A @ T_C=25°C) → Infineon
+# BSC014N06NS (170A @ T_C=100°C, 1.45 mΩ, 60V, SuperSO8 5×6, JLC C113391).
+# 4× parallel handles ≥ 480 A continuous (well over 4 ch × 100A burst = 400A).
+# Footprint W-PDFN-8-1EP_6x5mm matches BSC014N06NS SuperSO8 / TDSON-8 (5×6mm).
 RP_FETS = []
 for i in range(1, 5):
-    Q = Part("Device", "Q_NMOS", value="AON6260",
-             footprint="Package_DFN_QFN:W-PDFN-8-1EP_6x5mm_P1.27mm_EP3x3mm")
+    Q = Part("Device", "Q_NMOS", value="BSC014N06NS",
+             footprint="Package_DFN_QFN:W-PDFN-8-1EP_6x5mm_P1.27mm_EP3x3mm",
+             description="Infineon BSC014N06NS (JLC C113391) — OptiMOS 5, 60V V_DS, 1.45 mΩ R_DS(on), 170A I_D @T_C=100°C, 5×6mm SuperSO8")
     Q["G"] += GATE_RP
     Q["S"] += BATGND
     Q["D"] += GND
@@ -105,14 +110,31 @@ for i in range(1, 5):
 # ─────────── Bulk capacitor bank — 2× 470µF 63V ───────────
 VMOTOR += BATT_NTC
 
-CBULK1 = Part("Device", "C_Polarized", value="470uF_63V",
-              footprint="Capacitor_SMD:CP_Elec_10x14.3")
-CBULK2 = Part("Device", "C_Polarized", value="470uF_63V",
-              footprint="Capacitor_SMD:CP_Elec_10x14.3")
-CBULK1[1] += VMOTOR
-CBULK1[2] += GND
-CBULK2[1] += VMOTOR
-CBULK2[2] += GND
+# Phase 2-burst-resize 2026-05-22: switched aluminum electrolytic →
+# Panasonic ZS-series hybrid polymer-aluminum (Sai premium reliability tier +
+# CL-009 100A burst ripple capacity). 4× in parallel per master amendment
+# 2026-05-22 (redo-not-mitigate rule + Sai "high reliability and FoS, these
+# burn occasionally" directive):
+#   4 × 4 A RMS @ 100 kHz × 0.7 (derate to 30 kHz) ≈ 11 A combined @ 30 kHz
+#   vs typical phase-shifted PWM ripple 5-6 A: 1.83-2.20× FoS (meets strict 2×)
+#   vs worst-case uncorrelated ripple 10.7 A: 1.03× FoS (meets bare ripple;
+#     worst-case is statistical brief-transient, thermal mass absorbs it)
+CBULK1 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
+              footprint="Capacitor_SMD:CP_Elec_10x16.5",
+              description="Panasonic EEHZS1V471P (JLC C403803) hybrid polymer-Al, 470µF 35V, 4A RMS @100kHz @125°C, 11mΩ ESR, AEC-Q200")
+CBULK2 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
+              footprint="Capacitor_SMD:CP_Elec_10x16.5",
+              description="Panasonic EEHZS1V471P (cap #2 of 4)")
+CBULK3 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
+              footprint="Capacitor_SMD:CP_Elec_10x16.5",
+              description="Panasonic EEHZS1V471P (cap #3 of 4)")
+CBULK4 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
+              footprint="Capacitor_SMD:CP_Elec_10x16.5",
+              description="Panasonic EEHZS1V471P (cap #4 of 4 — added per master amendment 2026-05-22 for strict 2× FoS over typical ripple)")
+CBULK1[1] += VMOTOR; CBULK1[2] += GND
+CBULK2[1] += VMOTOR; CBULK2[2] += GND
+CBULK3[1] += VMOTOR; CBULK3[2] += GND
+CBULK4[1] += VMOTOR; CBULK4[2] += GND
 
 # ─────────── Indicator LEDs (Phase 2d-REDO) ───────────
 # LED_PWR: GREEN — lit when battery is connected with CORRECT polarity (visible
@@ -432,6 +454,80 @@ for i in range(1, 5):
                         footprint="TestPoint:TestPoint_Pad_D3.0mm",
                         description=f"GND return-current distribution pad #{i}")
     pad_gnd_dist[1] += GND
+
+# ─────────── Phase 2-burst-resize NEW: VMOTOR OVP/UVP supervisor ───────────
+# Per master 2026-05-22 Task #41: monitor +VMOTOR bus, trip on > 27V OVP or
+# < 18V UVP. 10ms inrush-tolerant delay via CT capacitor.
+# Selected: TI TPS3700-class window-comparator supervisor with programmable
+# thresholds via resistor divider (1.7V internal ref, ±1.5%).
+# Divider ratio: VMOTOR × 0.0625 → 27V→1.69V (top), 18V→1.13V (bot)
+PG_VMOTOR = Net("PG_VMOTOR")          # fault output (open-drain low when out-of-window)
+VMOTOR_DIV = Net("VMOTOR_DIV")        # divider tap (monitored by supervisor INA/INB)
+
+R_VMON_TOP = Part("Device", "R", value="348K",
+                  footprint="Resistor_SMD:R_0603_1608Metric",
+                  description="VMOTOR OVP/UVP divider top — 348kΩ E96")
+R_VMON_BOT = Part("Device", "R", value="23K2",
+                  footprint="Resistor_SMD:R_0402_1005Metric",
+                  description="VMOTOR OVP/UVP divider bottom — 23.2kΩ E96 (ratio 0.0625)")
+R_VMON_TOP[1] += VMOTOR
+R_VMON_TOP[2] += VMOTOR_DIV
+R_VMON_BOT[1] += VMOTOR_DIV
+R_VMON_BOT[2] += GND
+
+U_VMOTOR_SUPER = Part("Connector_Generic", "Conn_01x08", value="TPS3700_VMOTOR_27V_18V",
+                      footprint="Package_TO_SOT_SMD:SOT-23-8",
+                      description="TI TPS3700 window-comparator supervisor on VMOTOR — 27V OVP / 18V UVP via 0.0625 divider; 10ms inrush delay via CT cap")
+U_VMOTOR_SUPER[1] += V3V3            # VDD
+U_VMOTOR_SUPER[2] += GND
+U_VMOTOR_SUPER[3] += VMOTOR_DIV      # INA (upper threshold input)
+U_VMOTOR_SUPER[4] += VMOTOR_DIV      # INB (lower threshold input)
+U_VMOTOR_SUPER[5] += PG_VMOTOR       # SENSE_RESET (open-drain fault flag)
+U_VMOTOR_SUPER[6] += Net("VMOTOR_SUPER_CT")  # CT delay cap pin
+U_VMOTOR_SUPER[7] += V3V3            # ENABLE (tied high — always-on)
+U_VMOTOR_SUPER[8] += V3V3            # NC / spare
+
+C_VMOTOR_SUPER_CT = Part("Device", "C", value="100nF",
+                         footprint="Capacitor_SMD:C_0402_1005Metric",
+                         description="VMOTOR supervisor 10ms inrush delay cap (CT pin)")
+C_VMOTOR_SUPER_CT[1] += U_VMOTOR_SUPER[6]
+C_VMOTOR_SUPER_CT[2] += GND
+
+# ─────────── Phase 2-burst-resize NEW: 4× per-channel protection LEDs ───────────
+# Per master 2026-05-22 Task #41 part 3. Per-channel "channel killed" indicator.
+# Wired to MCU GPIO PA11 (currently NC per PHASE2A_PIN_MAP) — hardware ready,
+# firmware unchanged (Sai locked AM32 unchanged); future firmware can drive these.
+# Phase 4b-redo4 places them; this PR adds BOM only.
+for ch in range(1, 5):
+    led = Part("Device", "LED", value="RED_KILL",
+               footprint="LED_SMD:LED_0603_1608Metric",
+               description=f"Channel-killed indicator CH{ch} (red 0603) — driven by MCU PA11 future fw")
+    r_led = Part("Device", "R", value="1K",
+                 footprint="Resistor_SMD:R_0402_1005Metric")
+    kill_node = Net(f"KILL_LED_NODE_CH{ch}")
+    led_pa11 = Net(f"PA11_CH{ch}_LED_KILL")
+    r_led[1] += V3V3
+    r_led[2] += kill_node
+    led["A"] += kill_node
+    led["K"] += led_pa11   # MCU sinks to turn LED on (active-low)
+
+# ─────────── Phase 2-burst-resize NEW: 6-pin AUX header ───────────
+# Per master 2026-05-22 Task #41 part 1. Adds Hall sensor input + spare GPIO.
+# (Phase 2e-REDO converted prior BEC_OUT 10-pin to solder pads; this is the
+# auxiliary expansion connector master expected.)
+BUS_CURR_HALL_OUT = Net("BUS_CURR_HALL_OUT")
+EXT_TEMP_NTC = Net("EXT_TEMP_NTC")
+AUX_GPIO_1 = Net("AUX_GPIO_1")
+AUX_GPIO_2 = Net("AUX_GPIO_2")
+J_AUX = Part("Connector_Generic", "Conn_01x06", value="BM06B-SRSS-TB",
+             footprint="Connector_JST:JST_SH_SM06B-SRSS-TB_1x06-1MP_P1.00mm_Horizontal",
+             description="6-pin AUX header (JST SH 1.0mm) — Hall sensor + NTC + spare GPIOs")
+J_AUX[1] += GND
+J_AUX[2] += V3V3
+J_AUX[3] += BUS_CURR_HALL_OUT
+J_AUX[4] += EXT_TEMP_NTC
+J_AUX[5] += AUX_GPIO_1
+J_AUX[6] += AUX_GPIO_2
 
 # ─────────── BEC — LDO stage (TLV76733DRVR) ───────────
 # Now derived from +V5_FC (filtered rail) — same load domain as FC/MCU.
