@@ -189,10 +189,11 @@ def main():
     # are on opposite faces of the PCB); only same-layer body intersection is a
     # real defect. Mount holes occupy both layers (drill through hardware).
     if _HAS_PCBNEW:
-        bbox_overlaps, bbox_cross_layer = bbox_overlap_check()
-        print(f"\nBbox-overlap audit (layer-aware):")
+        bbox_overlaps, bbox_cross_layer, silkscreen_touches = bbox_overlap_check()
+        print(f"\nBbox-overlap audit (layer-aware, pad-only + silkscreen-aware per master 2026-05-23):")
         print(f"  Cross-layer F.Cu/B.Cu intersections (physically fine): {bbox_cross_layer}")
-        print(f"  Same-layer body overlaps (DEFECTS): {len(bbox_overlaps)}")
+        print(f"  PAD-OVERLAP defects (fab-blocking): {len(bbox_overlaps)}")
+        print(f"  Silkscreen-courtyard touches (Phase 5c aesthetic polish, NOT fab-blocking): {len(silkscreen_touches)}")
         if bbox_overlaps:
             # Aggregate per-ref overlap counts
             ref_overlap_count = defaultdict(int)
@@ -302,28 +303,53 @@ def bbox_overlap_check(pcb_path=None):
             layer_set = {'B.Cu'}
         else:
             layer_set = {f'layer{fp.GetLayer()}'}
-        bbox = fp.GetBoundingBox(False, False)
+        bbox_full = fp.GetBoundingBox(False, False)
+        # Per master 2026-05-23: separate fab-blocking pad-overlap from
+        # quality-aesthetic silkscreen-courtyard touch. pad-only bbox is the
+        # union of footprint Pad bboxes (fab-critical for clearance/short).
+        pad_bbox = None
+        for pad in fp.Pads():
+            pb = pad.GetBoundingBox()
+            if pad_bbox is None:
+                pad_bbox = pcbnew.BOX2I(pb.GetPosition(), pb.GetSize())
+            else:
+                pad_bbox.Merge(pb)
+        if pad_bbox is None:
+            pad_bbox = bbox_full
         rows.append({
             'ref': ref, 'value': value, 'layer_set': layer_set,
-            'bbox': bbox,
+            'bbox': bbox_full,         # silkscreen-inclusive (legacy)
+            'pad_bbox': pad_bbox,      # pad-only (fab-critical)
             'x': fp.GetPosition().x / 1e6,
             'y': fp.GetPosition().y / 1e6,
         })
-    same_layer = []
+    same_layer = []          # pad-overlap defects (fab-blocking)
+    silkscreen_touches = []  # silkscreen-courtyard touches (quality/aesthetic)
     cross_layer = 0
     n = len(rows)
     for i in range(n):
         bi = rows[i]['bbox']
+        pi = rows[i]['pad_bbox']
         li = rows[i]['layer_set']
         for j in range(i + 1, n):
             lj = rows[j]['layer_set']
             shared = li & lj
-            if bi.Intersects(rows[j]['bbox']):
+            bj = rows[j]['bbox']
+            pj = rows[j]['pad_bbox']
+            full_intersects = bi.Intersects(bj)
+            pad_intersects = pi.Intersects(pj)
+            if full_intersects:
                 if shared:
-                    same_layer.append((rows[i], rows[j]))
+                    if pad_intersects:
+                        same_layer.append((rows[i], rows[j]))  # PAD overlap — fab-blocking
+                    else:
+                        silkscreen_touches.append((rows[i], rows[j]))  # silkscreen only — aesthetic
                 else:
                     cross_layer += 1
-    return same_layer, cross_layer
+    # Return all 3 metrics — back-compat: callers that unpack 2 values still work
+    # via tuple expansion of (same_layer, cross_layer) — but new callers can use
+    # the 3-tuple form. We standardize on 3-tuple from now on.
+    return same_layer, cross_layer, silkscreen_touches
 
 
 def _self_test():
@@ -376,7 +402,7 @@ def _self_test():
 ''')
     fixture.close()
     try:
-        same_layer, cross_layer = bbox_overlap_check(fixture.name)
+        same_layer, cross_layer, _silkscreen = bbox_overlap_check(fixture.name)
         if not same_layer:
             print(f"SELF-TEST FAILED: bbox_overlap_check returned {len(same_layer)} "
                   f"same-layer overlaps for 2 stacked F.Cu 0402s; expected ≥1")

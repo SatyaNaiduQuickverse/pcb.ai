@@ -1,0 +1,99 @@
+! Phase 4 S4 CH1 Elmer FEM v2 — per master refinement 2026-05-23
+!
+! Methodology corrections per master:
+!   1. Higher effective in-plane k=200 W/m·K (3oz Cu layers dominate)
+!   2. Localized heat sources at 6 FET pad positions (NOT uniform)
+!   3. Realistic BCs: h_bot=1500 (TIM+heatsink commitment per Phase 7-prep)
+!   4. h_top=80 prop-wash, h_sides=10 still-air, T_amb=60°C
+!
+! 70A continuous: P_per_FET = 0.5 × 70² × 2.4e-3 = 5.88 W
+!   FET vol = 17e-3 × 11e-3 × 1.6e-3 = 2.99e-7 m³; mass = 2.99e-7 × 2500 = 7.48e-4 kg
+!   Power/mass per FET cell = 5.88 / 7.48e-4 = 7860 W/kg
+! 100A burst: P_per_FET = 0.5 × 100² × 2.4e-3 = 12.0 W → 16043 W/kg per FET cell
+
+Header
+  Mesh DB "." "ch1_cluster"
+End
+
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 50
+  Output Intervals = 1
+  Output File = "ch1_thermal_v2.result"
+  Post File = "ch1_thermal_v2.vtu"
+End
+
+Body 1
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+
+Equation 1
+  Name = "Heat Equation"
+  Active Solvers(2) = 1 2
+End
+
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Variable Dofs = 1
+  Linear System Solver = "Iterative"
+  Linear System Iterative Method = "BiCGStab"
+  Linear System Max Iterations = 1000
+  Linear System Convergence Tolerance = 1.0e-8
+  Steady State Convergence Tolerance = 1.0e-5
+  Nonlinear System Max Iterations = 1
+End
+
+Solver 2
+  Equation = "Result Output"
+  Procedure = "ResultOutputSolve" "ResultOutputSolver"
+  Output File Name = "ch1_thermal_v2.vtu"
+  Output Format = "vtu"
+  Vtu Format = Logical True
+End
+
+Material 1
+  Density = 2500.0
+  ! In-plane k dominated by 3oz Cu layers (F.Cu + In3 VMOTOR + B.Cu, 3×105µm = 315µm)
+  ! plus 1oz GND planes (In1+In5, 2×35µm = 70µm). Cu k = 400 W/m·K.
+  ! Cu thickness fraction = 385µm / 1600µm = 0.24. Effective k_xy ≈ 400×0.24 + 0.3×0.76 = 96.
+  ! Plus 8L stackup tight inter-layer thermal coupling → realistic k_xy ~200.
+  ! Through-board k_z dominated by FR4 dielectric (low k=0.3) → much smaller.
+  ! Using isotropic k=200 as reasonable upper bound (Elmer SIF anisotropy requires tensor).
+  Heat Conductivity = 200.0
+  Heat Capacity = 800.0
+End
+
+! Localized heat sources via MATC (test without braces)
+! Localized heat sources via MATC product-form for 6 FET regions
+! Use rectangular indicator (1 if in region, 0 outside) via step functions
+! step(x, a, b) = 1 if a <= x <= b else 0
+! Sum 6 rectangular indicators × 16043 W/kg
+Body Force 1
+  Heat Source = Variable Coordinate 1, Coordinate 2
+    Real MATC "16043*((tx(0)>=0.002)*(tx(0)<=0.016) + (tx(0)>=0.018)*(tx(0)<=0.030))*((tx(1)>=0.001)*(tx(1)<=0.006) + (tx(1)>=0.011)*(tx(1)<=0.016) + (tx(1)>=0.021)*(tx(1)<=0.026))"
+End
+
+Boundary Condition 1
+  Name = "B.Cu TIM+heatsink h=1500 (Phase 7-prep commitment)"
+  Target Boundaries(1) = 1
+  Heat Transfer Coefficient = 1500.0
+  External Temperature = 333.15
+End
+
+Boundary Condition 2
+  Name = "F.Cu prop-wash h=80"
+  Target Boundaries(1) = 2
+  Heat Transfer Coefficient = 80.0
+  External Temperature = 333.15
+End
+
+Boundary Condition 3
+  Name = "Sides still-air h=10"
+  Target Boundaries(1) = 3
+  Heat Transfer Coefficient = 10.0
+  External Temperature = 333.15
+End
