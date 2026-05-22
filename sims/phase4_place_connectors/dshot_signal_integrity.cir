@@ -1,0 +1,46 @@
+* DShot 600 signal integrity — FC pin → MCU input via PCB trace
+* Trace length: ~30-50mm typical from FC connector (50, 80) to MCU at quadrant
+* Trace model: lossy transmission line via lumped LC ladder (5 sections)
+*   PCB microstrip 0.2mm wide on 0.2mm prepreg over GND plane
+*   Z0 ≈ 65 Ω (KiCad calc); L ≈ 0.32 nH/mm, C ≈ 0.08 pF/mm
+* Total for 50mm: L_tot = 16 nH, C_tot = 4 pF
+* Driver: FC GPIO push-pull 3.3V, R_src ~50Ω typ
+* Sink: MCU GPIO input C_in ~5pF + USBLC6 ESD cap ~25pF shunt to GND
+*
+* DShot 600: 600 kbaud, bit period 1.67µs. Pulse width 1250ns (1) or 625ns (0).
+* Critical: rise/fall time ≤ 100ns acceptable (Betaflight spec)
+
+* Driver — 3.3V pulse with 10ns ideal rise/fall, 50Ω output impedance
+V_DRIVE drv 0 PULSE(0 3.3 100n 10n 10n 625n 1.67u)
+R_SRC drv tx_in 50
+
+* Transmission line — 5-section LC ladder for 50mm microstrip
+* per section: 10mm = L=3.2nH, C=0.8pF
+L1 tx_in n1 3.2n
+C1 n1 0 0.8p
+L2 n1 n2 3.2n
+C2 n2 0 0.8p
+L3 n2 n3 3.2n
+C3 n3 0 0.8p
+L4 n3 n4 3.2n
+C4 n4 0 0.8p
+L5 n4 rx_in 3.2n
+C5 rx_in 0 0.8p
+
+* USBLC6 ESD shunt at receiver (25 pF Cj)
+C_ESD rx_in 0 25p
+
+* MCU input capacitance (5pF typ STM32 / AT32 GPIO)
+C_MCU rx_in 0 5p
+
+.SAVE V(drv) V(tx_in) V(rx_in)
+
+* Run two cycles to see rise/fall behavior
+.TRAN 1n 4u UIC
+
+.control
+run
+wrdata dshot_data.txt V(drv) V(tx_in) V(rx_in)
+.endc
+
+.END
