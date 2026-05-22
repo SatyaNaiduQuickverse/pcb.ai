@@ -43,20 +43,18 @@ PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad
 # acceptable since adjacent S2 bulk-cap zone (Y=13-42) is empty at PR-time).
 # ────────────────────────────────────────────────────────────────────
 S1_POSITIONS = {
-    # ref          (x,    y,   layer,  rot)   notes
-    # Per master PR-A4 step 1 amendment 2026-05-23: S1 zone amended Y=0-15.
-    # Single-row RP FET cluster (4 in parallel, electrically identical to 2×2).
-    # Saves 5mm vertical for CH3/CH4 channel template placement at Y=15-42.
+    # Per master PR-A4 Option F (2026-05-23): revert S1 to Y=0-13 single-row.
+    # CH3/CH4 use P=9 FET pitch fitting in Y=13-42 channel zone.
     'J1':         (50.0,  4.0, 'F.Cu',  0.0),   # BATT_PAD (XT30) center-bottom
-    'D26':        (15.0,  5.0, 'B.Cu',  0.0),   # SMBJ33A TVS (moved west to clear Q1)
-    # NTCs at row 1 west/east of XT30
-    'R1':         (22.0, 11.0, 'F.Cu',  0.0),   # MF72_5D25 NTC inrush #1 (west)
-    'R2':         (78.0, 11.0, 'F.Cu',  0.0),   # MF72_5D25 NTC inrush #2 (east)
-    # 4 RP FETs in single row at y=11 (B.Cu), 4× parallel BSC014N06NS
-    'Q1':         (30.0, 11.0, 'B.Cu',  0.0),
-    'Q2':         (45.0, 11.0, 'B.Cu',  0.0),
-    'Q3':         (55.0, 11.0, 'B.Cu',  0.0),
-    'Q4':         (70.0, 11.0, 'B.Cu',  0.0),
+    'D26':        (15.0,  5.0, 'B.Cu',  0.0),   # SMBJ33A TVS
+    'R1':         (22.0, 10.0, 'F.Cu',  0.0),   # MF72_5D25 NTC inrush #1 (west)
+    'R2':         (78.0, 10.0, 'F.Cu',  0.0),   # MF72_5D25 NTC inrush #2 (east)
+    # 4 RP FETs single row at y=10 (B.Cu), 4× parallel BSC014N06NS
+    # SuperSO8 5×6mm bbox: at y=10, extends y=7-13 — fits Y=0-13 cleanly.
+    'Q1':         (30.0, 10.0, 'B.Cu',  0.0),
+    'Q2':         (45.0, 10.0, 'B.Cu',  0.0),
+    'Q3':         (55.0, 10.0, 'B.Cu',  0.0),
+    'Q4':         (70.0, 10.0, 'B.Cu',  0.0),
 }
 # Expected SKiDL values per ref (sanity check; abort if mismatched)
 S1_EXPECTED_VALUES = {
@@ -470,12 +468,13 @@ S4_CH1_POSITIONS = {
     'TP21': (5.0,  66.0, 'F.Cu', 0.0),    # MOTOR_C_CH1
     # 6× AOTL66912 MOSFETs on B.Cu (2 columns × 3 phase rows)
     # Hi-side west col x=12 (near motor pad), Lo-side east col x=28
-    'Q5':  (12.0, 45.0, 'B.Cu', 0.0),     # Phase A hi
-    'Q6':  (30.0, 45.0, 'B.Cu', 0.0),     # Phase A lo (x=30 for 1.3mm gap from Q5 x_max=20.35)
+    # CH1 NW P=9 pitch per master PR-A4 Option F: Y=49/58/67 (was 45/58/70 at P=13)
+    'Q5':  (12.0, 49.0, 'B.Cu', 0.0),     # Phase A hi
+    'Q6':  (30.0, 49.0, 'B.Cu', 0.0),     # Phase A lo
     'Q7':  (12.0, 58.0, 'B.Cu', 0.0),     # Phase B hi
     'Q8':  (30.0, 58.0, 'B.Cu', 0.0),     # Phase B lo
-    'Q9':  (12.0, 70.0, 'B.Cu', 0.0),     # Phase C hi
-    'Q10': (30.0, 70.0, 'B.Cu', 0.0),     # Phase C lo
+    'Q9':  (12.0, 67.0, 'B.Cu', 0.0),     # Phase C hi
+    'Q10': (30.0, 67.0, 'B.Cu', 0.0),     # Phase C lo
     # MCU + DRV8300 on F.Cu (interior — east of FET cluster)
     'J18': (32.0, 52.0, 'F.Cu', 0.0),     # AT32F421 MCU LQFP-32 (y=52 clears S2 C3 bbox y_max=45.5)
     'J19': (22.0, 50.0, 'F.Cu', 0.0),     # DRV8300 gate driver HVQFN-24
@@ -601,9 +600,9 @@ S4_CHX_POSITIONS = {
     # CH2 (NE quadrant) — 18 major + 6 MOSFETs
     'TP26': (95.0, 46.0, 'F.Cu', 180.0), 'TP27': (95.0, 56.0, 'F.Cu', 180.0),
     'TP28': (95.0, 66.0, 'F.Cu', 180.0),
-    'Q11': (88.0, 45.0, 'B.Cu', 180.0), 'Q12': (70.0, 45.0, 'B.Cu', 180.0),
+    'Q11': (88.0, 49.0, 'B.Cu', 180.0), 'Q12': (70.0, 49.0, 'B.Cu', 180.0),
     'Q13': (88.0, 58.0, 'B.Cu', 180.0), 'Q14': (70.0, 58.0, 'B.Cu', 180.0),
-    'Q15': (88.0, 70.0, 'B.Cu', 180.0), 'Q16': (70.0, 70.0, 'B.Cu', 180.0),
+    'Q15': (88.0, 67.0, 'B.Cu', 180.0), 'Q16': (70.0, 67.0, 'B.Cu', 180.0),
     'J23': (68.0, 52.0, 'F.Cu', 180.0), 'J24': (78.0, 50.0, 'F.Cu', 180.0),
     'J25': (85.0, 45.0, 'F.Cu', 180.0), 'J26': (85.0, 55.0, 'F.Cu', 180.0),
     'J27': (85.0, 65.0, 'F.Cu', 180.0),
@@ -619,9 +618,10 @@ S4_CHX_POSITIONS = {
     # Mirror y → 80-y instead of 85-y to fit in narrower SW zone clear of S1 Y=0-15.
     'TP33': (5.0, 34.0, 'F.Cu', 180.0), 'TP34': (5.0, 24.0, 'F.Cu', 180.0),
     'TP35': (5.0, 17.0, 'F.Cu', 180.0),
-    'Q17': (12.0, 35.0, 'B.Cu', 180.0), 'Q18': (30.0, 35.0, 'B.Cu', 180.0),
-    'Q19': (12.0, 25.0, 'B.Cu', 180.0), 'Q20': (30.0, 25.0, 'B.Cu', 180.0),
-    'Q21': (12.0, 17.0, 'B.Cu', 180.0), 'Q22': (30.0, 17.0, 'B.Cu', 180.0),
+    # CH3 P=9: mirror y → 85-y of CH1 P=9. CH1 Y=49/58/67 → CH3 Y=36/27/18
+    'Q17': (12.0, 36.0, 'B.Cu', 180.0), 'Q18': (30.0, 36.0, 'B.Cu', 180.0),
+    'Q19': (12.0, 27.0, 'B.Cu', 180.0), 'Q20': (30.0, 27.0, 'B.Cu', 180.0),
+    'Q21': (12.0, 18.0, 'B.Cu', 180.0), 'Q22': (30.0, 18.0, 'B.Cu', 180.0),
     'J28': (32.0, 28.0, 'F.Cu', 180.0), 'J29': (22.0, 30.0, 'F.Cu', 180.0),
     'J30': (15.0, 35.0, 'F.Cu', 180.0), 'J31': (15.0, 25.0, 'F.Cu', 180.0),
     'J32': (15.0, 17.0, 'F.Cu', 180.0),
@@ -635,9 +635,10 @@ S4_CHX_POSITIONS = {
     # CH4 (SE quadrant Y=15-42) — XY-mirrored with 5mm offset
     'TP40': (95.0, 34.0, 'F.Cu', 0.0), 'TP41': (95.0, 24.0, 'F.Cu', 0.0),
     'TP42': (95.0, 17.0, 'F.Cu', 0.0),
-    'Q23': (88.0, 35.0, 'B.Cu', 0.0), 'Q24': (70.0, 35.0, 'B.Cu', 0.0),
-    'Q25': (88.0, 25.0, 'B.Cu', 0.0), 'Q26': (70.0, 25.0, 'B.Cu', 0.0),
-    'Q27': (88.0, 17.0, 'B.Cu', 0.0), 'Q28': (70.0, 17.0, 'B.Cu', 0.0),
+    # CH4 P=9: same Y as CH3 (mirror)
+    'Q23': (88.0, 36.0, 'B.Cu', 0.0), 'Q24': (70.0, 36.0, 'B.Cu', 0.0),
+    'Q25': (88.0, 27.0, 'B.Cu', 0.0), 'Q26': (70.0, 27.0, 'B.Cu', 0.0),
+    'Q27': (88.0, 18.0, 'B.Cu', 0.0), 'Q28': (70.0, 18.0, 'B.Cu', 0.0),
     'J33': (68.0, 28.0, 'F.Cu', 0.0), 'J34': (78.0, 30.0, 'F.Cu', 0.0),
     'J35': (85.0, 35.0, 'F.Cu', 0.0), 'J36': (85.0, 25.0, 'F.Cu', 0.0),
     'J37': (85.0, 17.0, 'F.Cu', 0.0),

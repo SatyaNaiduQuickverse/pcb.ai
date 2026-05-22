@@ -1404,7 +1404,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "01514f43-bf89-4320-b5f8-2cd468b53dfc")
-		(at 12.00 45.00 0.0)
+		(at 12.00 49.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q5"
@@ -7859,7 +7859,7 @@
 	(footprint "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P5.08mm_Vertical"
 		(layer "F.Cu")
 		(uuid "10afb9ed-cb34-4103-b736-59de25e10ca6")
-		(at 78.00 11.00 0.0)
+		(at 78.00 10.00 0.0)
 		(descr "Resistor, Axial_DIN0207 series, Axial, Vertical, pin pitch=5.08mm, 0.25W = 1/4W, length*diameter=6.3*2.5mm^2, http://cdn-reichelt.de/documents/datenblatt/B400/1_4W%23YAG.pdf")
 		(tags "Resistor Axial_DIN0207 series Axial Vertical pin pitch 5.08mm 0.25W = 1/4W length 6.3mm diameter 2.5mm")
 		(property "Reference" "R2"
@@ -10845,7 +10845,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "151f94fa-7aa2-4d72-af3b-7d53e61dc0ad")
-		(at 30.00 17.00 180.0)
+		(at 30.00 18.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q22"
@@ -12390,7 +12390,7 @@
 	(footprint "Package_DFN_QFN:W-PDFN-8-1EP_6x5mm_P1.27mm_EP3x3mm"
 		(layer "B.Cu")
 		(uuid "17776768-7902-4419-8ed9-d0f9083f3620")
-		(at 55.00 11.00 0.0)
+		(at 55.00 10.00 0.0)
 		(descr "W-PDFN, 8 Pin (https://media-www.micron.com/-/media/client/global/documents/products/data-sheet/nor-flash/serial-nor/mt25q/die-rev-a/mt25q_qljs_u_256_aba_0.pdf#page=22), generated with kicad-footprint-generator ipc_noLead_generator.py")
 		(tags "W-PDFN NoLead")
 		(property "Reference" "Q3"
@@ -26341,7 +26341,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "3181a26e-30de-47e9-ab35-adb9329cacd0")
-		(at 88.00 35.00 0.0)
+		(at 88.00 36.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q23"
@@ -26862,7 +26862,7 @@
 	(footprint "Package_DFN_QFN:W-PDFN-8-1EP_6x5mm_P1.27mm_EP3x3mm"
 		(layer "B.Cu")
 		(uuid "32472718-e510-48e1-a856-81a7a23fae9f")
-		(at 70.00 11.00 0.0)
+		(at 70.00 10.00 0.0)
 		(descr "W-PDFN, 8 Pin (https://media-www.micron.com/-/media/client/global/documents/products/data-sheet/nor-flash/serial-nor/mt25q/die-rev-a/mt25q_qljs_u_256_aba_0.pdf#page=22), generated with kicad-footprint-generator ipc_noLead_generator.py")
 		(tags "W-PDFN NoLead")
 		(property "Reference" "Q4"
@@ -30377,7 +30377,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "3be296d7-1f21-467f-8746-0bca5d8238fb")
-		(at 70.00 70.00 180.0)
+		(at 70.00 67.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q16"
@@ -32823,7 +32823,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "3fb86463-6824-4516-bad2-eb7210cf7d8f")
-		(at 70.00 35.00 0.0)
+		(at 70.00 36.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q24"
@@ -37164,7 +37164,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "479b8b5e-8e9b-45ea-94df-25e7aa389fc6")
-		(at 30.00 25.00 180.0)
+		(at 30.00 27.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q20"
@@ -44744,7 +44744,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "5619c8ee-2888-4360-9375-060fb3870c96")
-		(at 88.00 45.00 180.0)
+		(at 88.00 49.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q11"
@@ -45072,7 +45072,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "568d1501-36a8-426b-be8d-560198f0e3fa")
-		(at 70.00 25.00 0.0)
+		(at 70.00 27.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q26"
@@ -51887,7 +51887,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "63244bb7-7119-499c-ab2c-ce804cd7ce7d")
-		(at 30.00 70.00 0.0)
+		(at 30.00 67.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q10"
@@ -61221,7 +61221,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "78e0f2eb-2157-4500-8f4d-ea8a03a5ed0d")
-		(at 70.00 17.00 0.0)
+		(at 70.00 18.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q28"
@@ -77519,7 +77519,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "9d0bd969-4594-45d6-9e0d-013f67dc5ec4")
-		(at 88.00 25.00 0.0)
+		(at 88.00 27.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q25"
@@ -80124,7 +80124,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "a428153b-55f7-4abc-a623-93afbf5adf97")
-		(at 88.00 70.00 180.0)
+		(at 88.00 67.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q15"
@@ -82984,7 +82984,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "a720631a-f7e8-4922-93e2-af410d3f0ee2")
-		(at 30.00 45.00 0.0)
+		(at 30.00 49.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q6"
@@ -86653,7 +86653,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "afb253eb-f46a-4cfb-bcb9-23d0e463c684")
-		(at 12.00 17.00 180.0)
+		(at 12.00 18.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q21"
@@ -95263,7 +95263,7 @@
 	(footprint "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P5.08mm_Vertical"
 		(layer "F.Cu")
 		(uuid "be0c768d-f94d-4a26-8d33-eb36eafd77a3")
-		(at 22.00 11.00 0.0)
+		(at 22.00 10.00 0.0)
 		(descr "Resistor, Axial_DIN0207 series, Axial, Vertical, pin pitch=5.08mm, 0.25W = 1/4W, length*diameter=6.3*2.5mm^2, http://cdn-reichelt.de/documents/datenblatt/B400/1_4W%23YAG.pdf")
 		(tags "Resistor Axial_DIN0207 series Axial Vertical pin pitch 5.08mm 0.25W = 1/4W length 6.3mm diameter 2.5mm")
 		(property "Reference" "R1"
@@ -98802,7 +98802,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "c68d65f8-5646-42bb-867f-7701fdf8637d")
-		(at 70.00 45.00 180.0)
+		(at 70.00 49.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q12"
@@ -108088,7 +108088,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "db774a2b-d371-4d82-966b-5f17072dbeb3")
-		(at 12.00 35.00 180.0)
+		(at 12.00 36.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q17"
@@ -113098,7 +113098,7 @@
 	(footprint "Package_DFN_QFN:W-PDFN-8-1EP_6x5mm_P1.27mm_EP3x3mm"
 		(layer "B.Cu")
 		(uuid "e0977b35-2b62-4569-9d21-29c117be3d6f")
-		(at 30.00 11.00 0.0)
+		(at 30.00 10.00 0.0)
 		(descr "W-PDFN, 8 Pin (https://media-www.micron.com/-/media/client/global/documents/products/data-sheet/nor-flash/serial-nor/mt25q/die-rev-a/mt25q_qljs_u_256_aba_0.pdf#page=22), generated with kicad-footprint-generator ipc_noLead_generator.py")
 		(tags "W-PDFN NoLead")
 		(property "Reference" "Q1"
@@ -114300,7 +114300,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "e3d6e6a0-e5b6-4806-9462-bd32c09d6f6e")
-		(at 12.00 25.00 180.0)
+		(at 12.00 27.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q19"
@@ -120423,7 +120423,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "eee222b8-68f1-4146-8d6b-dcf4e9de5590")
-		(at 30.00 35.00 180.0)
+		(at 30.00 36.00 180.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q18"
@@ -120751,7 +120751,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "eef7abeb-f306-4c16-a341-95b4c074135e")
-		(at 88.00 17.00 0.0)
+		(at 88.00 18.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q27"
@@ -123983,7 +123983,7 @@
 	(footprint "Package_DFN_QFN:W-PDFN-8-1EP_6x5mm_P1.27mm_EP3x3mm"
 		(layer "B.Cu")
 		(uuid "f715e07b-c5f8-4184-8617-90b236d49844")
-		(at 45.00 11.00 0.0)
+		(at 45.00 10.00 0.0)
 		(descr "W-PDFN, 8 Pin (https://media-www.micron.com/-/media/client/global/documents/products/data-sheet/nor-flash/serial-nor/mt25q/die-rev-a/mt25q_qljs_u_256_aba_0.pdf#page=22), generated with kicad-footprint-generator ipc_noLead_generator.py")
 		(tags "W-PDFN NoLead")
 		(property "Reference" "Q2"
@@ -124509,7 +124509,7 @@
 	(footprint "Package_TO_SOT_SMD:TO-263-3_TabPin2"
 		(layer "B.Cu")
 		(uuid "f7ddb672-669d-408d-8ca2-1ce07fb4c831")
-		(at 12.00 70.00 0.0)
+		(at 12.00 67.00 0.0)
 		(descr "TO-263/D2PAK/DDPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO263/PG-TO263-3-1/")
 		(tags "D2PAK DDPAK TO-263 D2PAK-3 TO-263-3 SOT-404")
 		(property "Reference" "Q9"
