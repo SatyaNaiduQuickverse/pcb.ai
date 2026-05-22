@@ -1,0 +1,50 @@
+! Phase 0 smoke test — Elmer heat conduction in unit cube
+! Top surface 100°C, bottom 0°C, sides insulated. Steady-state.
+! Analytical: linear gradient T(z) = 100·z, q = -k·dT/dz = -k·100 W/m² flux
+Header
+  Mesh DB "." "grid"
+End
+
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 30
+  Output Intervals = 1
+End
+
+Body 1
+  Equation = 1
+  Material = 1
+End
+
+Equation 1
+  Name = "Heat Equation"
+  Active Solvers(1) = 1
+End
+
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Variable Dofs = 1
+  Linear System Solver = "Iterative"
+  Linear System Iterative Method = "BiCGStab"
+  Linear System Max Iterations = 500
+  Linear System Convergence Tolerance = 1.0e-8
+  Steady State Convergence Tolerance = 1.0e-5
+End
+
+Material 1
+  Density = 1.0
+  Heat Conductivity = 1.0
+  Heat Capacity = 1.0
+End
+
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Temperature = 0
+End
+
+Boundary Condition 2
+  Target Boundaries(1) = 2
+  Temperature = 100
+End

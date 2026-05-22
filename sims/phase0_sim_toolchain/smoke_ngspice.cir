@@ -1,0 +1,14 @@
+* Phase 0 smoke test — ngspice AC sweep on RLC
+* Reference: 2nd-order RLC low-pass; resonance f0 = 1/(2π√LC)
+* L=1mH, C=1uF → f0 ≈ 5033 Hz; Q=1/R × √(L/C) for series form
+V1 in 0 AC 1 SIN(0 1 1k)
+R1 in node 100
+L1 node out 1m
+C1 out 0 1u
+.ac dec 50 100 100k
+.control
+run
+let f0 = 1/(2*3.14159265*sqrt(1m*1u))
+print f0
+.endc
+.end
