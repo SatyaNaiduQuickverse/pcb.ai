@@ -90,8 +90,17 @@ Quadrants:
 - **Components**: 5× buck regulators (TPS54560 × 4 for V5_FC, V5_PI5, V5_AI, V9_VTX1; + 1 more for V9_VTX2 or shared) + 1× LDO for V3V3 + LC filters per output + protection diodes + bias passives
 - **Inputs**: +VMOTOR (from S3 output), GND
 - **Outputs**: +V5_FC, +V5_PI5, +V5_AI, +V9_VTX1, +V9_VTX2, +V3V3, +V3V3A
-- **ALLOWED zone**: central spine pocket X=39-61, **Y=58-72** (amended 2026-05-23 root-cause prevention — previous wording "distributed in side bands" was AMBIGUOUS and allowed creep into channel zones, causing the PR-A1/A2/A3 cascade. BEC belongs in central spine pocket, NOT in channel zones.) Buck 5 V9_VTX2 retains SW corner exception (x=5-12, y=14-40) — far from V9_VTX1 buck per isolation spec.
-- **FORBIDDEN zones** (added 2026-05-23 per root-cause prevention rule): all 4 channel zones (NW/NE/SW/SE except SW corner pocket x=5-12 y=14-40 for isolated Buck 5); S6 top edge Y=72-85; S1 battery zone Y=0-20; S2 cap zone Y=20-45; Hall body X=42-62 Y=20-46
+- **ALLOWED zones** (amended 2026-05-23 stage-2 — spine pocket alone too small per master root-cause audit; 4-zone distribution required for 51 S5 components):
+  - **Zone A** — Central spine pocket X=39-61, Y=58-72 (308 mm²): 4× buck ICs (F.Cu) + 4× inductors (B.Cu) + LDO J13 + supervisor J10 (B.Cu) + boot caps where they fit
+  - **Zone B** — Bottom-edge S5 strip X=12-92, Y=12-19 (between S1 components): input-side passives (4× Schottky catch diodes D5-D8, 3× eFuses J7-J9, 1× polyfuse F1)
+  - **Zone C** — Top-edge S5 strip X=20-90, Y=70-77 (between spine pocket and S6 USBLC6 row): output-side passives (4× ferrites L6-L9, 4× C_OUT C8/C12/C15/C18, 4× TVS D10-D13 on B.Cu, 8× FB resistors R6-R13, 4× boot caps)
+  - **Zone D** — SW corner X=2-22, Y=12-42: Buck 5 V9_VTX2 thermal-isolation cluster ONLY (J6, L5, D9, F2, R14, R15, C20, L10, D14, C21) — far from V9_VTX1 per Sai isolation directive
+- **FORBIDDEN zones** (added 2026-05-23 per root-cause prevention rule):
+  - All channel zones (NW/NE/SE/deep-SW Y=42-72) except the explicit Zone B/C strips above
+  - S1 main body zone X=20-80 Y=0-12 (S1 components dense)
+  - S2 cap envelope (avoid C1/C2 bbox y=18.5..29.5 + C3/C4 bbox y=34.5..45.5)
+  - S3 supervisor cluster X=39-61 Y=42-58 + Hall body X=42-62 Y=20-46
+  - S6 connector zone X≥20 Y≥77.5
 - **Adjacency**: outputs feed FC connector + AUX header (above) + 4 MCU subsystems (per-channel V3V3)
 - **Acceptance**: thermal separation from FET clusters (channel quadrants); bbox-clean; output trace ampacity for each rail. ROOT-CAUSE PREVENTION: spine pocket is reserved S5 territory; channels are forbidden zone for BEC.
 

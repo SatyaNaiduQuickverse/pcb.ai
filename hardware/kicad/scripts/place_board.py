@@ -345,51 +345,47 @@ S5_POSITIONS = {
     # Buck #4 V9_VTX1 + L4
     'J5':  (57.0, 70.0, 'F.Cu', 0.0),
     'L4':  (57.0, 70.0, 'B.Cu', 0.0),
-    # FB resistors + boot caps DEFERRED off-board (PR-A2 honest deviation)
-    'R6':  (10.0, 110.0, 'F.Cu', 0.0),
-    'R7':  (15.0, 110.0, 'F.Cu', 0.0),
-    'R8':  (20.0, 110.0, 'F.Cu', 0.0),
-    'R9':  (25.0, 110.0, 'F.Cu', 0.0),
-    'R10': (30.0, 110.0, 'F.Cu', 0.0),
-    'R11': (35.0, 110.0, 'F.Cu', 0.0),
-    'R12': (40.0, 110.0, 'F.Cu', 0.0),
-    'R13': (45.0, 110.0, 'F.Cu', 0.0),
-    'C7':  (50.0, 110.0, 'F.Cu', 0.0),
-    'C11': (55.0, 110.0, 'F.Cu', 0.0),
-    'C14': (60.0, 110.0, 'F.Cu', 0.0),
-    'C17': (65.0, 110.0, 'F.Cu', 0.0),
-    # ── DEFERRED safety-stack components (Schottky/TVS/eFuses/polyfuse/ferrites/C_OUT) ──
-    # Spine pocket physically too small to fit all S5 components per master spec.
-    # Per PR-A2 doc Section "Root cause prevention + honest deviation":
-    # These components moved OFF-BOARD (y > board edge 85) pending follow-up
-    # PR with master adjudication on placement. Channel zones forbidden per
-    # new locked rule. SE/SW corners outside Buck 5 area too constrained.
-    # Off-board placement keeps bbox-clean for PR-A2 + PR-A3 to proceed.
-    # SCHOTTKY V5/V9 (4× SS54)
-    'D5':  (10.0, 95.0, 'F.Cu', 0.0),
-    'D6':  (20.0, 95.0, 'F.Cu', 0.0),
-    'D7':  (30.0, 95.0, 'F.Cu', 0.0),
-    'D8':  (40.0, 95.0, 'F.Cu', 0.0),
-    # TVS V5/V9 (4× SMAJ)
-    'D10': (50.0, 95.0, 'F.Cu', 0.0),
-    'D11': (60.0, 95.0, 'F.Cu', 0.0),
-    'D12': (70.0, 95.0, 'F.Cu', 0.0),
-    'D13': (80.0, 95.0, 'F.Cu', 0.0),
-    # eFuses + polyfuse
-    'J7':  (10.0, 100.0, 'F.Cu', 0.0),
-    'J8':  (25.0, 100.0, 'F.Cu', 0.0),
-    'J9':  (40.0, 100.0, 'F.Cu', 0.0),
-    'F1':  (55.0, 100.0, 'F.Cu', 0.0),
-    # Ferrites V5/V9 (4× 600Ω)
-    'L6':  (65.0, 100.0, 'F.Cu', 0.0),
-    'L7':  (75.0, 100.0, 'F.Cu', 0.0),
-    'L8':  (85.0, 100.0, 'F.Cu', 0.0),
-    'L9':  (95.0, 100.0, 'F.Cu', 0.0),
-    # C_OUT (4× 22uF)
-    'C8':  (10.0, 105.0, 'F.Cu', 0.0),
-    'C12': (20.0, 105.0, 'F.Cu', 0.0),
-    'C15': (30.0, 105.0, 'F.Cu', 0.0),
-    'C18': (40.0, 105.0, 'F.Cu', 0.0),
+    # FB resistors — 0402 in top strip Y=70-72 lateral area (outside spine pocket bucks)
+    'R6':  (24.0, 70.0, 'F.Cu', 0.0),    # V5_FC FB top 52K3
+    'R7':  (24.0, 72.0, 'F.Cu', 0.0),    # V5_FC FB bot 10K
+    'R8':  (28.0, 70.0, 'F.Cu', 0.0),    # V5_PI5 FB top 52K3
+    'R9':  (28.0, 72.0, 'F.Cu', 0.0),    # V5_PI5 FB bot 10K
+    'R10': (70.0, 70.0, 'F.Cu', 0.0),    # V5_AI FB top 52K3
+    'R11': (70.0, 72.0, 'F.Cu', 0.0),    # V5_AI FB bot 10K
+    'R12': (76.0, 70.0, 'F.Cu', 0.0),    # V9_VTX1 FB top 102K
+    'R13': (76.0, 72.0, 'F.Cu', 0.0),    # V9_VTX1 FB bot 10K
+    # Boot caps — 0402 in top strip Y=76 (close to S6 BAT/USBLC6 row but between gaps)
+    'C7':  (30.0, 76.0, 'F.Cu', 0.0),    # Buck 1 boot 100nF
+    'C11': (52.0, 76.0, 'F.Cu', 0.0),    # Buck 2 boot
+    'C14': (65.0, 76.0, 'F.Cu', 0.0),    # Buck 3 boot
+    'C17': (80.0, 76.0, 'F.Cu', 0.0),    # Buck 4 boot
+    # ── INPUT-side strip Y=12-19 between S1 components (per master amendment 2026-05-23) ──
+    # 4× Schottky D5-D8 — between S1 Q3/Q4 FET columns + east of R2 NTC
+    'D5':  (48.0, 14.0, 'F.Cu', 0.0),    # V5_FC catch diode SS54
+    'D6':  (48.0, 18.0, 'F.Cu', 0.0),    # V5_PI5 catch diode SS54
+    'D7':  (82.0, 14.0, 'F.Cu', 0.0),    # V5_AI catch diode
+    'D8':  (82.0, 18.0, 'F.Cu', 0.0),    # V9_VTX1 catch diode
+    # 3× eFuses + 1× polyfuse — input protection per rail
+    'J7':  (15.0, 14.0, 'F.Cu', 0.0),    # V5_FC eFuse TPS259251
+    'J8':  (22.0, 16.0, 'F.Cu', 0.0),    # V5_PI5 eFuse (moved east to clear J6 V9_VTX2 buck at (12, 22))
+    'J9':  (90.0, 14.0, 'F.Cu', 0.0),    # V5_AI eFuse (moved east to clear D7 SS54)
+    'F1':  (88.0, 18.0, 'F.Cu', 0.0),    # V9_VTX1 polyfuse MF-MSMF200
+    # ── OUTPUT-side strip Y=70-77 (per master amendment 2026-05-23) ──
+    # 4× ferrites (LC filter) on F.Cu at y=73 row (between spine pocket south edge and S6 USBLC6)
+    'L6':  (35.0, 73.0, 'F.Cu', 0.0),    # V5_FC ferrite 600Ω
+    'L7':  (50.0, 73.0, 'F.Cu', 0.0),    # V5_PI5 ferrite (in spine-pocket center column gap)
+    'L8':  (65.0, 73.0, 'F.Cu', 0.0),    # V5_AI ferrite
+    'L9':  (82.0, 73.0, 'F.Cu', 0.0),    # V9_VTX1 ferrite
+    # 4× C_OUT (22µF post-ferrite) — spine pocket center + top strip edges
+    'C8':  (50.0, 62.0, 'F.Cu', 0.0),    # V5_FC C_OUT (spine pocket center, between J2/J4 row)
+    'C12': (50.0, 70.0, 'F.Cu', 0.0),    # V5_PI5 C_OUT (spine pocket center, between J3/J5 row)
+    'C15': (22.0, 75.0, 'F.Cu', 0.0),    # V5_AI C_OUT (top strip west, clears R7 FB resistor)
+    'C18': (88.0, 73.0, 'F.Cu', 0.0),    # V9_VTX1 C_OUT (top strip east)
+    # 4× output TVS on B.Cu y=76 row (between spine pocket B.Cu inductors and S6)
+    'D10': (35.0, 76.0, 'B.Cu', 0.0),    # V5_FC TVS SMAJ5.0A
+    'D11': (50.0, 76.0, 'B.Cu', 0.0),    # V5_PI5 TVS
+    'D12': (65.0, 76.0, 'B.Cu', 0.0),    # V5_AI TVS
+    'D13': (82.0, 76.0, 'B.Cu', 0.0),    # V9_VTX1 TVS SMAJ9.0A
     # ── Buck #5 V9_VTX2 SW (2A VTX #2, isolated from #1) — vertical column x=5 ──
     'J6':  (12.0, 22.0, 'F.Cu', 0.0),    # buck IC AOZ1284
     'L5':  (12.0, 30.0, 'F.Cu', 0.0),    # 10uH
@@ -403,7 +399,7 @@ S5_POSITIONS = {
     'C21': (5.0,  40.0, 'F.Cu', 0.0),    # C_OUT 22uF
     # ── LDO + Supervisor (central spine pocket) ──
     'J13': (50.0, 66.0, 'F.Cu', 0.0),    # LDO — center spine pocket (between 4 bucks)
-    'J10': (10.0, 10.0, 'F.Cu', 0.0),    # V5_PI5 supervisor — EVICTED to SW (no room in spine pocket center)
+    'J10': (50.0, 67.0, 'B.Cu', 0.0),    # V5_PI5 supervisor on B.Cu in spine pocket center (clears all F.Cu and B.Cu inductors)
 }
 S5_EXPECTED_VALUES = {
     'J2':  'TPS54560', 'J3':  'TPS54560', 'J4':  'TPS54560',

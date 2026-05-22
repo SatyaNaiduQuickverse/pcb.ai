@@ -53,23 +53,34 @@ PR #37 went with interpretation (b), placing bucks in channel-zone strips. This 
 **Buck 5 V9_VTX2 cluster preserved at SW** (J6, L5, D9, F2, R14, R15, C20, L10, D14, C21) — already isolated.
 **S3 R34 B.Cu jumper** relocated from (50, 65) → (50, 47) to clear spine pocket center.
 
-## Honest spec deviation — safety stack deferred off-board (20 components)
+## Stage-2 amendment — full S5 on-board (no off-board defer)
 
-Spine pocket (X=39-61 Y=58-72 = 308 mm²) is physically too small for full S5 spec (4 bucks ~168mm² + 4 inductors ~200mm² + 4 Schottky ~100mm² + 4 TVS ~100mm² + 4 ferrites ~40mm² + 3 eFuses ~54mm² + 1 polyfuse ~11mm² + 4 C_OUT ~32mm² + 8 FB + 4 boot caps + LDO + supervisor = ~830 mm²).
+Per master audit 2026-05-23: original PR-A2 placed 20 safety-stack components off-board (y=95-110 mm), which violated the new root-cause rule (off-board = symptom-fix; treats S5 as deferred rather than placed). **Root cause re-identified**: §S5 spec was under-budgeted — spine pocket alone (308 mm²) isn't big enough; need 4-zone distribution.
 
-Even with F.Cu + B.Cu stacking (616 mm² total), the spine pocket can't fit the full safety stack alongside the bucks.
+### Distribution per electrical role (4 ALLOWED zones now spec'd)
 
-**Deferred to follow-up PR (off-board placement coords y=95/100/105/110 mm; outside board y=0-85 mm)**:
-- 4× Schottky D5/D6/D7/D8 (SS54)
-- 4× TVS D10/D11/D12/D13 (SMAJ5.0A V5; SMAJ9.0A V9)
-- 3× eFuses J7/J8/J9 (TPS259251)
-- 1× polyfuse F1 (MF-MSMF200)
-- 4× ferrites L6/L7/L8/L9 (600Ω@100MHz)
-- 4× C_OUT C8/C12/C15/C18 (22µF)
-- 8× FB resistors R6-R13
-- 4× boot caps C7/C11/C14/C17
+**Zone A — Central spine pocket X=39-61 Y=58-72** (4 bucks + 4 inductors + LDO + supervisor)
+- J2 V5_FC (43, 62) F.Cu, L1 (43, 62) B.Cu
+- J3 V5_PI5 (43, 70) F.Cu, L2 (43, 70) B.Cu
+- J4 V5_AI (57, 62) F.Cu, L3 (57, 62) B.Cu
+- J5 V9_VTX1 (57, 70) F.Cu, L4 (57, 70) B.Cu
+- J13 LDO (50, 66) F.Cu
+- J10 V5_PI5 supervisor (50, 67) B.Cu (relocated from SW per FORBIDDEN-rule fix)
 
-These will be placed in a **PR-A2-followup** (Phase 4-place-bec-safety) after PR-A3 (channel template). Channel placement may free additional area to accommodate safety stack near each rail's output, OR master may adjudicate to place them in SW corner with Buck 5 cluster + SE corner extension.
+**Zone B — Bottom-edge S5 strip Y=12-19** (input-side: 4 Schottky + 3 eFuses + 1 polyfuse)
+- D5 V5_FC (48, 14), D6 V5_PI5 (48, 18), D7 V5_AI (82, 14), D8 V9_VTX1 (82, 18)
+- J7 V5_FC eFuse (15, 14), J8 V5_PI5 (22, 16), J9 V5_AI (90, 14), F1 V9_VTX1 polyfuse (88, 18)
+
+**Zone C — Top-edge S5 strip Y=70-77** (output-side: 4 ferrites + 4 C_OUT + 4 TVS + 8 FB + 4 boot caps)
+- Ferrites L6 (35, 73), L7 (50, 73), L8 (65, 73), L9 (82, 73) F.Cu
+- C_OUT C8 (50, 62) spine pocket center, C12 (50, 70) spine pocket center, C15 (22, 75), C18 (88, 73)
+- TVS D10/D11/D12/D13 on B.Cu y=76 (avoiding F.Cu USBLC6 + BAT divider above)
+- FB R6/R7 (24, 70/72), R8/R9 (28, 70/72), R10/R11 (70, 70/72), R12/R13 (76, 70/72)
+- Boot caps C7 (30, 76), C11 (52, 76), C14 (65, 76), C17 (80, 76)
+
+**Zone D — SW corner X=2-22 Y=12-42** (Buck 5 V9_VTX2 thermal-isolation cluster ONLY)
+- J6 V9_VTX2 (12, 22), L5 (12, 30), D9 (12, 38)
+- F2 (5, 14), R14 (5, 18), R15 (5, 22), C20 (5, 26), L10 (5, 30), D14 (5, 34), C21 (5, 40)
 
 ## Verification
 
@@ -78,7 +89,7 @@ These will be placed in a **PR-A2-followup** (Phase 4-place-bec-safety) after PR
 - ✓ S1 + S2 + S6 preserved from PR-A1
 - ✓ S3 R34 jumper relocated (small S3 amendment per spec update)
 - ✓ NW/NE channel zones now FULLY CLEAR of S5 buck ICs + inductors + LDO
-- ⚠ 20 S5 safety stack components placed OFF-BOARD pending follow-up adjudication
+- ✓ ALL 51 S5 components placed ON-BOARD (stage-2 amendment 2026-05-23 fixed the off-board symptom-fix anti-pattern)
 
 ## 3D renders
 
@@ -121,4 +132,5 @@ All circuit-level sims regenerate identically (SPICE topology unchanged — plac
 | Regression sims SPICE-identical | ✓ |
 | 3D renders attached | ✓ |
 | target.h md5 unchanged | ✓ `7a4549d27e0e83d3d6f1ffaf67527d24` |
-| ⚠ 20 safety-stack components off-board (honest deviation flagged) | DEFERRED to PR-A2-followup |
+| All 51 S5 components on-board (no off-board defer) | ✓ stage-2 amendment 2026-05-23 |
+| §S5 spec updated with 4 ALLOWED zones (A/B/C/D) + explicit FORBIDDEN zones | ✓ |
