@@ -117,8 +117,8 @@ S2_POSITIONS = {
     # NW inner edge x=39. C4 bbox (68.1, 34.5)..(81.9, 45.5) — x_min=68.1
     # well over channel NE inner edge x=61. Cleared for S4 channel placement.
     # C1/C2 at y=24 left at (30, 24)/(70, 24) — clear of S4 (S4 starts y=42).
-    'C1': (30.0, 28.0, 'F.Cu', 0.0),
-    'C2': (70.0, 28.0, 'F.Cu', 0.0),
+    'C1': (22.0, 28.0, 'F.Cu', 0.0),
+    'C2': (85.0, 28.0, 'F.Cu', 0.0),
     'C3': (25.0, 44.0, 'F.Cu', 0.0),
     'C4': (75.0, 44.0, 'F.Cu', 0.0),
 }
@@ -386,15 +386,15 @@ S5_POSITIONS = {
     'D13': (82.0, 88.0, 'B.Cu', 0.0),    # V9_VTX1 TVS SMAJ9.0A
     # ── Buck #5 V9_VTX2 SW (2A VTX #2, isolated from #1) — vertical column x=5 ──
     'J6':  (12.0, 22.0, 'F.Cu', 0.0),    # buck IC AOZ1284
-    'L5':  (12.0, 30.0, 'F.Cu', 0.0),    # 10uH
+    'L5':  (12.0, 33.0, 'F.Cu', 0.0),    # 10uH
     'D9':  (12.0, 38.0, 'F.Cu', 0.0),    # SS54
     'F2':  (5.0,  14.0, 'F.Cu', 0.0),    # V9_VTX2 polyfuse (V_IN side)
-    'R14': (5.0,  18.0, 'F.Cu', 0.0),    # FB top 102K
+    'R14': (8.0, 18.0, 'F.Cu', 0.0),    # FB top 102K
     'R15': (5.0,  22.0, 'F.Cu', 0.0),    # FB bot 10K
     'C20': (5.0,  26.0, 'F.Cu', 0.0),    # boot 100nF
-    'L10': (5.0,  30.0, 'F.Cu', 0.0),    # V9_VTX2 ferrite
-    'D14': (5.0,  34.0, 'F.Cu', 0.0),    # V9_VTX2 TVS SMAJ9.0A
-    'C21': (5.0,  40.0, 'F.Cu', 0.0),    # C_OUT 22uF
+    'L10': (5.0, 38.0, 'F.Cu', 0.0),    # V9_VTX2 ferrite
+    'D14': (5.0, 36.0, 'F.Cu', 0.0),    # V9_VTX2 TVS SMAJ9.0A
+    'C21': (8.0, 40.0, 'F.Cu', 0.0),    # C_OUT 22uF
     # ── LDO + Supervisor (central spine pocket) ──
     'J13': (50.0, 76.0, 'F.Cu', 0.0),    # LDO — center spine pocket (between 4 bucks)
     'J10': (50.0, 77.0, 'B.Cu', 0.0),    # V5_PI5 supervisor on B.Cu in spine pocket center (clears all F.Cu and B.Cu inductors)
@@ -521,18 +521,18 @@ S4_CH1_POSITIONS = {
     'R49': (38.5, 78.0, 'F.Cu', 0.0),
     # 23 remaining passives placed on SW B.Cu (S5 Buck 5 cluster is on F.Cu;
     # B.Cu in SW area is free). Routed through B.Cu plane stitched to F.Cu signals.
-    'R50': (22.0, 20.0, 'B.Cu', 0.0), 'R51': (26.0, 20.0, 'B.Cu', 0.0),
-    'R52': (30.0, 20.0, 'B.Cu', 0.0), 'R53': (34.0, 20.0, 'B.Cu', 0.0),
-    'R54': (22.0, 24.0, 'B.Cu', 0.0), 'R55': (26.0, 24.0, 'B.Cu', 0.0),
-    'R59': (30.0, 24.0, 'B.Cu', 0.0), 'R60': (34.0, 24.0, 'B.Cu', 0.0),
-    'R61': (22.0, 28.0, 'B.Cu', 0.0), 'R62': (26.0, 28.0, 'B.Cu', 0.0),
-    'R63': (30.0, 28.0, 'B.Cu', 0.0), 'R64': (34.0, 28.0, 'B.Cu', 0.0),
-    'R66': (22.0, 32.0, 'B.Cu', 0.0), 'R67': (26.0, 32.0, 'B.Cu', 0.0),
-    'R68': (30.0, 32.0, 'B.Cu', 0.0), 'R69': (34.0, 32.0, 'B.Cu', 0.0),
-    'R70': (22.0, 36.0, 'B.Cu', 0.0), 'R71': (26.0, 36.0, 'B.Cu', 0.0),
-    'R72': (30.0, 36.0, 'B.Cu', 0.0), 'R73': (34.0, 36.0, 'B.Cu', 0.0),
-    'R74': (22.0, 40.0, 'B.Cu', 0.0), 'R75': (26.0, 40.0, 'B.Cu', 0.0),
-    'R76': (30.0, 40.0, 'B.Cu', 0.0),
+    'R50': (42.0, 22.0, 'B.Cu', 0.0), 'R51': (45.0, 22.0, 'B.Cu', 0.0),
+    'R52': (48.0, 22.0, 'B.Cu', 0.0), 'R53': (51.0, 22.0, 'B.Cu', 0.0),
+    'R54': (54.0, 22.0, 'B.Cu', 0.0), 'R55': (57.0, 22.0, 'B.Cu', 0.0),
+    'R59': (42.0, 26.0, 'B.Cu', 0.0), 'R60': (45.0, 26.0, 'B.Cu', 0.0),
+    'R61': (42.0, 24.0, 'B.Cu', 0.0), 'R62': (51.0, 23.0, 'B.Cu', 0.0),
+    'R63': (54.0, 23.0, 'B.Cu', 0.0), 'R64': (57.0, 26.0, 'B.Cu', 0.0),
+    'R66': (42.0, 30.0, 'B.Cu', 0.0), 'R67': (45.0, 30.0, 'B.Cu', 0.0),
+    'R68': (48.0, 30.0, 'B.Cu', 0.0), 'R69': (51.0, 30.0, 'B.Cu', 0.0),
+    'R70': (54.0, 30.0, 'B.Cu', 0.0), 'R71': (57.0, 30.0, 'B.Cu', 0.0),
+    'R72': (42.0, 34.0, 'B.Cu', 0.0), 'R73': (45.0, 34.0, 'B.Cu', 0.0),
+    'R74': (48.0, 34.0, 'B.Cu', 0.0), 'R75': (51.0, 34.0, 'B.Cu', 0.0),
+    'R76': (54.0, 34.0, 'B.Cu', 0.0),
 }
 S4_CH1_EXPECTED_VALUES = {
     'TP19': 'MOTOR_A_CH1', 'TP20': 'MOTOR_B_CH1', 'TP21': 'MOTOR_C_CH1',
@@ -587,6 +587,63 @@ def place_channel_ch1(fps_by_ref, placements):
     return placed
 
 
+
+
+# ────────────────────────────────────────────────────────────────────
+# S4 CH2/CH3/CH4 — PR-A4-d 2026-05-23 mirror instantiation per master spec
+# CH2 NE: mirror CH1 NW about X=50 (x → 100-x), rot += 180°
+# CH3 SE: mirror CH1 NW about (X=50, Y=47.5) (x → 100-x, y → 95-y), rot += 0° (double mirror)
+# CH4 SW: mirror CH1 NW about Y=47.5 (y → 95-y), rot += 180°
+# 24 FETs total + 9 motor pads + 9 supporting per channel = 12 core × 3 = 36 cores
+# Channel passives DEFERRED to A4-e per master scope
+# ────────────────────────────────────────────────────────────────────
+S4_CH234_POSITIONS = {
+    # CH2 NE (mirror x → 100-x)
+    'TP26': (95.0, 54.0, 'F.Cu', 180.0),  # motor A
+    'TP27': (95.0, 66.0, 'F.Cu', 180.0),  # motor B
+    'TP28': (95.0, 78.0, 'F.Cu', 180.0),  # motor C
+    'Q11':  (88.0, 54.0, 'B.Cu', 180.0),  # Phase A hi
+    'Q12':  (70.0, 54.0, 'B.Cu', 180.0),  # Phase A lo
+    'Q13':  (88.0, 66.0, 'B.Cu', 180.0),  # Phase B hi
+    'Q14':  (70.0, 66.0, 'B.Cu', 180.0),  # Phase B lo
+    'Q15':  (88.0, 78.0, 'B.Cu', 180.0),  # Phase C hi
+    'Q16':  (70.0, 78.0, 'B.Cu', 180.0),  # Phase C lo
+    # CH3 SE (mirror both axes)
+    'TP33': (95.0, 41.0, 'F.Cu',   0.0),  # mirror y=54 → 41
+    'TP34': (95.0, 29.0, 'F.Cu',   0.0),  # mirror y=66 → 29
+    'TP35': (95.0, 17.0, 'F.Cu',   0.0),  # mirror y=78 → 17
+    'Q17':  (88.0, 41.0, 'B.Cu',   0.0),  # Phase A hi
+    'Q18':  (70.0, 41.0, 'B.Cu',   0.0),  # Phase A lo
+    'Q19':  (88.0, 30.0, 'B.Cu',   0.0),  # Phase B hi
+    'Q20':  (70.0, 30.0, 'B.Cu',   0.0),  # Phase B lo
+    'Q21':  (88.0, 19.0, 'B.Cu',   0.0),  # Phase C hi
+    'Q22':  (70.0, 19.0, 'B.Cu',   0.0),  # Phase C lo
+    # CH4 SW (mirror y about Y=47.5)
+    'TP40': (5.0, 41.0, 'F.Cu', 180.0),
+    'TP41': (5.0, 29.0, 'F.Cu', 180.0),
+    'TP42': (5.0, 17.0, 'F.Cu', 180.0),
+    'Q23':  (12.0, 41.0, 'B.Cu', 180.0),
+    'Q24':  (30.0, 41.0, 'B.Cu', 180.0),
+    'Q25':  (12.0, 30.0, 'B.Cu', 180.0),
+    'Q26':  (30.0, 30.0, 'B.Cu', 180.0),
+    'Q27':  (12.0, 19.0, 'B.Cu', 180.0),
+    'Q28':  (30.0, 19.0, 'B.Cu', 180.0),
+}
+
+
+def place_channels_234(fps_by_ref, placements):
+    """S4 CH2/3/4 — mirror instantiate per A4-d."""
+    placed = 0
+    for ref, pos in S4_CH234_POSITIONS.items():
+        fp = fps_by_ref.get(ref)
+        if not fp:
+            continue
+        x, y, layer, rot = pos
+        placements[ref] = (x, y, layer, rot)
+        placed += 1
+    return placed
+
+
 # Registry of subsystem placers in spec order
 ALL_PLACERS = [
     ('S1', 'Battery input',         place_battery_input),
@@ -595,6 +652,7 @@ ALL_PLACERS = [
     ('S6', 'FC + AUX connectors',   place_connectors),
     ('S5', 'BEC subsystem',         place_bec),
     ('S4 CH1', 'Channel #1 template (NW)', place_channel_ch1),
+    ('S4 CH234', 'Channels 2/3/4 mirror', place_channels_234),
 ]
 
 

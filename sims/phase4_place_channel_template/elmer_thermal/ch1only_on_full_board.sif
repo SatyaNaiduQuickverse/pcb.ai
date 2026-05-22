@@ -1,0 +1,83 @@
+! Phase 4 A4-d amendment: CH1-only-on-full-board validation sim per master 2026-05-23.
+! SAME mesh + BCs as full4ch_thermal_v2.sif (100×95×1.6mm, h_bot=1500, k=200).
+! ONLY CH1 FET zones active (x ranges 0.0035-0.0205 + 0.0215-0.0385,
+! y ranges 0.0485-0.0595 + 0.0605-0.0715 + 0.0725-0.0835).
+! Other 18 FET zones zero heat.
+
+Header
+  Mesh DB "." "full4ch_mesh_v2"
+End
+
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 50
+  Output Intervals = 1
+  Output File = "ch1only_on_full_board.result"
+  Post File = "ch1only_on_full_board.vtu"
+End
+
+Body 1
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+
+Equation 1
+  Name = "Heat Equation"
+  Active Solvers(2) = 1 2
+End
+
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Variable Dofs = 1
+  Linear System Solver = "Iterative"
+  Linear System Iterative Method = "BiCGStab"
+  Linear System Max Iterations = 1000
+  Linear System Convergence Tolerance = 1.0e-8
+  Steady State Convergence Tolerance = 1.0e-5
+  Nonlinear System Max Iterations = 1
+End
+
+Solver 2
+  Equation = "Result Output"
+  Procedure = "ResultOutputSolve" "ResultOutputSolver"
+  Output File Name = "ch1only_on_full_board.vtu"
+  Output Format = "vtu"
+  Vtu Format = Logical True
+End
+
+Material 1
+  Density = 2500.0
+  Heat Conductivity = 200.0
+  Heat Capacity = 800.0
+End
+
+! CH1-only heat source (only CH1 x ranges 0.0035-0.0205 + 0.0215-0.0385,
+! all 3 y rows of CH1 0.0485-0.0595 + 0.0605-0.0715 + 0.0725-0.0835)
+Body Force 1
+  Heat Source = Variable Coordinate 1, Coordinate 2
+    Real MATC "16043*((tx(0)>=0.0035)*(tx(0)<=0.0205) + (tx(0)>=0.0215)*(tx(0)<=0.0385))*((tx(1)>=0.0485)*(tx(1)<=0.0595) + (tx(1)>=0.0605)*(tx(1)<=0.0715) + (tx(1)>=0.0725)*(tx(1)<=0.0835))"
+End
+
+Boundary Condition 1
+  Name = "B.Cu TIM+heatsink h=1500"
+  Target Boundaries(1) = 1
+  Heat Transfer Coefficient = 1500.0
+  External Temperature = 333.15
+End
+
+Boundary Condition 2
+  Name = "F.Cu prop-wash h=80"
+  Target Boundaries(1) = 2
+  Heat Transfer Coefficient = 80.0
+  External Temperature = 333.15
+End
+
+Boundary Condition 3
+  Name = "Sides still-air h=10"
+  Target Boundaries(1) = 3
+  Heat Transfer Coefficient = 10.0
+  External Temperature = 333.15
+End
