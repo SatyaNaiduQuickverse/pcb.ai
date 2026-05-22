@@ -51,7 +51,25 @@ def make_channel(ch_num, vmotor, v5, v3v3, v3v3a, gnd, dshot_in, tlm, swdio, swc
     mcu[16] += gnd
     mcu[32] += gnd
     mcu[4] += Net(f"NRST_CH{cn}")
-    mcu[31] += gnd
+    # BOOT0 (pin 31) — Phase 3b-detail: replace direct GND tie with 10kΩ pull-down
+    # + 2-pin solder jumper for emergency DFU access (bridge to +3V3 to boot from
+    # system bootloader). Per AT32F421 DS §2.5 boot-mode selection.
+    boot0_node = Net(f"BOOT0_CH{cn}")
+    mcu[31] += boot0_node
+    r_boot0_pd = Part("Device", "R", value="10K",
+                      footprint="Resistor_SMD:R_0402_1005Metric",
+                      description=f"BOOT0 pull-down CH{cn} — default boot from flash")
+    r_boot0_pd[1] += boot0_node
+    r_boot0_pd[2] += gnd
+    # 2-pin solder jumper pad: short to pull BOOT0 → +3V3 for DFU
+    boot_jumper = Part("Connector", "TestPoint", value=f"BOOT_JUMPER_CH{cn}",
+                       footprint="TestPoint:TestPoint_Pad_D1.5mm",
+                       description=f"BOOT0 emergency DFU jumper pad CH{cn} — bridge to +3V3 solder pad")
+    boot_jumper[1] += boot0_node
+    boot_jumper_3v = Part("Connector", "TestPoint", value=f"BOOT_3V_CH{cn}",
+                          footprint="TestPoint:TestPoint_Pad_D1.5mm",
+                          description=f"+3V3 reference pad for BOOT0 jumper CH{cn}")
+    boot_jumper_3v[1] += v3v3
     mcu[6] += bemf_a
     mcu[10] += bemf_b
     mcu[11] += bemf_c
@@ -69,6 +87,17 @@ def make_channel(ch_num, vmotor, v5, v3v3, v3v3a, gnd, dshot_in, tlm, swdio, swc
     mcu[24] += swclk
     mcu[27] += dshot_in
     mcu[29] += tlm
+    # Phase 3b-detail: 10kΩ pull-up on TLM (PB6) to +3V3.
+    # AM32 source verification (serial_telemetry.c L27-34): PB6 is configured
+    # PUSH-PULL + internal pull-up + half-duplex single-line. External pull-up
+    # is NOT strictly required, but FPV reference designs add it for noise
+    # immunity on the shared TX/RX line with FC UART. Pending master URGENT
+    # adjudication 2026-05-22 on push-pull vs skip — worker recommended (a).
+    r_tlm_pu = Part("Device", "R", value="10K",
+                    footprint="Resistor_SMD:R_0402_1005Metric",
+                    description=f"TLM pull-up to +3V3 CH{cn} (noise immunity for half-duplex)")
+    r_tlm_pu[1] += tlm
+    r_tlm_pu[2] += v3v3
     mcu[21] += Net(f"PA11_NC_CH{cn}")
     mcu[22] += Net(f"PA12_NC_CH{cn}")
     mcu[25] += led_gpio

@@ -282,10 +282,23 @@ Playbook §Simulation.
 
 ---
 
+## §reliability-spec — PL1 FPV 4-in-1 (Phase 3b-detail additions)
+
+The PL1 FPV 4-in-1 does **not** carry the full HV60 reliability obligations (FPV market
+norm), but per `feedback-anchor-on-most-capable-reference` rule (RPi 5 + AI HAT
+host = autonomous-drone power-hub class) the following PL1 commitments apply:
+
+| # | PL1 Standard |
+|---|---|
+| 1 | **Conformal coating optional for indoor/clean FPV use; RECOMMENDED for sustained outdoor / wet-environment / dusty use.** Standard MG Chemicals 4223 acrylic or equivalent (silicone variant 422B for higher-temp). Apply post-assembly + post-bench-test. Coating breaks if rework needed — apply only after final QA. |
+| 2 | All external pads carry silkscreen polarity markings + rail labels (Phase 3b-detail closes this gap). |
+| 3 | 3× SMT fiducials per side for pick-and-place reference (Phase 3b-detail). |
+| 4 | PCB rev marking on F.SilkS for revision traceability. |
+| 5 | Manufacturer mark placeholder for end-user/integrator branding. |
+
 ## §reliability-spec — HV60 family factor-of-safety standard
 
-The HV60 family is reliability-positioned. The PL1 FPV 4-in-1 does **not** carry
-these obligations (FPV market norm). Locked principles for the HV60 line:
+The HV60 family is reliability-positioned. Locked principles for the HV60 line:
 
 | # | Standard |
 |---|---|
