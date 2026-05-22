@@ -107,12 +107,43 @@ target.h md5 `7a4549d27e0e83d3d6f1ffaf67527d24` pre+post. **NO firmware impact.*
 
 ---
 
-## 5. Next step (per master adjudication 2026-05-22)
+## 5. v2.2.3 fallback test result: ALSO INCOMPLETE — paused per master
 
-GO option (d) — install Freerouting v2.2.3 worker-local + retry Pass #1 with
-60-min budget. Same DSN as committed here. Outcomes:
-- ≥95% → amend this PR with SES import + completion %.
-- <95% or no termination → pause + flag Sai-queue (per master) for next path: (b) channel restructure or (c) board grow 100×85 → 120×100. NO third attempt without owner input.
+```
+Installed: /home/novatics64/escworker/local/freerouting/freerouting-v2.2.3.jar
+Started:   2026-05-22 14:10:43 UTC
+Wall time: 62 min (master gave 60-min budget — slightly over)
+CPU time:  1h56m on 4-core ARM
+Pass #1:   NOT REACHED
+Failure count: 546 (vs v2.2.4's 188 at 37 min — actually higher fail rate)
+Killed: 2026-05-22 15:12 per master directive
+```
+
+Same `MazeSearchAlgo.init: no accessible expansion doors` pattern. v2.2.3 vs v2.2.4
+trajectory roughly equivalent — both grind without converging on this placement.
+
+**Conclusion: tool change is NOT the bottleneck. Placement-density is.**
+
+## 6. PAUSED pending owner input
+
+Per master adjudication 2026-05-22 binding clause: "Do NOT proceed to a 3rd
+attempt without owner input."
+
+Flagged to Sai via `/tmp/sai-queue.md` (worker append 2026-05-22 ~15:12).
+Three options summarized for Sai:
+
+- **(b)** Major restructure: migrate CH1+CH2+CH3+CH4 off corners. Breaks
+  Phase 4b-redo per-MCU pin-side rotation discipline (playbook trap T8).
+  Worker pessimistic — regresses channel-internal routability.
+- **(c)** Board grow 100×85 → ~120×100 (+41% area). Optionally promote
+  In3.Cu + In4.Cu BOTH to signal (5 signal layers). Worker recommends
+  conditional on owner approval of form factor (3.3× over premium FPV
+  reference; you've approved progression 50→85→90→100).
+- **(d)** Accept MARGINAL D/S — defer to manual route in Phase 5c (KiCad
+  GUI). Won't catch design errors during autoroute.
+
+**Worker recommendation: (c) if Sai approves form factor**, otherwise (d) as
+last-resort.
 
 ---
 
