@@ -1,0 +1,27 @@
+! Phase 4 S4 CH1 Elmer FEM v3 — TRUE P=12 mesh per master rebuke 2026-05-23.
+! Previous v3.sif reused v2 mesh (P=10 mesh pitch) → result identical to v2.
+! This NEW mesh reflects actual P=12 row pitch:
+!   FET row 1 (Q5/Q6): mesh-y 1-6 (5mm wide pad zone)
+!   Gap1: mesh-y 6-13 (7mm gap, total row-to-row pitch = 12mm)
+!   FET row 2 (Q7/Q8): mesh-y 13-18
+!   Gap2: mesh-y 18-25
+!   FET row 3 (Q9/Q10): mesh-y 25-30
+!   Total mesh-y span: 30mm — matches NW quadrant 33mm (with 3mm boundary)
+!
+! Heat source rate at FET zones: 16043 W/kg per FET at 100A burst (P=12W per FET).
+Version = 210903
+Coordinate System = Cartesian 3D
+Subcell Divisions in 1D = 4 7 1
+Subcell Limits 1 = 0 0.002 0.016 0.018 0.030
+Subcell Limits 2 = 0 0.001 0.006 0.013 0.018 0.025 0.030 0.032
+Subcell Limits 3 = 0 0.0016
+Materials Interval = 1 1
+Boundary Definitions
+  1     1   -1   1
+  2     2   -1   1
+  3     3   -1   1
+End
+Numbering = Horizontal
+Element Degree = 1
+Surface Elements = 6
+Volume Elements = 12

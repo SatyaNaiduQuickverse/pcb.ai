@@ -1,0 +1,80 @@
+! Phase 4 S4 CH1 Elmer FEM v3 TRUE P=12 — per master rebuke 2026-05-23.
+! New mesh ch1_cluster_p12 has y-bands at mesh-y 1-6, 13-18, 25-30 (P=12 pitch).
+! Heat source MATC updated to those new y bands.
+
+Header
+  Mesh DB "." "ch1_cluster_p12"
+End
+
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 50
+  Output Intervals = 1
+  Output File = "ch1_thermal_v3_p12_true.result"
+  Post File = "ch1_thermal_v3_p12_true.vtu"
+End
+
+Body 1
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+
+Equation 1
+  Name = "Heat Equation"
+  Active Solvers(2) = 1 2
+End
+
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Variable Dofs = 1
+  Linear System Solver = "Iterative"
+  Linear System Iterative Method = "BiCGStab"
+  Linear System Max Iterations = 1000
+  Linear System Convergence Tolerance = 1.0e-8
+  Steady State Convergence Tolerance = 1.0e-5
+  Nonlinear System Max Iterations = 1
+End
+
+Solver 2
+  Equation = "Result Output"
+  Procedure = "ResultOutputSolve" "ResultOutputSolver"
+  Output File Name = "ch1_thermal_v3_p12_true.vtu"
+  Output Format = "vtu"
+  Vtu Format = Logical True
+End
+
+Material 1
+  Density = 2500.0
+  Heat Conductivity = 200.0
+  Heat Capacity = 800.0
+End
+
+! P=12 heat-source MATC: rows at mesh-y 0.001-0.006, 0.013-0.018, 0.025-0.030
+Body Force 1
+  Heat Source = Variable Coordinate 1, Coordinate 2
+    Real MATC "16043*((tx(0)>=0.002)*(tx(0)<=0.016) + (tx(0)>=0.018)*(tx(0)<=0.030))*((tx(1)>=0.001)*(tx(1)<=0.006) + (tx(1)>=0.013)*(tx(1)<=0.018) + (tx(1)>=0.025)*(tx(1)<=0.030))"
+End
+
+Boundary Condition 1
+  Name = "B.Cu TIM+heatsink h=1500"
+  Target Boundaries(1) = 1
+  Heat Transfer Coefficient = 1500.0
+  External Temperature = 333.15
+End
+
+Boundary Condition 2
+  Name = "F.Cu prop-wash h=80"
+  Target Boundaries(1) = 2
+  Heat Transfer Coefficient = 80.0
+  External Temperature = 333.15
+End
+
+Boundary Condition 3
+  Name = "Sides still-air h=10"
+  Target Boundaries(1) = 3
+  Heat Transfer Coefficient = 10.0
+  External Temperature = 333.15
+End
