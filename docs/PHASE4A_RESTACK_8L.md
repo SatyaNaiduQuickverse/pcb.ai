@@ -165,32 +165,34 @@ Script: `sims/phase4a_restack_8l/via_stitching_audit.py`.
   - 10 s burst (1.5× continuous derate): 1.5 A/via (cons.) / 3.0 A/via (aggr.)
 - FoS target (Sai's reliability rule): 1.5× over continuous + burst
 
-### Verdict at master's target (200 vias)
+### Master-locked target: **≥ 210 vias** (amended 2026-05-22)
 
-| Dimension | Bus load | Capacity | Margin | Status |
-|---|---:|---:|---:|---|
-| Continuous (conservative) | 280 A | 200 A | 0.71× | MARGINAL (relies on 3 oz pour) |
-| Continuous (aggressive)   | 280 A | 400 A | 1.43× | MARGINAL (5% short of 1.5× FoS) |
-| Burst @ 10 s (aggressive) | 400 A | 600 A | 1.50× | PASS ✓ |
-
-### Recommendation: bump to **210 vias** for 1.5× FoS on both
+Initial worker calculation showed master's pre-dispatch target of ~200 vias
+falls short of Sai's 1.5× FoS reliability standard on continuous current
+(1.43×). Master adjudicated **210 as the locked target** per redo-not-mitigate
++ zero fab-cost delta.
 
 | Dimension | Bus load | Capacity @ 210 vias | Margin | Status |
 |---|---:|---:|---:|---|
-| Continuous (aggressive) | 280 A | 420 A | 1.50× | PASS ✓ |
-| Burst @ 10 s (aggressive) | 400 A | 630 A | 1.58× | PASS ✓ |
+| Continuous (conservative, no copper pour) | 280 A | 210 A | 0.75× | MARGINAL — relies on 3 oz copper pour to bridge |
+| Continuous (aggressive, with copper pour) | 280 A | 420 A | 1.50× | PASS ✓ |
+| Burst @ 10 s (aggressive)                 | 400 A | 630 A | 1.58× | PASS ✓ |
 
-Delta from master's spec: **+10 vias** (200 → 210). JLC fab cost impact: **$0**
-(vias are inclusive in standard SMT order).
+Both FoS dimensions PASS under aggressive (with-pour) baseline. Conservative
+worst-case (no-pour) is 0.75× — flagged for Phase 5b-retry to enforce the
+"3 oz copper pour around every via" placement rule.
 
-### Placement strategy for Phase 5b-retry
+Delta from initial estimate: **+10 vias** (200 → 210). JLC fab cost impact: **$0**
+(vias inclusive in standard SMT order).
+
+### Placement strategy for Phase 5b-retry (Phase 4b-redo4-R1 places, Phase 5b verifies)
 
 | Region | Approx. via count |
 |---|---:|
 | CBULK output → VMOTOR rail entry (4× polymer cap × ~5 vias) | 20 |
 | Per-channel VMOTOR fanout × 4 (~50 each: FET drains + trace + bypass cap stacks) | 200 |
 | Mid-trace stitching (filler, ~ 1 via / 5 mm² VMOTOR pour) | 20 |
-| **Total target** | **≥ 210** |
+| **Master-locked target** | **≥ 210** |
 
 **Critical layout requirement**: 3 oz copper pour on +VMOTOR rail (F.Cu and
 B.Cu) must surround every via to sustain the 2 A/via continuous baseline.
@@ -203,7 +205,7 @@ at 210 vias = 210 A, MARGINAL (75% of continuous bus load).
 |---|---|
 | setup_board.py emits 8L stackup with 3 oz on F.Cu/In3/B.Cu, 1 oz elsewhere | ✓ |
 | dsn_inject_planes.py handles 8L geometry (5 signal + 3 plane layers) | ✓ |
-| via-stitching count documented + meets ≥ 200 target | ✓ (recommend 210 for 1.5× FoS on both dimensions; delta $0) |
+| via-stitching count documented + meets ≥ 210 target (master-locked, amended from 200 per Phase 4a audit) | ✓ (1.50× cont. + 1.58× burst FoS; delta $0; Phase 4b-redo4-R1 places, Phase 5b-retry verifies) |
 | D/S re-prediction matches master's ~0.55–0.65 estimate | ✓ (model predicts ~0.59; validation in Phase 4b) |
 | target.h md5 unchanged (no firmware impact) | ✓ (`7a4549d27e0e83d3d6f1ffaf67527d24`) |
 | One PR | ✓ (this PR — `phase4a-restack-8L/8layer-stackup`) |

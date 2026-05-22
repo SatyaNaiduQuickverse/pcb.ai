@@ -76,14 +76,18 @@ print(f"Burst sanity-check (no FoS needed on 10s pulse — aggressive baseline):
 print(f"  Burst-cap @ 3.0 A/via burst: ⌈{I_BUS_BURST:.0f} / {I_VIA_BURST_AGGRESSIVE}⌉ = {n_via_burst_aggr} vias")
 print()
 
-# ─────────── Master directive — target 200 vias ───────────
-N_VIA_TARGET = 200
+# ─────────── Master-locked target: 210 vias ───────────
+# Master adjudication 2026-05-22 post-Phase-4a audit: amended target from
+# original 200 → 210 per Sai's 1.5× FoS reliability standard (200 was MARGINAL
+# at 1.43× continuous; bump to 210 yields 1.50× continuous + 1.58× burst).
+# Fab cost delta: $0 (vias inclusive in JLC SMT order).
+N_VIA_TARGET = 210
 
-print(f"Master directive target: ≥ {N_VIA_TARGET} vias on +VMOTOR rail")
-print(f"  (master's '1 via per 1-2 A continuous' rule on {I_BUS_CONT:.0f} A)")
+print(f"Master-locked target: ≥ {N_VIA_TARGET} vias on +VMOTOR rail")
+print(f"  (revised from initial 200 after Phase 4a audit — Sai's 1.5× FoS requirement)")
 print()
-print(f"Selected target: {N_VIA_TARGET} vias (matches master spec; lies between")
-print(f"                 conservative {n_via_cons} and aggressive {n_via_aggr})")
+print(f"Selected target: {N_VIA_TARGET} vias (1.5× FoS on both continuous and burst;")
+print(f"                 above aggressive-bound minimum of {n_via_aggr})")
 print()
 
 # ─────────── Total ampacity at target via count ───────────
@@ -144,7 +148,7 @@ print("=" * 72)
 print(f"  Target via count: {N_VIA_TARGET} (matches master directive)")
 print()
 print(f"  Continuous ampacity margin (aggressive, FoS {FOS}×): {total_cont_aggr / I_BUS_CONT:.2f}× — {'PASS ✓' if verdict_continuous_aggr else 'MARGINAL ⚠' if total_cont_aggr >= I_BUS_CONT else 'FAIL ✗'}")
-print(f"  Continuous bare-1× margin (conservative):           {total_cont_cons / I_BUS_CONT:.2f}× — {'PASS ✓' if verdict_continuous_cons else 'MARGINAL ⚠ (covers 71% of bus; relies on copper-pour to bridge)'}")
+print(f"  Continuous bare-1× margin (conservative):           {total_cont_cons / I_BUS_CONT:.2f}× — {'PASS ✓' if verdict_continuous_cons else f'MARGINAL ⚠ (covers {100 * total_cont_cons / I_BUS_CONT:.0f}% of bus; relies on copper-pour to bridge)'}")
 print(f"  Burst @10s margin (aggressive baseline):            {total_burst_aggr / I_BUS_BURST:.2f}× — {'PASS ✓' if verdict_burst_aggr else 'FAIL ✗'}")
 print()
 if verdict_continuous_aggr and verdict_burst_aggr:
