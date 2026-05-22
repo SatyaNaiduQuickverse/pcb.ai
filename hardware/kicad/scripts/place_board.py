@@ -1,17 +1,19 @@
-"""Phase 4b — scripted placement of 249 footprints on pcbai_fpv4in1.kicad_pcb.
+"""Phase 4b-REDO — scripted placement with per-MCU pin-side connectivity analysis.
 
-Reads the .kicad_pcb (kinet2pcb output with all parts at origin) and writes
-back with each footprint placed per the Phase 2.5 sketch.
+Reads the .kicad_pcb and writes back with each footprint placed for routability
+per playbook trap T8 + LQFP-32 pin-side analysis (see PHASE4B_REDO_PLACEMENT.md
+for the derivation).
 
-Methodology:
-  - Parse each (footprint ...) block, extract: library, ref, value, current
-    (at ...) and (layer ...) lines.
-  - Categorize by value substring + ref pattern.
-  - Place each category into its assigned board region (F.Cu corners for
-    MCUs, B.Cu center for MOSFET 6×4 grid, edge for motor pads, etc.).
-  - Rewrite the .kicad_pcb file in place.
+Key change vs Phase 4b: per-channel MCU rotation + FET-to-channel sub-grid
+remapping. Each channel's MCU now has its PWM corner (chip's RIGHT+BOTTOM
+corner at default, where PA8-10 PWM-HIGH + PA7/PB0/PB1 PWM-LOW pins exit)
+facing the board's interior, where its gate driver + MOSFETs sit. FETs are
+re-grouped from row-per-channel (62 mm horizontal spread) to 3×2 corner
+sub-grids (25×13 mm cluster per channel) — same 24 physical (x,y) positions,
+different schematic-ref-to-position assignment. Heatsink validity preserved.
 
-Idempotent: re-running produces the same output regardless of starting state.
+KiCad screen convention used throughout: +Y is DOWN. Channel labels (TL/TR/BL/BR)
+refer to position in the KiCad-rendered view (NOT a flipped-Y "user view").
 """
 
 import re
@@ -22,18 +24,40 @@ PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad
 BOARD_W = 85.0   # Phase 4c-resume Option C rectangular
 BOARD_H = 70.0
 
-# ───────────── Placement regions (per Phase 2.5 sketch) ─────────────
+# ───────────── Placement regions (Phase 4b-REDO per playbook trap T8) ─────────────
 
-# Channel corner anchors (F.Cu): scaled for 85×70 board
-# CH1 BL, CH2 BR, CH3 TL, CH4 TR
+# Channel corner anchors (F.Cu): MCU CENTER coordinates. In KiCad screen
+# convention (+Y down), CH1=top-left, CH2=top-right, CH3=bottom-left, CH4=bottom-right.
+# Bumped inward from Phase 4b's (3,3) corners to keep the 7×7mm LQFP-32 body
+# fully on-board with ~5mm margin.
 CHANNEL_CORNERS = {
-    1: (3.0,  3.0,  'BL'),
-    2: (73.0, 3.0,  'BR'),
-    3: (3.0,  52.0, 'TL'),
-    4: (73.0, 52.0, 'TR'),
+    1: (8.0,  8.0,  'TL'),  # top-left in KiCad screen view
+    2: (77.0, 8.0,  'TR'),  # top-right
+    3: (8.0,  62.0, 'BL'),  # bottom-left
+    4: (77.0, 62.0, 'BR'),  # bottom-right
 }
-# Each channel "footprint zone" is ~12×15 mm centered around the MCU; we cluster
-# the per-channel passives in a 10×10 mm sub-region adjacent to the MCU.
+
+# Per-channel MCU rotation (KiCad CCW degrees) — derived from LQFP-32 pin-side
+# analysis: the chip's PWM corner (RIGHT+BOTTOM in chip frame at θ=0, where
+# PA8/PA9/PA10 PWM-HIGH on RIGHT and PA7/PB0/PB1 PWM-LOW on BOTTOM exit) must
+# face the board's INNER direction (toward gate driver + MOSFETs at board center).
+# See docs/PHASE4B_REDO_PLACEMENT.md §3 for full derivation.
+CHANNEL_MCU_ROTATION = {
+    1: 0,    # PWM corner (chip SE) faces +X+Y (down-right) = inward from CH1 (top-left)
+    2: 90,   # CCW 90° → PWM corner faces -X+Y (down-left) = inward from CH2 (top-right)
+    3: 270,  # CW 90° → PWM corner faces +X-Y (up-right) = inward from CH3 (bottom-left)
+    4: 180,  # 180° → PWM corner faces -X-Y (up-left) = inward from CH4 (bottom-right)
+}
+
+# Per-channel "PWM-corner direction" unit vector in board frame. Gate driver,
+# CSAs, decoupling caps cluster on this side of the MCU. Derived from rotation:
+# chip frame +X+Y rotated by θ.
+CHANNEL_PWM_DIR = {
+    1: ( 1,  1),  # +X+Y
+    2: (-1,  1),  # -X+Y
+    3: ( 1, -1),  # +X-Y
+    4: (-1, -1),  # -X-Y
+}
 
 # MOSFET 6×4 grid (B.Cu, heatsink zone): 6 cols × 4 rows centered on board.
 # Per Phase 2.5 sketch: fet 5×6 mm + spacing → 6×7 cols, 4×7.5 rows = 42×30 mm grid.
@@ -132,8 +156,10 @@ def parse_footprints(pcb_text):
                     end = i + 1
                     break
         block = pcb_text[start:end]
-        # Extract metadata
-        lib_m = re.match(r'\(footprint "([^"]+)"', block)
+        # Extract metadata. Block starts with `\t(footprint "..."` (leading tab),
+        # so use re.search (not re.match) for the lib name — fixes a pre-existing
+        # bug that misclassified all mount holes as 'passive' (Phase 4b-REDO fix).
+        lib_m = re.search(r'\(footprint "([^"]+)"', block)
         ref_m = re.search(r'\(property "Reference" "([^"]+)"', block)
         val_m = re.search(r'\(property "Value" "([^"]+)"', block)
         layer_m = re.search(r'\(layer "([^"]+)"\)', block)
@@ -237,8 +263,85 @@ def categorize(fp):
     return ('passive', ref)
 
 
+def dedup_mount_holes(txt):
+    """Remove duplicate mount-hole footprint blocks (Phase 4a/4c-resume legacy bug:
+    setup_board.py was non-idempotent and accumulated 12 holes stacked at one position).
+    Keep first 4 blocks; delete the rest. Reposition the kept 4 at proper board corners.
+    """
+    # Find all mount hole footprint block char-ranges.
+    mh_blocks = []
+    pos = 0
+    while True:
+        idx = txt.find('\n\t(footprint "MountingHole:', pos)
+        if idx < 0:
+            break
+        start = idx + 1  # skip leading \n; include \t(footprint...
+        depth = 0
+        end = start
+        for i, c in enumerate(txt[start:], start):
+            if c == '(':
+                depth += 1
+            elif c == ')':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        mh_blocks.append((idx, end))  # idx points to \n before \t — include the \n in deletion
+        pos = end
+
+    if len(mh_blocks) <= 4:
+        return txt, len(mh_blocks)
+
+    # Delete blocks 4..end (in reverse to preserve earlier indices)
+    deleted = 0
+    for idx, end in reversed(mh_blocks[4:]):
+        txt = txt[:idx] + txt[end:]
+        deleted += 1
+
+    # Reposition the kept 4 holes at proper corners for current 85×70 board
+    # (per setup_board.py MOUNT_X_PAD=5, MOUNT_Y_PAD=5, BOARD_W=85, BOARD_H=70).
+    corners = [(5.0, 5.0), (80.0, 5.0), (5.0, 65.0), (80.0, 65.0)]
+    # Re-scan after deletion to get fresh positions of the kept 4
+    pos = 0
+    kept = []
+    while len(kept) < 4:
+        idx = txt.find('\n\t(footprint "MountingHole:', pos)
+        if idx < 0:
+            break
+        start = idx + 1
+        depth = 0
+        end = start
+        for i, c in enumerate(txt[start:], start):
+            if c == '(':
+                depth += 1
+            elif c == ')':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        kept.append((start, end))
+        pos = end
+
+    # Rewrite each (at ...) to the corner position (in reverse to preserve offsets)
+    for i, (start, end) in enumerate(reversed(kept)):
+        cx, cy = corners[len(kept) - 1 - i]
+        block = txt[start:end]
+        new_block = re.sub(r'\(at [0-9.\-]+ [0-9.\-]+(?: [0-9.\-]+)?\)',
+                           f'(at {cx} {cy} 0.0)', block, count=1)
+        txt = txt[:start] + new_block + txt[end:]
+
+    return txt, deleted
+
+
 def main():
     txt = PCB.read_text()
+
+    # Pre-processing: dedup mount holes + reposition to proper corners
+    txt, mh_deleted = dedup_mount_holes(txt)
+    if mh_deleted:
+        print(f"Pre-processing: removed {mh_deleted} duplicate mount holes; "
+              f"4 remaining repositioned to corners (5,5), (80,5), (5,65), (80,65)")
+
     fps = parse_footprints(txt)
     print(f"Parsed {len(fps)} footprints")
 
@@ -254,12 +357,30 @@ def main():
     # Build placement assignments
     placements = {}  # ref → (x, y, layer, rotation)
 
-    # 1) MOSFETs (phase) — 6×4 grid on B.Cu
+    # 1) MOSFETs (phase) — 6×4 grid on B.Cu, RE-MAPPED into per-channel 3×2 sub-grids.
+    # Phase 4b had FETs in a row-per-channel layout (each channel's 6 FETs spanned
+    # x=5..67.5, 62mm horizontal). New layout: each channel's 6 FETs in a 3×2 sub-grid
+    # at the corresponding quadrant of the 6×4 grid (25mm × 13mm cluster).
+    # Per netlist ordering: Q5..Q10 = CH1, Q11..Q16 = CH2, Q17..Q22 = CH3, Q23..Q28 = CH4.
+    # SAME 24 physical (x,y) positions — only schematic-ref-to-position assignment changes.
+    # Heatsink (80×55 Al6061) covers all 24 positions → thermal verdict preserved.
     phase_fets = [fp for fp, _ in groups.get('phase_fet', [])]
     g = MOSFET_GRID
+    # CH→sub-grid quadrant (col_start, row_start). Each ch gets 3 cols × 2 rows.
+    ch_to_quadrant = {
+        1: (0, 0),   # CH1 top-left in KiCad screen (low Y) → upper-left grid quadrant
+        2: (3, 0),   # CH2 top-right → upper-right quadrant
+        3: (0, 2),   # CH3 bottom-left → lower-left quadrant
+        4: (3, 2),   # CH4 bottom-right → lower-right quadrant
+    }
     for i, fp in enumerate(phase_fets[:g['cols'] * g['rows']]):
-        col = i % g['cols']
-        row = i // g['cols']
+        ch = (i // 6) + 1                   # 6 FETs per channel
+        idx_in_ch = i % 6                   # 0..5 within channel
+        col0, row0 = ch_to_quadrant[ch]
+        sub_col = idx_in_ch % 3             # 0..2 within 3-col sub-grid
+        sub_row = idx_in_ch // 3            # 0..1 within 2-row sub-grid
+        col = col0 + sub_col
+        row = row0 + sub_row
         x = g['origin_x'] + col * g['cell_w']
         y = g['origin_y'] + row * g['cell_h']
         placements[fp['ref']] = (x, y, 'B.Cu', 0.0)
@@ -292,31 +413,44 @@ def main():
         y = shunt_y - (i // 6) * 3.0  # 2 rows if more than 6
         placements[fp['ref']] = (x, y, 'B.Cu', 0.0)
 
-    # 7) MCUs (4× AT32F421) — F.Cu corners
+    # 7) MCUs (4× AT32F421) — F.Cu corners, with per-channel rotation per pin-side analysis
     mcus = [fp for fp, _ in groups.get('mcu', [])]
     for i, fp in enumerate(mcus[:4]):
         ch = i + 1
         x, y, label = CHANNEL_CORNERS[ch]
-        placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
+        rot = CHANNEL_MCU_ROTATION[ch]
+        placements[fp['ref']] = (x, y, 'F.Cu', rot)
 
-    # 8) Gate drivers (4× DRV8300) — F.Cu adjacent to MCUs
+    # 8) Gate drivers (4× DRV8300) — F.Cu adjacent to MCU's PWM corner.
+    # Offset is 8mm along the PWM-direction vector (chip's PWM corner = chip's
+    # bottom-right in chip frame, rotated by channel rotation).
     drivers = [fp for fp, _ in groups.get('driver', [])]
-    driver_offsets = {1: (10, 2), 2: (-5, 2), 3: (10, 2), 4: (-5, 2)}  # offset from MCU corner
+    GATE_DRIVER_OFFSET_MM = 7.0  # 7 mm from MCU center to gate driver center
     for i, fp in enumerate(drivers[:4]):
         ch = i + 1
         mx, my, _ = CHANNEL_CORNERS[ch]
-        ox, oy = driver_offsets[ch]
-        placements[fp['ref']] = (mx + ox, my + oy, 'F.Cu', 0.0)
+        dx, dy = CHANNEL_PWM_DIR[ch]
+        # Place gate driver along PWM-corner direction
+        x = mx + dx * GATE_DRIVER_OFFSET_MM
+        y = my + dy * GATE_DRIVER_OFFSET_MM
+        placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
 
-    # 9) CSAs (12×) — F.Cu clustered 3 per channel
+    # 9) CSAs (12×) — F.Cu clustered 3 per channel, along the PWM-corner direction
+    # (between MCU and shunt row, since CSAs need short shunt → CSA → ADC paths).
+    # CSAs are in a 3-in-a-row layout perpendicular to the PWM-direction vector.
     csas = [fp for fp, _ in groups.get('csa', [])]
-    csa_offsets = {1: (0, 10), 2: (3, 10), 3: (0, -3), 4: (3, -3)}  # base offset from MCU corner
+    CSA_RADIAL_OFFSET_MM = 11.0   # from MCU center along PWM direction
+    CSA_TANGENTIAL_SPACING_MM = 2.5
     for i, fp in enumerate(csas[:12]):
-        ch = (i // 3) + 1  # 3 CSAs per channel
+        ch = (i // 3) + 1
         sub = i % 3
         mx, my, _ = CHANNEL_CORNERS[ch]
-        ox, oy = csa_offsets[ch]
-        placements[fp['ref']] = (mx + ox + sub * 2.5, my + oy, 'F.Cu', 0.0)
+        dx, dy = CHANNEL_PWM_DIR[ch]
+        # Tangential vector perpendicular to PWM direction (rotate 90° CCW: (dx,dy) → (-dy,dx))
+        tx, ty = -dy, dx
+        cx = mx + dx * CSA_RADIAL_OFFSET_MM + tx * (sub - 1) * CSA_TANGENTIAL_SPACING_MM
+        cy = my + dy * CSA_RADIAL_OFFSET_MM + ty * (sub - 1) * CSA_TANGENTIAL_SPACING_MM
+        placements[fp['ref']] = (cx, cy, 'F.Cu', 0.0)
 
     # 10) Buck + LDO + buck inductor + VDDA ferrite (F.Cu right side)
     for fp, _ in groups.get('buck', []):
@@ -359,16 +493,23 @@ def main():
             placements[fp['ref']] = (x, y, 'F.Cu', 0.0)
 
     # 16) Per-channel passive cluster — pack remaining "passive" footprints
-    # into 4 zones (one per channel), 7×7 grid each, 1.4 mm pitch
-    # We split passives across 4 channels by ref order; ~200/4 = 50 per channel zone.
+    # into 4 zones (one per channel), 7×7 grid each, 1.4 mm pitch.
+    # Zones are placed along each channel's PWM-corner direction (between MCU and
+    # gate driver), so decoupling caps and BEMF dividers route to the chip side
+    # with the most heavy-routing pins (PWM + ADC + BEMF on RIGHT+BOTTOM at θ=0).
     passives = [fp for fp, _ in groups.get('passive', [])]
-    # Per-channel zone starts (right of MCU for CH1+CH3 bottom; left of MCU for CH2+CH4)
-    zones = {
-        1: (15.0, 14.0),
-        2: (55.0, 14.0),
-        3: (15.0, 45.0),
-        4: (55.0, 45.0),
-    }
+    PASSIVE_ZONE_OFFSET_MM = 14.0   # from MCU center along PWM direction
+    zones = {}
+    for ch in (1, 2, 3, 4):
+        mx, my, _ = CHANNEL_CORNERS[ch]
+        dx, dy = CHANNEL_PWM_DIR[ch]
+        # Zone origin = MCU center + PWM-direction offset, then back off by half grid
+        # so the grid is roughly centered around the offset point
+        pg = CHANNEL_PASSIVE_GRID
+        grid_half_w = (pg['cols'] - 1) * pg['cell_w'] / 2.0
+        grid_half_h = (pg['rows'] - 1) * pg['cell_h'] / 2.0
+        zones[ch] = (mx + dx * PASSIVE_ZONE_OFFSET_MM - grid_half_w,
+                     my + dy * PASSIVE_ZONE_OFFSET_MM - grid_half_h)
     per_zone = (len(passives) + 3) // 4
     pg = CHANNEL_PASSIVE_GRID
     for i, fp in enumerate(passives):
