@@ -1,0 +1,97 @@
+! Phase 4 A4-d FULL 4-channel Elmer FEM v4 — 100×95 whole-board, all 24 FETs
+! Per master 2026-05-23 spec + sim-execution-gate rule.
+!
+! 24 FETs active at 100A burst: P_per_FET = 12W; total board 24 × 12 = 288W
+! Power/mass per FET cell: 16043 W/kg (matches v3 P=12 single-channel)
+!
+! FET zones (mesh-local coords from grd):
+!   CH1 NW: x=12/30, y=54/66/78
+!   CH2 NE: x=88/70, y=54/66/78
+!   CH3 SE: x=88/70, y=41/30/19
+!   CH4 SW: x=12/30, y=41/30/19
+
+Header
+  Mesh DB "." "full4ch_mesh_v2"
+End
+
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 50
+  Output Intervals = 1
+  Output File = "full4ch_thermal_v5.result"
+  Post File = "full4ch_thermal_v5.vtu"
+End
+
+Body 1
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+
+Equation 1
+  Name = "Heat Equation"
+  Active Solvers(2) = 1 2
+End
+
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Variable Dofs = 1
+  Linear System Solver = "Iterative"
+  Linear System Iterative Method = "BiCGStab"
+  Linear System Max Iterations = 1000
+  Linear System Convergence Tolerance = 1.0e-8
+  Steady State Convergence Tolerance = 1.0e-5
+  Nonlinear System Max Iterations = 1
+End
+
+Solver 2
+  Equation = "Result Output"
+  Procedure = "ResultOutputSolve" "ResultOutputSolver"
+  Output File Name = "full4ch_thermal_v5.vtu"
+  Output Format = "vtu"
+  Vtu Format = Logical True
+End
+
+Material 1
+  Density = 2500.0
+  Heat Conductivity = 200.0
+  Heat Capacity = 800.0
+End
+
+! 24 FET zones via MATC product-form
+! Hi-col CH1 x=0.012 ±0.0085 → [0.0035, 0.0205], lo-col CH1 x=0.030 ±0.0085 → [0.0215, 0.0385]
+! Hi-col CH4 same as CH1 (different y rows)
+! Hi-col CH2 x=0.088, lo-col CH2 x=0.070
+! Hi-col CH3 x=0.088, lo-col CH3 x=0.070
+!
+! Simplified union: 4 x-zones (CH1/4 hi at 0.0035-0.0205, CH1/4 lo at 0.0215-0.0385,
+!   CH3/2 lo at 0.0615-0.0785, CH3/2 hi at 0.0795-0.0965)
+! 6 y-zones (CH1/2 rows at 0.0485-0.0595/0.0605-0.0715/0.0725-0.0835,
+!   CH3/4 rows at 0.0135-0.0245/0.0245-0.0355/0.0355-0.0465 — approximate)
+Body Force 1
+  Heat Source = Variable Coordinate 1, Coordinate 2
+    Real MATC "16043*((tx(0)>=0.0035)*(tx(0)<=0.0205) + (tx(0)>=0.0215)*(tx(0)<=0.0385) + (tx(0)>=0.0615)*(tx(0)<=0.0785) + (tx(0)>=0.0795)*(tx(0)<=0.0965))*((tx(1)>=0.0135)*(tx(1)<=0.0245) + (tx(1)>=0.0245)*(tx(1)<=0.0355) + (tx(1)>=0.0355)*(tx(1)<=0.0465) + (tx(1)>=0.0485)*(tx(1)<=0.0595) + (tx(1)>=0.0605)*(tx(1)<=0.0715) + (tx(1)>=0.0725)*(tx(1)<=0.0835))"
+End
+
+Boundary Condition 1
+  Name = "B.Cu TIM+heatsink h=1500"
+  Target Boundaries(1) = 1
+  Heat Transfer Coefficient = 1500.0
+  External Temperature = 333.15
+End
+
+Boundary Condition 2
+  Name = "F.Cu prop-wash h=80"
+  Target Boundaries(1) = 2
+  Heat Transfer Coefficient = 80.0
+  External Temperature = 333.15
+End
+
+Boundary Condition 3
+  Name = "Sides still-air h=10"
+  Target Boundaries(1) = 3
+  Heat Transfer Coefficient = 10.0
+  External Temperature = 333.15
+End
