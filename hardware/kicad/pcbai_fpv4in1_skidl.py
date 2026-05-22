@@ -67,10 +67,10 @@ BATT_PAD[2] += BATGND
 # C116485) → combined I_max = 16A ≥ 15A ✓, R_cold = 2.5Ω ≥ 1.5Ω ✓, R_hot ~25mΩ ≤ 50mΩ ✓.
 # All 3 spec criteria met.
 U_NTC1 = Part("Device", "R", value="MF72_5D25",
-              footprint="Resistor_THT:R_Disc_D11.0mm_W4.6mm_P5.00mm",
+              footprint="Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P5.08mm_Vertical",
               description="NTC inrush limiter #1 (Nanjing Shiheng MF72 5D25, 5Ω/8A, JLC C116485)")
 U_NTC2 = Part("Device", "R", value="MF72_5D25",
-              footprint="Resistor_THT:R_Disc_D11.0mm_W4.6mm_P5.00mm",
+              footprint="Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P5.08mm_Vertical",
               description="NTC inrush limiter #2 (parallel with #1 for 16A combined I_max)")
 U_NTC1[1] += BATT;     U_NTC1[2] += BATT_NTC
 U_NTC2[1] += BATT;     U_NTC2[2] += BATT_NTC
@@ -118,7 +118,7 @@ CBULK2[2] += GND
 # LED_PWR: GREEN — lit when battery is connected with CORRECT polarity (visible
 # only when rev-pol FETs ON, i.e., GATE_RP is high and rev-pol FETs source the
 # return path normally). Powered from +VMOTOR (post rev-pol) via 5.1 kΩ → GND.
-LED_PWR = Part("Device", "LED", value="GREEN",
+LED_PWR = Part("Device", "LED", value="GREEN_PWR",
                footprint="LED_SMD:LED_0603_1608Metric",
                description="Battery present + polarity correct indicator")
 R_LED_PWR = Part("Device", "R", value="5K1",
@@ -136,7 +136,7 @@ LED_PWR["K"] += GND
 # only path for current is through the rev-pol FET body diodes (reversed) →
 # small current flows backward; LED_RPOL between GATE_RP and BATGND sees ~V_BR
 # of the body diodes and lights through R_LED_RPOL. Safety: at most ~1mA.
-LED_RPOL = Part("Device", "LED", value="RED",
+LED_RPOL = Part("Device", "LED", value="RED_RPOL",
                 footprint="LED_SMD:LED_0603_1608Metric",
                 description="Reverse-polarity warning indicator")
 R_LED_RPOL = Part("Device", "R", value="5K1",
@@ -185,8 +185,8 @@ def buck_stage(idx, vmotor, gnd, vout_volts, i_out_amps,
 
     # Inductor (sized per buck IC datasheet — see PHASE2D_REDO_BEC_EXPANSION.md §3)
     l_buck = Part("Device", "L", value=l_value,
-                  footprint="Inductor_SMD:L_Sunlord_MWSA0630-2R2MT" if i_out_amps >= 5
-                            else "Inductor_SMD:L_Sunlord_MWSA0503S-1R5MT")
+                  footprint="Inductor_SMD:L_Sunlord_MWSA0605S" if i_out_amps >= 5
+                            else "Inductor_SMD:L_Sunlord_MWSA0503S")
     l_buck[1] += sw; l_buck[2] += v_buck_out
 
     # External Schottky catch diode (TPS54560 + AOZ1284PI are non-synchronous)
@@ -247,7 +247,7 @@ def safety_stack(rail_name, idx, v_in_unfiltered, v_out_filtered, gnd,
         # Active eFuse — TPS259251DRCR VSON-10 (or similar SOT-23-5 TPS family).
         # Provides current-limit, soft-start, reverse-current block, fault flag.
         u_efuse = Part("Connector_Generic", "Conn_01x10", value=efuse_pn,
-                       footprint="Package_DFN_QFN:QFN-10-1EP_3x3mm_P0.5mm_EP1.65x1.65mm",
+                       footprint="Package_DFN_QFN:DFN-10-1EP_3x3mm_P0.5mm_EP1.55x2.48mm",
                        description=f"eFuse {efuse_pn} on rail {rail_name}")
         # Generic VSON-10 placeholder pin map. Per TPS25925 datasheet:
         # 1=VIN, 2=VIN, 3=GND (EP), 4=EN, 5=ILIMIT, 6=FLT_n, 7=NC, 8=OUT, 9=OUT, 10=NC

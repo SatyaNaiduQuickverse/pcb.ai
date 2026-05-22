@@ -1,17 +1,25 @@
-"""Phase 4a — board setup: 6-layer stack + Edge.Cuts + M3 mounting holes.
+"""Phase 4b-REDO2 — board setup: 6-layer stack + Edge.Cuts + M3 mounting holes.
 
 Reads pcbai_fpv4in1.kicad_pcb (kinet2pcb output, 2-layer default),
-upgrades to 6-layer per PCB_PLAYBOOK §Routing, adds 50×50 Edge.Cuts
-outline, and 4× M3 mounting holes on the 40×40 Betaflight pattern.
+upgrades to 6-layer per PCB_PLAYBOOK §Routing, adds 90×75 Edge.Cuts
+outline, and 4× M3 mounting holes on a custom 80×65 pattern.
+
+Board-size history:
+  Phase 4a: 50×50 mm (initial square)
+  Phase 4c-resume Option C: 85×70 mm rectangular (TOLL MOSFETs + bigger heatsink)
+  Phase 4b-REDO2 (this): 90×75 mm rectangular (BEC absorption per Sai's
+    feedback-anchor-on-most-capable-reference rule — commercial-product class,
+    not entry-level FPV reference)
 """
 
 import re
 from pathlib import Path
 
 PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb")
-BOARD_W = 85.0                 # Phase 4c-resume Option C: rectangular 85×70 (was 50×50)
-BOARD_H = 70.0
-# Custom mount-hole pattern for 85×70 board (no standard FPV fit; pick 75×60 inset)
+BOARD_W = 90.0                 # Phase 4b-REDO2: grew 85 → 90 for BEC absorption
+BOARD_H = 75.0                 # grew 70 → 75
+# Custom mount-hole pattern for 90×75 board: 80×65 spacing (5mm inset from each edge).
+# No standard FPV stack pattern fits 90×75 — commercial-product-class custom pattern.
 MOUNT_X_PAD = 5.0              # inset from board edges in X
 MOUNT_Y_PAD = 5.0              # inset from board edges in Y
 M3_HOLE_DIA = 3.2              # mm clearance through-hole
