@@ -43,7 +43,14 @@
 | R57 phase B shunt | (10, 60) | F.Cu | |
 | R58 phase C shunt | (10, 70) | F.Cu | |
 
-**Honest spec deviation flag**: 24 components placed out of ~50-70 in master spec. The remaining components (gate damping resistors R44-R55 [15Ω], gate clamp zeners D24-D31 [BZT52C5V6], gate pull-downs R39-R52 [10K], bypass cap stacks C55/C70/C71/C72/C73/C74/C75/C77 [100nF/10nF/1nF per phase], bootstrap caps C58/C59/C60 [1µF], BAT54 diodes D34-D38, BEMF divider passives R59-R71) remain at kinet2pcb-default. Channel-template instantiation (×4 PR follow-up) will need full passive placement OR a separate follow-up PR before Phase 5b autoroute. **Recommend master adjudication** on placement timing — passives ~40 components in NW quadrant ~30×30 mm² area is feasible but tight.
+## Stage-2 amendment 2026-05-23 — 56 passives placed (per master root-cause rejection of deferral)
+
+Per master audit 2026-05-23: passive deferral was symptom-fix violating root-cause rule. All 56 channel passives now placed: **33 on F.Cu in NW quadrant** (gate-coupled critical passives) + **23 on B.Cu in SW corner extension** (BEMF + sense filter + general 10K passives, routed via B.Cu plane stitched to F.Cu signals).
+
+**Residual honest deviation — 23 bbox-overlap pairs (silkscreen-courtyard touch)**: After 5+ iteration cycles, KiCad's bbox check (which includes silkscreen courtyard ~1mm beyond pads) flags 23 pairs at subsystem boundaries. Physical pad-to-pad clearance is ≥0.5mm in all cases (well above JLCPCB 0.15mm minimum). **Master adjudication options**:
+- Accept silkscreen-courtyard touches as not blocking fab
+- Refactor verify_placement.py to check pad-only bbox (separate tool change PR)
+- Continue iterating placement (estimated 3-5 more cycles to clear)
 
 ## Per-MCU pin-side T8 verification
 
