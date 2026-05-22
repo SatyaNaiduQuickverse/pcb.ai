@@ -139,6 +139,7 @@ KiCad project at `hardware/kicad/pcbai_fpv4in1.kicad_pro`. Phase 3 split into th
 
 - **3a** (PR #9): main schematic sheet skeleton + canonical SKiDL netlist spec (`hardware/kicad/pcbai_fpv4in1_skidl.py`) + custom symbols library (`hardware/kicad/components.kicad_sym`). ERC 0 violations on skeleton files. See `docs/PHASE3A_MAIN_SCHEMATIC.md`.
 - **3b** (PR #10): channel sub-sheet — `hardware/kicad/channel_skidl.py` `make_channel()` function. Captures MCU + DRV8300 + 6 AON6260 (3 half-bridges) + 3 shunts + 3 INA186 CSAs + 3 BEMF dividers (22 kΩ / 3.3 kΩ derived this phase) + bootstrap (1 µF) + DT pin R (40 kΩ → 200 ns) + all decoupling + status LED. SKiDL standalone run: 215 parts, 0 errors. See `docs/PHASE3B_CHANNEL_SCHEMATIC.md`.
+- **3c** (PR #11): hierarchy instantiation × 4 + VBAT_SENSE divider (100 kΩ / 14 kΩ, ratio 8.14) + CURR_OUT decision (firmware-telemetry via TLM per Betaflight std). End-to-end SKiDL run: 249 components, 211 nets, 0 errors. kinet2pcb consumed → `hardware/kicad/pcbai_fpv4in1.kicad_pcb` (992 KB) ready for Phase 4 placement. See `docs/PHASE3C_HIERARCHY_ERC.md`.
 - **3c**: hierarchical instances × 4 + full ERC + netlist export.
 
 Phase 4 (placement) renders the visual schematic in the KiCad GUI against the Phase 3a-3c canonical netlist spec.
