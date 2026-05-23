@@ -60,7 +60,8 @@ inventory + Phase 6 follow-up queue.
 | SYMMETRY (verify_spec_diff)         | 87/88 per pair across CH1↔CH2/CH3/CH4 (3 × 1 disclosed D26) |
 | PASSIVE-ANCHORING (>20mm hard fail) | 0 fail (~110 in 10-20mm warn band — Phase 5b routing-time check) |
 | DECOUPLING (3mm)                    | PASS for all ICs in CH1; CH2/3/4 inheritance |
-| PAD-OVERLAP                         | **460 residual** (down from 911 peak; Hall + MCU repositioned per master) |
+| PAD-OVERLAP                         | **422 total / 19 same-net intentional / 403 diff-net** (down from 911 peak) |
+| PAD-OVERLAP-DIFFNET (true fab-block)| **198** (after filtering 205 unnetted-FET / mount-hole-tied pairs — netlist drop, not placement) |
 | target.h md5                        | 7a4549d27e0e83d3d6f1ffaf67527d24 unchanged ✓ |
 
 ## Sims (2 cumulative regression, real + 4-point evidence per R18)
@@ -137,15 +138,35 @@ Master rejected initial 911→777 residual ("777 PAD-OVERLAP is fab-blocking; ro
 3. **Gate drivers**: J19 (45, 74) → (40, 62) east of FET cluster, clear of J2 buck
    spine. Mirror set J24/J29/J34 similarly relocated.
 
-**Residual 460 PAD-OVERLAP** — significantly below 911 peak but NOT meeting
-master's ≤20 acceptance. Top remaining offenders:
-- J18 + J23 corner MCUs: 42 conflicts each (J22/J26 INA + auto-anchored debris)
-- J3/J5 bucks + Q27/U12/U3/U9 protection cluster collisions
+**Residual 422 PAD-OVERLAP raw** — significantly below 911 peak. With same-net
+vs different-net categorization (audit_layout_compliance.py enhancement, this
+amendment):
 
-**Honest report to master**: physical density of AT32F421 LQFP-32 + DRV8300 +
-INA186 + protection cluster + 24 FETs + Hall + supervisor + BEC + S6 connectors
-+ ~384 channel passives on 100×100mm board exceeds what placement alone can resolve.
-Master Option B (BOM change to smaller MCU/Hall) recommended for getting below 20.
+| Class                                    | Count | Status |
+|------------------------------------------|------:|--------|
+| Total geometric pad-pair overlaps        |  422  | raw    |
+| Same-net (intentional bus/pour overlap)  |   19  | OK     |
+| Different-net (raw)                      |  403  | review |
+| ↳ involving unnetted refs (Q5-Q28, H1-H4) |  205  | netlist drop (kinet2pcb) — Phase 5b/netlist-fix issue, not placement |
+| ↳ BOTH netted = TRUE fab-blocking         |  198  | the real number |
+
+**True fab-blocking different-net pairs: 198**. This is just under master's
+200+ BOM-change escalation threshold, above the <100 single-PR-mergeable bar.
+
+Top remaining offenders (both-netted diff-net):
+- LQFP-32 MCUs J18/J23/J28/J33: ~21-28 conflicts each at quadrant corners
+  (still hitting Y=80/20 FET-row pads after corner-spread)
+- J3/J5 bucks + DRV8300 instances (J24/J29/J34) + protection cluster collisions
+
+**Honest report to master**: 198 is borderline. Two paths:
+- Option B-1 (BOM change, e.g., LQFP→QFN MCU + smaller Hall) → faster to <100
+- Phase 5b routing-time hand-clearance + a netlist-import fix pass (the 205
+  unnetted-pad pairs may resolve once Q5-Q28 are properly net-assigned)
+
+**Separately flagged**: 28 FETs Q1-Q4 (protection) + Q5-Q28 (channel) have ALL
+pads at netname="" — kinet2pcb dropped their netlist. Memory
+[[reference-kinet2pcb-silent-drop]] applies. This is a Phase 2 netlist defect,
+not a placement defect, but inflates raw PAD-OVERLAP.
 
 Cumulative sims still PASS (thermal 62.76°C; ngspice V_BUS 18.7V / 473mV trip
 margin / V_HALL 0.095mV) — these are not pad-overlap-blocked.

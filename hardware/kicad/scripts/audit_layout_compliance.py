@@ -68,23 +68,30 @@ def check_off_board(items, bbox):
             fails.append(f"  ... and {len(off) - 10} more")
 
 
-# ----- check 2: pad-overlap -----
+# ----- check 2: pad-overlap (same-net vs different-net split) -----
 def check_pad_overlap(items):
     pads = []
     for ref, d in items.items():
         for pad in d["fp"].Pads():
             bb = pad.GetBoundingBox()
             layers = pad.GetLayerSet()
+            try:
+                net = pad.GetNet().GetNetname()
+            except Exception:
+                net = ""
             pads.append({
                 "ref": ref,
                 "pad": pad.GetPadName(),
+                "net": net,
                 "bb": (pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetTop()),
                        pcbnew.ToMM(bb.GetRight()), pcbnew.ToMM(bb.GetBottom())),
                 "layers_F": layers.Contains(pcbnew.F_Cu),
                 "layers_B": layers.Contains(pcbnew.B_Cu),
             })
-    overlaps = 0
-    pairs = []
+    same_net = 0
+    diff_net = 0
+    diff_pairs = []
+    same_pairs = []
     for i in range(len(pads)):
         a = pads[i]
         for j in range(i + 1, len(pads)):
@@ -98,15 +105,33 @@ def check_pad_overlap(items):
             ax1, ay1, ax2, ay2 = a["bb"]
             bx1, by1, bx2, by2 = b["bb"]
             if ax1 < bx2 and ax2 > bx1 and ay1 < by2 and ay2 > by1:
-                overlaps += 1
-                if len(pairs) < 8:
-                    pairs.append((a["ref"], a["pad"], b["ref"], b["pad"]))
-    if overlaps:
-        fails.append(f"PAD-OVERLAP: {overlaps} pad pairs overlap on same layer")
-        for r1, p1, r2, p2 in pairs:
-            fails.append(f"  {r1}.{p1} <-> {r2}.{p2}")
-        if overlaps > 8:
-            fails.append(f"  ... and {overlaps - 8} more")
+                # Same non-empty net = intentional pour overlap (not fab-blocking).
+                if a["net"] and b["net"] and a["net"] == b["net"]:
+                    same_net += 1
+                    if len(same_pairs) < 8:
+                        same_pairs.append((a["ref"], a["pad"], b["ref"], b["pad"], a["net"]))
+                else:
+                    diff_net += 1
+                    if len(diff_pairs) < 12:
+                        diff_pairs.append((a["ref"], a["pad"], a["net"] or "<noconn>",
+                                           b["ref"], b["pad"], b["net"] or "<noconn>"))
+    total = same_net + diff_net
+    # Always emit summary line (PASS or FAIL) so worker/master can grep.
+    if total:
+        fails.append(f"PAD-OVERLAP-TOTAL: {total} (same-net {same_net} intentional, "
+                     f"different-net {diff_net} FAB-BLOCKING)")
+        if diff_net:
+            fails.append(f"PAD-OVERLAP-DIFFNET: {diff_net} different-net pad pairs")
+            for r1, p1, n1, r2, p2, n2 in diff_pairs:
+                fails.append(f"  {r1}.{p1}[{n1}] <-> {r2}.{p2}[{n2}]")
+            if diff_net > len(diff_pairs):
+                fails.append(f"  ... and {diff_net - len(diff_pairs)} more different-net pairs")
+        if same_net:
+            fails.append(f"PAD-OVERLAP-SAMENET: {same_net} same-net pad pairs (intentional pour/bus overlap)")
+            for r1, p1, r2, p2, net in same_pairs[:5]:
+                fails.append(f"  {r1}.{p1} <-> {r2}.{p2}  net={net}")
+            if same_net > 5:
+                fails.append(f"  ... and {same_net - 5} more same-net pairs")
 
 
 # ----- check 3: symmetry (4 channels) -----
