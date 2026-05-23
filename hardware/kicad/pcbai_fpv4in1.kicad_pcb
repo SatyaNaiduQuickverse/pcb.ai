@@ -39200,7 +39200,7 @@
 	(footprint "Capacitor_SMD:CP_Elec_10x14.3"
 		(layer "F.Cu")
 		(uuid "4aa58eb6-ee68-4f12-a85d-0a72604b838e")
-		(at 22.00 28.00 0.0)
+		(at 25.00 28.00 0.0)
 		(descr "SMD capacitor, aluminum electrolytic, Vishay 1014, 10.0x14.3mm, http://www.vishay.com/docs/28395/150crz.pdf")
 		(tags "capacitor electrolytic")
 		(property "Reference" "C1"
@@ -117010,7 +117010,7 @@
 	(footprint "Capacitor_SMD:CP_Elec_10x14.3"
 		(layer "F.Cu")
 		(uuid "e7e7af4c-c1c3-42d7-86d7-a056b9eb71e4")
-		(at 85.00 28.00 0.0)
+		(at 75.00 28.00 0.0)
 		(descr "SMD capacitor, aluminum electrolytic, Vishay 1014, 10.0x14.3mm, http://www.vishay.com/docs/28395/150crz.pdf")
 		(tags "capacitor electrolytic")
 		(property "Reference" "C2"
@@ -128478,9 +128478,12 @@
 
 	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
 
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "21d332a0-5302-4675-a36f-8f4f6ecd5ff7")
+		(uuid "bacee9b9-4963-497d-91f9-7ff2b4c9c6de")
 		(at 44.60 37.50 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128488,13 +128491,13 @@
 		(property "Reference" "H1"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "82de01dc-661e-4370-9196-7c154106826a")
+			(uuid "45e0927f-d018-421c-863a-5cc23b23554a")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "6e4e0a67-96cf-4b51-8c8c-8f25dfc12cce")
+			(uuid "5e1fd3d2-1aa2-42fb-8836-884ee4d94930")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128502,12 +128505,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "c5c10c36-12ef-499e-9fce-9be0619ea78d")
+			(uuid "f451ef67-6a14-46c0-bdf1-53b3b9036bff")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "935608fe-212b-4a12-9d6b-523828703ffe")
+		(uuid "c1995de4-ceb8-45c5-858a-f16fafe18002")
 		(at 51.80 37.50 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128515,13 +128518,13 @@
 		(property "Reference" "H2"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "3c925124-bd00-404d-bfc7-d7632763dded")
+			(uuid "3601b20f-690c-47fd-bdf2-b52537ba5a4e")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "2ed11457-b282-4e35-8efa-2b7758e1e9f0")
+			(uuid "c032f308-ff0e-4b98-9653-442a5ec5ffeb")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128529,12 +128532,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "fe7d87a6-6c55-48ba-b719-0c94c549c139")
+			(uuid "ba6ba698-da00-47a8-a293-c4cf268d5814")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "416936ef-fa0f-4a9a-8812-65ad4d9eee53")
+		(uuid "484d6c5f-bd0d-4337-b48c-a7ddb9dcfce4")
 		(at 2.00 2.00 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128542,13 +128545,13 @@
 		(property "Reference" "H3"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "9d023ad2-fd42-415f-8a71-fa051bbc0ca6")
+			(uuid "6e1ca792-b950-40aa-8270-92ff814293c4")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "4a41654c-5dec-4ee1-954d-4188f0e476f3")
+			(uuid "c91ad5f3-b2dd-4cef-bb3f-9e78c29a57c1")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128556,12 +128559,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "06c046b7-ebe0-4844-95ce-3c1cbf26cb8d")
+			(uuid "d600b8ad-2179-46b2-9d3d-93c531ee9c36")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "041eb5c4-100f-48c7-9774-7eaacb805ed1")
+		(uuid "875f7a2b-bce5-43aa-9101-0490c9681152")
 		(at 23.60 2.00 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128569,13 +128572,13 @@
 		(property "Reference" "H4"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "bcb90b76-a9f2-404d-b3b8-a8cbcf04eb29")
+			(uuid "954e533f-381f-4a15-a2ed-586aa60e27db")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "e55efa46-9d87-4ce7-bc27-33df6a5e1b1c")
+			(uuid "71b20b00-d735-4c23-a53d-b88a72c0e3e4")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128583,7 +128586,7 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "75a39495-3285-425a-8035-36c91840d75a")
+			(uuid "44f2e388-fcf6-4e09-8584-bb94379bb21f")
 		)
 	)
 )

@@ -133,8 +133,10 @@ S2_POSITIONS = {
     # NW inner edge x=39. C4 bbox (68.1, 34.5)..(81.9, 45.5) — x_min=68.1
     # well over channel NE inner edge x=61. Cleared for S4 channel placement.
     # C1/C2 at y=24 left at (30, 24)/(70, 24) — clear of S4 (S4 starts y=42).
-    'C1': (22.0, 28.0, 'F.Cu', 0.0),
-    'C2': (85.0, 28.0, 'F.Cu', 0.0),
+    # PR-S2 2026-05-23: 2×2 mirror grid about (50, 36) per master locked spec.
+    # C1 was (22, 28), C2 was (85, 28) — not X-symmetric. Fixed to (25, 28)/(75, 28).
+    'C1': (25.0, 28.0, 'F.Cu', 0.0),
+    'C2': (75.0, 28.0, 'F.Cu', 0.0),
     'C3': (25.0, 44.0, 'F.Cu', 0.0),
     'C4': (75.0, 44.0, 'F.Cu', 0.0),
 }

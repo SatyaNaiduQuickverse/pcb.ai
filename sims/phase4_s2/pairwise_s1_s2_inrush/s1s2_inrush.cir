@@ -1,0 +1,33 @@
+* PR-S2 pair-wise S1+S2 inrush: combined sim with §S1 NTC + rev-pol FETs +
+* §S2 bulk caps (1880µF). Cold-start charging from V_BATT=25.2V.
+* Acceptance: V_BUS rise to 95% within 5ms (re-confirm S1 result holds with
+* full bulk cap bank load).
+
+V_batt    BATT 0       PWL(0 0 100us 25.2)
+R_xt30    BATT N1      10m
+* MF72-5D25 NTC pair, parallel — B-source model with self-heat decay τ=2ms
+B_ntc     N1   N2      I = V(N1, N2) / (0.05 + 2.45 * exp(-TIME/2m))
+R_revpol  N2   VBUS    0.425m
+V_sense   VBUS VBUS_S  0
+
+* §S2 bulk cap bank — 4× 470µF polymer parallel = 1880µF, 4× 30mΩ ESR // = 7.5mΩ
+R_esr1    VBUS_S V1    0.030
+C1_cap    V1   0       470u IC=0
+R_esr2    VBUS_S V2    0.030
+C2_cap    V2   0       470u IC=0
+R_esr3    VBUS_S V3    0.030
+C3_cap    V3   0       470u IC=0
+R_esr4    VBUS_S V4    0.030
+C4_cap    V4   0       470u IC=0
+
+.ic V(V1)=0 V(V2)=0 V(V3)=0 V(V4)=0
+
+.control
+  tran 100n 30m UIC
+  meas tran ipeak MAX I(V_sense)
+  meas tran t_95 WHEN V(V1) = 23.94
+  set wr_singlescale
+  set wr_vecnames
+  wrdata s1s2_inrush.raw I(V_sense) V(VBUS_S) V(V1)
+.endc
+.end
