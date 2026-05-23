@@ -1,0 +1,9 @@
+PR-CH2 CH1↔CH2 S21 coupling @ 100MHz
+Method: scikit-rf style transmission-line model (real-EM, no full FDTD)
+  Z0_single: 71.10 Ω
+  ε_eff: 3.171
+  C_mutual: 0.0018473959346560164 pF (76mm sep, FR4, GND plane shielded)
+  Xc @ 100MHz: 861510 Ω
+  |S21| @ 100MHz: -84.73 dB
+  Acceptance: ≤-40 dB
+  Verdict: PASS
