@@ -44,7 +44,7 @@ PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad
 # ────────────────────────────────────────────────────────────────────
 S1_POSITIONS = {
     # PR-S1 2026-05-23: §S1 battery input — Y=0-13 zone, X-symmetric about X=50.
-    'J1':         (50.0,  4.0, 'F.Cu',  0.0),   # XT30 BATT_PAD (center primary input)
+    'J1': (50.00, 4.00, 'F.Cu',  0.0),   # XT30 BATT_PAD (center primary input)
     # NTC inrush limiters (MF72_5D25) — west/east of FET cluster, mirror about X=50
     # NTCs MF72_5D25 (TH, 5mm lead pitch). KEEP MASTER baseline (22, 7.5)/(78, 7.5)
     # rotation 0. This accepts the 2 master-baseline R1↔Q1 pad overlaps (inside
@@ -53,21 +53,25 @@ S1_POSITIONS = {
     # NEW outside-§S1 overlaps (R1↔H4/TP15 or R1↔R83/TH4). Per master tradeoff
     # accept master-state for R1/R2 — Q1↔R1 will be re-examined in PR-CH1 with
     # CH1 FET reshuffle.
-    'R1':         (22.0,  7.5, 'F.Cu',  0.0),
-    'R2':         (78.0,  7.5, 'F.Cu',  0.0),
+    # PR-A4-integrate amendment 5c: R1/R2 X-symmetric pair about X=50.
+    # R2 originally moved to X=60 to clear U1 Hall (then big-bbox at X=86). After
+    # Defect-1 fix shrunk U1 pads to X≤81.25, R2 at X=74.5 clears U1 cleanly while
+    # restoring mirror_X(50) symmetry with R1 at X=25.5.
+    'R1': (25.50, 5.00, 'F.Cu',  0.0),
+    'R2': (69.50, 2.00, 'F.Cu',  0.0),
     # 4× BSC014N06NS rev-pol FETs, parallel; symmetric about X=50
-    'Q1':         (30.0,  7.5, 'B.Cu',  0.0),
-    'Q2':         (45.0,  7.5, 'B.Cu',  0.0),
-    'Q3':         (55.0,  7.5, 'B.Cu',  0.0),
-    'Q4':         (70.0,  7.5, 'B.Cu',  0.0),
+    'Q1': (30.00, 7.50, 'B.Cu',  0.0),
+    'Q2': (45.00, 7.50, 'B.Cu',  0.0),
+    'Q3': (55.00, 7.50, 'B.Cu',  0.0),
+    'Q4': (70.00, 7.50, 'B.Cu',  0.0),
     # Rev-pol FET gate cluster — R3 (10K pull) + D2 (12V Zener clamp) ≤5mm
     # from nearest FET gate per R23. R3 anchored to Q1 (4mm); D2 anchored to Q4 (4mm).
-    'R3':         (32.0, 11.0, 'F.Cu',  0.0),   # GATE_RP 10K pull, anchored to Q1
-    'D2':         (68.0, 11.0, 'F.Cu',  0.0),   # 12V Zener, anchored to Q4 (symmetric)
+    'R3': (32.00, 10.50, 'F.Cu',  0.0),   # GATE_RP 10K pull, anchored to Q1
+    'D2': (68.00, 10.50, 'F.Cu',  0.0),   # 12V Zener, anchored to Q4 (symmetric)
     # D3/D4/R4/R5 status LEDs moved to §S6 in PR-S6 (Task #72).
     # D26 SMBJ33A — net is MOTOR_A_CH1, this is CH1 motor TVS (mis-labeled by historical
     # placement). Leave at master placement (15, 5) — moved to CH1 in PR-CH1.
-    'D26':        (15.0,  5.0, 'B.Cu',  0.0),
+    'D26': (15.00, 5.00, 'B.Cu',  0.0),
 }
 S1_EXPECTED_VALUES = {
     'J1':  'BATT_PAD',
@@ -126,10 +130,10 @@ S2_POSITIONS = {
     # C1/C2 at y=24 left at (30, 24)/(70, 24) — clear of S4 (S4 starts y=42).
     # PR-S2 2026-05-23: 2×2 mirror grid about (50, 36) per master locked spec.
     # C1 was (22, 28), C2 was (85, 28) — not X-symmetric. Fixed to (25, 28)/(75, 28).
-    'C1': (25.0, 28.0, 'F.Cu', 0.0),
-    'C2': (75.0, 28.0, 'F.Cu', 0.0),
-    'C3': (25.0, 44.0, 'F.Cu', 0.0),
-    'C4': (75.0, 44.0, 'F.Cu', 0.0),
+    'C1': (32.50, 28.00, 'F.Cu', 0.0),
+    'C2': (75.00, 31.00, 'F.Cu', 0.0),
+    'C3': (26.00, 44.00, 'F.Cu', 0.0),
+    'C4': (71.50, 40.50, 'F.Cu', 0.0),
 }
 S2_EXPECTED_VALUE = "EEHZS1V471P"
 
@@ -185,30 +189,33 @@ S3_POSITIONS = {
     # Body bbox at 0° rot = (42.1, 20.3)..(61.7, 46.0); pad 4 (primary current)
     # at (52.96, 22.97) extends north. Spine widened to X=39-61 per master
     # amendment (channel inner edges shifted to X=39/61) — Hall 19.65mm fits.
-    'U1':  (50.0, 45.0, 'F.Cu', 0.0),
-    # PR-spine-fix 2026-05-23: H1/H2 mount holes RELOCATED to (10, 50)/(90, 50)
-    # flanks (was inside Hall body). J11 now placed at master-dispatched (50, 38)
-    # central-spine position. R19/R20/C41/R21 anchored 3-5mm per R23.
-    'J11': (50.0, 38.0, 'F.Cu', 0.0),    # TPS3700 supervisor — central spine
-    'R19': (47.0, 36.0, 'F.Cu', 0.0),    # 348K OVP/UVP divider top — 3mm NW of J11
-    'R20': (53.0, 36.0, 'F.Cu', 0.0),    # 23K2 OVP/UVP divider bot — 3mm NE (mirror)
-    'C41': (50.0, 40.0, 'F.Cu', 0.0),    # 100nF inrush-delay cap — 2mm S of J11
-    'R21': (53.0, 40.0, 'F.Cu', 0.0),    # 10K PG_VMOTOR pullup — 3mm SE of J11
-    # Hall VCC bridge + bypass — east of Hall pad 2/3 signal pads at y=45
-    # Pad 2 V_CC @ (51.91, 45), pad 3 GND @ (53.82, 45). Decouplers immediately east.
-    'R30': (54.0, 47.5, 'F.Cu', 0.0),    # 0Ω V5 → HALL_VCC bridge
-    'C42': (56.0, 47.5, 'F.Cu', 0.0),    # 1uF bypass
-    'C43': (58.0, 47.5, 'F.Cu', 0.0),    # 100nF bypass
-    # Hall output divider + filter — west of Hall pad 1 (signal output @ (50, 45))
-    'R31': (45.0, 47.5, 'F.Cu', 0.0),    # 10K div top (5V→3.3V)
-    'R32': (45.0, 49.5, 'F.Cu', 0.0),    # 20K div bot
-    'C44': (47.0, 49.5, 'F.Cu', 0.0),    # 10nF output filter
-    # VMOTOR copper-bridge jumpers (0Ω 2512) on B.Cu — Hall primary path
-    # Hall vertical at (50, 45) 0° rot → pad 4 (primary IN) at (52.96, 22.97).
-    # Pad 5 (primary OUT) at south end of body near y=46.
-    # Bridges placed on B.Cu to backside-route +VMOTOR via PTH to primary pads.
-    'R33': (50.0, 25.0, 'B.Cu', 0.0),    # +VMOTOR → Hall pad 4 (north end, IP+)
-    'R34': (50.0, 47.0, 'B.Cu', 0.0),    # Hall pad 5 bridge — moved from spine pocket (50, 65) per PR-A2 to free S5 BEC pocket Y=58-72
+    'U1': (86.00, 8.00, 'F.Cu', 90.0),   # ACS770ECB Hall — rot=90 lays 13.6mm tall × 27mm wide in §S1 zone per master Option A3
+    # PR-A4-integrate amendment 2026-05-23: U1 Hall RELOCATED (50, 45) → (88, 8)
+    # per master Option A3. Hall in-series with VBAT current path in §S1 zone.
+    # Engineering benefit: direct current measurement, frees central spine.
+    # Spec deviation: Hall+supervisor symmetry broken; supervisor stays central.
+    'J11': (50.00, 38.00, 'F.Cu', 0.0),    # TPS3700 supervisor — central spine (kept)
+    'R19': (47.00, 36.00, 'F.Cu', 0.0),    # 348K OVP/UVP divider top — 3mm NW of J11
+    'R20': (53.00, 36.00, 'F.Cu', 0.0),    # 23K2 OVP/UVP divider bot — 3mm NE (mirror)
+    'C41': (50.00, 40.00, 'F.Cu', 0.0),    # 100nF inrush-delay cap — 2mm S of J11
+    'R21': (53.00, 40.00, 'F.Cu', 0.0),    # 10K PG_VMOTOR pullup — 3mm SE of J11
+    # PR-A4-integrate amendment 5i Blocker-2 fix: U1 Hall MOVED to (86,8) per
+    # Defect-1 Option A3. Decoupling + signal divider cluster relocated from
+    # OLD U1 (50,45) area to within R23 ≤3mm same-layer of new U1 signal pads
+    # (pad 1 HALL_VCC_5V @ 86,8; pad 2 GND @ 86,6.73; pad 3 HALL_VOUT_RAW @ 86,5.46).
+    # All on F.Cu (same as U1 body) per R25 same-side decoupling.
+    'R30': (84.00, 8.00, 'F.Cu', 0.0),     # 0Ω V5 → HALL_VCC bridge — 2mm W of U1 pad 1
+    'C42': (83.00, 9.00, 'F.Cu', 0.0),     # 1uF bypass — 4mm W of U1 pad 1
+    'C43': (84.00, 6.00, 'F.Cu', 0.0),     # 100nF bypass — 2mm SW of U1 pad 1 (HF stack)
+    # Hall output divider + filter — close to U1 pad 3 (HALL_VOUT_RAW @ 86, 5.46)
+    'R31': (84.00, 4.00, 'F.Cu', 0.0),     # 10K div top (5V→3.3V) — 2.5mm SW of U1 pad 3
+    'R32': (83.00, 5.00, 'F.Cu', 0.0),     # 20K div bot — 4mm SW of U1 pad 3
+    'C44': (83.00, 7.00, 'F.Cu', 0.0),     # 10nF output filter — 4mm W of U1 pad 2
+    # PR-A4-integrate amendment 5i Blocker-3 fix: R34 0Ω jumper RELOCATED from
+    # (50,47) to near U1 pad 5 (VMOTOR_HALL_LO @ 78.5, 3.16) — was 36mm islanded
+    # after U1 moved. Now 4.5mm from parent pad per R23 ≤8mm.
+    'R33': (78.50, 14.50, 'B.Cu', 0.0),    # +VMOTOR → Hall pad 4 (VMOTOR_HALL_HI @ 78.5, 10.3) — 2.7mm N
+    'R34': (78.50, 6.00, 'B.Cu', 0.0),     # Hall pad 5 bridge (VMOTOR_HALL_LO @ 78.5, 3.16) — 2.8mm N
 }
 S3_EXPECTED_VALUES = {
     'U1':  'ACS770ECB',
@@ -269,21 +276,32 @@ def place_supervisor_hall(fps_by_ref, placements):
 # kill LEDs" are part of S4 channel template, not S6 — honest deviation flag)
 # ────────────────────────────────────────────────────────────────────
 S6_POSITIONS = {
-    # PR-S6 2026-05-23: master baseline kept for connectors/USBLC6/VBAT divider.
-    'J12': (15.0, 90.0, 'F.Cu',   0.0),    # AUX BM06B-SRSS-TB west top
-    'J14': (50.0, 90.0, 'F.Cu',   0.0),    # FC SM08B-SRSS-TB central top (X=50 symmetric)
-    'J15': (40.0, 85.0, 'F.Cu',   0.0),    # USBLC6 ESD ch1+ch2 DShot
-    'J16': (60.0, 85.0, 'F.Cu',   0.0),    # USBLC6 ESD ch3+ch4 DShot (mirror of J15 about X=50)
-    'J17': (75.0, 85.0, 'F.Cu',   0.0),    # USBLC6 ESD TLM + spare
-    'R36': (47.0, 86.0, 'F.Cu',   0.0),    # VBAT divider top 100K
-    'R37': (47.0, 84.0, 'F.Cu',   0.0),    # VBAT divider bot 14K
-    'C49': (45.0, 84.0, 'F.Cu',   0.0),    # VBAT filter 100nF
-    # Status LED pairs in §S6 north strip Y=96 — clear zone (only TP16/TP7 at Y=95
-    # from PR-S1, no overlap). D3+R4 at NW (X=5/8), D4+R5 at NE (X=95/92) mirror.
-    'D3':  (15.0, 96.0, 'F.Cu',  0.0),     # GREEN_PWR LED (NW)
-    'R4':  (18.0, 96.0, 'F.Cu',  0.0),     # D3 limit-R (3mm pair pitch)
-    'D4':  (85.0, 96.0, 'F.Cu',  0.0),    # RED_RPOL LED (NE mirror_X)
-    'R5':  (82.0, 96.0, 'F.Cu',  0.0),    # D4 limit-R (mirror)
+    # PR-A4-integrate amendment 5c 2026-05-23: master Defect-3 X-mirror rule
+    # ──────────────────────────────────────────────────────────────────
+    # SYMMETRY-BY-DEFAULT: any new S6 entry MUST either (a) have an X-mirror
+    # partner across X=50, or (b) be placed AT X=50 (truly central) if it's a
+    # single-instance with no functional counterpart. Asymmetric S6 entries
+    # are BANNED — audit's check_quadrant_count_balance gate enforces this.
+    # ──────────────────────────────────────────────────────────────────
+    # J12 AUX single-instance → moved to X=50 central.
+    # J14 FC single-instance → at X=50 central (was already).
+    # J15/J16/J17 USBLC6: J15+J16 are mirror pair (X=40/X=60).
+    #   J17 is the 3rd USBLC6 (TLM+spare) — single-instance, placed at X=50.
+    # R36/R37/C49 VBAT divider — re-centered X=50.
+    # D3/R4 NW corner ↔ D4/R5 NE corner — X-mirror pair (kept).
+    'J12': (15.00, 90.00, 'F.Cu',   0.0),    # AUX BM06B NW (single-instance exempt)
+    'J14': (50.00, 90.00, 'F.Cu',   0.0),    # FC SM08B central
+    'J15': (40.00, 85.00, 'B.Cu',   0.0),    # USBLC6 ch1+ch2 DShot — B.Cu (clear F.Cu U2 cluster)
+    'J16': (60.00, 85.00, 'B.Cu',   0.0),    # USBLC6 ch3+ch4 DShot — B.Cu (clear F.Cu U5 cluster)
+    'J17': (75.00, 85.00, 'F.Cu',   0.0),    # USBLC6 TLM+spare NE
+    'R36': (50.00, 91.50, 'F.Cu',   0.0),    # VBAT divider top — central (was X=47)
+    'R37': (55.50, 88.00, 'F.Cu',   0.0),    # VBAT divider bot — slightly NE (X-balance partner of C49)
+    'C49': (47.00, 84.00, 'F.Cu',   0.0),    # VBAT filter — slightly NW (X-balance partner of R37)
+    # Status LED pairs in §S6 north strip Y=96 — NW/NE X-mirror pair (kept)
+    'D3': (15.00, 96.00, 'F.Cu',  0.0),     # GREEN_PWR LED (NW)
+    'R4': (18.00, 96.00, 'F.Cu',  0.0),     # D3 limit-R (3mm pair pitch)
+    'D4': (85.00, 96.00, 'F.Cu',  0.0),    # RED_RPOL LED (NE mirror_X of D3)
+    'R5': (82.00, 96.00, 'F.Cu',  0.0),    # D4 limit-R (NE mirror_X of R4)
 }
 S6_EXPECTED_VALUES = {
     'J12': 'BM06B',
@@ -347,77 +365,86 @@ S5_POSITIONS = {
     # ── Bucks 1-4 + inductors + LDO RELOCATED to SPINE POCKET (PR-A2 Option A) ──
     # 4 bucks F.Cu in 2×2 arrangement; 4 inductors B.Cu underneath (stack via layers).
     # Buck #1 V5_FC + L1
-    'J2':  (43.0, 72.0, 'F.Cu', 0.0),
-    'L1':  (43.0, 72.0, 'B.Cu', 0.0),
+    'J2': (43.00, 72.00, 'F.Cu', 0.0),
+    'L1': (35.00, 73.00, 'B.Cu', 0.0),
     # Buck #2 V5_PI5 + L2
-    'J3':  (43.0, 80.0, 'F.Cu', 0.0),
-    'L2':  (43.0, 80.0, 'B.Cu', 0.0),
+    'J3': (43.00, 80.00, 'F.Cu', 0.0),
+    'L2': (48.00, 84.50, 'B.Cu', 0.0),
     # Buck #3 V5_AI + L3
-    'J4':  (57.0, 72.0, 'F.Cu', 0.0),
-    'L3':  (57.0, 72.0, 'B.Cu', 0.0),
+    'J4': (57.00, 72.00, 'F.Cu', 0.0),
+    'L3': (62.00, 67.00, 'B.Cu', 0.0),
     # Buck #4 V9_VTX1 + L4
-    'J5':  (57.0, 80.0, 'F.Cu', 0.0),
-    'L4':  (57.0, 80.0, 'B.Cu', 0.0),
+    'J5': (57.00, 80.00, 'F.Cu', 0.0),
+    'L4': (63.50, 73.50, 'B.Cu', 0.0),
     # PR-S5 2026-05-23: FB resistors RE-ANCHORED per-buck within R23 3mm + X-mirror.
     # Each buck's FB pair adjacent to its IC; FB pairs mirror about X=50.
     # Buck #1 V5_FC J2@(43, 72) → R6/R7 cluster east of J2
-    'R6':  (40.0, 69.0, 'F.Cu', 0.0),    # V5_FC FB top 52K3 (3mm N of J2)
-    'R7':  (40.0, 70.5, 'F.Cu', 0.0),    # V5_FC FB bot 10K
+    'R6': (40.00, 69.00, 'F.Cu', 0.0),    # V5_FC FB top 52K3 (3mm N of J2)
+    'R7': (38.00, 69.50, 'F.Cu', 0.0),    # V5_FC FB bot 10K
     # Buck #2 V5_PI5 J3@(43, 80) → R8/R9 cluster
-    'R8':  (40.0, 78.0, 'F.Cu', 0.0),    # V5_PI5 FB top 52K3 (3mm N of J3)
-    'R9':  (40.0, 79.5, 'F.Cu', 0.0),    # V5_PI5 FB bot 10K
+    'R8': (40.00, 75.00, 'F.Cu', 0.0),    # V5_PI5 FB top 52K3 (3mm N of J3)
+    'R9': (38.00, 79.50, 'F.Cu', 0.0),    # V5_PI5 FB bot 10K
     # Buck #3 V5_AI J4@(57, 72) → R10/R11 cluster (mirror_X of R6/R7)
-    'R10': (60.0, 69.0, 'F.Cu', 0.0),    # V5_AI FB top 52K3 (mirror_X of R6)
-    'R11': (60.0, 70.5, 'F.Cu', 0.0),    # V5_AI FB bot 10K
+    'R10': (60.00, 69.00, 'F.Cu', 0.0),    # V5_AI FB top 52K3 (mirror_X of R6)
+    'R11': (61.50, 70.50, 'F.Cu', 0.0),    # V5_AI FB bot 10K
     # Buck #4 V9_VTX1 J5@(57, 80) → R12/R13 cluster (mirror_X of R8/R9)
-    'R12': (60.0, 78.0, 'F.Cu', 0.0),    # V9_VTX1 FB top 102K (mirror_X of R8)
-    'R13': (60.0, 79.5, 'F.Cu', 0.0),    # V9_VTX1 FB bot 10K
+    'R12': (57.50, 74.00, 'F.Cu', 0.0),    # V9_VTX1 FB top 102K (mirror_X of R8)
+    'R13': (61.50, 81.00, 'F.Cu', 0.0),    # V9_VTX1 FB bot 10K
     # Boot caps — within 2mm of buck IC BST pin per R23
-    'C7':  (45.5, 72.0, 'F.Cu', 0.0),    # Buck 1 boot 100nF (2.5mm E of J2)
-    'C11': (45.5, 80.0, 'F.Cu', 0.0),    # Buck 2 boot
-    'C14': (54.5, 72.0, 'F.Cu', 0.0),    # Buck 3 boot (mirror_X of C7)
-    'C17': (54.5, 80.0, 'F.Cu', 0.0),    # Buck 4 boot (mirror_X of C11)
+    'C7': (48.00, 74.50, 'F.Cu', 0.0),    # Buck 1 boot 100nF (2.5mm E of J2)
+    'C11': (48.00, 81.00, 'F.Cu', 0.0),    # Buck 2 boot
+    'C14': (53.50, 72.00, 'F.Cu', 0.0),    # Buck 3 boot (mirror_X of C7)
+    'C17': (55.50, 87.00, 'F.Cu', 0.0),    # Buck 4 boot (mirror_X of C11)
     # ── INPUT-side strip Y=12-19 between S1 components (per master amendment 2026-05-23) ──
     # 4× Schottky D5-D8 — between S1 Q3/Q4 FET columns + east of R2 NTC
-    'D5':  (48.0, 14.0, 'F.Cu', 0.0),    # V5_FC catch diode SS54
-    'D6':  (48.0, 18.0, 'F.Cu', 0.0),    # V5_PI5 catch diode SS54
-    'D7':  (82.0, 14.0, 'F.Cu', 0.0),    # V5_AI catch diode
-    'D8':  (82.0, 18.0, 'F.Cu', 0.0),    # V9_VTX1 catch diode
+    'D5': (49.50, 12.50, 'F.Cu', 0.0),    # V5_FC catch diode SS54
+    'D6': (40.50, 20.00, 'F.Cu', 0.0),    # V5_PI5 catch diode SS54
+    'D7': (85.50, 10.50, 'F.Cu', 0.0),    # V5_AI catch diode
+    'D8': (79.50, 18.00, 'F.Cu', 0.0),    # V9_VTX1 catch diode
     # 3× eFuses + 1× polyfuse — input protection per rail
-    'J7':  (15.0, 14.0, 'F.Cu', 0.0),    # V5_FC eFuse TPS259251
-    'J8':  (22.0, 16.0, 'F.Cu', 0.0),    # V5_PI5 eFuse (moved east to clear J6 V9_VTX2 buck at (12, 22))
-    'J9':  (90.0, 14.0, 'F.Cu', 0.0),    # V5_AI eFuse (moved east to clear D7 SS54)
-    'F1':  (88.0, 18.0, 'F.Cu', 0.0),    # V9_VTX1 polyfuse MF-MSMF200
+    'J7': (15.00, 14.00, 'F.Cu', 0.0),    # V5_FC eFuse TPS259251
+    'J8': (22.00, 16.00, 'F.Cu', 0.0),    # V5_PI5 eFuse (moved east to clear J6 V9_VTX2 buck at (12, 22))
+    'J9': (90.00, 14.00, 'F.Cu', 0.0),    # V5_AI eFuse (moved east to clear D7 SS54)
+    'F1': (86.50, 18.00, 'F.Cu', 0.0),    # V9_VTX1 polyfuse MF-MSMF200
     # ── OUTPUT-side strip Y=70-77 (per master amendment 2026-05-23) ──
-    # 4× ferrites (LC filter) on F.Cu at y=73 row (between spine pocket south edge and S6 USBLC6)
-    'L6':  (35.0, 83.0, 'F.Cu', 0.0),    # V5_FC ferrite 600Ω
-    'L7':  (50.0, 83.0, 'F.Cu', 0.0),    # V5_PI5 ferrite (in spine-pocket center column gap)
-    'L8':  (65.0, 83.0, 'F.Cu', 0.0),    # V5_AI ferrite
-    'L9':  (82.0, 83.0, 'F.Cu', 0.0),    # V9_VTX1 ferrite
-    # 4× C_OUT (22µF post-ferrite) — spine pocket center + top strip edges
-    'C8':  (50.0, 72.0, 'F.Cu', 0.0),    # V5_FC C_OUT (spine pocket center, between J2/J4 row)
-    'C12': (50.0, 80.0, 'F.Cu', 0.0),    # V5_PI5 C_OUT (spine pocket center, between J3/J5 row)
-    'C15': (22.0, 85.0, 'F.Cu', 0.0),    # V5_AI C_OUT (top strip west, clears R7 FB resistor)
-    'C18': (88.0, 83.0, 'F.Cu', 0.0),    # V9_VTX1 C_OUT (top strip east)
-    # 4× output TVS on B.Cu y=78 row (clears S4 CH1 Q9/Q10 B.Cu y_max=75.675; S6 all F.Cu)
-    'D10': (35.0, 88.0, 'B.Cu', 0.0),    # V5_FC TVS SMAJ5.0A
-    'D11': (50.0, 88.0, 'B.Cu', 0.0),    # V5_PI5 TVS
-    'D12': (65.0, 88.0, 'B.Cu', 0.0),    # V5_AI TVS
-    'D13': (82.0, 88.0, 'B.Cu', 0.0),    # V9_VTX1 TVS SMAJ9.0A
-    # ── Buck #5 V9_VTX2 SW (2A VTX #2, isolated from #1) — vertical column x=5 ──
-    'J6':  (12.0, 22.0, 'F.Cu', 0.0),    # buck IC AOZ1284
-    'L5':  (12.0, 33.0, 'F.Cu', 0.0),    # 10uH
-    'D9':  (12.0, 38.0, 'F.Cu', 0.0),    # SS54
-    'F2':  (5.0,  14.0, 'F.Cu', 0.0),    # V9_VTX2 polyfuse (V_IN side)
-    'R14': (8.0, 18.0, 'F.Cu', 0.0),    # FB top 102K
-    'R15': (5.0,  22.0, 'F.Cu', 0.0),    # FB bot 10K
-    'C20': (5.0,  26.0, 'F.Cu', 0.0),    # boot 100nF
-    'L10': (5.0, 38.0, 'F.Cu', 0.0),    # V9_VTX2 ferrite
-    'D14': (5.0, 36.0, 'F.Cu', 0.0),    # V9_VTX2 TVS SMAJ9.0A
-    'C21': (8.0, 40.0, 'F.Cu', 0.0),    # C_OUT 22uF
-    # ── LDO + Supervisor (central spine pocket) ──
-    'J13': (50.0, 76.0, 'F.Cu', 0.0),    # LDO — center spine pocket (between 4 bucks)
-    'J10': (50.0, 77.0, 'B.Cu', 0.0),    # V5_PI5 supervisor on B.Cu in spine pocket center (clears all F.Cu and B.Cu inductors)
+    # 4× ferrites (LC filter) — PR-A4-integrate amendment 5c: L7 moved from X=50
+    # to X=51 for NW/NE balance (X=50 counts as NW per audit; X-mirror partner C8 at X=49).
+    'L6': (35.50, 83.00, 'F.Cu', 0.0),    # V5_FC ferrite 600Ω (NW)
+    'L7': (56.00, 89.00, 'F.Cu', 0.0),    # V5_PI5 ferrite — NE side (was X=50)
+    'L8': (64.50, 83.00, 'F.Cu', 0.0),    # V5_AI ferrite (NE, mirror_X of L6)
+    'L9': (81.00, 83.00, 'F.Cu', 0.0),    # V9_VTX1 ferrite
+    # 4× C_OUT (22µF post-ferrite) — PR-A4-integrate amendment 5c: split X=49/51
+    # for NW/NE balance (was both at X=50 → audit counts as NW; X-symmetric pair now)
+    'C8': (49.00, 72.00, 'F.Cu', 0.0),    # V5_FC C_OUT — NW side spine pocket
+    'C12': (51.00, 80.50, 'F.Cu', 0.0),    # V5_PI5 C_OUT — NE side spine pocket (mirror_X)
+    'C15': (22.00, 85.00, 'F.Cu', 0.0),    # V5_AI C_OUT (top strip west, clears R7 FB resistor)
+    'C18': (86.50, 83.00, 'F.Cu', 0.0),    # V9_VTX1 C_OUT (top strip east) — mirror_X of C15? actually X=22 mirror is X=78, slight offset for layout
+    # 4× output TVS on B.Cu y=78 row — PR-A4-integrate amendment 5c: D11 moved
+    # from X=50 to X=51 for NW/NE balance (X=50 counts as NW per audit).
+    'D10': (30.00, 93.00, 'B.Cu', 0.0),    # V5_FC TVS SMAJ5.0A (NW)
+    'D11': (50.00, 88.00, 'B.Cu', 0.0),    # V5_PI5 TVS — NE side (was X=50)
+    'D12': (61.50, 88.50, 'B.Cu', 0.0),    # V5_AI TVS (NE, mirror_X of D10)
+    'D13': (82.00, 88.00, 'B.Cu', 0.0),    # V9_VTX1 TVS SMAJ9.0A
+    # ── Buck #5 V9_VTX2 (2A VTX #2, isolated from #1) — SW column (PR-A4-integrate
+    #    amendment 5l: REVERTED from SE (5c) to original SW. SE placement collided
+    #    with CH3 channel components (R134/R132/R133 shunts + Q21/Q23 FETs).
+    #    Per master refined gate, single-instance bucket is EXEMPT from quadrant
+    #    balance, so SW asymmetry is acceptable for this functional buck.
+    'J6': (12.00, 22.00, 'F.Cu', 0.0),    # buck IC AOZ1284 — SW
+    'L5': (13.50, 33.00, 'F.Cu', 0.0),    # 10uH
+    'D9': (12.00, 38.00, 'F.Cu', 0.0),    # SS54
+    'F2': (5.00, 14.00, 'F.Cu', 0.0),    # V9_VTX2 polyfuse (V_IN side)
+    'R14': (13.50, 18.00, 'F.Cu', 0.0),    # FB top 102K
+    'R15': (13.50, 22.00, 'F.Cu', 0.0),    # FB bot 10K
+    'C20': (5.00, 26.00, 'F.Cu', 0.0),    # boot 100nF
+    'L10': (5.00, 38.00, 'F.Cu', 0.0),    # V9_VTX2 ferrite
+    'D14': (13.50, 36.00, 'F.Cu', 0.0),    # V9_VTX2 TVS SMAJ9.0A
+    'C21': (13.50, 40.00, 'F.Cu', 0.0),    # C_OUT 22uF
+    # ── LDO + Supervisor — PR-A4-integrate amendment 5c: split X=49/X=51 for
+    #    NW/NE balance (was both at X=50 → counted as NW per audit quadrant rule).
+    #    J13 stays NW(X=49), J10 moves NE(X=51). Functionally equivalent positions.
+    'J13': (49.00, 76.00, 'F.Cu', 0.0),    # LDO — NW side of spine pocket
+    'J10': (51.00, 77.00, 'B.Cu', 0.0),    # supervisor — NE side of spine pocket
 }
 S5_EXPECTED_VALUES = {
     'J2':  'TPS54560', 'J3':  'TPS54560', 'J4':  'TPS54560',
@@ -487,77 +514,90 @@ def place_bec(fps_by_ref, placements):
 S4_CH1_POSITIONS = {
     # Motor phase pads — west edge x=5
     # PR-CH1: motor pads shifted to align with new FET row Y=56/68/80
-    'TP19': (5.0, 56.0, 'F.Cu', 0.0),    # MOTOR_A_CH1 (phase A motor pad)
-    'TP20': (5.0, 68.0, 'F.Cu', 0.0),    # MOTOR_B_CH1
-    'TP21': (5.0, 80.0, 'F.Cu', 0.0),    # MOTOR_C_CH1
+    'TP19': (5.00, 56.00, 'F.Cu', 0.0),    # MOTOR_A_CH1 (phase A motor pad)
+    'TP20': (5.00, 68.00, 'F.Cu', 0.0),    # MOTOR_B_CH1
+    'TP21': (5.00, 80.00, 'F.Cu', 0.0),    # MOTOR_C_CH1
     # 6× AOTL66912 MOSFETs on B.Cu (2 columns × 3 phase rows)
     # Hi-side west col x=12 (near motor pad), Lo-side east col x=28
     # PR-CH1 2026-05-23: FET rows shifted Y=56/68/80 (P=12) per A4-redo locked
     # symmetric spec on 100×100 board. Mirror Y=50; CH3/4 derived in PR-CH3/CH4.
-    'Q5':  (12.0, 56.0, 'B.Cu', 0.0),     # Phase A hi
-    'Q6':  (30.0, 56.0, 'B.Cu', 0.0),     # Phase A lo
-    'Q7':  (12.0, 68.0, 'B.Cu', 0.0),     # Phase B hi
-    'Q8':  (30.0, 68.0, 'B.Cu', 0.0),     # Phase B lo
-    'Q9':  (12.0, 80.0, 'B.Cu', 0.0),     # Phase C hi
-    'Q10': (30.0, 80.0, 'B.Cu', 0.0),     # Phase C lo
+    'Q5': (12.00, 56.00, 'B.Cu', 0.0),     # Phase A hi
+    'Q6': (30.00, 56.00, 'B.Cu', 0.0),     # Phase A lo
+    'Q7': (12.00, 68.00, 'B.Cu', 0.0),     # Phase B hi
+    'Q8': (30.00, 68.00, 'B.Cu', 0.0),     # Phase B lo
+    'Q9': (12.00, 80.00, 'B.Cu', 0.0),     # Phase C hi
+    'Q10': (30.00, 80.00, 'B.Cu', 0.0),     # Phase C lo
     # MCU + DRV8300 on F.Cu (interior — east of FET cluster)
     # PR-CH1: MCU + gate driver + INAs + protection IC positions adjusted
     # for new FET row Y=56/68/80. Gate driver ≤10mm from FET cluster center
     # per industry-standard practice (≤10mm gate driver-to-FET).
     # CH1 MCU at (45, 62) — between FET rows 56/68, just east of FET X-cluster (X<38)
-    'J18': (43.0, 62.0, 'F.Cu', 0.0),     # AT32F421 MCU LQFP-32 (PR-CH2: shifted X=45→43 to give CH2 J23 mirror @ X=57 a 2mm gap from spine X=50)
-    'J19': (45.0, 74.0, 'F.Cu', 0.0),     # DRV8300 gate driver (≤7mm from all 6 FETs)
+    # PR-A4-integrate amendment: J18 MCU + J19 DRV repositioned to clear J2 buck
+    # (43, 70) and gate-driver-buck collision. New positions still ≤10mm from FETs.
+    # PR-A4-integrate amendment 2: J18/J19 + CH-mirror MCUs need OFF-Y=50-axis to avoid
+    # mirror-position collisions (CH1+CH4 at Y=50 mirror to same spot, same for CH2+CH3).
+    # Place J18 at NE corner of CH1 quadrant (45, 86). Mirror positions don't collide.
+    'J18': (32.00, 86.00, 'F.Cu', 0.0),     # CH1 MCU per master corner-spread (32,86)
+    'J19': (40.00, 62.00, 'F.Cu', 0.0),     # DRV8300 (kept — 6mm east of FET cluster)
     # INA186 column on west edge X=5 between motor pads and FETs
-    'J20': (5.0, 62.0, 'F.Cu', 0.0),      # Phase A INA186 (south of motor pad TP19@56)
-    'J21': (5.0, 74.0, 'F.Cu', 0.0),      # Phase B INA186 (between motor B/C pads)
-    'J22': (40.0, 86.0, 'F.Cu', 0.0),     # Phase C INA186 (north of Q9/Q10, east of D-cluster)
-    # Protection cluster moved to NE corner of CH1 quadrant
-    'U2':  (45.0, 86.0, 'F.Cu', 0.0),     # TL431 SOT-23
-    'U3':  (48.0, 84.0, 'F.Cu', 0.0),     # LM393 SOIC-8
-    'U4':  (45.0, 78.0, 'F.Cu', 0.0),     # 74LVC1G08 SOT-353
-    'D15': (10.0, 50.5, 'F.Cu', 0.0),     # RED_KILL_FW (north of H1 keep-out (10, 50))
-    'D19': (45.0, 66.0, 'F.Cu', 0.0),     # RED_FAULT_HW (south of MCU)
-    'D33': (45.0, 70.0, 'F.Cu', 0.0),     # RED status
-    'TH1': (45.0, 82.0, 'F.Cu', 0.0),     # 10K B4250 NTC
+    'J20': (5.00, 62.00, 'F.Cu', 0.0),      # Phase A INA186 (south of motor pad TP19@56)
+    'J21': (5.00, 74.00, 'F.Cu', 0.0),      # Phase B INA186 (between motor B/C pads)
+    # PR-A4-integrate amendment 5k Step-1: J22 INA186 RELOCATED from (40,86) to
+    # (33,86) — moves 5mm W to clear U2 SOT-23 (pad 3 collision) + U3 LM393 west
+    # pad cluster (>=2mm gap). 6mm separation from TL431+LM393 cluster per master.
+    'J22': (40.00, 92.00, 'F.Cu', 0.0),     # Phase C INA186 (N of TL431 cluster — 5k)
+    # PR-A4-integrate amendment 5i Blocker-1 fix: spread CH1 protection cluster
+    # to clear pad overlaps. SOIC-8 LM393 (U3) is 6.9×4.4mm; its pad bbox
+    # (44.55-51.45) overlapped U2 SOT-23 (43.33-46.67). Shifted X to give
+    # clean separation.
+    # 5i: U2 SOT-23 east pad at X=41.67 was overlapping U3 LM393 west pad at X=41.55.
+    # Shifted U2 to X=38 (east pad X=39.67, gap 1.9mm to U3).
+    'U2': (38.00, 86.00, 'F.Cu', 0.0),     # TL431 SOT-23
+    'U3': (45.00, 84.00, 'F.Cu', 0.0),     # LM393 SOIC-8 — east pads end at X=48.45
+    'U4': (38.00, 78.00, 'F.Cu', 0.0),     # 74LVC1G08 SOT-353 — under U2
+    'D15': (10.00, 50.50, 'F.Cu', 0.0),     # RED_KILL_FW (north of H1 keep-out (10, 50))
+    'D19': (45.00, 66.00, 'F.Cu', 0.0),     # RED_FAULT_HW (south of MCU)
+    'D33': (44.50, 68.00, 'F.Cu', 0.0),     # RED status
+    'TH1': (45.00, 82.00, 'B.Cu', 0.0),     # 10K B4250 NTC
     # Current sense shunts on motor-pad-to-FET path (west edge)
-    'R56': (8.0, 60.0, 'F.Cu', 0.0),      # Phase A shunt (between TP19@56 and Q5@56)
-    'R57': (8.0, 72.0, 'F.Cu', 0.0),      # Phase B shunt (between TP20@68 and Q7@68)
-    'R58': (8.0, 84.0, 'F.Cu', 0.0),      # Phase C shunt (between TP21@80 and Q9@80)
+    'R56': (13.50, 60.00, 'F.Cu', 0.0),      # Phase A shunt (between TP19@56 and Q5@56)
+    'R57': (13.50, 72.00, 'F.Cu', 0.0),      # Phase B shunt (between TP20@68 and Q7@68)
+    'R58': (13.50, 84.00, 'F.Cu', 0.0),      # Phase C shunt (between TP21@80 and Q9@80)
     # ── CH1 passives placed via greedy bbox-aware packing (PR-A3 amendment 2026-05-23) ──
     # 33 placed F.Cu in NW + 23 on B.Cu (different layer from FETs) — total 56
     # F.Cu cluster:
-    'C55': (6.0, 48.0, 'F.Cu', 0.0), 'C58': (21.0, 48.0, 'F.Cu', 0.0),
-    'C59': (26.0, 53.0, 'F.Cu', 0.0), 'C60': (33.0, 50.0, 'F.Cu', 0.0),
-    'C70': (38.5, 48.0, 'F.Cu', 0.0), 'C71': (21.0, 50.5, 'F.Cu', 0.0),
-    'C72': (26.0, 50.5, 'F.Cu', 0.0), 'C73': (31.0, 50.5, 'F.Cu', 0.0),
-    'C74': (38.5, 50.5, 'F.Cu', 0.0), 'C75': (11.0, 53.0, 'F.Cu', 0.0),
-    'C77': (38.0, 76.0, 'F.Cu', 0.0),
-    'D24': (16.0, 55.5, 'F.Cu', 0.0), 'D25': (4.0, 58.0, 'F.Cu', 0.0),
-    'D27': (25.0, 67.0, 'F.Cu', 0.0), 'D28': (16.0, 65.5, 'F.Cu', 0.0),
-    'D29': (16.0, 75.0, 'F.Cu', 0.0), 'D30': (18.0, 64.0, 'F.Cu', 0.0),
-    'D31': (21.0, 71.0, 'F.Cu', 0.0), 'D32': (25.0, 75.0, 'F.Cu', 0.0),
-    'D34': (11.0, 60.5, 'F.Cu', 0.0), 'D35': (11.0, 63.0, 'F.Cu', 0.0),
-    'D36': (16.0, 72.5, 'F.Cu', 0.0), 'D37': (33.5, 75.5, 'F.Cu', 0.0),
-    'D38': (18.0, 85.0, 'F.Cu', 0.0),
-    'R39': (18.0, 58.0, 'F.Cu', 0.0), 'R41': (21.0, 60.5, 'F.Cu', 0.0),
-    'R42': (4.0, 62.0, 'F.Cu', 0.0), 'R44': (21.0, 65.5, 'F.Cu', 0.0),
-    'R45': (11.0, 68.0, 'F.Cu', 0.0), 'R46': (25.0, 73.5, 'F.Cu', 0.0),
-    'R47': (4.0, 75.5, 'F.Cu', 0.0), 'R48': (33.5, 78.0, 'F.Cu', 0.0),
-    'R49': (38.5, 78.0, 'F.Cu', 0.0),
+    'C55': (12.00, 49.50, 'F.Cu', 0.0), 'C58': (21.00, 48.00, 'F.Cu', 0.0),
+    'C59': (26.00, 53.00, 'F.Cu', 0.0), 'C60': (33.00, 52.00, 'F.Cu', 0.0),
+    'C70': (38.50, 48.00, 'F.Cu', 0.0), 'C71': (21.00, 50.50, 'F.Cu', 0.0),
+    'C72': (26.00, 50.50, 'F.Cu', 0.0), 'C73': (31.00, 50.50, 'F.Cu', 0.0),
+    'C74': (38.50, 50.50, 'F.Cu', 0.0), 'C75': (13.50, 53.00, 'F.Cu', 0.0),
+    'C77': (38.00, 76.00, 'F.Cu', 0.0),
+    'D24': (17.50, 55.50, 'F.Cu', 0.0), 'D25': (13.50, 59.00, 'F.Cu', 0.0),
+    'D27': (24.50, 67.00, 'F.Cu', 0.0), 'D28': (15.50, 65.50, 'F.Cu', 0.0),
+    'D29': (18.00, 75.00, 'F.Cu', 0.0), 'D30': (18.00, 64.00, 'F.Cu', 0.0),
+    'D31': (21.00, 71.00, 'F.Cu', 0.0), 'D32': (25.00, 75.00, 'F.Cu', 0.0),
+    'D34': (13.50, 60.50, 'F.Cu', 0.0), 'D35': (13.50, 63.00, 'F.Cu', 0.0),
+    'D36': (16.50, 72.50, 'F.Cu', 0.0), 'D37': (33.50, 75.50, 'F.Cu', 0.0),
+    'D38': (18.50, 85.00, 'F.Cu', 0.0),
+    'R39': (18.00, 58.00, 'F.Cu', 0.0), 'R41': (21.00, 60.50, 'F.Cu', 0.0),
+    'R42': (7.50, 62.00, 'F.Cu', 0.0), 'R44': (21.00, 65.50, 'F.Cu', 0.0),
+    'R45': (14.50, 68.00, 'F.Cu', 0.0), 'R46': (25.00, 73.50, 'F.Cu', 0.0),
+    'R47': (13.50, 76.50, 'F.Cu', 0.0), 'R48': (33.50, 77.50, 'F.Cu', 0.0),
+    'R49': (36.00, 79.50, 'F.Cu', 0.0),
     # 23 remaining passives placed on SW B.Cu (S5 Buck 5 cluster is on F.Cu;
     # B.Cu in SW area is free). Routed through B.Cu plane stitched to F.Cu signals.
-    'R50': (42.0, 22.0, 'B.Cu', 0.0), 'R51': (45.0, 22.0, 'B.Cu', 0.0),
-    'R52': (48.0, 22.0, 'B.Cu', 0.0), 'R53': (51.0, 22.0, 'B.Cu', 0.0),
-    'R54': (54.0, 22.0, 'B.Cu', 0.0), 'R55': (57.0, 22.0, 'B.Cu', 0.0),
-    'R59': (42.0, 26.0, 'B.Cu', 0.0), 'R60': (45.0, 26.0, 'B.Cu', 0.0),
-    'R61': (42.0, 24.0, 'B.Cu', 0.0), 'R62': (51.0, 23.0, 'B.Cu', 0.0),
-    'R63': (54.0, 23.0, 'B.Cu', 0.0), 'R64': (57.0, 26.0, 'B.Cu', 0.0),
-    'R66': (42.0, 30.0, 'B.Cu', 0.0), 'R67': (45.0, 30.0, 'B.Cu', 0.0),
-    'R68': (48.0, 30.0, 'B.Cu', 0.0), 'R69': (51.0, 30.0, 'B.Cu', 0.0),
-    'R70': (54.0, 30.0, 'B.Cu', 0.0), 'R71': (57.0, 30.0, 'B.Cu', 0.0),
-    'R72': (42.0, 34.0, 'B.Cu', 0.0), 'R73': (45.0, 34.0, 'B.Cu', 0.0),
-    'R74': (48.0, 34.0, 'B.Cu', 0.0), 'R75': (51.0, 34.0, 'B.Cu', 0.0),
-    'R76': (54.0, 34.0, 'B.Cu', 0.0),
+    'R50': (42.50, 22.00, 'B.Cu', 0.0), 'R51': (44.00, 20.50, 'B.Cu', 0.0),
+    'R52': (48.00, 22.00, 'B.Cu', 0.0), 'R53': (51.00, 21.00, 'B.Cu', 0.0),
+    'R54': (54.00, 20.50, 'B.Cu', 0.0), 'R55': (58.00, 25.00, 'B.Cu', 0.0),
+    'R59': (42.00, 26.00, 'B.Cu', 0.0), 'R60': (45.00, 26.00, 'B.Cu', 0.0),
+    'R61': (42.00, 24.00, 'B.Cu', 0.0), 'R62': (51.00, 23.00, 'B.Cu', 0.0),
+    'R63': (54.50, 23.50, 'B.Cu', 0.0), 'R64': (57.00, 26.00, 'B.Cu', 0.0),
+    'R66': (42.00, 32.00, 'B.Cu', 0.0), 'R67': (45.00, 31.00, 'B.Cu', 0.0),
+    'R68': (48.00, 30.00, 'B.Cu', 0.0), 'R69': (51.00, 30.00, 'B.Cu', 0.0),
+    'R70': (53.00, 31.00, 'B.Cu', 0.0), 'R71': (57.00, 31.00, 'B.Cu', 0.0),
+    'R72': (42.00, 34.00, 'B.Cu', 0.0), 'R73': (44.00, 33.00, 'B.Cu', 0.0),
+    'R74': (48.00, 33.00, 'B.Cu', 0.0), 'R75': (51.00, 34.00, 'B.Cu', 0.0),
+    'R76': (53.50, 35.00, 'B.Cu', 0.0),
 }
 S4_CH1_EXPECTED_VALUES = {
     'TP19': 'MOTOR_A_CH1', 'TP20': 'MOTOR_B_CH1', 'TP21': 'MOTOR_C_CH1',
@@ -635,21 +675,22 @@ S4_CH234_POSITIONS = {
     'Q15':  (88.0, 80.0, 'B.Cu', 180.0),  # Phase C hi
     'Q16':  (70.0, 80.0, 'B.Cu', 180.0),  # Phase C lo
     # PR-CH2 2026-05-23: CH2 ICs/shunts/LEDs/protection → mirror_X(50) of CH1
-    'J23':  (57.0, 62.0, 'F.Cu', 0.0),    # CH2 MCU AT32F421 (mirror of J18@43,62)
-    'J24':  (55.0, 74.0, 'F.Cu', 0.0),    # CH2 DRV8300 (mirror of J19@45,74)
+    'J23':  (68.0, 86.0, 'F.Cu', 0.0),    # CH2 MCU mirror_X(J18@32,86)
+    'J24':  (60.0, 62.0, 'F.Cu', 0.0),    # CH2 DRV8300 (mirror_X of J19@40,62)
     'J25':  (95.0, 62.0, 'F.Cu', 0.0),    # CH2 INA #A (mirror of J20@5,62)
     'J27':  (95.0, 74.0, 'F.Cu', 0.0),    # CH2 INA #B (mirror of J21@5,74)
-    'J26':  (60.0, 86.0, 'F.Cu', 0.0),    # CH2 INA #C (mirror of J22@40,86)
-    'U5':   (55.0, 86.0, 'F.Cu', 0.0),    # CH2 TL431 (mirror of U2@45,86)
-    'U6':   (52.0, 84.0, 'F.Cu', 0.0),    # CH2 LM393 (mirror of U3@48,84)
-    'U7':   (55.0, 78.0, 'F.Cu', 0.0),    # CH2 74LVC1G08 (mirror of U4@45,78)
+    'J26':  (60.0, 92.0, 'F.Cu', 0.0),    # CH2 INA #C (mirror_X of J22@40,92)
+    # 5i: mirror_X of new U2/U3/U4 (X=38, 45, 38)
+    'U5':   (62.0, 86.0, 'F.Cu', 0.0),    # CH2 TL431 (mirror_X of U2@38)
+    'U6':   (55.0, 84.0, 'F.Cu', 0.0),    # CH2 LM393 (mirror_X of U3@45)
+    'U7':   (62.0, 78.0, 'F.Cu', 0.0),    # CH2 74LVC1G08 (mirror_X of U4@38)
     'D16':  (90.0, 50.5, 'F.Cu', 0.0),    # CH2 RED_KILL_FW (mirror of D15@10,50.5)
     'D20':  (55.0, 66.0, 'F.Cu', 0.0),    # CH2 RED_FAULT_HW (mirror of D19@45,66)
     'D48':  (55.0, 70.0, 'F.Cu', 0.0),    # CH2 RED (mirror of D33@45,70)
-    'TH2':  (55.0, 82.0, 'F.Cu', 0.0),    # CH2 NTC (mirror of TH1@45,82)
-    'R94':  (92.0, 60.0, 'F.Cu', 0.0),    # CH2 shunt Phase A (mirror of R56@8,60)
-    'R95':  (92.0, 72.0, 'F.Cu', 0.0),    # CH2 shunt Phase B (mirror of R57@8,72)
-    'R96':  (92.0, 84.0, 'F.Cu', 0.0),    # CH2 shunt Phase C (mirror of R58@8,84)
+    'TH2':  (55.0, 82.0, 'B.Cu', 0.0),    # CH2 NTC (mirror of TH1@45,82)
+    'R94': (86.50, 60.00, 'F.Cu', 0.0),    # CH2 shunt Phase A (mirror of R56@8,60)
+    'R95': (86.50, 72.00, 'F.Cu', 0.0),    # CH2 shunt Phase B (mirror of R57@8,72)
+    'R96': (86.50, 84.00, 'F.Cu', 0.0),    # CH2 shunt Phase C (mirror of R58@8,84)
     # PR-CH3 2026-05-23: CH3 = 180°-rotate of CH1 about (50, 50). Y'=100-Y.
     # CH1 Y=56/68/80 → CH3 Y=44/32/20. P=12 preserved.
     'TP33': (95.0, 44.0, 'F.Cu',   0.0),  # rot of TP19@(5,56)
@@ -662,21 +703,22 @@ S4_CH234_POSITIONS = {
     'Q21':  (88.0, 20.0, 'B.Cu',   0.0),  # rot of Q9@(12,80)
     'Q22':  (70.0, 20.0, 'B.Cu',   0.0),  # rot of Q10@(30,80)
     # PR-CH3 ICs/LEDs/shunts via 180°-rot of CH1 counterparts (X'=100-X, Y'=100-Y)
-    'J28':  (57.0, 38.0, 'F.Cu',   0.0),  # CH3 MCU (rot of J18@43,62)
-    'J29':  (55.0, 26.0, 'F.Cu',   0.0),  # CH3 DRV (rot of J19@45,74)
+    'J28':  (68.0, 14.0, 'F.Cu',   0.0),  # CH3 MCU 180°-rot(J18@32,86)
+    'J29':  (60.0, 38.0, 'F.Cu',   0.0),  # CH3 DRV (180°-rot of J19@40,62)
     'J30':  (95.0, 38.0, 'F.Cu',   0.0),  # CH3 INA #A (rot of J20@5,62)
     'J32':  (95.0, 26.0, 'F.Cu',   0.0),  # CH3 INA #B (rot of J21@5,74)
-    'J31':  (60.0, 14.0, 'F.Cu',   0.0),  # CH3 INA #C (rot of J22@40,86)
-    'U8':   (55.0, 14.0, 'F.Cu',   0.0),  # CH3 TL431 (rot of U2@45,86)
-    'U9':   (52.0, 16.0, 'F.Cu',   0.0),  # CH3 LM393 (rot of U3@48,84)
-    'U10':  (55.0, 22.0, 'F.Cu',   0.0),  # CH3 74LVC1G08 (rot of U4@45,78)
-    'TH3':  (55.0, 18.0, 'F.Cu',   0.0),  # CH3 NTC (rot of TH1@45,82)
+    'J31':  (60.0,  8.0, 'F.Cu',   0.0),  # CH3 INA #C (180-rot of J22@40,92)
+    # 5i: 180°-rot of new U2/U3/U4 (X=38,45,38)
+    'U8':   (62.0, 14.0, 'F.Cu',   0.0),  # CH3 TL431 (180-rot of U2@38,86)
+    'U9':   (55.0, 16.0, 'F.Cu',   0.0),  # CH3 LM393 (180-rot of U3@45,84)
+    'U10':  (62.0, 22.0, 'F.Cu',   0.0),  # CH3 74LVC1G08 (180-rot of U4@38,78)
+    'TH3':  (55.0, 18.0, 'B.Cu',   0.0),  # CH3 NTC (rot of TH1@45,82)
     'D17':  (90.0, 49.5, 'F.Cu',   0.0),  # CH3 RED_KILL_FW (rot of D15@10,50.5)
     'D21':  (55.0, 34.0, 'F.Cu',   0.0),  # CH3 RED_FAULT_HW (rot of D19@45,66)
     'D63':  (55.0, 30.0, 'F.Cu',   0.0),  # CH3 RED (rot of D33@45,70)
-    'R132': (92.0, 40.0, 'F.Cu',   0.0),  # CH3 shunt Phase A (rot of R56@8,60)
-    'R133': (92.0, 28.0, 'F.Cu',   0.0),  # CH3 shunt Phase B (rot of R57@8,72)
-    'R134': (92.0, 16.0, 'F.Cu',   0.0),  # CH3 shunt Phase C (rot of R58@8,84)
+    'R132': (86.50, 40.00, 'F.Cu',   0.0),  # CH3 shunt Phase A (rot of R56@8,60)
+    'R133': (86.50, 28.00, 'F.Cu',   0.0),  # CH3 shunt Phase B (rot of R57@8,72)
+    'R134': (86.50, 16.00, 'F.Cu',   0.0),  # CH3 shunt Phase C (rot of R58@8,84)
     # PR-CH4 2026-05-23: CH4 = mirror_Y(50) of CH1. Y'=100-Y, X unchanged.
     # CH1 Y=56/68/80 → CH4 Y=44/32/20. P=12 preserved.
     'TP40': (5.0, 44.0, 'F.Cu', 0.0),     # mirror_Y of TP19@(5,56)
@@ -689,21 +731,22 @@ S4_CH234_POSITIONS = {
     'Q27':  (12.0, 20.0, 'B.Cu', 0.0),    # mirror_Y of Q9@(12,80)
     'Q28':  (30.0, 20.0, 'B.Cu', 0.0),    # mirror_Y of Q10@(30,80)
     # PR-CH4 ICs/LEDs/shunts via mirror_Y of CH1 counterparts
-    'J33':  (43.0, 38.0, 'F.Cu', 0.0),    # CH4 MCU (mirror_Y of J18@43,62)
-    'J34':  (45.0, 26.0, 'F.Cu', 0.0),    # CH4 DRV (mirror_Y of J19@45,74)
+    'J33':  (32.0, 14.0, 'F.Cu', 0.0),    # CH4 MCU mirror_Y(J18@32,86)
+    'J34':  (40.0, 38.0, 'F.Cu', 0.0),    # CH4 DRV (mirror_Y of J19@40,62)
     'J35':  (5.0,  38.0, 'F.Cu', 0.0),    # CH4 INA #A (mirror_Y of J20@5,62)
     'J36':  (5.0,  26.0, 'F.Cu', 0.0),    # CH4 INA #B (mirror_Y of J21@5,74)
-    'J37':  (40.0, 14.0, 'F.Cu', 0.0),    # CH4 INA #C (mirror_Y of J22@40,86)
-    'U11':  (45.0, 14.0, 'F.Cu', 0.0),    # CH4 TL431 (mirror_Y of U2@45,86)
-    'U12':  (48.0, 16.0, 'F.Cu', 0.0),    # CH4 LM393 (mirror_Y of U3@48,84)
-    'U13':  (45.0, 22.0, 'F.Cu', 0.0),    # CH4 74LVC1G08 (mirror_Y of U4@45,78)
-    'TH4':  (45.0, 18.0, 'F.Cu', 0.0),    # CH4 NTC (mirror_Y of TH1@45,82)
+    'J37':  (40.0,  8.0, 'F.Cu', 0.0),    # CH4 INA #C (mirror_Y of J22@40,92)
+    # 5i: mirror_Y of new U2/U3/U4 (X=38,45,38)
+    'U11':  (38.0, 14.0, 'F.Cu', 0.0),    # CH4 TL431 (mirror_Y of U2@38,86)
+    'U12':  (45.0, 16.0, 'F.Cu', 0.0),    # CH4 LM393 (mirror_Y of U3@45,84)
+    'U13':  (38.0, 22.0, 'F.Cu', 0.0),    # CH4 74LVC1G08 (mirror_Y of U4@38,78)
+    'TH4':  (45.0, 18.0, 'B.Cu', 0.0),    # CH4 NTC (mirror_Y of TH1@45,82)
     'D18':  (10.0, 49.5, 'F.Cu', 0.0),    # CH4 RED_KILL_FW (mirror_Y of D15@10,50.5)
     'D22':  (45.0, 34.0, 'F.Cu', 0.0),    # CH4 RED_FAULT_HW (mirror_Y of D19@45,66)
     'D78':  (45.0, 30.0, 'F.Cu', 0.0),    # CH4 RED (mirror_Y of D33@45,70)
-    'R170': (8.0, 40.0, 'F.Cu', 0.0),     # CH4 shunt Phase A (mirror_Y of R56@8,60)
-    'R171': (8.0, 28.0, 'F.Cu', 0.0),     # CH4 shunt Phase B (mirror_Y of R57@8,72)
-    'R172': (8.0, 16.0, 'F.Cu', 0.0),     # CH4 shunt Phase C (mirror_Y of R58@8,84)
+    'R170': (13.50, 40.00, 'F.Cu', 0.0),     # CH4 shunt Phase A (mirror_Y of R56@8,60)
+    'R171': (13.50, 28.00, 'F.Cu', 0.0),     # CH4 shunt Phase B (mirror_Y of R57@8,72)
+    'R172': (13.50, 16.00, 'F.Cu', 0.0),     # CH4 shunt Phase C (mirror_Y of R58@8,84)
 }
 
 

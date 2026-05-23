@@ -1,0 +1,49 @@
+* PR-A4-integrate full-board ngspice: cold-start → 100A burst all 4 channels
+* + supervisor + BEC operation.
+* Acceptance: V_BATT >12V, V_HALL noise <10mV, supervisor no false-trip.
+
+* S1 cold-start NTC self-heat model
+V_batt   BATT 0      25.2
+R_ntc    BATT N1     0.025   ; NTC pair hot-state (steady-state operation)
+R_rpol   N1   VBUS   0.425m
+
+* S2 bulk caps (1880uF, 7.5mOhm ESR)
+V_sense  VBUS VBUS_S 0
+R_esr    VBUS_S V1   0.0075
+C_bulk   V1   0      1880u IC=25.2
+
+* 4-channel motor load (50A DC + 25A AC ripple per channel = 200A DC total
+* + 100A AC). Stagger phases by 90° (8.33us at 30kHz)
+I_dc_ch1   VBUS_S 0  50
+I_pwm_ch1  VBUS_S 0  PULSE(0 25 1m 50n 50n 16.67u 33.33u)
+I_dc_ch2   VBUS_S 0  50
+I_pwm_ch2  VBUS_S 0  PULSE(0 25 1.00833m 50n 50n 16.67u 33.33u)
+I_dc_ch3   VBUS_S 0  50
+I_pwm_ch3  VBUS_S 0  PULSE(0 25 1.01667m 50n 50n 16.67u 33.33u)
+I_dc_ch4   VBUS_S 0  50
+I_pwm_ch4  VBUS_S 0  PULSE(0 25 1.025m 50n 50n 16.67u 33.33u)
+
+* Supervisor input divider on VBUS
+R19      VBUS_S INA  348k
+R20      INA  0      23.2k
+
+* Hall sense (V5_FC PSRR + filter)
+B_v5fc   V5_FC 0     V = 5.0 + 0.015*sin(2*3.14159*500e3*TIME)
+R31      V5_FC HALL_OUT_DIV  10k
+R32      HALL_OUT_DIV 0      20k
+C44      HALL_OUT_DIV 0      10n IC=1.667
+
+.ic V(HALL_OUT_DIV)=1.667
+
+.control
+  tran 100n 5m UIC
+  meas tran v_bus_min MIN V(VBUS_S) FROM=2m TO=5m
+  meas tran v_bus_max MAX V(VBUS_S) FROM=2m TO=5m
+  meas tran v_ina_max MAX V(INA) FROM=2m TO=5m
+  meas tran v_hall_max MAX V(HALL_OUT_DIV) FROM=2m TO=5m
+  meas tran v_hall_min MIN V(HALL_OUT_DIV) FROM=2m TO=5m
+  set wr_singlescale
+  set wr_vecnames
+  wrdata full_board_data.raw V(VBUS_S) V(INA) V(HALL_OUT_DIV)
+.endc
+.end

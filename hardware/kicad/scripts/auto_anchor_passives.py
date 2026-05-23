@@ -183,20 +183,35 @@ def main():
             if 1 <= int(r[1:]) <= 4:
                 keepouts.append((x, y, 3.5, 4.0, layer))
             elif 5 <= int(r[1:]) <= 28:
-                keepouts.append((x, y, 8.5, 5.7, layer))
+                # PR-A4-integrate amendment 5g B-1a: Q5-Q28 now PDFN-8 5×6mm
+                # (was TO-263 10×9). Keep-out shrinks from 17×11.4 to 6×5mm.
+                keepouts.append((x, y, 3.5, 3.0, layer))
         elif r.startswith('U'):
             # Most ICs: ~3×3mm half-bbox
             keepouts.append((x, y, 3.5, 3.5, layer))
-        elif r == 'J18':  # MCU LQFP-32 ~5×5
-            keepouts.append((x, y, 4.0, 4.0, layer))
-        elif r == 'J19':  # DRV8300 HVQFN-24 ~4×4
+        elif r in ('J18', 'J23', 'J28', 'J33'):
+            # PR-A4-integrate amendment 5g B-1b: MCU now QFN-32 5×5mm
+            # (was LQFP-32 7×7). Keep-out shrinks from 8×8 to 5.5×5.5.
+            keepouts.append((x, y, 2.75, 2.75, layer))
+        elif r in ('J19', 'J24', 'J29', 'J34'):  # DRV8300 HVQFN-24 ~4×4
             keepouts.append((x, y, 3.0, 3.0, layer))
+        elif r in ('J2', 'J3', 'J4', 'J5', 'J6'):  # Buck ICs ~3×3
+            keepouts.append((x, y, 3.5, 3.5, layer))
+        elif r in ('L1', 'L2', 'L3', 'L4', 'L5'):  # Buck inductors ~4×4
+            keepouts.append((x, y, 4.0, 4.0, layer))
         elif r.startswith('J') and r[1:].isdigit() and int(r[1:]) >= 20:  # INA186 etc.
             keepouts.append((x, y, 2.5, 2.5, layer))
         elif r in ('U1',):  # Hall body
             keepouts.append((x, y, 10.0, 13.5, layer))
+        # PR-A4-integrate amendment 5 Defect-2 fix 2026-05-23:
+        # Motor terminal TPs need 2mm clear-zone for 14-16AWG soldering.
+        # MUST come BEFORE the generic startswith('TP') branch below or it gets shadowed.
+        elif r in ('TP19','TP20','TP21','TP26','TP27','TP28',
+                   'TP33','TP34','TP35','TP40','TP41','TP42'):
+            keepouts.append((x, y, 7.3, 5.3, 'F.Cu'))
+            keepouts.append((x, y, 7.3, 5.3, 'B.Cu'))
         elif r.startswith('TP') and r != 'TH1':
-            pass  # test points are small
+            pass  # generic test points are small — no keepout needed
         elif r in ('J1',):  # XT30
             keepouts.append((x, y, 5.0, 4.0, layer))
         # PR-CH1 2026-05-23: mount-hole 3mm keep-out — applies to both layers
@@ -226,6 +241,21 @@ def main():
     per_anchor_count = {}
     PER_ANCHOR_MAX = 5  # limit pile-up; excess refs forced to grid fallback
 
+    # PR-A4-integrate amendment 5b Defect-3 fix 2026-05-23:
+    # Per-quadrant placement counter — when multiple offset candidates are viable,
+    # prefer the quadrant with currently-lowest count to enforce R19 symmetry.
+    # Initial counts seed from already-placed (hand-placed S/CH zones).
+    quadrant_count = {'NW': 0, 'NE': 0, 'SW': 0, 'SE': 0}
+
+    def quadrant_of(x, y):
+        if x <= 50 and y >= 50: return 'NW'
+        if x > 50 and y >= 50: return 'NE'
+        if x <= 50 and y < 50: return 'SW'
+        return 'SE'
+
+    for r, (px, py, _, _) in placed.items():
+        quadrant_count[quadrant_of(px, py)] += 1
+
     # Multi-pass: keep extending the placed set as new passives find homes
     remaining = list(sorted(unplaced))
     for pass_num in range(8):
@@ -241,15 +271,16 @@ def main():
                 next_remaining.append(ref)
                 continue
             ax, ay, _, _ = placed[anchor_ref]
-            placed_ok = False
-            for ox, oy in EXTENDED_OFFSETS:
+            # PR-A4-integrate amendment 5b: gather ALL viable candidate positions
+            # for this ref, then pick the one in the lowest-count quadrant.
+            # Tie-break: spiral-distance (original order = original tie-break).
+            candidates = []  # (quad_score, spiral_idx, nx, ny, tb)
+            for spiral_idx, (ox, oy) in enumerate(EXTENDED_OFFSETS):
                 nx, ny = round(ax + ox, 1), round(ay + oy, 1)
                 if nx < 1.5 or nx > 98.5 or ny < 1.5 or ny > 93.5:
                     continue
-                # Skip FET pad-bbox keepout zones
                 if inside_keepout(nx, ny, layer):
                     continue
-                # Look for nearby occupied (within ~1.5mm in same layer)
                 collide = False
                 for occ_xyl in occupied:
                     ox_o, oy_o, layer_o = occ_xyl
@@ -257,25 +288,36 @@ def main():
                     if abs(ox_o - nx) < 1.8 and abs(oy_o - ny) < 1.5:
                         collide = True; break
                 if collide: continue
-                # Pad-bbox collision check (uses actual kicad pads)
                 tb = [bb + (ref,) for bb in update_pad_bbox_for_ref(ref, (nx, ny))]
                 if has_pad_collision(tb): continue
+                q = quadrant_of(nx, ny)
+                quad_score = quadrant_count[q]
+                candidates.append((quad_score, spiral_idx, nx, ny, tb, q))
+            placed_ok = False
+            if candidates:
+                # Pick lowest quad_score, tie-break by spiral_idx
+                candidates.sort(key=lambda c: (c[0], c[1]))
+                _, _, nx, ny, tb, q = candidates[0]
                 auto_placements[ref] = (nx, ny, layer, 0.0)
                 placed[ref] = (nx, ny, layer, 0.0)
                 occupied[(nx, ny, layer)] = ref
                 pad_bboxes.extend(tb)
                 per_anchor_count[anchor_ref] = per_anchor_count.get(anchor_ref, 0) + 1
+                quadrant_count[q] += 1
                 placed_ok = True
                 progress = True
                 dist = ((nx-ax)**2 + (ny-ay)**2)**0.5
                 if dist > 8.0:
                     far_anchored.append((ref, anchor_ref, dist))
-                break
             if not placed_ok:
                 next_remaining.append(ref)
         remaining = next_remaining
         if not progress: break
     no_parent = remaining
+
+    # Diagnostic: per-quadrant final counts
+    print(f"Quadrant placement counts: NW={quadrant_count['NW']} NE={quadrant_count['NE']} "
+          f"SW={quadrant_count['SW']} SE={quadrant_count['SE']}")
 
     # Final fallback: place ANY remaining ref in a grid slot on-board (per R24 — no kinet2pcb defaults).
     # Walk a Y-strip grid: top row Y=2-4, north strip Y=46.5-49, etc.
