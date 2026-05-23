@@ -677,16 +677,33 @@ S4_CH234_POSITIONS = {
     'R132': (92.0, 40.0, 'F.Cu',   0.0),  # CH3 shunt Phase A (rot of R56@8,60)
     'R133': (92.0, 28.0, 'F.Cu',   0.0),  # CH3 shunt Phase B (rot of R57@8,72)
     'R134': (92.0, 16.0, 'F.Cu',   0.0),  # CH3 shunt Phase C (rot of R58@8,84)
-    # CH4 SW (mirror y about Y=47.5)
-    'TP40': (5.0, 41.0, 'F.Cu', 180.0),
-    'TP41': (5.0, 29.0, 'F.Cu', 180.0),
-    'TP42': (5.0, 17.0, 'F.Cu', 180.0),
-    'Q23':  (12.0, 41.0, 'B.Cu', 180.0),
-    'Q24':  (30.0, 41.0, 'B.Cu', 180.0),
-    'Q25':  (12.0, 30.0, 'B.Cu', 180.0),
-    'Q26':  (30.0, 30.0, 'B.Cu', 180.0),
-    'Q27':  (12.0, 19.0, 'B.Cu', 180.0),
-    'Q28':  (30.0, 19.0, 'B.Cu', 180.0),
+    # PR-CH4 2026-05-23: CH4 = mirror_Y(50) of CH1. Y'=100-Y, X unchanged.
+    # CH1 Y=56/68/80 → CH4 Y=44/32/20. P=12 preserved.
+    'TP40': (5.0, 44.0, 'F.Cu', 0.0),     # mirror_Y of TP19@(5,56)
+    'TP41': (5.0, 32.0, 'F.Cu', 0.0),     # mirror_Y of TP20@(5,68)
+    'TP42': (5.0, 20.0, 'F.Cu', 0.0),     # mirror_Y of TP21@(5,80)
+    'Q23':  (12.0, 44.0, 'B.Cu', 0.0),    # mirror_Y of Q5@(12,56)
+    'Q24':  (30.0, 44.0, 'B.Cu', 0.0),    # mirror_Y of Q6@(30,56)
+    'Q25':  (12.0, 32.0, 'B.Cu', 0.0),    # mirror_Y of Q7@(12,68)
+    'Q26':  (30.0, 32.0, 'B.Cu', 0.0),    # mirror_Y of Q8@(30,68)
+    'Q27':  (12.0, 20.0, 'B.Cu', 0.0),    # mirror_Y of Q9@(12,80)
+    'Q28':  (30.0, 20.0, 'B.Cu', 0.0),    # mirror_Y of Q10@(30,80)
+    # PR-CH4 ICs/LEDs/shunts via mirror_Y of CH1 counterparts
+    'J33':  (43.0, 38.0, 'F.Cu', 0.0),    # CH4 MCU (mirror_Y of J18@43,62)
+    'J34':  (45.0, 26.0, 'F.Cu', 0.0),    # CH4 DRV (mirror_Y of J19@45,74)
+    'J35':  (5.0,  38.0, 'F.Cu', 0.0),    # CH4 INA #A (mirror_Y of J20@5,62)
+    'J36':  (5.0,  26.0, 'F.Cu', 0.0),    # CH4 INA #B (mirror_Y of J21@5,74)
+    'J37':  (40.0, 14.0, 'F.Cu', 0.0),    # CH4 INA #C (mirror_Y of J22@40,86)
+    'U11':  (45.0, 14.0, 'F.Cu', 0.0),    # CH4 TL431 (mirror_Y of U2@45,86)
+    'U12':  (48.0, 16.0, 'F.Cu', 0.0),    # CH4 LM393 (mirror_Y of U3@48,84)
+    'U13':  (45.0, 22.0, 'F.Cu', 0.0),    # CH4 74LVC1G08 (mirror_Y of U4@45,78)
+    'TH4':  (45.0, 18.0, 'F.Cu', 0.0),    # CH4 NTC (mirror_Y of TH1@45,82)
+    'D18':  (10.0, 49.5, 'F.Cu', 0.0),    # CH4 RED_KILL_FW (mirror_Y of D15@10,50.5)
+    'D22':  (45.0, 34.0, 'F.Cu', 0.0),    # CH4 RED_FAULT_HW (mirror_Y of D19@45,66)
+    'D78':  (45.0, 30.0, 'F.Cu', 0.0),    # CH4 RED (mirror_Y of D33@45,70)
+    'R170': (8.0, 40.0, 'F.Cu', 0.0),     # CH4 shunt Phase A (mirror_Y of R56@8,60)
+    'R171': (8.0, 28.0, 'F.Cu', 0.0),     # CH4 shunt Phase B (mirror_Y of R57@8,72)
+    'R172': (8.0, 16.0, 'F.Cu', 0.0),     # CH4 shunt Phase C (mirror_Y of R58@8,84)
 }
 
 
