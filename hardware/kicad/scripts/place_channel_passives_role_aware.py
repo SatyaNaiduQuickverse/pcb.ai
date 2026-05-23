@@ -458,16 +458,23 @@ def collision_with_placed(ref, x, y, fp_data, placed_set, min_clear=1.0):
 
 
 def in_motor_tp_zone(x, y, fp_data, margin=2.0):
-    """True if (x, y) is within `margin` mm of any MOTOR_<phase>_CH<n> testpoint."""
+    """True if (x, y) is inside motor-TP bbox + `margin` keep-out (matches
+    audit_layout_compliance.py check_motor_pad_clear logic). Motor TP pad
+    is 3.0mm dia → bbox 3×3mm. Audit uses fp.GetBoundingBox() which may
+    include silk/courtyard giving slightly larger bbox."""
     for ref, d in fp_data.items():
         if not ref.startswith('TP'):
             continue
         v = d.get('value', '')
         if not v.startswith('MOTOR_'):
             continue
-        # Motor TP pad is 3mm dia → radius 1.5 + margin
-        keep = 1.5 + margin
-        if abs(d['x'] - x) < keep and abs(d['y'] - y) < keep:
+        # TP bbox approx 3.0×3.0 centered on fp position (1.5 each side)
+        # +margin keep-out
+        x0 = d['x'] - 1.5 - margin
+        y0 = d['y'] - 1.5 - margin
+        x1 = d['x'] + 1.5 + margin
+        y1 = d['y'] + 1.5 + margin
+        if x0 <= x <= x1 and y0 <= y <= y1:
             return ref
     return None
 
@@ -569,8 +576,9 @@ def place_one(ref, d, anchor_xy, max_dist, ch_num, fp_data, placed_set, pad_idx)
             continue
         if not in_zone(x, y, ch_num):
             continue
-        # Motor-TP keep-out (R20 audit gate) — bumped to 3mm margin per Phase 3 fix
-        if in_motor_tp_zone(x, y, fp_data, margin=3.0):
+        # Motor-TP keep-out (R20 audit gate) — uses bbox+margin to match audit
+        # Audit uses MOTOR_PAD_KEEPOUT=2.0; we use 2.5 for safety margin
+        if in_motor_tp_zone(x, y, fp_data, margin=2.5):
             continue
         # IC body bbox keep-out — don't place inside IC pad extent
         if in_ic_body_zone(x, y, fp_data, parent_ref=parent_ref):
