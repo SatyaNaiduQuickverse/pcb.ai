@@ -40,36 +40,65 @@ def pad_layer_summary(fp):
     return any_F, any_B
 
 
+# Master 2026-05-24 P1: design-intent override list. These components are
+# CANONICALLY F.Cu by role. If we encounter fp_F+pad_B mismatch on these,
+# flip PADS back to F.Cu (instead of dragging fp_layer to B.Cu).
+CANONICAL_F_CU_REFS = set()
+# Built dynamically based on value + footprint:
+CANONICAL_F_CU_VALUES = {'0.2mR', '0.5mR'}  # current-sense shunts
+CANONICAL_F_CU_FP_PATTERNS = ('R_2512',)     # 2512 shunts
+
+
+def is_canonical_F(fp):
+    """True if this component is F.Cu by design intent regardless of current pad-layer state."""
+    if fp.GetReference() in CANONICAL_F_CU_REFS:
+        return True
+    val = fp.GetValue() or ''
+    if val in CANONICAL_F_CU_VALUES:
+        return True
+    lib = str(fp.GetFPID().GetLibItemName() or '')
+    for pat in CANONICAL_F_CU_FP_PATTERNS:
+        if pat in lib:
+            return True
+    return False
+
+
 def main():
     board = pcbnew.LoadBoard(PCB)
     flipped_a = 0
-    flipped_b = 0
+    flipped_b_set_fp = 0
+    flipped_b_flip_pads = 0
     for fp in board.GetFootprints():
         pad_F, pad_B = pad_layer_summary(fp)
         if not (pad_F or pad_B):
             continue
         fp_layer = fp.GetLayer()
-        # Direction A: fp_B + pad_F only  → flip pads
+        # Direction A: fp_B + pad_F only  → flip pads (and fp_layer) to B
         if fp_layer == pcbnew.B_Cu and pad_F and not pad_B:
             fp.Flip(fp.GetPosition(), False)
             flipped_a += 1
             continue
-        # Direction B: fp_F + pad_B only  → set fp_layer to B.Cu
-        # IMPORTANT: We don't Flip() here because pads are ALREADY on B.Cu.
-        # We just need to align fp_layer metadata to match the pad reality.
-        # Use SetLayerAndFlip with current layer so geometry unchanged but
-        # fp_layer reflects pad side. Actually safer: call Flip() twice (once
-        # to flip everything, once to flip back) — net change is just fp_layer
-        # metadata. Or use SetLayer directly.
+        # Direction B: fp_F + pad_B only
+        # DEFAULT: align fp_layer to B (set fp_layer; don't touch pads)
+        # OVERRIDE: if component is canonically F.Cu by design → flip pads back to F
         if fp_layer == pcbnew.F_Cu and pad_B and not pad_F:
-            # Move fp_layer to B.Cu without touching pad geometry.
-            # Approach: Flip() flips pads + sets fp_layer; calling it once
-            # would mess up pads. Use SetLayer() to just update metadata.
-            fp.SetLayer(pcbnew.B_Cu)
-            flipped_b += 1
+            if is_canonical_F(fp):
+                # Pads should be F.Cu by design — flip pads back to F.
+                # fp.Flip() with current fp_layer=F will move both fp+pads to B
+                # (wrong direction). Instead, flip twice: once to B (everything),
+                # once back to F (everything). Net effect: pads round-trip.
+                pos = fp.GetPosition()
+                fp.Flip(pos, False)  # F→B (everything)
+                fp.Flip(pos, False)  # B→F (everything)
+                flipped_b_flip_pads += 1
+            else:
+                # Standard Dir B: align fp_layer metadata to pad reality
+                fp.SetLayer(pcbnew.B_Cu)
+                flipped_b_set_fp += 1
     print(f"Direction A (fp_B + pad_F → flip pads): {flipped_a} footprints")
-    print(f"Direction B (fp_F + pad_B → set fp_layer to B): {flipped_b} footprints")
-    print(f"Total fixes: {flipped_a + flipped_b}")
+    print(f"Direction B set-fp-to-B (default): {flipped_b_set_fp} footprints")
+    print(f"Direction B flip-pads-to-F (canonical-F override): {flipped_b_flip_pads} footprints")
+    print(f"Total fixes: {flipped_a + flipped_b_set_fp + flipped_b_flip_pads}")
     board.Save(PCB)
     print(f"Saved {PCB}")
 

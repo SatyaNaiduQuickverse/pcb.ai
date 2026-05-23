@@ -37,21 +37,41 @@ import sys
 PCB = "/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb"
 
 
-def is_critical(ref, fp_lib):
-    """True if this component is in the critical-keep-silk class."""
-    if ref.startswith(('U', 'J', 'Q', 'TH', 'TP', 'H', 'FID')):
+def is_critical(ref, fp_lib, val):
+    """True if component is in critical-keep-silk class.
+    Master 2026-05-24 P2: extended small-passive class includes BAT54 +
+    BZT52 + 0805 caps + 1nF/3.3K/10K/22K passives.
+    Truly critical (always keep silk): MCUs, DRVs, comparators, refs,
+    connectors, polarized large caps, mount holes, fiducials, test points,
+    FETs, phase TVS (SMBJ33A — orientation matters)."""
+    if ref.startswith(('TH', 'TP', 'H', 'FID')):
         return True
-    if ref.startswith(('D',)):
-        # Polarized parts always critical
+    # FETs always critical
+    if ref.startswith('Q'):
         return True
+    # MCU/DRV/comparator placeholders + connectors
+    if ref.startswith(('U', 'J')):
+        return True
+    # Diodes: only phase TVS (SMBJ33A) is critical (orientation matters);
+    # BAT54 (CSA OR), BZT52 (Zener clamp) are extended-small-passive
+    if ref.startswith('D'):
+        if 'SMBJ33A' in val:
+            return True
+        if 'BAT54' in val or 'BZT52' in val:
+            return False  # extended small-passive — allow silk hide
+        if val.startswith('RED') or val.startswith('GREEN'):
+            return True  # status LEDs (orientation/identification matters)
+        return True  # default: keep diode silk
+    # Inductors: keep silk for now (small inductors might be hideable but
+    # there are few inductors in this design)
     if ref.startswith('L'):
         return True
-    # R/C: critical only if NOT 0402/0603
+    # R/C: extended small-passive class
     if ref.startswith(('R', 'C')):
-        if '0402' in fp_lib or '0603' in fp_lib:
-            return False  # small-passive
+        if '0402' in fp_lib or '0603' in fp_lib or '0805' in fp_lib:
+            return False  # small-passive — allow silk hide
+        # 100uF polymer / 2512 shunt / large caps → critical
         return True
-    # Default: critical (safer)
     return True
 
 
@@ -121,29 +141,30 @@ def main():
         text_h = ty1 - ty0
         cx = (fx0 + fx1) / 2
         cy = (fy0 + fy1) / 2
-        # 8 candidates (offsets from body edges, with 0.5mm gap)
-        gap = 0.5
-        candidates = [
-            ('N',  cx, fy0 - text_h/2 - gap),
-            ('S',  cx, fy1 + text_h/2 + gap),
-            ('E',  fx1 + text_w/2 + gap, cy),
-            ('W',  fx0 - text_w/2 - gap, cy),
-            ('NE', fx1 + text_w/2 + gap, fy0 - text_h/2 - gap),
-            ('NW', fx0 - text_w/2 - gap, fy0 - text_h/2 - gap),
-            ('SE', fx1 + text_w/2 + gap, fy1 + text_h/2 + gap),
-            ('SW', fx0 - text_w/2 - gap, fy1 + text_h/2 + gap),
-        ]
+        # Master 2026-05-24 P2: 16 candidates = 8 cardinal × 2 distance rings
+        # (0.5mm and 2mm gap). Search radius extended to clear cluster density.
         new_pos = None
-        for label, ncx, ncy in candidates:
-            ntx0 = ncx - text_w / 2
-            nty0 = ncy - text_h / 2
-            ntx1 = ncx + text_w / 2
-            nty1 = ncy + text_h / 2
-            # On-board?
-            if ntx0 < 0 or nty0 < 0 or ntx1 > 100 or nty1 > 100: continue
-            if text_clear(ntx0, nty0, ntx1, nty1, ref, side, bodies, pads):
-                new_pos = (ncx, ncy)
-                break
+        for gap in (0.5, 1.5, 3.0):
+            candidates = [
+                (cx, fy0 - text_h/2 - gap),                                  # N
+                (cx, fy1 + text_h/2 + gap),                                  # S
+                (fx1 + text_w/2 + gap, cy),                                  # E
+                (fx0 - text_w/2 - gap, cy),                                  # W
+                (fx1 + text_w/2 + gap, fy0 - text_h/2 - gap),                # NE
+                (fx0 - text_w/2 - gap, fy0 - text_h/2 - gap),                # NW
+                (fx1 + text_w/2 + gap, fy1 + text_h/2 + gap),                # SE
+                (fx0 - text_w/2 - gap, fy1 + text_h/2 + gap),                # SW
+            ]
+            for ncx, ncy in candidates:
+                ntx0 = ncx - text_w / 2
+                nty0 = ncy - text_h / 2
+                ntx1 = ncx + text_w / 2
+                nty1 = ncy + text_h / 2
+                if ntx0 < 0 or nty0 < 0 or ntx1 > 100 or nty1 > 100: continue
+                if text_clear(ntx0, nty0, ntx1, nty1, ref, side, bodies, pads):
+                    new_pos = (ncx, ncy)
+                    break
+            if new_pos: break
         if new_pos:
             nx, ny = new_pos
             rf.SetTextPos(pcbnew.VECTOR2I(pcbnew.FromMM(nx), pcbnew.FromMM(ny)))
@@ -151,7 +172,8 @@ def main():
         else:
             # No clear position. Critical → leave visible; small-passive → hide
             fp_lib = str(fp.GetFPID().GetLibItemName() or '')
-            if is_critical(ref, fp_lib):
+            val = fp.GetValue() or ''
+            if is_critical(ref, fp_lib, val):
                 leave_visible += 1
             else:
                 rf.SetVisible(False)

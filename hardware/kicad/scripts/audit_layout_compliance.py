@@ -380,8 +380,14 @@ MOTOR_TP_REFS = ('TP19','TP20','TP21','TP26','TP27','TP28',
 MOTOR_PAD_KEEPOUT = 2.0
 
 _MOTOR_ADJACENT_NET_RE = re.compile(
-    r'^(MOTOR_[ABC]_CH\d+|BEMF_[ABC]_CH\d+|CSA_[ABC]_OUT_CH\d+'
-    r'|CSA_MAX_CH\d+|SHUNT_[ABC]_TOP_CH\d+)$'
+    r'^(MOTOR_[ABC]_CH\d+'             # motor net itself
+    r'|BEMF_[ABC]_CH\d+'               # BEMF divider tap
+    r'|CSA_[ABC]_OUT_CH\d+'            # INA output filter
+    r'|CSA_MAX_CH\d+'                  # CSA diode-OR
+    r'|SHUNT_[ABC]_TOP_CH\d+'          # shunt Kelvin sense
+    r'|GH[ABC]_CH\d+|GL[ABC]_CH\d+'    # gate-drive nets (gate-R + clamp + pull-down)
+    r'|BST[ABC]_CH\d+'                 # bootstrap cap nets (anchored to DRV BST pin)
+    r')$'
 )
 
 
