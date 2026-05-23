@@ -64,14 +64,7 @@ S1_POSITIONS = {
     # from nearest FET gate per R23. R3 anchored to Q1 (4mm); D2 anchored to Q4 (4mm).
     'R3':         (32.0, 11.0, 'F.Cu',  0.0),   # GATE_RP 10K pull, anchored to Q1
     'D2':         (68.0, 11.0, 'F.Cu',  0.0),   # 12V Zener, anchored to Q4 (symmetric)
-    # Status LEDs — KEEP MASTER-BASELINE POSITIONS (PR-S1 amendment after master
-    # audit flagged +15 NEW overlaps from moving LEDs into dense auto-anchored Y=2
-    # strip). Master baseline D4/R5 pair at (55.5, 5.5)/(55.5, 3) is symmetric-OK;
-    # D3/R4 at (90, 4.2)/(95.6, 4.2) are not paired but in low-density east corner.
-    'D4':         (55.5,  5.5, 'F.Cu',  0.0),   # RED_RPOL — master baseline position
-    'R5':         (55.5,  3.0, 'F.Cu',  0.0),   # D4 current-limit (2.5mm — vertical pair)
-    'D3':         (2.0,  25.0, 'F.Cu',  0.0),   # GREEN_PWR — master baseline position (in §S5 strip; defer to PR-S5/S6 to relocate)
-    'R4':         (95.6,  4.2, 'F.Cu',  0.0),   # D3 current-limit (master baseline; D3 is far — handled in later PR)
+    # D3/D4/R4/R5 status LEDs moved to §S6 in PR-S6 (Task #72).
     # D26 SMBJ33A — net is MOTOR_A_CH1, this is CH1 motor TVS (mis-labeled by historical
     # placement). Leave at master placement (15, 5) — moved to CH1 in PR-CH1.
     'D26':        (15.0,  5.0, 'B.Cu',  0.0),
@@ -83,8 +76,6 @@ S1_EXPECTED_VALUES = {
     'Q1':  'BSC014N06NS', 'Q2':  'BSC014N06NS', 'Q3':  'BSC014N06NS', 'Q4':  'BSC014N06NS',
     'R3':  '10K',
     'D2':  '12V',
-    'D4':  'RED_RPOL',   'D3':  'GREEN_PWR',
-    'R4':  '5K1',        'R5':  '5K1',
 }
 
 
@@ -277,24 +268,29 @@ def place_supervisor_hall(fps_by_ref, placements):
 # kill LEDs" are part of S4 channel template, not S6 — honest deviation flag)
 # ────────────────────────────────────────────────────────────────────
 S6_POSITIONS = {
+    # PR-S6 2026-05-23: master baseline kept for connectors/USBLC6/VBAT divider.
     'J12': (15.0, 90.0, 'F.Cu',   0.0),    # AUX BM06B-SRSS-TB west top
-    'J14': (50.0, 90.0, 'F.Cu',   0.0),    # FC SM08B-SRSS-TB central top
+    'J14': (50.0, 90.0, 'F.Cu',   0.0),    # FC SM08B-SRSS-TB central top (X=50 symmetric)
     'J15': (40.0, 85.0, 'F.Cu',   0.0),    # USBLC6 ESD ch1+ch2 DShot
-    'J16': (60.0, 85.0, 'F.Cu',   0.0),    # USBLC6 ESD ch3+ch4 DShot
+    'J16': (60.0, 85.0, 'F.Cu',   0.0),    # USBLC6 ESD ch3+ch4 DShot (mirror of J15 about X=50)
     'J17': (75.0, 85.0, 'F.Cu',   0.0),    # USBLC6 ESD TLM + spare
     'R36': (47.0, 86.0, 'F.Cu',   0.0),    # VBAT divider top 100K
     'R37': (47.0, 84.0, 'F.Cu',   0.0),    # VBAT divider bot 14K
     'C49': (45.0, 84.0, 'F.Cu',   0.0),    # VBAT filter 100nF
+    # Status LED pairs in §S6 north strip Y=96 — clear zone (only TP16/TP7 at Y=95
+    # from PR-S1, no overlap). D3+R4 at NW (X=5/8), D4+R5 at NE (X=95/92) mirror.
+    'D3':  (5.0, 96.0, 'F.Cu',  0.0),     # GREEN_PWR LED (NW)
+    'R4':  (8.0, 96.0, 'F.Cu',  0.0),     # D3 limit-R (3mm pair pitch)
+    'D4':  (95.0, 96.0, 'F.Cu',  0.0),    # RED_RPOL LED (NE mirror_X)
+    'R5':  (92.0, 96.0, 'F.Cu',  0.0),    # D4 limit-R (mirror)
 }
 S6_EXPECTED_VALUES = {
     'J12': 'BM06B',
     'J14': 'SM08B',
-    'J15': 'USBLC6',
-    'J16': 'USBLC6',
-    'J17': 'USBLC6',
-    'R36': '100K',
-    'R37': '14K',
-    'C49': '100nF',
+    'J15': 'USBLC6', 'J16': 'USBLC6', 'J17': 'USBLC6',
+    'R36': '100K', 'R37': '14K', 'C49': '100nF',
+    'D3':  'GREEN_PWR', 'D4':  'RED_RPOL',
+    'R4':  '5K1', 'R5':  '5K1',
 }
 
 
