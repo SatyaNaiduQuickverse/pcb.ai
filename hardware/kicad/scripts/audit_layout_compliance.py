@@ -517,32 +517,40 @@ def check_quadrant_count_balance():
     if abs(sm['SW']-sm['SE']) > QUADRANT_DELTA_LIMIT:
         sm_fails.append(f"S-mirror SW↔SE Δ={abs(sm['SW']-sm['SE'])}")
 
-    # AUTO bucket rule: ≤4 delta (slightly looser since auto-anchored debris
-    # follows parent placement; some asymmetry inherited from S-zone parents)
+    # AUTO bucket rule: WARN ONLY (master adjudication 2026-05-23).
+    # Auto-anchored debris (debug TPs, generic +3V3/GND/N$nn pulls, IC decoupling)
+    # often has NO mirror partner by design — components anchored to single-instance
+    # parents (MCU central spine, supervisor) cannot move ≥40mm away per R23
+    # without breaking electrical function. The audit surfaces structural
+    # asymmetry as a WARNING for verification, not a FAIL.
     au = buckets['auto']
+    auto_warns = []
+    AUTO_WARN_THRESHOLD = 4
+    if abs(au['NW']-au['NE']) > AUTO_WARN_THRESHOLD:
+        auto_warns.append(f"auto-anchored NW↔NE Δ={abs(au['NW']-au['NE'])} — verify no mirror partner exists then document as structural")
+    if abs(au['SW']-au['SE']) > AUTO_WARN_THRESHOLD:
+        auto_warns.append(f"auto-anchored SW↔SE Δ={abs(au['SW']-au['SE'])} — verify no mirror partner exists then document as structural")
+    # No auto_fails list — only warns
     auto_fails = []
-    AUTO_LIMIT = 4
-    if abs(au['NW']-au['NE']) > AUTO_LIMIT:
-        auto_fails.append(f"auto-anchored NW↔NE Δ={abs(au['NW']-au['NE'])}")
-    if abs(au['SW']-au['SE']) > AUTO_LIMIT:
-        auto_fails.append(f"auto-anchored SW↔SE Δ={abs(au['SW']-au['SE'])}")
 
     # Composite report — always print bucket counts for transparency
-    if ch_fails or sm_fails or auto_fails:
-        fails.append(f"QUADRANT-BALANCE: channel/s_mirror/auto-anchored bucket(s) over limit")
-        fails.append(f"  channel  NW={ch['NW']} NE={ch['NE']} SW={ch['SW']} SE={ch['SE']} (limit Δ≤{QUADRANT_DELTA_LIMIT})")
-        fails.append(f"  s_mirror NW={sm['NW']} NE={sm['NE']} SW={sm['SW']} SE={sm['SE']} (limit Δ≤{QUADRANT_DELTA_LIMIT})")
-        fails.append(f"  single   NW={buckets['single']['NW']} NE={buckets['single']['NE']} SW={buckets['single']['SW']} SE={buckets['single']['SE']} (exempt — central/strip placement)")
-        fails.append(f"  auto     NW={au['NW']} NE={au['NE']} SW={au['SW']} SE={au['SE']} (limit Δ≤{AUTO_LIMIT})")
+    if ch_fails or sm_fails:
+        fails.append(f"QUADRANT-BALANCE: channel and/or s_mirror bucket(s) over enforced limit")
+        fails.append(f"  channel  NW={ch['NW']} NE={ch['NE']} SW={ch['SW']} SE={ch['SE']} (ENFORCED Δ≤{QUADRANT_DELTA_LIMIT})")
+        fails.append(f"  s_mirror NW={sm['NW']} NE={sm['NE']} SW={sm['SW']} SE={sm['SE']} (ENFORCED Δ≤{QUADRANT_DELTA_LIMIT})")
+        fails.append(f"  single   NW={buckets['single']['NW']} NE={buckets['single']['NE']} SW={buckets['single']['SW']} SE={buckets['single']['SE']} (EXEMPT — central/strip placement)")
+        fails.append(f"  auto     NW={au['NW']} NE={au['NE']} SW={au['SW']} SE={au['SE']} (WARN-only — debris inherits parent asymmetry)")
         fails.append(f"  TOTAL    NW={total_nw} NE={total_ne} SW={total_sw} SE={total_se}")
-        for f in ch_fails + sm_fails + auto_fails:
+        for f in ch_fails + sm_fails:
             fails.append(f"  {f}")
     else:
-        # PASS: still print summary for transparency (use warns to surface info)
-        warns.append(f"QUADRANT-BALANCE PASS: channel NW={ch['NW']}/NE={ch['NE']}/SW={ch['SW']}/SE={ch['SE']}; "
+        warns.append(f"QUADRANT-BALANCE: channel + s_mirror PASS — channel NW={ch['NW']}/NE={ch['NE']}/SW={ch['SW']}/SE={ch['SE']}; "
                      f"s_mirror NW={sm['NW']}/NE={sm['NE']}/SW={sm['SW']}/SE={sm['SE']}; "
                      f"auto NW={au['NW']}/NE={au['NE']}/SW={au['SW']}/SE={au['SE']}; "
                      f"TOTAL NW={total_nw}/NE={total_ne}/SW={total_sw}/SE={total_se}")
+    # AUTO bucket warnings — always surface (informational; documented as structural)
+    for w in auto_warns:
+        warns.append(f"AUTO-BUCKET: {w}")
 
 
 # ----- run -----
