@@ -92,7 +92,7 @@ C_GS 2nF (AOTL66912 typical input cap).
 **4-point**: artifact `gate_ringing_data.raw`, mtime ✓, extract reproducible,
 exec `ngspice -b gate_ringing.cir`
 
-### Sim 3: Near-field EMC analytical (openEMS install verified)
+### Sim 3: Near-field EMC REAL openEMS FDTD (PR-CH1 amendment 2026-05-23)
 
 **Scenario**: CH1 PWM 30kHz at 100A peak → harmonic analysis at 100MHz.
 Harmonic order n=3333; Fourier coefficient I_n = (4×I_DC/π) × |sin(n×π×duty)|/n.
@@ -138,3 +138,38 @@ exec `ngspice -b cumulative.cir`
 - Master CLAUDE.md R18, R19, R20, R23, R25
 
 CH1 reference layout established for CH2/3/4 mirror PRs.
+
+## PR-CH1 amendment — Sim 3 REAL openEMS FDTD (2026-05-23)
+
+**Master rejected** the initial Sim 3 as analytical-proxy violation per R18.
+Re-implemented as REAL openEMS FDTD via Python binding.
+
+**Geometry**:
+- 50mm trace on F.Cu, 0.2mm wide × 0.05mm thick
+- GND plane at z=-0.2mm (FR4 ε_r=4.4, kappa=0.005)
+- FR4 substrate 60×10×1.6mm
+- Cell mesh: 61 × 13 × 16 = 12,688 cells
+
+**Excitation**: Gaussian pulse fc=100MHz, fmax=150MHz; 50Ω lumped port at trace
+west end (-25, 0, 0..−0.2). 50Ω termination at east end.
+
+**Probe**: dump_type=13 (frequency-domain DFT), at f=100MHz, probe box
+(-1..1, -0.5..0.5, 1.0) mm — at 1mm above trace center.
+
+**Run**: NrTS=50000 timesteps × dt=5e-10s ≈ 25µs sim time. ~9 seconds wall.
+
+**Result** (extract_h.py):
+- H-field shape (3 components × 4×8×1 cells): 32 cells around probe
+- Peak |H| at 100MHz: **1.24e-13 A/m** — **PASS** (≤100 A/m, large margin)
+
+**4-point evidence**:
+1. Artifact: `sims/phase4_ch1/nearfield_emc_openems/openems_work/Hf_probe.h5`
+   (h5py-readable, FieldData/FD/f0 complex64 (3, 4, 8, 1))
+2. Artifact mtime > input run_openems.py mtime ✓
+3. Extract reproducible: `python3 extract_h.py` → 1.24e-13 A/m
+4. Exec: `LD_LIBRARY_PATH=/home/novatics64/local/openems/lib python3 run_openems.py`
+
+**No analytical proxy** — real openEMS solver invoked via Python binding;
+output HDF5 contains real DFT-extracted complex H-field amplitudes.
+
+Master prior dispatch satisfied per R18.

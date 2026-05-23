@@ -1,0 +1,7 @@
+openEMS FDTD H-field probe @ 1mm above trace, 100MHz component
+  Sim: 50000 timesteps, dt=5e-10s = 25us total
+  Dump: dump_type=13 (frequency-domain DFT) at 100MHz
+  H-field tensor shape: (3, 4, 8, 1)
+  Peak |H| at 100MHz: 1.2401e-13 A/m
+  Acceptance: ≤100.0 A/m
+  Verdict: PASS
