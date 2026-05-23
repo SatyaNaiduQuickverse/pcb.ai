@@ -1,0 +1,32 @@
+* PR-S1 inrush sim: cold-start XT30 → bulk-cap charge
+* Source: 6S LiPo cold-start V_BATT = 25.2V
+* Path: XT30 connector (10mΩ contact) → NTC inrush limiter (R_NTC dyn ~50mΩ cold,
+*       drops to ~5mΩ hot) → 4× parallel rev-pol FETs (4× 1.7mΩ // = 0.425mΩ)
+* Load: 4× 470µF polymer bulk caps (C1-C4 EEHZS1V471P) = 1880µF total
+*       ESR per cap ~30mΩ → 4× ESR // = 7.5mΩ
+* Acceptance: peak I ≤ 200A, V_BATT rise to 95% within 5ms
+
+V_batt    BATT 0       PWL(0 0 100us 25.2)
+R_xt30    BATT N1      10m
+* MF72-5D25 NTC parallel pair (R1+R2). Cold-state 2.5Ω; self-heats to ~50mΩ via
+* thermal dissipation. Model as time-dependent: R(t) = 2.5 × exp(-t/τ_th) + 0.05.
+* τ_th ~ 2ms at I=10A (P=250W initially → fast heat-up).
+B_ntc     N1   N2      I = V(N1, N2) / (0.05 + 2.45 * exp(-TIME/2m))
+R_revpol  N2   VBUS    0.425m           ; 4-FET parallel R_DS_on
+V_sense   VBUS VBUS_S  0
+R_esr     VBUS_S VBUS_C  7.5m
+C_bulk    VBUS_C 0     1880u IC=0
+
+.ic V(VBUS_C)=0
+
+.control
+  tran 100n 30m UIC
+  meas tran ipeak MAX I(V_sense)
+  meas tran ipeak_neg MIN I(V_sense)
+  meas tran t_95 WHEN V(VBUS_C) = 23.94
+  set wr_singlescale
+  set wr_vecnames
+  wrdata inrush_data.raw I(V_sense) V(VBUS_S) V(VBUS_C)
+.endc
+
+.end

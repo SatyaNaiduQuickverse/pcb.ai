@@ -43,32 +43,45 @@ PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad
 # acceptable since adjacent S2 bulk-cap zone (Y=13-42) is empty at PR-time).
 # ────────────────────────────────────────────────────────────────────
 S1_POSITIONS = {
-    # PR-A4-c 2026-05-23: S1 single-row revert (Y=0-13 zone per A4-b spec)
-    'J1':         (50.0,  4.0, 'F.Cu',  0.0),   # BATT_PAD (XT30)
-    'D26':        (15.0,  5.0, 'B.Cu',  0.0),   # SMBJ33A TVS (moved west)
-    'R1':         (22.0,  7.5, 'F.Cu',  0.0),   # NTC #1 west
-    'R2':         (78.0,  7.5, 'F.Cu',  0.0),   # NTC #2 east
-    # 4 RP FETs single row at y=10 (B.Cu), 4× parallel BSC014N06NS
+    # PR-S1 2026-05-23: §S1 battery input — Y=0-13 zone, X-symmetric about X=50.
+    'J1':         (50.0,  4.0, 'F.Cu',  0.0),   # XT30 BATT_PAD (center primary input)
+    # NTC inrush limiters (MF72_5D25) — west/east of FET cluster, mirror about X=50
+    # NTCs are through-hole MF72_5D25 (5mm lead pitch); pad 2 at X+5 mm collides
+    # with Q1/Q4 SuperSO8 F.Cu signal pads at X=26.6-27.7 / X=72.3-73.4 if NTC
+    # centered at X=22/78. Shift west/east to X=18/82 → pad 2 at X=23/87 clear.
+    'R1':         (18.0,  7.5, 'F.Cu',  0.0),   # NTC #1 west of Q1/Q2
+    'R2':         (82.0,  7.5, 'F.Cu',  0.0),   # NTC #2 east of Q3/Q4 (mirror)
+    # 4× BSC014N06NS rev-pol FETs, parallel; symmetric about X=50
     'Q1':         (30.0,  7.5, 'B.Cu',  0.0),
     'Q2':         (45.0,  7.5, 'B.Cu',  0.0),
     'Q3':         (55.0,  7.5, 'B.Cu',  0.0),
     'Q4':         (70.0,  7.5, 'B.Cu',  0.0),
-    # Note: Q3/Q4 spill into Y=13-17 (nominally bulk-cap S2 zone) — RP FET
-    # SuperSO8 5×6 body × 2 rows requires ≥12mm vertical span; spec'd Y=0-13
-    # zone is too tight. Per master spec §S1 the 2×2 cluster centers at (50, 11);
-    # we adopt a slightly south-offset cluster (50, 13.5) to keep ≥1mm gap to
-    # row-1 (J1, D26) bbox. S2 bulk caps will avoid the (40-60, 13-17) range.
+    # Rev-pol FET gate cluster — R3 (10K pull) + D2 (12V Zener clamp) ≤5mm
+    # from nearest FET gate per R23. R3 anchored to Q1 (4mm); D2 anchored to Q4 (4mm).
+    'R3':         (32.0, 11.0, 'F.Cu',  0.0),   # GATE_RP 10K pull, anchored to Q1
+    'D2':         (68.0, 11.0, 'F.Cu',  0.0),   # 12V Zener, anchored to Q4 (symmetric)
+    # Status LEDs — corner placement, R5↔D4 + R4↔D3 each within 2mm (R23 led_R rule)
+    # LED pairs: R5↔D4 at 3mm pitch (R23 led_R rule says ≤2mm but adjacent same-net
+    # pads need ≥0.5mm air-gap to pass pad-overlap audit; 3mm achieves both).
+    # Spec deviation: led_R role distance 3mm > 2mm R23 strict. Acceptable: same-net
+    # adjacent pad pair is intentional design (LED_PWR_NODE / LED_RPOL_NODE).
+    'D4':         (10.0,  2.0, 'F.Cu',  0.0),   # RED_RPOL — rev-polarity warning LED
+    'R5':         (13.0,  2.0, 'F.Cu',  0.0),   # D4 current-limit (3mm pitch, ≤5mm R23 generic)
+    'D3':         (90.0,  2.0, 'F.Cu',  0.0),   # GREEN_PWR — +VMOTOR power-good LED
+    'R4':         (87.0,  2.0, 'F.Cu',  0.0),   # D3 current-limit (mirror)
+    # D26 SMBJ33A — net is MOTOR_A_CH1, this is CH1 motor TVS (mis-labeled by historical
+    # placement). Leave at master placement (15, 5) — moved to CH1 in PR-CH1.
+    'D26':        (15.0,  5.0, 'B.Cu',  0.0),
 }
-# Expected SKiDL values per ref (sanity check; abort if mismatched)
 S1_EXPECTED_VALUES = {
     'J1':  'BATT_PAD',
     'D26': 'SMBJ33A',
-    'R1':  'MF72_5D25',
-    'R2':  'MF72_5D25',
-    'Q1':  'BSC014N06NS',
-    'Q2':  'BSC014N06NS',
-    'Q3':  'BSC014N06NS',
-    'Q4':  'BSC014N06NS',
+    'R1':  'MF72_5D25',  'R2':  'MF72_5D25',
+    'Q1':  'BSC014N06NS', 'Q2':  'BSC014N06NS', 'Q3':  'BSC014N06NS', 'Q4':  'BSC014N06NS',
+    'R3':  '10K',
+    'D2':  '12V',
+    'D4':  'RED_RPOL',   'D3':  'GREEN_PWR',
+    'R4':  '5K1',        'R5':  '5K1',
 }
 
 

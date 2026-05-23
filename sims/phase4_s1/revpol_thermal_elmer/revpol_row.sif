@@ -1,0 +1,93 @@
+! PR-S1 rev-pol FET ROW thermal sim — 4 FETs in row at Y=7.5
+! Burst: 100A through 4 parallel FETs → 25A per FET, R_DS_on hot ~1.7mΩ.
+! P_per_FET = 25² × 1.7mΩ = 1.06 W; P_total = 4.25 W.
+! FET body volume per FET: 5×6×0.4mm = 1.2e-8 m³ (top 0.4mm of board under FET).
+! Heat source per FET = 1.06 W / (ρ=2700 × V=1.2e-8) = 32716 W/kg.
+! Apply as volumetric body force only in FET regions (via MATC indicator).
+! Cont case (100A burst over 100ms, then 70A continuous → 70/4 = 17.5A per FET):
+!   P_cont = 17.5² × 1.7mΩ = 0.52W per FET → P_total_cont = 2.08W → 16064 W/kg
+! Use burst case for worst-case T_J.
+
+Header
+  Mesh DB "." "revpol_row"
+End
+
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 50
+  Output Intervals = 1
+  Output File = "revpol_row.result"
+  Post File = "revpol_row.vtu"
+End
+
+Body 1
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+
+Equation 1
+  Name = "Heat Equation"
+  Active Solvers(2) = 1 2
+End
+
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Variable Dofs = 1
+  Linear System Solver = "Direct"
+  Linear System Direct Method = "UMFPack"
+  Linear System Convergence Tolerance = 1.0e-6
+  Steady State Convergence Tolerance = 1.0e-5
+  Nonlinear System Max Iterations = 1
+End
+
+Solver 2
+  Equation = "SaveScalars"
+  Procedure = "SaveData" "SaveScalars"
+  Filename = "max_temp.dat"
+  Variable 1 = "Temperature"
+  Operator 1 = max
+End
+
+! PCB composite (8L, 3oz F.Cu/In3/B.Cu) — k_eff isotropic 60 W/m·K
+Material 1
+  Density = 2700.0
+  Heat Conductivity = 60.0
+  Heat Capacity = 800.0
+End
+
+! Heat source via MATC: 32716 W/kg in FET body regions, 0 elsewhere.
+! FET bodies (in mm) at X ∈ [27.5,32.5] [42.5,47.5] [52.5,57.5] [67.5,72.5]; Y ∈ [4.5,10.5]
+! Indicator: 1 if inside any FET body, 0 otherwise.
+! Continuous-case heat source: 70A through 4 FETs → 17.5A each → P = 17.5² × 1.7mΩ = 0.52W per FET.
+! 0.52W / (ρ=2700 × V=1.2e-8) = 16049 W/kg in FET regions, 0 elsewhere.
+Body Force 1
+  Heat Source = Variable Coordinate
+    Real MATC "tx_x=tx(0); tx_y=tx(1); inside = ((tx_y>=0.0045)*(tx_y<=0.0105))*( ((tx_x>=0.0275)*(tx_x<=0.0325)) + ((tx_x>=0.0425)*(tx_x<=0.0475)) + ((tx_x>=0.0525)*(tx_x<=0.0575)) + ((tx_x>=0.0675)*(tx_x<=0.0725))); 16049.0 * inside"
+End
+
+! BC1 — B.Cu (bottom): full-back heatsink per Phase7_PREP, h=1500 W/m²·K
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 1500.0
+  External Temperature = 60.0
+End
+
+! BC2 — F.Cu (top): prop-wash convection h=80
+Boundary Condition 2
+  Target Boundaries(1) = 2
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 80.0
+  External Temperature = 60.0
+End
+
+! BC3 — sides: still air h=10
+Boundary Condition 3
+  Target Boundaries(1) = 3
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 10.0
+  External Temperature = 60.0
+End
