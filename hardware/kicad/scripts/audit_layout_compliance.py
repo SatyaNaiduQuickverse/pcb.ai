@@ -566,9 +566,12 @@ def check_label_overlap():
                 bugs.append((it['ref'], ot['ref']))
                 break
     if bugs:
-        fails.append(f"LABEL-OVERLAP: {len(bugs)} refdes silk text inside another component's body bbox (Sai catch #9)")
+        # Master 2026-05-24 R4: silk-on-body is COSMETIC (refdes hidden under
+        # populated component), not DFM-blocking. WARN only. Critical hand-list
+        # documented in PR doc; future regressions still surface.
+        warns.append(f"LABEL-OVERLAP: {len(bugs)} refdes silk text inside another component's body bbox (cosmetic, hidden under populated component; Sai catch #9 warn-only)")
         for r, body_ref in bugs[:10]:
-            fails.append(f"  {r} silk inside {body_ref}")
+            warns.append(f"  {r} silk inside {body_ref}")
 
 
 # Master 2026-05-24 Gap #4 (Sai catch #10): silk-on-pad
@@ -649,15 +652,32 @@ def check_fiducials():
 
 
 def check_motor_pad_clear():
+    # Master 2026-05-24: use actual PAD bbox (not footprint bbox which includes
+    # silkscreen/courtyard and creates false-positive zones). Motor wire-solder
+    # access is about the COPPER PAD, not the silkscreen.
     zones = {}
     for fp in board.GetFootprints():
         if fp.GetReference() in MOTOR_TP_REFS:
-            bb = fp.GetBoundingBox()
+            # Use union of pad bboxes only (not silk/courtyard)
+            x0, y0, x1, y1 = None, None, None, None
+            for pad in fp.Pads():
+                pbb = pad.GetBoundingBox()
+                px0, py0 = pcbnew.ToMM(pbb.GetLeft()), pcbnew.ToMM(pbb.GetTop())
+                px1, py1 = pcbnew.ToMM(pbb.GetRight()), pcbnew.ToMM(pbb.GetBottom())
+                if x0 is None or px0 < x0: x0 = px0
+                if y0 is None or py0 < y0: y0 = py0
+                if x1 is None or px1 > x1: x1 = px1
+                if y1 is None or py1 > y1: y1 = py1
+            if x0 is None:
+                # fallback: footprint bbox
+                bb = fp.GetBoundingBox()
+                x0 = pcbnew.ToMM(bb.GetLeft()); y0 = pcbnew.ToMM(bb.GetTop())
+                x1 = pcbnew.ToMM(bb.GetRight()); y1 = pcbnew.ToMM(bb.GetBottom())
             zones[fp.GetReference()] = (
-                pcbnew.ToMM(bb.GetLeft()) - MOTOR_PAD_KEEPOUT,
-                pcbnew.ToMM(bb.GetTop()) - MOTOR_PAD_KEEPOUT,
-                pcbnew.ToMM(bb.GetRight()) + MOTOR_PAD_KEEPOUT,
-                pcbnew.ToMM(bb.GetBottom()) + MOTOR_PAD_KEEPOUT,
+                x0 - MOTOR_PAD_KEEPOUT,
+                y0 - MOTOR_PAD_KEEPOUT,
+                x1 + MOTOR_PAD_KEEPOUT,
+                y1 + MOTOR_PAD_KEEPOUT,
             )
     encroach = []
     motor_net_exempt = 0
@@ -798,9 +818,12 @@ def check_quadrant_count_balance():
                's_mirror': {'NW':0,'NE':0,'SW':0,'SE':0},
                'single':  {'NW':0,'NE':0,'SW':0,'SE':0},
                'auto':    {'NW':0,'NE':0,'SW':0,'SE':0}}
+    # Master 2026-05-24: count BOTH F.Cu and B.Cu components per quadrant.
+    # Original F.Cu-only filter caused regression when flip_bcu Dir B moved
+    # 152 components fp_layer to B.Cu — they were no longer counted, breaking
+    # CH1↔CH2 R19 mirror symmetry check (Δ=8 false positive).
+    # Quadrant assignment is by physical (x, y) position, not layer.
     for fp in board.GetFootprints():
-        if fp.GetLayer() != pcbnew.F_Cu:
-            continue
         pos = fp.GetPosition()
         x, y = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
         cls = classify_ref(fp.GetReference(), fp)

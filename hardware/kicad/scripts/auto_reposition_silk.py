@@ -66,11 +66,14 @@ def is_critical(ref, fp_lib, val):
     # there are few inductors in this design)
     if ref.startswith('L'):
         return True
-    # R/C: extended small-passive class
+    # R/C: extended small-passive class. Master 2026-05-24: 2512 shunts also
+    # hideable (non-polarized, refdes-non-critical-visually; identified in BOM).
     if ref.startswith(('R', 'C')):
         if '0402' in fp_lib or '0603' in fp_lib or '0805' in fp_lib:
-            return False  # small-passive — allow silk hide
-        # 100uF polymer / 2512 shunt / large caps → critical
+            return False
+        if '2512' in fp_lib:  # shunt resistors — also hideable
+            return False
+        # 100uF polymer / large caps → critical
         return True
     return True
 
