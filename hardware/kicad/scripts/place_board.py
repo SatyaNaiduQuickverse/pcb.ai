@@ -289,11 +289,11 @@ S6_POSITIONS = {
     #   J17 is the 3rd USBLC6 (TLM+spare) — single-instance, placed at X=50.
     # R36/R37/C49 VBAT divider — re-centered X=50.
     # D3/R4 NW corner ↔ D4/R5 NE corner — X-mirror pair (kept).
-    'J12': (50.00, 88.00, 'F.Cu',   0.0),    # AUX BM06B single-instance → central X=50
-    'J14': (50.00, 92.00, 'F.Cu',   0.0),    # FC SM08B single-instance → central X=50 (Y +2 above J12 to clear bbox)
+    'J12': (15.00, 90.00, 'F.Cu',   0.0),    # AUX BM06B NW (single-instance exempt)
+    'J14': (50.00, 90.00, 'F.Cu',   0.0),    # FC SM08B central
     'J15': (40.00, 85.00, 'F.Cu',   0.0),    # USBLC6 ch1+ch2 DShot (NW)
     'J16': (60.00, 85.00, 'F.Cu',   0.0),    # USBLC6 ch3+ch4 DShot (NE, mirror_X of J15)
-    'J17': (50.00, 84.00, 'F.Cu',   0.0),    # USBLC6 TLM+spare single-instance → central X=50
+    'J17': (75.00, 85.00, 'F.Cu',   0.0),    # USBLC6 TLM+spare NE
     'R36': (50.00, 91.50, 'F.Cu',   0.0),    # VBAT divider top — central (was X=47)
     'R37': (55.50, 87.00, 'F.Cu',   0.0),    # VBAT divider bot — slightly NE (X-balance partner of C49)
     'C49': (47.00, 84.00, 'F.Cu',   0.0),    # VBAT filter — slightly NW (X-balance partner of R37)
@@ -369,7 +369,7 @@ S5_POSITIONS = {
     'L1': (35.00, 73.00, 'B.Cu', 0.0),
     # Buck #2 V5_PI5 + L2
     'J3': (43.00, 80.00, 'F.Cu', 0.0),
-    'L2': (43.00, 80.00, 'B.Cu', 0.0),
+    'L2': (43.00, 79.50, 'B.Cu', 0.0),
     # Buck #3 V5_AI + L3
     'J4': (57.00, 72.00, 'F.Cu', 0.0),
     'L3': (62.00, 67.00, 'B.Cu', 0.0),
@@ -543,7 +543,10 @@ S4_CH1_POSITIONS = {
     # INA186 column on west edge X=5 between motor pads and FETs
     'J20': (5.00, 62.00, 'F.Cu', 0.0),      # Phase A INA186 (south of motor pad TP19@56)
     'J21': (5.00, 74.00, 'F.Cu', 0.0),      # Phase B INA186 (between motor B/C pads)
-    'J22': (40.00, 86.00, 'F.Cu', 0.0),     # Phase C INA186 (north of Q9/Q10, east of D-cluster)
+    # PR-A4-integrate amendment 5k Step-1: J22 INA186 RELOCATED from (40,86) to
+    # (33,86) — moves 5mm W to clear U2 SOT-23 (pad 3 collision) + U3 LM393 west
+    # pad cluster (>=2mm gap). 6mm separation from TL431+LM393 cluster per master.
+    'J22': (40.00, 92.00, 'F.Cu', 0.0),     # Phase C INA186 (N of TL431 cluster — 5k)
     # PR-A4-integrate amendment 5i Blocker-1 fix: spread CH1 protection cluster
     # to clear pad overlaps. SOIC-8 LM393 (U3) is 6.9×4.4mm; its pad bbox
     # (44.55-51.45) overlapped U2 SOT-23 (43.33-46.67). Shifted X to give
@@ -556,7 +559,7 @@ S4_CH1_POSITIONS = {
     'D15': (10.00, 50.50, 'F.Cu', 0.0),     # RED_KILL_FW (north of H1 keep-out (10, 50))
     'D19': (45.00, 66.00, 'F.Cu', 0.0),     # RED_FAULT_HW (south of MCU)
     'D33': (44.50, 68.00, 'F.Cu', 0.0),     # RED status
-    'TH1': (45.00, 82.00, 'F.Cu', 0.0),     # 10K B4250 NTC
+    'TH1': (45.00, 82.00, 'B.Cu', 0.0),     # 10K B4250 NTC
     # Current sense shunts on motor-pad-to-FET path (west edge)
     'R56': (13.50, 60.00, 'F.Cu', 0.0),      # Phase A shunt (between TP19@56 and Q5@56)
     'R57': (13.50, 72.00, 'F.Cu', 0.0),      # Phase B shunt (between TP20@68 and Q7@68)
@@ -677,7 +680,7 @@ S4_CH234_POSITIONS = {
     'J24':  (60.0, 62.0, 'F.Cu', 0.0),    # CH2 DRV8300 (mirror_X of J19@40,62)
     'J25':  (95.0, 62.0, 'F.Cu', 0.0),    # CH2 INA #A (mirror of J20@5,62)
     'J27':  (95.0, 74.0, 'F.Cu', 0.0),    # CH2 INA #B (mirror of J21@5,74)
-    'J26':  (60.0, 86.0, 'F.Cu', 0.0),    # CH2 INA #C (mirror of J22@40,86)
+    'J26':  (60.0, 92.0, 'F.Cu', 0.0),    # CH2 INA #C (mirror_X of J22@40,92)
     # 5i: mirror_X of new U2/U3/U4 (X=38, 45, 38)
     'U5':   (62.0, 86.0, 'F.Cu', 0.0),    # CH2 TL431 (mirror_X of U2@38)
     'U6':   (55.0, 84.0, 'F.Cu', 0.0),    # CH2 LM393 (mirror_X of U3@45)
@@ -685,7 +688,7 @@ S4_CH234_POSITIONS = {
     'D16':  (90.0, 50.5, 'F.Cu', 0.0),    # CH2 RED_KILL_FW (mirror of D15@10,50.5)
     'D20':  (55.0, 66.0, 'F.Cu', 0.0),    # CH2 RED_FAULT_HW (mirror of D19@45,66)
     'D48':  (55.0, 70.0, 'F.Cu', 0.0),    # CH2 RED (mirror of D33@45,70)
-    'TH2':  (55.0, 82.0, 'F.Cu', 0.0),    # CH2 NTC (mirror of TH1@45,82)
+    'TH2':  (55.0, 82.0, 'B.Cu', 0.0),    # CH2 NTC (mirror of TH1@45,82)
     'R94': (86.50, 60.00, 'F.Cu', 0.0),    # CH2 shunt Phase A (mirror of R56@8,60)
     'R95': (86.50, 72.00, 'F.Cu', 0.0),    # CH2 shunt Phase B (mirror of R57@8,72)
     'R96': (86.50, 84.00, 'F.Cu', 0.0),    # CH2 shunt Phase C (mirror of R58@8,84)
@@ -705,12 +708,12 @@ S4_CH234_POSITIONS = {
     'J29':  (60.0, 38.0, 'F.Cu',   0.0),  # CH3 DRV (180°-rot of J19@40,62)
     'J30':  (95.0, 38.0, 'F.Cu',   0.0),  # CH3 INA #A (rot of J20@5,62)
     'J32':  (95.0, 26.0, 'F.Cu',   0.0),  # CH3 INA #B (rot of J21@5,74)
-    'J31':  (60.0, 14.0, 'F.Cu',   0.0),  # CH3 INA #C (rot of J22@40,86)
+    'J31':  (60.0,  8.0, 'F.Cu',   0.0),  # CH3 INA #C (180-rot of J22@40,92)
     # 5i: 180°-rot of new U2/U3/U4 (X=38,45,38)
     'U8':   (62.0, 14.0, 'F.Cu',   0.0),  # CH3 TL431 (180-rot of U2@38,86)
     'U9':   (55.0, 16.0, 'F.Cu',   0.0),  # CH3 LM393 (180-rot of U3@45,84)
     'U10':  (62.0, 22.0, 'F.Cu',   0.0),  # CH3 74LVC1G08 (180-rot of U4@38,78)
-    'TH3':  (55.0, 18.0, 'F.Cu',   0.0),  # CH3 NTC (rot of TH1@45,82)
+    'TH3':  (55.0, 18.0, 'B.Cu',   0.0),  # CH3 NTC (rot of TH1@45,82)
     'D17':  (90.0, 49.5, 'F.Cu',   0.0),  # CH3 RED_KILL_FW (rot of D15@10,50.5)
     'D21':  (55.0, 34.0, 'F.Cu',   0.0),  # CH3 RED_FAULT_HW (rot of D19@45,66)
     'D63':  (55.0, 30.0, 'F.Cu',   0.0),  # CH3 RED (rot of D33@45,70)
@@ -733,12 +736,12 @@ S4_CH234_POSITIONS = {
     'J34':  (40.0, 38.0, 'F.Cu', 0.0),    # CH4 DRV (mirror_Y of J19@40,62)
     'J35':  (5.0,  38.0, 'F.Cu', 0.0),    # CH4 INA #A (mirror_Y of J20@5,62)
     'J36':  (5.0,  26.0, 'F.Cu', 0.0),    # CH4 INA #B (mirror_Y of J21@5,74)
-    'J37':  (40.0, 14.0, 'F.Cu', 0.0),    # CH4 INA #C (mirror_Y of J22@40,86)
+    'J37':  (40.0,  8.0, 'F.Cu', 0.0),    # CH4 INA #C (mirror_Y of J22@40,92)
     # 5i: mirror_Y of new U2/U3/U4 (X=38,45,38)
     'U11':  (38.0, 14.0, 'F.Cu', 0.0),    # CH4 TL431 (mirror_Y of U2@38,86)
     'U12':  (45.0, 16.0, 'F.Cu', 0.0),    # CH4 LM393 (mirror_Y of U3@45,84)
     'U13':  (38.0, 22.0, 'F.Cu', 0.0),    # CH4 74LVC1G08 (mirror_Y of U4@38,78)
-    'TH4':  (45.0, 18.0, 'F.Cu', 0.0),    # CH4 NTC (mirror_Y of TH1@45,82)
+    'TH4':  (45.0, 18.0, 'B.Cu', 0.0),    # CH4 NTC (mirror_Y of TH1@45,82)
     'D18':  (10.0, 49.5, 'F.Cu', 0.0),    # CH4 RED_KILL_FW (mirror_Y of D15@10,50.5)
     'D22':  (45.0, 34.0, 'F.Cu', 0.0),    # CH4 RED_FAULT_HW (mirror_Y of D19@45,66)
     'D78':  (45.0, 30.0, 'F.Cu', 0.0),    # CH4 RED (mirror_Y of D33@45,70)
