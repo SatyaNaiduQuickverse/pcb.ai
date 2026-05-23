@@ -187,10 +187,14 @@ def main():
         elif r.startswith('U'):
             # Most ICs: ~3×3mm half-bbox
             keepouts.append((x, y, 3.5, 3.5, layer))
-        elif r == 'J18':  # MCU LQFP-32 ~5×5
+        elif r in ('J18', 'J23', 'J28', 'J33'):  # MCU LQFP-32 ~5×5
             keepouts.append((x, y, 4.0, 4.0, layer))
-        elif r == 'J19':  # DRV8300 HVQFN-24 ~4×4
+        elif r in ('J19', 'J24', 'J29', 'J34'):  # DRV8300 HVQFN-24 ~4×4
             keepouts.append((x, y, 3.0, 3.0, layer))
+        elif r in ('J2', 'J3', 'J4', 'J5', 'J6'):  # Buck ICs ~3×3
+            keepouts.append((x, y, 3.5, 3.5, layer))
+        elif r in ('L1', 'L2', 'L3', 'L4', 'L5'):  # Buck inductors ~4×4
+            keepouts.append((x, y, 4.0, 4.0, layer))
         elif r.startswith('J') and r[1:].isdigit() and int(r[1:]) >= 20:  # INA186 etc.
             keepouts.append((x, y, 2.5, 2.5, layer))
         elif r in ('U1',):  # Hall body
