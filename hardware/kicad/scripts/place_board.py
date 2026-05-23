@@ -295,7 +295,7 @@ S6_POSITIONS = {
     'J16': (60.00, 85.00, 'F.Cu',   0.0),    # USBLC6 ch3+ch4 DShot (NE, mirror_X of J15)
     'J17': (75.00, 85.00, 'F.Cu',   0.0),    # USBLC6 TLM+spare NE
     'R36': (50.00, 91.50, 'F.Cu',   0.0),    # VBAT divider top — central (was X=47)
-    'R37': (55.50, 87.00, 'F.Cu',   0.0),    # VBAT divider bot — slightly NE (X-balance partner of C49)
+    'R37': (55.50, 88.00, 'F.Cu',   0.0),    # VBAT divider bot — slightly NE (X-balance partner of C49)
     'C49': (47.00, 84.00, 'F.Cu',   0.0),    # VBAT filter — slightly NW (X-balance partner of R37)
     # Status LED pairs in §S6 north strip Y=96 — NW/NE X-mirror pair (kept)
     'D3': (15.00, 96.00, 'F.Cu',  0.0),     # GREEN_PWR LED (NW)
@@ -369,7 +369,7 @@ S5_POSITIONS = {
     'L1': (35.00, 73.00, 'B.Cu', 0.0),
     # Buck #2 V5_PI5 + L2
     'J3': (43.00, 80.00, 'F.Cu', 0.0),
-    'L2': (43.00, 79.50, 'B.Cu', 0.0),
+    'L2': (48.00, 84.50, 'B.Cu', 0.0),
     # Buck #3 V5_AI + L3
     'J4': (57.00, 72.00, 'F.Cu', 0.0),
     'L3': (62.00, 67.00, 'B.Cu', 0.0),
@@ -398,7 +398,7 @@ S5_POSITIONS = {
     # ── INPUT-side strip Y=12-19 between S1 components (per master amendment 2026-05-23) ──
     # 4× Schottky D5-D8 — between S1 Q3/Q4 FET columns + east of R2 NTC
     'D5': (49.50, 12.50, 'F.Cu', 0.0),    # V5_FC catch diode SS54
-    'D6': (39.50, 20.00, 'F.Cu', 0.0),    # V5_PI5 catch diode SS54
+    'D6': (40.50, 20.00, 'F.Cu', 0.0),    # V5_PI5 catch diode SS54
     'D7': (85.50, 10.50, 'F.Cu', 0.0),    # V5_AI catch diode
     'D8': (79.50, 18.00, 'F.Cu', 0.0),    # V9_VTX1 catch diode
     # 3× eFuses + 1× polyfuse — input protection per rail
@@ -410,7 +410,7 @@ S5_POSITIONS = {
     # 4× ferrites (LC filter) — PR-A4-integrate amendment 5c: L7 moved from X=50
     # to X=51 for NW/NE balance (X=50 counts as NW per audit; X-mirror partner C8 at X=49).
     'L6': (35.50, 83.00, 'F.Cu', 0.0),    # V5_FC ferrite 600Ω (NW)
-    'L7': (56.00, 88.00, 'F.Cu', 0.0),    # V5_PI5 ferrite — NE side (was X=50)
+    'L7': (56.00, 89.00, 'F.Cu', 0.0),    # V5_PI5 ferrite — NE side (was X=50)
     'L8': (64.50, 83.00, 'F.Cu', 0.0),    # V5_AI ferrite (NE, mirror_X of L6)
     'L9': (81.00, 83.00, 'F.Cu', 0.0),    # V9_VTX1 ferrite
     # 4× C_OUT (22µF post-ferrite) — PR-A4-integrate amendment 5c: split X=49/51
@@ -425,22 +425,21 @@ S5_POSITIONS = {
     'D11': (50.00, 88.00, 'B.Cu', 0.0),    # V5_PI5 TVS — NE side (was X=50)
     'D12': (61.50, 88.50, 'B.Cu', 0.0),    # V5_AI TVS (NE, mirror_X of D10)
     'D13': (82.00, 88.00, 'B.Cu', 0.0),    # V9_VTX1 TVS SMAJ9.0A
-    # ── Buck #5 V9_VTX2 (2A VTX #2, isolated from #1) — SE column (PR-A4-integrate
-    #    amendment 5c: relocated from SW to SE per master Defect-3 X-mirror rule.
-    #    Single-instance V9_VTX2 has no W-side partner; place X-mirror of where SW
-    #    cluster would have been. Maintains isolation from Buck #1/2 east side.
-    #    R19 symmetry: NW/NE bucks 1-4 stay west-east balanced; Buck #5 now SE
-    #    counters SW V9_VTX1 cluster effect from south input/output strips. ──
-    'J6': (88.00, 22.00, 'F.Cu', 0.0),    # buck IC AOZ1284
-    'L5': (86.50, 33.00, 'F.Cu', 0.0),    # 10uH
-    'D9': (88.00, 38.00, 'F.Cu', 0.0),    # SS54
-    'F2': (95.00, 14.00, 'F.Cu', 0.0),    # V9_VTX2 polyfuse (V_IN side)
-    'R14': (86.50, 16.50, 'F.Cu', 0.0),    # FB top 102K
-    'R15': (90.00, 25.50, 'F.Cu', 0.0),    # FB bot 10K
-    'C20': (97.50, 26.00, 'F.Cu', 0.0),    # boot 100nF
-    'L10': (96.00, 38.00, 'F.Cu', 0.0),    # V9_VTX2 ferrite
-    'D14': (77.50, 43.00, 'F.Cu', 0.0),    # V9_VTX2 TVS SMAJ9.0A
-    'C21': (80.50, 46.00, 'F.Cu', 0.0),    # C_OUT 22uF
+    # ── Buck #5 V9_VTX2 (2A VTX #2, isolated from #1) — SW column (PR-A4-integrate
+    #    amendment 5l: REVERTED from SE (5c) to original SW. SE placement collided
+    #    with CH3 channel components (R134/R132/R133 shunts + Q21/Q23 FETs).
+    #    Per master refined gate, single-instance bucket is EXEMPT from quadrant
+    #    balance, so SW asymmetry is acceptable for this functional buck.
+    'J6': (12.00, 22.00, 'F.Cu', 0.0),    # buck IC AOZ1284 — SW
+    'L5': (13.50, 33.00, 'F.Cu', 0.0),    # 10uH
+    'D9': (12.00, 38.00, 'F.Cu', 0.0),    # SS54
+    'F2': (5.00, 14.00, 'F.Cu', 0.0),    # V9_VTX2 polyfuse (V_IN side)
+    'R14': (13.50, 18.00, 'F.Cu', 0.0),    # FB top 102K
+    'R15': (14.50, 22.00, 'F.Cu', 0.0),    # FB bot 10K
+    'C20': (10.00, 26.00, 'F.Cu', 0.0),    # boot 100nF
+    'L10': (4.00, 38.00, 'F.Cu', 0.0),    # V9_VTX2 ferrite
+    'D14': (13.50, 36.00, 'F.Cu', 0.0),    # V9_VTX2 TVS SMAJ9.0A
+    'C21': (13.50, 47.50, 'F.Cu', 0.0),    # C_OUT 22uF
     # ── LDO + Supervisor — PR-A4-integrate amendment 5c: split X=49/X=51 for
     #    NW/NE balance (was both at X=50 → counted as NW per audit quadrant rule).
     #    J13 stays NW(X=49), J10 moves NE(X=51). Functionally equivalent positions.
@@ -567,7 +566,7 @@ S4_CH1_POSITIONS = {
     # ── CH1 passives placed via greedy bbox-aware packing (PR-A3 amendment 2026-05-23) ──
     # 33 placed F.Cu in NW + 23 on B.Cu (different layer from FETs) — total 56
     # F.Cu cluster:
-    'C55': (13.50, 48.00, 'F.Cu', 0.0), 'C58': (21.00, 48.00, 'F.Cu', 0.0),
+    'C55': (12.00, 49.50, 'F.Cu', 0.0), 'C58': (21.00, 48.00, 'F.Cu', 0.0),
     'C59': (26.00, 53.00, 'F.Cu', 0.0), 'C60': (33.00, 52.00, 'F.Cu', 0.0),
     'C70': (38.50, 48.00, 'F.Cu', 0.0), 'C71': (21.00, 50.50, 'F.Cu', 0.0),
     'C72': (26.00, 50.50, 'F.Cu', 0.0), 'C73': (31.00, 50.50, 'F.Cu', 0.0),
