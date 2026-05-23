@@ -49,23 +49,46 @@ def collect_components():
     return items
 
 
-# ----- check 1: off-board -----
+# ----- check 1: off-board (PAD-EXTENT-AWARE per master 2026-05-24 Sai-catch #2 fix) -----
+# Previously used component CENTER which missed C38 case (center 0.17mm, pad extends to -0.56mm).
+# Now uses pad bbox extent — any pad whose bbox exceeds board outline = FAIL.
 def check_off_board(items, bbox):
     if not bbox:
         warns.append("no board outline found; off-board check skipped")
         return
     x_min, y_min, x_max, y_max = bbox
-    m = 2.0
-    off = [r for r, d in items.items()
-           if not (x_min - m <= d["x"] <= x_max + m
-                   and y_min - m <= d["y"] <= y_max + m)]
-    if off:
-        fails.append(f"OFF-BOARD: {len(off)} footprints outside outline+{m}mm")
-        for r in off[:10]:
+    m_center = 2.0     # ≥2mm center inset (for footprint body)
+    m_pad = 0.3        # ≥0.3mm pad-extent inset (fab routing clearance)
+    off_center = []
+    off_pad = []
+    for r, d in items.items():
+        cx, cy = d["x"], d["y"]
+        if not (x_min - m_center <= cx <= x_max + m_center
+                and y_min - m_center <= cy <= y_max + m_center):
+            off_center.append(r)
+            continue  # center off-board is the bigger violation
+        # Pad-extent check
+        for pad in d["fp"].Pads():
+            bb = pad.GetBoundingBox()
+            px0 = pcbnew.ToMM(bb.GetLeft())
+            py0 = pcbnew.ToMM(bb.GetTop())
+            px1 = pcbnew.ToMM(bb.GetRight())
+            py1 = pcbnew.ToMM(bb.GetBottom())
+            if (px0 < x_min + m_pad or py0 < y_min + m_pad
+                    or px1 > x_max - m_pad or py1 > y_max - m_pad):
+                off_pad.append((r, pad.GetPadName(), px0, py0, px1, py1))
+                break
+    if off_center:
+        fails.append(f"OFF-BOARD-CENTER: {len(off_center)} footprints with center outside outline+{m_center}mm")
+        for r in off_center[:10]:
             d = items[r]
             fails.append(f"  {r} at ({d['x']:.2f}, {d['y']:.2f})")
-        if len(off) > 10:
-            fails.append(f"  ... and {len(off) - 10} more")
+        if len(off_center) > 10:
+            fails.append(f"  ... and {len(off_center) - 10} more")
+    if off_pad:
+        fails.append(f"OFF-BOARD-PAD: {len(off_pad)} footprint(s) with pad extending beyond board outline (≤{m_pad}mm clearance)")
+        for r, pn, x0, y0, x1, y1 in off_pad[:10]:
+            fails.append(f"  {r}.pad{pn} bbox ({x0:.2f},{y0:.2f})-({x1:.2f},{y1:.2f}) vs outline ({x_min:.2f},{y_min:.2f})-({x_max:.2f},{y_max:.2f})")
 
 
 # ----- check 2: pad-overlap (same-net vs different-net split) -----
@@ -390,13 +413,11 @@ def check_coincident_placement():
             fails.append(f"  {d:.2f}mm: {r1} <-> {r2} near ({x:.2f},{y:.2f})")
 
 
-# PR #67 Sai-eye catch #4: TP-spacing audit gate (was missing — regressed in Phase 3)
-# Reinstated by PR-TP-and-connector-edge-regression-fix master 2026-05-24.
+# PR #67 Sai-eye catch #4: TP-spacing audit gate (re-added per master 2026-05-24)
 def check_test_point_spacing():
     """Test points (TP*) on the same layer must be ≥4mm center-to-center to
-    allow scope probe access (probe tip ~1.5mm + clip 4-5mm/side). PR #67
-    locked the threshold. Re-added as audit gate to prevent silent regression
-    on fresh kinet2pcb re-imports."""
+    allow scope probe access. PR #67 locked the threshold; re-codified as
+    audit gate per master directive (was lost during edits)."""
     THRESH = 4.0
     tps = []
     for fp in board.GetFootprints():
@@ -414,36 +435,67 @@ def check_test_point_spacing():
             if d < THRESH:
                 bugs.append((d, r1, r2, x1, y1))
     if bugs:
-        fails.append(f"TP-SPACING: {len(bugs)} TP-pair(s) <{THRESH}mm center-to-center on same layer (probe access blocked, Sai-eye catch #4)")
+        fails.append(f"TP-SPACING: {len(bugs)} TP-pair(s) <{THRESH}mm c-to-c on same layer (probe access blocked, Sai catch #4)")
         for d, r1, r2, x, y in bugs[:10]:
             fails.append(f"  {d:.2f}mm: {r1} <-> {r2} near ({x:.2f},{y:.2f})")
 
 
-# PR #67 Sai-eye catch #5: external-connector edge audit gate
+# PR #67 Sai-eye catch #5: external connector edge audit gate
 def check_external_connector_edge():
-    """External cable connectors (J14 FC, J12 AUX) must be ≤5mm from board
-    edge to allow cable bend without component encroachment. Pre-PR-#67
-    they were 12mm from S edge — too far, components encroached cable zone."""
-    EDGE_MAX = 5.0   # mm from S edge
+    """J14 FC + J12 AUX must be ≤5mm from N/S board edge (cable bend zone)."""
+    EDGE_MAX = 5.0
     bb = get_outline_bbox()
     if not bb: return
     _, _, _, y_max = bb
     bugs = []
     for fp in board.GetFootprints():
         r = fp.GetReference()
-        v = fp.GetValue()
         if r in ('J14', 'J12'):
-            # Should be on south (or north — depending on conn orientation) edge
             cy = pcbnew.ToMM(fp.GetPosition().y)
-            d_n = cy
-            d_s = y_max - cy
-            d_edge = min(d_n, d_s)
+            d_edge = min(cy, y_max - cy)
             if d_edge > EDGE_MAX:
-                bugs.append((r, v, cy, d_edge))
+                bugs.append((r, fp.GetValue(), cy, d_edge))
     if bugs:
-        fails.append(f"EXTERNAL-CONNECTOR-EDGE: {len(bugs)} cable connector(s) >{EDGE_MAX}mm from N/S board edge (Sai-eye catch #5)")
+        fails.append(f"EXTERNAL-CONNECTOR-EDGE: {len(bugs)} cable connector(s) >{EDGE_MAX}mm from N/S edge (Sai catch #5)")
         for r, v, cy, d in bugs:
-            fails.append(f"  {r} ({v}) at Y={cy:.1f}, {d:.1f}mm from nearest edge")
+            fails.append(f"  {r} ({v}) Y={cy:.1f}, {d:.1f}mm from edge")
+
+
+# Master 2026-05-24 Sai-class catch #8: fiducial markers for JLC SMT assembly
+def check_fiducials():
+    """≥3 fiducials per side (F.Cu, B.Cu) for JLC SMT machine-vision alignment."""
+    fids_f = []
+    fids_b = []
+    for fp in board.GetFootprints():
+        r = fp.GetReference()
+        v = fp.GetValue() or ''
+        lib_name = str(fp.GetFPID().GetLibItemName() or '')
+        is_fid = r.startswith('FID') or 'Fiducial' in v or 'Fiducial' in lib_name
+        if not is_fid: continue
+        p = fp.GetPosition()
+        x, y = pcbnew.ToMM(p.x), pcbnew.ToMM(p.y)
+        if fp.GetLayer() == pcbnew.F_Cu:
+            fids_f.append((r, x, y))
+        else:
+            fids_b.append((r, x, y))
+    issues = []
+    if len(fids_f) < 3:
+        issues.append(f"F.Cu side has {len(fids_f)} fiducials, need ≥3 (JLC SMT alignment)")
+    if len(fids_b) < 3:
+        issues.append(f"B.Cu side has {len(fids_b)} fiducials, need ≥3 (JLC SMT alignment)")
+    for side_name, fids in [('F.Cu', fids_f), ('B.Cu', fids_b)]:
+        if len(fids) >= 3:
+            max_pair = max(
+                math.hypot(a[1] - b[1], a[2] - b[2])
+                for i, a in enumerate(fids)
+                for b in fids[i + 1:]
+            )
+            if max_pair < 40.0:
+                issues.append(f"{side_name} max fiducial separation {max_pair:.1f}mm < 40mm (triangulation accuracy)")
+    if issues:
+        fails.append(f"FIDUCIALS: {len(issues)} issue(s)")
+        for msg in issues:
+            fails.append(f"  {msg}")
 
 
 def check_motor_pad_clear():
@@ -743,6 +795,7 @@ check_motor_pad_clear()
 check_coincident_placement()
 check_test_point_spacing()
 check_external_connector_edge()
+check_fiducials()
 check_quadrant_count_balance()
 check_per_channel_passive_quadrant()
 
