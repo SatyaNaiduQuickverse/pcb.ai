@@ -241,6 +241,41 @@ def check_decoupling(items):
             fails.append(f"  {r} at ({x:.1f},{y:.1f}) — no C within 3mm")
 
 
+# ----- check 6: mount-hole vs body conflict (PR-spine-fix 2026-05-23) -----
+def check_mount_hole_vs_body(items):
+    """For every mount hole H*, verify no other component's pad bbox intersects
+    the hole's 3mm keep-out radius. Catches the PR-S3 H1/H2-inside-U1-Hall bug."""
+    mount_holes = []
+    for ref, d in items.items():
+        if ref.startswith("H") and len(ref) > 1 and ref[1:].isdigit():
+            mount_holes.append((ref, d["x"], d["y"]))
+    if not mount_holes:
+        return
+    conflicts = []
+    KEEPOUT_R = 3.0  # mm — M3 clearance + 1.5mm trace keepout per industry std
+    for h_ref, h_x, h_y in mount_holes:
+        for ref, d in items.items():
+            if ref == h_ref or ref.startswith("H"):
+                continue
+            for pad in d["fp"].Pads():
+                bb = pad.GetBoundingBox()
+                px1 = pcbnew.ToMM(bb.GetLeft())
+                py1 = pcbnew.ToMM(bb.GetTop())
+                px2 = pcbnew.ToMM(bb.GetRight())
+                py2 = pcbnew.ToMM(bb.GetBottom())
+                # Closest point of pad bbox to hole center
+                cx = max(px1, min(h_x, px2))
+                cy = max(py1, min(h_y, py2))
+                d_min = math.hypot(h_x - cx, h_y - cy)
+                if d_min < KEEPOUT_R:
+                    conflicts.append((h_ref, ref, d_min))
+                    break  # only flag once per component
+    if conflicts:
+        fails.append(f"MOUNT-HOLE-CONFLICT: {len(conflicts)} component(s) inside mount-hole {KEEPOUT_R}mm keep-out")
+        for h, r, d_min in conflicts[:10]:
+            fails.append(f"  {h} keep-out hit by {r} (closest pad {d_min:.2f}mm)")
+
+
 # ----- run -----
 items = collect_components()
 bbox = get_outline_bbox()
@@ -249,6 +284,7 @@ check_pad_overlap(items)
 check_symmetry(items)
 check_passive_anchoring(items)
 check_decoupling(items)
+check_mount_hole_vs_body(items)
 
 print(f"=== Layout compliance audit: {os.path.basename(sys.argv[1])} ===")
 print(f"Components: {len(items)}")

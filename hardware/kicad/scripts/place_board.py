@@ -186,18 +186,14 @@ S3_POSITIONS = {
     # at (52.96, 22.97) extends north. Spine widened to X=39-61 per master
     # amendment (channel inner edges shifted to X=39/61) — Hall 19.65mm fits.
     'U1':  (50.0, 45.0, 'F.Cu', 0.0),
-    # PR-S3 2026-05-23: Master dispatch directed J11 → (50, 38). Discovered H1/H2
-    # mount holes at (44.6, 37.5)/(51.8, 37.5) (pre-existing master-baseline bug —
-    # mount holes inside Hall body footprint!) make Y=34.5-40.5 strip unavailable
-    # for J11 + dividers. Spec deviation: REVERT J11/R19/R20/C41/R21 to master
-    # baseline positions (Y=53-59) until H1/H2 mount holes are properly relocated
-    # in a future PR (separate scope from PR-S3). Sai/master to adjudicate
-    # mount-hole correction.
-    'J11': (50.0, 55.0, 'F.Cu', 0.0),    # TPS3700 supervisor (master-baseline position)
-    'R19': (45.0, 53.0, 'F.Cu', 0.0),    # 348K OVP/UVP divider top — 3mm SW of J11
-    'R20': (55.0, 53.0, 'F.Cu', 0.0),    # 23K2 OVP/UVP divider bot — 3mm SE of J11 (mirror)
-    'C41': (50.0, 59.0, 'F.Cu', 0.0),    # 100nF inrush-delay cap — 4mm S of J11
-    'R21': (45.0, 57.0, 'F.Cu', 0.0),    # 10K PG_VMOTOR pullup — within 3mm of J11
+    # PR-spine-fix 2026-05-23: H1/H2 mount holes RELOCATED to (10, 50)/(90, 50)
+    # flanks (was inside Hall body). J11 now placed at master-dispatched (50, 38)
+    # central-spine position. R19/R20/C41/R21 anchored 3-5mm per R23.
+    'J11': (50.0, 38.0, 'F.Cu', 0.0),    # TPS3700 supervisor — central spine
+    'R19': (47.0, 36.0, 'F.Cu', 0.0),    # 348K OVP/UVP divider top — 3mm NW of J11
+    'R20': (53.0, 36.0, 'F.Cu', 0.0),    # 23K2 OVP/UVP divider bot — 3mm NE (mirror)
+    'C41': (50.0, 40.0, 'F.Cu', 0.0),    # 100nF inrush-delay cap — 2mm S of J11
+    'R21': (53.0, 40.0, 'F.Cu', 0.0),    # 10K PG_VMOTOR pullup — 3mm SE of J11
     # Hall VCC bridge + bypass — east of Hall pad 2/3 signal pads at y=45
     # Pad 2 V_CC @ (51.91, 45), pad 3 GND @ (53.82, 45). Decouplers immediately east.
     'R30': (54.0, 47.5, 'F.Cu', 0.0),    # 0Ω V5 → HALL_VCC bridge
@@ -284,10 +280,10 @@ S6_POSITIONS = {
     'C49': (45.0, 84.0, 'F.Cu',   0.0),    # VBAT filter 100nF
     # Status LED pairs in §S6 north strip Y=96 — clear zone (only TP16/TP7 at Y=95
     # from PR-S1, no overlap). D3+R4 at NW (X=5/8), D4+R5 at NE (X=95/92) mirror.
-    'D3':  (5.0, 96.0, 'F.Cu',  0.0),     # GREEN_PWR LED (NW)
-    'R4':  (8.0, 96.0, 'F.Cu',  0.0),     # D3 limit-R (3mm pair pitch)
-    'D4':  (95.0, 96.0, 'F.Cu',  0.0),    # RED_RPOL LED (NE mirror_X)
-    'R5':  (92.0, 96.0, 'F.Cu',  0.0),    # D4 limit-R (mirror)
+    'D3':  (15.0, 96.0, 'F.Cu',  0.0),     # GREEN_PWR LED (NW)
+    'R4':  (18.0, 96.0, 'F.Cu',  0.0),     # D3 limit-R (3mm pair pitch)
+    'D4':  (85.0, 96.0, 'F.Cu',  0.0),    # RED_RPOL LED (NE mirror_X)
+    'R5':  (82.0, 96.0, 'F.Cu',  0.0),    # D4 limit-R (mirror)
 }
 S6_EXPECTED_VALUES = {
     'J12': 'BM06B',
@@ -675,6 +671,10 @@ def place_auto_anchored(fps_by_ref, placements):
     placed = 0
     for ref, pos in CH234_PASSIVES.items():
         if ref in placements:
+            continue
+        # PR-spine-fix 2026-05-23: skip mount holes (H*) — owned by setup_board.py
+        # to avoid auto-anchor regression to legacy (44.6, 37.5) positions.
+        if ref.startswith('H') and len(ref) > 1 and ref[1:].isdigit():
             continue
         fp = fps_by_ref.get(ref)
         if not fp:
