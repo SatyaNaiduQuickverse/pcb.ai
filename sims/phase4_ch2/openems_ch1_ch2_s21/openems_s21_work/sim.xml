@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<ContinuousStructure CoordSystem="0">
+    <RectilinearGrid DeltaUnit="0.001" CoordSystem="0">
+        <XLines Qty="51">-50,-48,-46,-44,-42,-40,-38,-36,-34,-32,-30,-28,-26,-24,-22,-20,-18,-16,-14,-12,-10,-8,-6,-4,-2,0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50</XLines>
+        <YLines Qty="23">-50,-45,-40,-38.1,-38,-37.9,-37.7,-35,-30,-20,-10,0,10,20,30,35,37.7,37.9,38,38.1,40,45,50</YLines>
+        <ZLines Qty="16">-1.6,-1,-0.5,-0.3,-0.2,-0.15,-0.1,-0.05,0,0.025,0.05,0.2,0.5,1,2,5</ZLines>
+    </RectilinearGrid>
+    <BackgroundMaterial Epsilon="1" Mue="1" Kappa="0" Sigma="0" />
+    <ParameterSet />
+    <Properties>
+        <Material ID="0" Name="FR4" Isotropy="1">
+            <FillColor R="103" G="198" B="105" a="123" />
+            <EdgeColor R="103" G="198" B="105" a="123" />
+            <Primitives>
+                <Box Priority="1">
+                    <P1 X="-5.000000e+01" Y="-5.000000e+01" Z="-1.600000e+00" />
+                    <P2 X="5.000000e+01" Y="5.000000e+01" Z="0.000000e+00" />
+                </Box>
+            </Primitives>
+            <Property Epsilon="4.400000e+00,1.000000e+00,1.000000e+00" Mue="1.000000e+00,1.000000e+00,1.000000e+00" Kappa="5.000000e-03,0.000000e+00,0.000000e+00" Sigma="0.000000e+00,0.000000e+00,0.000000e+00" Density="0.000000e+00" />
+            <Weight Epsilon="1.000000e+00,1.000000e+00,1.000000e+00" Mue="1.000000e+00,1.000000e+00,1.000000e+00" Kappa="1.000000e+00,1.000000e+00,1.000000e+00" Sigma="1.000000e+00,1.000000e+00,1.000000e+00" Density="1.000000e+00" />
+        </Material>
+        <Metal ID="1" Name="PEC">
+            <FillColor R="115" G="81" B="255" a="255" />
+            <EdgeColor R="115" G="81" B="255" a="255" />
+            <Primitives>
+                <Box Priority="10">
+                    <P1 X="-5.000000e+01" Y="-5.000000e+01" Z="-2.000000e-01" />
+                    <P2 X="5.000000e+01" Y="5.000000e+01" Z="-1.500000e-01" />
+                </Box>
+                <Box Priority="10">
+                    <P1 X="-3.800000e+01" Y="-1.000000e-01" Z="0.000000e+00" />
+                    <P2 X="1.200000e+01" Y="1.000000e-01" Z="5.000000e-02" />
+                </Box>
+                <Box Priority="11">
+                    <P1 X="-2.500000e+01" Y="-3.800000e+01" Z="0.000000e+00" />
+                    <P2 X="2.500000e+01" Y="-3.780000e+01" Z="5.000000e-02" />
+                </Box>
+                <Box Priority="11">
+                    <P1 X="-2.500000e+01" Y="3.780000e+01" Z="0.000000e+00" />
+                    <P2 X="2.500000e+01" Y="3.800000e+01" Z="5.000000e-02" />
+                </Box>
+            </Primitives>
+        </Metal>
+        <LumpedElement ID="2" Name="port_resist_1" Direction="2" Caps="1" R="5.000000e+01" LEtype="0.000000e+00">
+            <FillColor R="74" G="236" B="41" a="255" />
+            <EdgeColor R="74" G="236" B="41" a="255" />
+            <Primitives>
+                <Box Priority="0">
+                    <P1 X="-2.500000e+01" Y="-3.800000e+01" Z="-2.000000e-01" />
+                    <P2 X="-2.500000e+01" Y="-3.780000e+01" Z="0.000000e+00" />
+                </Box>
+            </Primitives>
+        </LumpedElement>
+        <Excitation ID="3" Name="port_excite_1" Number="0" Enabled="1" Frequency="0.000000e+00" Delay="0.000000e+00" Type="0" Excite="0.000000e+00,0.000000e+00,-1.000000e+00" PropDir="0.000000e+00,0.000000e+00,0.000000e+00">
+            <FillColor R="205" G="186" B="171" a="255" />
+            <EdgeColor R="205" G="186" B="171" a="255" />
+            <Primitives>
+                <Box Priority="0">
+                    <P1 X="-2.500000e+01" Y="-3.800000e+01" Z="-2.000000e-01" />
+                    <P2 X="-2.500000e+01" Y="-3.780000e+01" Z="0.000000e+00" />
+                </Box>
+            </Primitives>
+            <Weight X="1.000000e+00" Y="1.000000e+00" Z="1.000000e+00" />
+        </Excitation>
+        <ProbeBox ID="4" Name="port_ut_1" Visible="0" Number="0" Type="0" Weight="-1" NormDir="-1" StartTime="0" StopTime="0">
+            <FillColor R="242" G="251" B="227" a="255" />
+            <EdgeColor R="242" G="251" B="227" a="255" />
+            <Primitives>
+                <Box Priority="0">
+                    <P1 X="-2.500000e+01" Y="-3.790000e+01" Z="-2.000000e-01" />
+                    <P2 X="-2.500000e+01" Y="-3.790000e+01" Z="0.000000e+00" />
+                </Box>
+            </Primitives>
+        </ProbeBox>
+        <ProbeBox ID="5" Name="port_it_1" Visible="0" Number="0" Type="1" Weight="1" NormDir="2" StartTime="0" StopTime="0">
+            <FillColor R="70" G="124" B="194" a="255" />
+            <EdgeColor R="70" G="124" B="194" a="255" />
+            <Primitives>
+                <Box Priority="0">
+                    <P1 X="-2.500000e+01" Y="-3.800000e+01" Z="-1.000000e-01" />
+                    <P2 X="-2.500000e+01" Y="-3.780000e+01" Z="-1.000000e-01" />
+                </Box>
+            </Primitives>
+        </ProbeBox>
+        <LumpedElement ID="6" Name="port_resist_2" Direction="2" Caps="1" R="5.000000e+01" LEtype="0.000000e+00">
+            <FillColor R="84" G="248" B="27" a="255" />
+            <EdgeColor R="84" G="248" B="27" a="255" />
+            <Primitives>
+                <Box Priority="0">
+                    <P1 X="-2.500000e+01" Y="3.780000e+01" Z="-2.000000e-01" />
+                    <P2 X="-2.500000e+01" Y="3.800000e+01" Z="0.000000e+00" />
+                </Box>
+            </Primitives>
+        </LumpedElement>
+        <ProbeBox ID="7" Name="port_ut_2" Visible="0" Number="0" Type="0" Weight="-1" NormDir="-1" StartTime="0" StopTime="0">
+            <FillColor R="232" G="231" B="141" a="255" />
+            <EdgeColor R="232" G="231" B="141" a="255" />
+            <Primitives>
+                <Box Priority="0">
+                    <P1 X="-2.500000e+01" Y="3.790000e+01" Z="-2.000000e-01" />
+                    <P2 X="-2.500000e+01" Y="3.790000e+01" Z="0.000000e+00" />
+                </Box>
+            </Primitives>
+        </ProbeBox>
+        <ProbeBox ID="8" Name="port_it_2" Visible="0" Number="0" Type="1" Weight="1" NormDir="2" StartTime="0" StopTime="0">
+            <FillColor R="118" G="90" B="46" a="255" />
+            <EdgeColor R="118" G="90" B="46" a="255" />
+            <Primitives>
+                <Box Priority="0">
+                    <P1 X="-2.500000e+01" Y="3.780000e+01" Z="-1.000000e-01" />
+                    <P2 X="-2.500000e+01" Y="3.800000e+01" Z="-1.000000e-01" />
+                </Box>
+            </Primitives>
+        </ProbeBox>
+    </Properties>
+</ContinuousStructure>

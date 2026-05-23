@@ -505,7 +505,7 @@ S4_CH1_POSITIONS = {
     # for new FET row Y=56/68/80. Gate driver ≤10mm from FET cluster center
     # per industry-standard practice (≤10mm gate driver-to-FET).
     # CH1 MCU at (45, 62) — between FET rows 56/68, just east of FET X-cluster (X<38)
-    'J18': (45.0, 62.0, 'F.Cu', 0.0),     # AT32F421 MCU LQFP-32 (≤8mm from Q5/Q6/Q7/Q8)
+    'J18': (43.0, 62.0, 'F.Cu', 0.0),     # AT32F421 MCU LQFP-32 (PR-CH2: shifted X=45→43 to give CH2 J23 mirror @ X=57 a 2mm gap from spine X=50)
     'J19': (45.0, 74.0, 'F.Cu', 0.0),     # DRV8300 gate driver (≤7mm from all 6 FETs)
     # INA186 column on west edge X=5 between motor pads and FETs
     'J20': (5.0, 62.0, 'F.Cu', 0.0),      # Phase A INA186 (south of motor pad TP19@56)
@@ -624,15 +624,32 @@ def place_channel_ch1(fps_by_ref, placements):
 # ────────────────────────────────────────────────────────────────────
 S4_CH234_POSITIONS = {
     # CH2 NE (mirror x → 100-x)
-    'TP26': (95.0, 54.0, 'F.Cu', 180.0),  # motor A
-    'TP27': (95.0, 66.0, 'F.Cu', 180.0),  # motor B
-    'TP28': (95.0, 78.0, 'F.Cu', 180.0),  # motor C
-    'Q11':  (88.0, 54.0, 'B.Cu', 180.0),  # Phase A hi
-    'Q12':  (70.0, 54.0, 'B.Cu', 180.0),  # Phase A lo
-    'Q13':  (88.0, 66.0, 'B.Cu', 180.0),  # Phase B hi
-    'Q14':  (70.0, 66.0, 'B.Cu', 180.0),  # Phase B lo
-    'Q15':  (88.0, 78.0, 'B.Cu', 180.0),  # Phase C hi
-    'Q16':  (70.0, 78.0, 'B.Cu', 180.0),  # Phase C lo
+    # PR-CH2 2026-05-23: CH2 = mirror_X(50) of CH1. Q11-Q16 at Y=56/68/80 per CH1.
+    'TP26': (95.0, 56.0, 'F.Cu', 180.0),  # motor A (mirror of TP19@5,56)
+    'TP27': (95.0, 68.0, 'F.Cu', 180.0),  # motor B
+    'TP28': (95.0, 80.0, 'F.Cu', 180.0),  # motor C
+    'Q11':  (88.0, 56.0, 'B.Cu', 180.0),  # Phase A hi (mirror of Q5@12,56)
+    'Q12':  (70.0, 56.0, 'B.Cu', 180.0),  # Phase A lo (mirror of Q6@30,56)
+    'Q13':  (88.0, 68.0, 'B.Cu', 180.0),  # Phase B hi
+    'Q14':  (70.0, 68.0, 'B.Cu', 180.0),  # Phase B lo
+    'Q15':  (88.0, 80.0, 'B.Cu', 180.0),  # Phase C hi
+    'Q16':  (70.0, 80.0, 'B.Cu', 180.0),  # Phase C lo
+    # PR-CH2 2026-05-23: CH2 ICs/shunts/LEDs/protection → mirror_X(50) of CH1
+    'J23':  (57.0, 62.0, 'F.Cu', 0.0),    # CH2 MCU AT32F421 (mirror of J18@43,62)
+    'J24':  (55.0, 74.0, 'F.Cu', 0.0),    # CH2 DRV8300 (mirror of J19@45,74)
+    'J25':  (95.0, 62.0, 'F.Cu', 0.0),    # CH2 INA #A (mirror of J20@5,62)
+    'J27':  (95.0, 74.0, 'F.Cu', 0.0),    # CH2 INA #B (mirror of J21@5,74)
+    'J26':  (60.0, 86.0, 'F.Cu', 0.0),    # CH2 INA #C (mirror of J22@40,86)
+    'U5':   (55.0, 86.0, 'F.Cu', 0.0),    # CH2 TL431 (mirror of U2@45,86)
+    'U6':   (52.0, 84.0, 'F.Cu', 0.0),    # CH2 LM393 (mirror of U3@48,84)
+    'U7':   (55.0, 78.0, 'F.Cu', 0.0),    # CH2 74LVC1G08 (mirror of U4@45,78)
+    'D16':  (90.0, 50.5, 'F.Cu', 0.0),    # CH2 RED_KILL_FW (mirror of D15@10,50.5)
+    'D20':  (55.0, 66.0, 'F.Cu', 0.0),    # CH2 RED_FAULT_HW (mirror of D19@45,66)
+    'D48':  (55.0, 70.0, 'F.Cu', 0.0),    # CH2 RED (mirror of D33@45,70)
+    'TH2':  (55.0, 82.0, 'F.Cu', 0.0),    # CH2 NTC (mirror of TH1@45,82)
+    'R94':  (92.0, 60.0, 'F.Cu', 0.0),    # CH2 shunt Phase A (mirror of R56@8,60)
+    'R95':  (92.0, 72.0, 'F.Cu', 0.0),    # CH2 shunt Phase B (mirror of R57@8,72)
+    'R96':  (92.0, 84.0, 'F.Cu', 0.0),    # CH2 shunt Phase C (mirror of R58@8,84)
     # CH3 SE (mirror both axes)
     'TP33': (95.0, 41.0, 'F.Cu',   0.0),  # mirror y=54 → 41
     'TP34': (95.0, 29.0, 'F.Cu',   0.0),  # mirror y=66 → 29
