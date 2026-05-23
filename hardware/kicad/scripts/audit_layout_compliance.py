@@ -273,20 +273,33 @@ def check_passive_anchoring(items):
 
 # ----- check 5: decoupling caps -----
 def check_decoupling(items):
-    ics = [(ref, d["x"], d["y"]) for ref, d in items.items()
+    """R25 enforcement: every IC must have a decoupling cap within 3mm AND on
+    the SAME copper layer. Opposite-side via adds ~0.5nH inductance, defeats
+    decoupling above ~50MHz. Master 2026-05-24 extension."""
+    ics = [(ref, d["x"], d["y"], d["side"]) for ref, d in items.items()
            if ref.startswith("U") and ref[1:].isdigit()]
-    caps = [(ref, d["x"], d["y"]) for ref, d in items.items()
+    caps = [(ref, d["x"], d["y"], d["side"]) for ref, d in items.items()
             if ref.startswith("C") and ref[1:].isdigit()]
-    bad = []
-    for ref, x, y in ics:
-        nearby_cap = [c for c in caps
+    no_cap = []
+    wrong_side = []
+    for ref, x, y, side in ics:
+        nearby_any = [c for c in caps
                       if math.hypot(c[1] - x, c[2] - y) <= 3.0]
-        if not nearby_cap:
-            bad.append((ref, x, y))
-    if bad:
-        fails.append(f"DECOUPLING: {len(bad)} ICs have no cap within 3mm")
-        for r, x, y in bad[:10]:
+        if not nearby_any:
+            no_cap.append((ref, x, y))
+            continue
+        # R25 same-side check: at least one cap within 3mm must be on same side
+        same_side_caps = [c for c in nearby_any if c[3] == side]
+        if not same_side_caps:
+            wrong_side.append((ref, x, y, side, nearby_any[0][0], nearby_any[0][3]))
+    if no_cap:
+        fails.append(f"DECOUPLING: {len(no_cap)} ICs have no cap within 3mm")
+        for r, x, y in no_cap[:10]:
             fails.append(f"  {r} at ({x:.1f},{y:.1f}) — no C within 3mm")
+    if wrong_side:
+        fails.append(f"DECOUPLING-R25-SAME-SIDE: {len(wrong_side)} ICs have decoupling cap on OPPOSITE side (R25 violation)")
+        for r, x, y, side, c_ref, c_side in wrong_side[:10]:
+            fails.append(f"  {r} on {side}.Cu at ({x:.1f},{y:.1f}) — nearest cap {c_ref} on {c_side}.Cu (opposite side)")
 
 
 # ----- check 6: mount-hole vs body conflict (PR-spine-fix 2026-05-23) -----
@@ -413,6 +426,38 @@ def check_coincident_placement():
             fails.append(f"  {d:.2f}mm: {r1} <-> {r2} near ({x:.2f},{y:.2f})")
 
 
+# Master 2026-05-24 Gap #5: detect fp_layer vs pad_layer mismatch (trap class from
+# [[feedback-flip-bcu-footprints-recurrence]] — text-edit (layer F→B) without flipping pads).
+# In PR #71 this trap masked 162 footprints with fp_layer=B.Cu but pad_layer=F.Cu,
+# inflating audit PAD-OVERLAP count from 9 to 245.
+def check_fp_layer_mismatch():
+    """Footprint declared layer vs actual pad copper layer must agree. If
+    fp.GetLayer() reports B.Cu but pads are on F.Cu (or vice versa), Freerouting
+    + audit will treat them inconsistently. Skip pads with no copper layer
+    (PDFN-8 courtyard/no-net unnamed pads etc.)."""
+    bugs = []
+    for fp in board.GetFootprints():
+        fp_layer = fp.GetLayer()
+        for pad in fp.Pads():
+            if pad.GetAttribute() in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH):
+                continue  # THT pads span both layers
+            ls = pad.GetLayerSet()
+            pad_F = ls.Contains(pcbnew.F_Cu)
+            pad_B = ls.Contains(pcbnew.B_Cu)
+            if not (pad_F or pad_B):
+                continue  # no copper layer — courtyard artifact, skip
+            if fp_layer == pcbnew.F_Cu and pad_B and not pad_F:
+                bugs.append((fp.GetReference(), 'fp=F.Cu pad=B-only'))
+                break
+            if fp_layer == pcbnew.B_Cu and pad_F and not pad_B:
+                bugs.append((fp.GetReference(), 'fp=B.Cu pad=F-only'))
+                break
+    if bugs:
+        fails.append(f"FP-LAYER-MISMATCH: {len(bugs)} footprint(s) with fp.GetLayer() ≠ pad copper layer (text-edit-without-flip trap, run flip_bcu_footprints.py)")
+        for r, why in bugs[:15]:
+            fails.append(f"  {r}: {why}")
+
+
 # PR #67 Sai-eye catch #4: TP-spacing audit gate (re-added per master 2026-05-24)
 def check_test_point_spacing():
     """Test points (TP*) on the same layer must be ≥4mm center-to-center to
@@ -459,6 +504,91 @@ def check_external_connector_edge():
         fails.append(f"EXTERNAL-CONNECTOR-EDGE: {len(bugs)} cable connector(s) >{EDGE_MAX}mm from N/S edge (Sai catch #5)")
         for r, v, cy, d in bugs:
             fails.append(f"  {r} ({v}) Y={cy:.1f}, {d:.1f}mm from edge")
+
+
+# Master 2026-05-24 Gap #3 (Sai catch #9): label-overlap
+# Silkscreen refdes/value text overlapping adjacent component bbox.
+# Catches Findings 3+4 from Sai 2026-05-24 hand-check (R102/R140/R144 cluster
+# and C38/C39/C46/C47 cluster — components at 1.5-2.5mm spacing with piled labels).
+def check_label_overlap():
+    """Silkscreen refdes TEXT bbox overlaps another component's BODY bbox on
+    the same side. Uses real fp.Reference() PCB_FIELD bbox (not estimated).
+    Only counts visible refdes texts. Fail when text bbox lies fully within
+    another component's body bbox (aesthetic piling — typically caused by
+    density >2.5mm placement). Detection-only; manual fix via refdes
+    reposition."""
+    items = []
+    for fp in board.GetFootprints():
+        if fp.GetReference().startswith('H'): continue
+        bb = fp.GetBoundingBox()
+        items.append({
+            'ref': fp.GetReference(),
+            'fp': fp,
+            'side': 'F' if fp.GetLayer() == pcbnew.F_Cu else 'B',
+            'body': (pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetTop()),
+                     pcbnew.ToMM(bb.GetRight()), pcbnew.ToMM(bb.GetBottom())),
+        })
+    bugs = []
+    for it in items:
+        rf = it['fp'].Reference()
+        if not rf.IsVisible(): continue
+        tb = rf.GetBoundingBox()
+        tx0, ty0 = pcbnew.ToMM(tb.GetLeft()), pcbnew.ToMM(tb.GetTop())
+        tx1, ty1 = pcbnew.ToMM(tb.GetRight()), pcbnew.ToMM(tb.GetBottom())
+        # Look for another component on same side whose body FULLY contains the
+        # text bbox (means text is INSIDE another component — definite issue)
+        for ot in items:
+            if ot['ref'] == it['ref'] or ot['side'] != it['side']: continue
+            bx0, by0, bx1, by1 = ot['body']
+            # Full-containment check (text bbox inside body bbox, with 0.1mm tolerance)
+            if (bx0 - 0.1 <= tx0 and tx1 <= bx1 + 0.1
+                    and by0 - 0.1 <= ty0 and ty1 <= by1 + 0.1):
+                bugs.append((it['ref'], ot['ref']))
+                break
+    if bugs:
+        fails.append(f"LABEL-OVERLAP: {len(bugs)} refdes silk text inside another component's body bbox (Sai catch #9)")
+        for r, body_ref in bugs[:10]:
+            fails.append(f"  {r} silk inside {body_ref}")
+
+
+# Master 2026-05-24 Gap #4 (Sai catch #10): silk-on-pad
+# Silkscreen text overlapping copper pad → solder joint defect (silk ink on pad).
+def check_silk_on_pad():
+    """Real fp.Reference() text bbox intersects another component's PAD bbox
+    on the same copper side. DFM critical — silk ink on solder pad creates
+    bad joint. Uses pcbnew GetBoundingBox() for the text PCB_FIELD."""
+    pads_by_layer = {'F': [], 'B': []}
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            bb = pad.GetBoundingBox()
+            ls = pad.GetLayerSet()
+            entry = {'ref': fp.GetReference(), 'pad': pad.GetPadName(),
+                     'box': (pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetTop()),
+                             pcbnew.ToMM(bb.GetRight()), pcbnew.ToMM(bb.GetBottom()))}
+            if ls.Contains(pcbnew.F_Cu): pads_by_layer['F'].append(entry)
+            if ls.Contains(pcbnew.B_Cu): pads_by_layer['B'].append(entry)
+    bugs = []
+    CLR = 0.05
+    for fp in board.GetFootprints():
+        ref = fp.GetReference()
+        if ref.startswith('H'): continue
+        rf = fp.Reference()
+        if not rf.IsVisible(): continue
+        tb = rf.GetBoundingBox()
+        tx0, ty0 = pcbnew.ToMM(tb.GetLeft()), pcbnew.ToMM(tb.GetTop())
+        tx1, ty1 = pcbnew.ToMM(tb.GetRight()), pcbnew.ToMM(tb.GetBottom())
+        side = 'F' if fp.GetLayer() == pcbnew.F_Cu else 'B'
+        for p in pads_by_layer[side]:
+            if p['ref'] == ref: continue
+            px0, py0, px1, py1 = p['box']
+            px0 -= CLR; py0 -= CLR; px1 += CLR; py1 += CLR
+            if tx0 < px1 and tx1 > px0 and ty0 < py1 and ty1 > py0:
+                bugs.append((ref, p['ref'], p['pad']))
+                break
+    if bugs:
+        fails.append(f"SILK-ON-PAD: {len(bugs)} refdes silk text on copper pad (Sai catch #10, DFM critical)")
+        for r, p_ref, p_num in bugs[:10]:
+            fails.append(f"  {r} silk on {p_ref}.pad{p_num}")
 
 
 # Master 2026-05-24 Sai-class catch #8: fiducial markers for JLC SMT assembly
@@ -793,9 +923,12 @@ check_mount_hole_vs_body(items)
 check_pad_in_body_bbox()
 check_motor_pad_clear()
 check_coincident_placement()
+check_fp_layer_mismatch()
 check_test_point_spacing()
 check_external_connector_edge()
 check_fiducials()
+check_label_overlap()
+check_silk_on_pad()
 check_quadrant_count_balance()
 check_per_channel_passive_quadrant()
 
