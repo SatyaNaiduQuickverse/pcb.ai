@@ -33,8 +33,11 @@ NET_FILE = Path("hardware/kicad/pcbai_fpv4in1.net")
 PCB_FILE = "hardware/kicad/pcbai_fpv4in1.kicad_pcb"
 
 # Symbolic-pin → list of physical pad numbers
+# PDFN-8 BSC014N06NS: G→4, S→1/2/3, D→5/6/7/8, EP(pad 9)→connected to SOURCE
+# per datasheet (EP pad is the drain heatsink for some parts, source for others;
+# BSC014N06NS datasheet says EP=SOURCE since it's flat-bottom SuperSO8).
 PIN_MAP_TO263 = {"G": ["1"], "D": ["2"], "S": ["3"]}
-PIN_MAP_PDFN8 = {"G": ["4"], "S": ["1", "2", "3"], "D": ["5", "6", "7", "8"]}
+PIN_MAP_PDFN8 = {"G": ["4"], "S": ["1", "2", "3", "9"], "D": ["5", "6", "7", "8"]}
 
 
 def parse_netlist():

@@ -131,7 +131,7 @@ S2_POSITIONS = {
     # PR-S2 2026-05-23: 2×2 mirror grid about (50, 36) per master locked spec.
     # C1 was (22, 28), C2 was (85, 28) — not X-symmetric. Fixed to (25, 28)/(75, 28).
     'C1': (32.50, 28.00, 'F.Cu', 0.0),
-    'C2': (75.00, 28.00, 'F.Cu', 0.0),
+    'C2': (75.00, 31.00, 'F.Cu', 0.0),
     'C3': (26.00, 44.00, 'F.Cu', 0.0),
     'C4': (71.50, 40.50, 'F.Cu', 0.0),
 }
@@ -291,8 +291,8 @@ S6_POSITIONS = {
     # D3/R4 NW corner ↔ D4/R5 NE corner — X-mirror pair (kept).
     'J12': (15.00, 90.00, 'F.Cu',   0.0),    # AUX BM06B NW (single-instance exempt)
     'J14': (50.00, 90.00, 'F.Cu',   0.0),    # FC SM08B central
-    'J15': (40.00, 85.00, 'F.Cu',   0.0),    # USBLC6 ch1+ch2 DShot (NW)
-    'J16': (60.00, 85.00, 'F.Cu',   0.0),    # USBLC6 ch3+ch4 DShot (NE, mirror_X of J15)
+    'J15': (40.00, 85.00, 'B.Cu',   0.0),    # USBLC6 ch1+ch2 DShot — B.Cu (clear F.Cu U2 cluster)
+    'J16': (60.00, 85.00, 'B.Cu',   0.0),    # USBLC6 ch3+ch4 DShot — B.Cu (clear F.Cu U5 cluster)
     'J17': (75.00, 85.00, 'F.Cu',   0.0),    # USBLC6 TLM+spare NE
     'R36': (50.00, 91.50, 'F.Cu',   0.0),    # VBAT divider top — central (was X=47)
     'R37': (55.50, 88.00, 'F.Cu',   0.0),    # VBAT divider bot — slightly NE (X-balance partner of C49)
@@ -435,8 +435,8 @@ S5_POSITIONS = {
     'D9': (12.00, 38.00, 'F.Cu', 0.0),    # SS54
     'F2': (5.00, 14.00, 'F.Cu', 0.0),    # V9_VTX2 polyfuse (V_IN side)
     'R14': (13.50, 18.00, 'F.Cu', 0.0),    # FB top 102K
-    'R15': (14.50, 22.00, 'F.Cu', 0.0),    # FB bot 10K
-    'C20': (10.00, 26.00, 'F.Cu', 0.0),    # boot 100nF
+    'R15': (15.00, 22.00, 'F.Cu', 0.0),    # FB bot 10K
+    'C20': (12.50, 26.00, 'F.Cu', 0.0),    # boot 100nF
     'L10': (4.00, 38.00, 'F.Cu', 0.0),    # V9_VTX2 ferrite
     'D14': (13.50, 36.00, 'F.Cu', 0.0),    # V9_VTX2 TVS SMAJ9.0A
     'C21': (13.50, 47.50, 'F.Cu', 0.0),    # C_OUT 22uF
