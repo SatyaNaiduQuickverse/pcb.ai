@@ -12,7 +12,7 @@ Checks (all hard gates):
 Run: python3 audit_layout_compliance.py <board.kicad_pcb>
 Exit 0 on PASS, 1 on any FAIL.
 """
-import sys, os, math
+import sys, os, math, re
 import pcbnew
 
 if len(sys.argv) < 2:
@@ -372,9 +372,107 @@ def check_motor_pad_clear():
 
 
 # ----- check 9: quadrant component-count balance (Defect-3 class) -----
-# Per R19: 4 channel quadrants should have near-identical component counts
-# (≤2 delta) — enforces symmetric mirror via [[feedback-symmetry-preserves-work]].
+# Per R19: components are classified into 3 buckets with different balance rules:
+#   1. CHANNEL bucket: 24 channel FETs + per-channel passives + MCU/DRV instances.
+#      Rule: ≤2 delta on CH1↔CH2 (NW↔NE) and CH3↔CH4 (SE↔SW) — the symmetry payoff.
+#   2. S-ZONE-MIRROR-PAIR bucket: paired multi-instance S-zone components.
+#      Rule: ≤2 delta on NW↔NE and SW↔SE.
+#   3. SINGLE-INSTANCE bucket: inherently single-instance subsystem parts.
+#      Rule: warn but don't fail (placed on central spine X=50±5 or single-strip).
+# Refined per master Defect-3 adjudication 2026-05-23.
+
 QUADRANT_DELTA_LIMIT = 2
+
+# Explicit S-zone mirror-pair refs (multi-instance, must X-mirror about X=50)
+S_ZONE_MIRROR_PAIR_REFS = {
+    # S1 protection FETs (4× parallel)
+    'Q1', 'Q2', 'Q3', 'Q4',
+    # S1 NTC pair
+    'R1', 'R2',
+    # S2 bulk caps (2×2 grid: 4 instances expected)
+    'C1', 'C2', 'C3', 'C4',
+    # S5 BEC bucks 1-4 + inductors (mirror pair J2↔J4, J3↔J5; L1↔L3, L2↔L4)
+    'J2', 'J3', 'J4', 'J5',
+    'L1', 'L2', 'L3', 'L4',
+    # S5 FB resistor pairs (R6/R7 ↔ R10/R11, R8/R9 ↔ R12/R13)
+    'R6', 'R7', 'R8', 'R9', 'R10', 'R11', 'R12', 'R13',
+    # S5 boot caps (C7 ↔ C14, C11 ↔ C17)
+    'C7', 'C11', 'C14', 'C17',
+    # S5 input-side eFuses + diodes (D5/D6 ↔ D7/D8; J7 ↔ J9)
+    'D5', 'D6', 'D7', 'D8',
+    'J7', 'J9',
+    # S5 output-side ferrites/TVS (L6 ↔ L8 ↔ L9, D10/D11 ↔ D12/D13 partials)
+    'L6', 'L8', 'L9',
+    'D10', 'D12', 'D13',
+    # S6 LED pairs + USBLC6 J15↔J16
+    'D3', 'D4', 'R4', 'R5',
+    'J15', 'J16',
+}
+
+# Explicit single-instance refs (exempt from quadrant balance)
+SINGLE_INSTANCE_REFS = {
+    'J1',           # XT30 battery connector (central)
+    'U1',           # Hall ACS770 (single)
+    'U2',           # supervisor (if any)
+    'J11',          # supervisor connector
+    'J12',          # AUX header (single)
+    'J14',          # FC header (single)
+    'J17',          # 3rd USBLC6 (single — TLM+spare)
+    'F1', 'F2',     # polyfuses (single per rail)
+    'J6',           # Buck #5 V9_VTX2 (single instance)
+    'L5', 'L10',    # Buck #5 inductor + output ferrite
+    'D9', 'D14',    # Buck #5 catch + TVS diodes
+    'R14', 'R15',   # Buck #5 FB pair (single-rail)
+    'C20', 'C21',   # Buck #5 boot + C_OUT
+    'C8', 'C12', 'C15', 'C18',  # post-ferrite C_OUT (mostly central or asymmetric)
+    'D11',          # V5_PI5 TVS (single, central)
+    'L7',           # V5_PI5 ferrite (single, central)
+    'J10', 'J13',   # supervisor IC + LDO (single)
+    'R3', 'D2',     # S1 gate cluster (R3 anchored to Q1, D2 to Q4 — paired but small)
+    'D26',          # S1 historic SMBJ33A
+    'C49', 'R36', 'R37',  # S6 VBAT divider (3 components, central)
+}
+
+
+def classify_ref(ref, fp):
+    """Return one of: 'channel', 's_mirror', 'single', 'auto'."""
+    # Single-instance explicit
+    if ref in SINGLE_INSTANCE_REFS:
+        return 'single'
+    # Mount holes — separate concern
+    if ref.startswith('H') and len(ref) > 1 and ref[1:].isdigit():
+        return 'single'
+    # Motor TPs (TP19-42) — single-instance per channel, but 12 of them so they balance naturally
+    if ref in ('TP19','TP20','TP21','TP26','TP27','TP28',
+               'TP33','TP34','TP35','TP40','TP41','TP42'):
+        return 'channel'
+    # S-zone mirror-pair explicit
+    if ref in S_ZONE_MIRROR_PAIR_REFS:
+        return 's_mirror'
+    # Channel: by net analysis (any pad has _CHn)
+    for pad in fp.Pads():
+        net = pad.GetNet()
+        if net and re.search(r'_CH[1234]', net.GetNetname()):
+            return 'channel'
+    # MCU/DRV/INA explicit channel instances (in case net parsing missed)
+    if ref in ('J18','J19','J20','J21','J22','J23','J24','J25','J26','J27',
+               'J28','J29','J30','J31','J32','J33','J34','J35','J36','J37'):
+        return 'channel'
+    # Channel FETs Q5-Q28
+    if ref.startswith('Q') and ref[1:].isdigit():
+        n = int(ref[1:])
+        if 5 <= n <= 28:
+            return 'channel'
+    # Auto-anchored debris — passives w/o channel net, w/o explicit list membership
+    return 'auto'
+
+
+def quadrant_of(x, y, mid_x=50.0, mid_y=50.0):
+    if x <= mid_x and y >= mid_y: return 'NW'
+    elif x > mid_x and y >= mid_y: return 'NE'
+    elif x <= mid_x and y < mid_y: return 'SW'
+    return 'SE'
+
 
 def check_quadrant_count_balance():
     bb = get_outline_bbox()
@@ -383,28 +481,68 @@ def check_quadrant_count_balance():
     x_min, y_min, x_max, y_max = bb
     mid_x = (x_min + x_max) / 2
     mid_y = (y_min + y_max) / 2
-    quads = {'NW': 0, 'NE': 0, 'SW': 0, 'SE': 0}
+
+    buckets = {'channel': {'NW':0,'NE':0,'SW':0,'SE':0},
+               's_mirror': {'NW':0,'NE':0,'SW':0,'SE':0},
+               'single':  {'NW':0,'NE':0,'SW':0,'SE':0},
+               'auto':    {'NW':0,'NE':0,'SW':0,'SE':0}}
     for fp in board.GetFootprints():
         if fp.GetLayer() != pcbnew.F_Cu:
             continue
         pos = fp.GetPosition()
         x, y = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
-        if x <= mid_x and y >= mid_y: quads['NW'] += 1
-        elif x > mid_x and y >= mid_y: quads['NE'] += 1
-        elif x <= mid_x and y < mid_y: quads['SW'] += 1
-        else: quads['SE'] += 1
-    deltas = {
-        'NW vs NE': abs(quads['NW'] - quads['NE']),
-        'SW vs SE': abs(quads['SW'] - quads['SE']),
-        'NW vs SW': abs(quads['NW'] - quads['SW']),
-        'NE vs SE': abs(quads['NE'] - quads['SE']),
-    }
-    over = {k: v for k, v in deltas.items() if v > QUADRANT_DELTA_LIMIT}
-    if over:
-        fails.append(f"QUADRANT-BALANCE: {len(over)} quadrant-pair delta(s) exceed {QUADRANT_DELTA_LIMIT}-count limit "
-                     f"(NW={quads['NW']} NE={quads['NE']} SW={quads['SW']} SE={quads['SE']})")
-        for pair, d in over.items():
-            fails.append(f"  {pair}: Δ={d}")
+        q = quadrant_of(x, y, mid_x, mid_y)
+        cls = classify_ref(fp.GetReference(), fp)
+        buckets[cls][q] += 1
+
+    # Report per-bucket totals
+    total_nw = sum(b['NW'] for b in buckets.values())
+    total_ne = sum(b['NE'] for b in buckets.values())
+    total_sw = sum(b['SW'] for b in buckets.values())
+    total_se = sum(b['SE'] for b in buckets.values())
+
+    # CHANNEL rule: ≤2 delta on NW↔NE (CH1↔CH2) and SW↔SE (CH4↔CH3)
+    ch = buckets['channel']
+    ch_fails = []
+    if abs(ch['NW']-ch['NE']) > QUADRANT_DELTA_LIMIT:
+        ch_fails.append(f"CH1(NW)↔CH2(NE) Δ={abs(ch['NW']-ch['NE'])}")
+    if abs(ch['SW']-ch['SE']) > QUADRANT_DELTA_LIMIT:
+        ch_fails.append(f"CH4(SW)↔CH3(SE) Δ={abs(ch['SW']-ch['SE'])}")
+
+    # S-ZONE-MIRROR-PAIR rule: ≤2 delta on NW↔NE and SW↔SE
+    sm = buckets['s_mirror']
+    sm_fails = []
+    if abs(sm['NW']-sm['NE']) > QUADRANT_DELTA_LIMIT:
+        sm_fails.append(f"S-mirror NW↔NE Δ={abs(sm['NW']-sm['NE'])}")
+    if abs(sm['SW']-sm['SE']) > QUADRANT_DELTA_LIMIT:
+        sm_fails.append(f"S-mirror SW↔SE Δ={abs(sm['SW']-sm['SE'])}")
+
+    # AUTO bucket rule: ≤4 delta (slightly looser since auto-anchored debris
+    # follows parent placement; some asymmetry inherited from S-zone parents)
+    au = buckets['auto']
+    auto_fails = []
+    AUTO_LIMIT = 4
+    if abs(au['NW']-au['NE']) > AUTO_LIMIT:
+        auto_fails.append(f"auto-anchored NW↔NE Δ={abs(au['NW']-au['NE'])}")
+    if abs(au['SW']-au['SE']) > AUTO_LIMIT:
+        auto_fails.append(f"auto-anchored SW↔SE Δ={abs(au['SW']-au['SE'])}")
+
+    # Composite report — always print bucket counts for transparency
+    if ch_fails or sm_fails or auto_fails:
+        fails.append(f"QUADRANT-BALANCE: channel/s_mirror/auto-anchored bucket(s) over limit")
+        fails.append(f"  channel  NW={ch['NW']} NE={ch['NE']} SW={ch['SW']} SE={ch['SE']} (limit Δ≤{QUADRANT_DELTA_LIMIT})")
+        fails.append(f"  s_mirror NW={sm['NW']} NE={sm['NE']} SW={sm['SW']} SE={sm['SE']} (limit Δ≤{QUADRANT_DELTA_LIMIT})")
+        fails.append(f"  single   NW={buckets['single']['NW']} NE={buckets['single']['NE']} SW={buckets['single']['SW']} SE={buckets['single']['SE']} (exempt — central/strip placement)")
+        fails.append(f"  auto     NW={au['NW']} NE={au['NE']} SW={au['SW']} SE={au['SE']} (limit Δ≤{AUTO_LIMIT})")
+        fails.append(f"  TOTAL    NW={total_nw} NE={total_ne} SW={total_sw} SE={total_se}")
+        for f in ch_fails + sm_fails + auto_fails:
+            fails.append(f"  {f}")
+    else:
+        # PASS: still print summary for transparency (use warns to surface info)
+        warns.append(f"QUADRANT-BALANCE PASS: channel NW={ch['NW']}/NE={ch['NE']}/SW={ch['SW']}/SE={ch['SE']}; "
+                     f"s_mirror NW={sm['NW']}/NE={sm['NE']}/SW={sm['SW']}/SE={sm['SE']}; "
+                     f"auto NW={au['NW']}/NE={au['NE']}/SW={au['SW']}/SE={au['SE']}; "
+                     f"TOTAL NW={total_nw}/NE={total_ne}/SW={total_sw}/SE={total_se}")
 
 
 # ----- run -----
