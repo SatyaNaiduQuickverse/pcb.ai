@@ -390,6 +390,62 @@ def check_coincident_placement():
             fails.append(f"  {d:.2f}mm: {r1} <-> {r2} near ({x:.2f},{y:.2f})")
 
 
+# PR #67 Sai-eye catch #4: TP-spacing audit gate (was missing — regressed in Phase 3)
+# Reinstated by PR-TP-and-connector-edge-regression-fix master 2026-05-24.
+def check_test_point_spacing():
+    """Test points (TP*) on the same layer must be ≥4mm center-to-center to
+    allow scope probe access (probe tip ~1.5mm + clip 4-5mm/side). PR #67
+    locked the threshold. Re-added as audit gate to prevent silent regression
+    on fresh kinet2pcb re-imports."""
+    THRESH = 4.0
+    tps = []
+    for fp in board.GetFootprints():
+        r = fp.GetReference()
+        if not r.startswith('TP'): continue
+        p = fp.GetPosition()
+        tps.append((r, pcbnew.ToMM(p.x), pcbnew.ToMM(p.y), fp.GetLayer()))
+    bugs = []
+    for i in range(len(tps)):
+        r1, x1, y1, l1 = tps[i]
+        for j in range(i + 1, len(tps)):
+            r2, x2, y2, l2 = tps[j]
+            if l1 != l2: continue
+            d = math.hypot(x1 - x2, y1 - y2)
+            if d < THRESH:
+                bugs.append((d, r1, r2, x1, y1))
+    if bugs:
+        fails.append(f"TP-SPACING: {len(bugs)} TP-pair(s) <{THRESH}mm center-to-center on same layer (probe access blocked, Sai-eye catch #4)")
+        for d, r1, r2, x, y in bugs[:10]:
+            fails.append(f"  {d:.2f}mm: {r1} <-> {r2} near ({x:.2f},{y:.2f})")
+
+
+# PR #67 Sai-eye catch #5: external-connector edge audit gate
+def check_external_connector_edge():
+    """External cable connectors (J14 FC, J12 AUX) must be ≤5mm from board
+    edge to allow cable bend without component encroachment. Pre-PR-#67
+    they were 12mm from S edge — too far, components encroached cable zone."""
+    EDGE_MAX = 5.0   # mm from S edge
+    bb = get_outline_bbox()
+    if not bb: return
+    _, _, _, y_max = bb
+    bugs = []
+    for fp in board.GetFootprints():
+        r = fp.GetReference()
+        v = fp.GetValue()
+        if r in ('J14', 'J12'):
+            # Should be on south (or north — depending on conn orientation) edge
+            cy = pcbnew.ToMM(fp.GetPosition().y)
+            d_n = cy
+            d_s = y_max - cy
+            d_edge = min(d_n, d_s)
+            if d_edge > EDGE_MAX:
+                bugs.append((r, v, cy, d_edge))
+    if bugs:
+        fails.append(f"EXTERNAL-CONNECTOR-EDGE: {len(bugs)} cable connector(s) >{EDGE_MAX}mm from N/S board edge (Sai-eye catch #5)")
+        for r, v, cy, d in bugs:
+            fails.append(f"  {r} ({v}) at Y={cy:.1f}, {d:.1f}mm from nearest edge")
+
+
 def check_motor_pad_clear():
     zones = {}
     for fp in board.GetFootprints():
@@ -685,6 +741,8 @@ check_mount_hole_vs_body(items)
 check_pad_in_body_bbox()
 check_motor_pad_clear()
 check_coincident_placement()
+check_test_point_spacing()
+check_external_connector_edge()
 check_quadrant_count_balance()
 check_per_channel_passive_quadrant()
 
