@@ -444,18 +444,94 @@ def _silk_bbox_mm(fp):
 #   - Area ratio: container > 4× contained
 #   - Same-layer only
 #   - Exempt motor-adjacent-net components (topologically required at motor node)
-# See [[feedback-anchor-outside-parent-body]] memory.
+# Refinement 2026-05-24 P1 dispatch [[feedback-host-silk-overdraw-exempt]]:
+#   Some library footprints draw silk PAST the mechanical body (for HV creepage
+#   visualization, current-path tab outline, etc.). For these hosts use the
+#   pad-cluster bbox + 1mm margin as "real body" instead of silk bbox — silk
+#   overdraw is a library convention, not actual fab-blocking geometry.
+# Library-specific REAL-BODY bbox override (relative to fp origin in mm).
+# For hosts with overdrawn silk extending past the actual mechanical body
+# (HV creepage outlines, current-path tab visualization, magnetic-field
+# indicators). The override gives the tight body that physically lands on
+# the PCB. Codified per [[feedback-host-silk-overdraw-exempt]].
+HARDCODED_BODY_BBOX_REL = {
+    # Allegro_CB_PFF Hall current sensor — overdrawn silk includes current-path
+    # bus tab. Real chip body ~5×5mm centered on the 3 signal pads, which sit
+    # near fp origin.
+    'Sensor_Current:Allegro_CB_PFF': (-2.5, -2.5, 2.5, 2.5),
+    # ACS770ECB — Allegro family, real body ~13.6×27mm (vertically large package).
+    # fp origin typically at body center. Stub entry — adjust if used.
+    'Sensor_Current:ACS770ECB':      (-13.5, -7.0, 13.5, 7.0),
+}
+
+SILK_OVERDRAW_EXEMPT_PATTERNS = (
+    'Sensor_Current:Allegro_',   # Allegro Hall families (CB_PFF, ACS770, ACS781, etc.)
+    'Sensor_Current:ACS',        # ACS family generally
+    'Sensor_Magnetic:',          # generic magnetic sensors
+    'Sensor_Current:DRV',        # TI DRV-class current/Hall combos
+)
+
+
+def _is_silk_overdraw_exempt_host(fp):
+    lib = fp.GetFPID().GetUniStringLibId()
+    for pat in SILK_OVERDRAW_EXEMPT_PATTERNS:
+        if lib.startswith(pat):
+            return True
+    return False
+
+
+def _hardcoded_body_bbox(fp):
+    """If footprint library has a hardcoded real-body bbox override, return
+    its absolute mm bbox. Else None."""
+    lib = fp.GetFPID().GetUniStringLibId()
+    rel = HARDCODED_BODY_BBOX_REL.get(lib)
+    if rel is None:
+        return None
+    pos = fp.GetPosition()
+    cx = pcbnew.ToMM(pos.x); cy = pcbnew.ToMM(pos.y)
+    return (cx + rel[0], cy + rel[1], cx + rel[2], cy + rel[3])
+
+
+def _pad_cluster_bbox(fp, margin=1.0):
+    """Bounding box of all pad bboxes + margin. Use as real-body proxy for
+    silk-overdraw hosts when no hardcoded override is available."""
+    xs = []; ys = []
+    for pad in fp.Pads():
+        bb = pad.GetBoundingBox()
+        xs.append(pcbnew.ToMM(bb.GetLeft()))
+        xs.append(pcbnew.ToMM(bb.GetRight()))
+        ys.append(pcbnew.ToMM(bb.GetTop()))
+        ys.append(pcbnew.ToMM(bb.GetBottom()))
+    if not xs:
+        return None
+    return (min(xs) - margin, min(ys) - margin,
+            max(xs) + margin, max(ys) + margin)
+
+
 def check_component_inside_body():
     """Fail when a small component's pad center OR component center lies inside
-    a 4×-or-larger same-layer component's silk bbox."""
+    a 4×-or-larger same-layer component's silk bbox (or pad-cluster bbox for
+    silk-overdraw-exempt hosts)."""
     fps = list(board.GetFootprints())
     info = []
     for fp in fps:
         ref = fp.GetReference()
         if ref.startswith('H'):  # skip mounting holes
             continue
-        b = _silk_bbox_mm(fp)
-        area = (b[2] - b[0]) * (b[3] - b[1])
+        silk_b = _silk_bbox_mm(fp)
+        # Pick container bbox priority:
+        #   1. Hardcoded real-body override (tightest, library-specific)
+        #   2. Pad-cluster bbox (for silk-overdraw exempt hosts)
+        #   3. Silk bbox (default)
+        hardcoded = _hardcoded_body_bbox(fp)
+        if hardcoded is not None:
+            cbox = hardcoded
+        elif _is_silk_overdraw_exempt_host(fp):
+            cbox = _pad_cluster_bbox(fp, margin=1.0)
+            if cbox is None: cbox = silk_b
+        else:
+            cbox = silk_b
+        area = (cbox[2] - cbox[0]) * (cbox[3] - cbox[1])
         if area <= 0:
             continue
         pos = fp.GetPosition()
@@ -463,7 +539,7 @@ def check_component_inside_body():
         pads = [(pcbnew.ToMM(p.GetPosition().x), pcbnew.ToMM(p.GetPosition().y))
                 for p in fp.Pads()]
         info.append({
-            'ref': ref, 'fp': fp, 'bbox': b, 'area': area,
+            'ref': ref, 'fp': fp, 'bbox': cbox, 'area': area,
             'cx': cx, 'cy': cy, 'pads': pads,
             'layer': fp.GetLayer(),
             'motor_exempt': _has_motor_adjacent_net_pad(fp),
