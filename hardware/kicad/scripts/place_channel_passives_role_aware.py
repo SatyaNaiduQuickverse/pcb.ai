@@ -50,7 +50,7 @@ ROLE_PATTERNS = [
     # bootstrap caps between BST and motor output (DRV pins)
     (re.compile(r'^BST([ABC])_CH(\d+)$'),'bootstrap-{m1}',        ('DRV-BST', '{m1}'),      2.5),
     # BEMF dividers — anchored to motor output FET drain/motor pad
-    (re.compile(r'^BEMF_([ABC])_CH(\d+)$'),'BEMF-{m1}',           ('motor-pad', '{m1}'),    10.0),
+    (re.compile(r'^BEMF_([ABC])_CH(\d+)$'),'BEMF-{m1}',           ('motor-pad', '{m1}'),    6.0),
     # CSA filter cap — anchored to INA186 output pin
     (re.compile(r'^CSA_([ABC])_OUT_CH(\d+)$'),'csa-filter-{m1}',  ('INA-out', '{m1}'),      4.0),
     # CSA diode-OR network — anchored to LM393 input (CSA_MAX node)
@@ -240,7 +240,25 @@ def find_anchor_pad(anchor_spec, ch_num, fp_data):
             if p: return (*p, ref)
         return None
     if anchor_kind == 'motor-pad':
-        # MOTOR_<phase>_CH<n> testpoint
+        # PR-channel-template-redo Phase 3 fix (master 2026-05-24 finding):
+        # OLD logic returned MOTOR_<phase>_CH<n> testpoint position, which put
+        # motor-net components (Zener clamps, TVS, BEMF dividers) INSIDE the
+        # motor-TP keep-out zone. Pre-Phase-3 PR #68 layout placed these near
+        # the HI-side FET body (X=15-25 for CH1 west) — outside the TP zone
+        # while still functionally on the motor net.
+        #
+        # New logic: anchor to HI-side FET for this phase+channel. HI-side FET
+        # identified by pad-1 net = MOTOR_<phase>_CH<n>. Return FET body center.
+        motor_net = f'MOTOR_{phase}_CH{chs}'
+        for ref, d in fp_data.items():
+            if not (ref.startswith('Q') and 'BSC014N06NS' in d['value']):
+                continue
+            p1 = next((pi for pi in d['pads'] if pi['name'] == '1'), None)
+            if p1 and p1['net'] == motor_net:
+                # HI-side FET; return body center (will spiral around it,
+                # naturally clearing motor TP zone)
+                return (d['x'], d['y'], ref)
+        # Fallback: motor TP itself (if no HI FET found)
         target_val = f'MOTOR_{phase}_CH{chs}'
         for ref, d in fp_data.items():
             if d['value'] == target_val:
@@ -254,10 +272,24 @@ def find_anchor_pad(anchor_spec, ch_num, fp_data):
                 if p: return (*p, ref)
         return None
     if anchor_kind == 'INA-shunt':
-        net = f'SHUNT_{phase}_TOP_CH{chs}'
+        # PR-channel-template-redo Phase 3 fix: anchor LO-side FET (source pad is
+        # on SHUNT_TOP net) instead of INA. INAs at X=5/8/92/95 are too close to
+        # motor TPs; LO-side FETs are at X=30 (CH1/CH4) or X=70 (CH2/CH3), well
+        # outside motor TP keep-out zones.
+        shunt_net = f'SHUNT_{phase}_TOP_CH{chs}'
+        motor_net = f'MOTOR_{phase}_CH{chs}'
         for ref, d in fp_data.items():
-            if ref.startswith('J') and 'INA186' in d['value'] and net in d['nets']:
-                p = pad_with_net(ref, net)
+            if not (ref.startswith('Q') and 'BSC014N06NS' in d['value']):
+                continue
+            p1 = next((pi for pi in d['pads'] if pi['name'] == '1'), None)
+            p5 = next((pi for pi in d['pads'] if pi['name'] == '5'), None)
+            # LO-side FET: pad 1 source = SHUNT_TOP, pad 5 drain = MOTOR
+            if (p1 and p1['net'] == shunt_net) and (p5 and p5['net'] == motor_net):
+                return (d['x'], d['y'], ref)
+        # Fallback: INA shunt pin
+        for ref, d in fp_data.items():
+            if ref.startswith('J') and 'INA186' in d['value'] and shunt_net in d['nets']:
+                p = pad_with_net(ref, shunt_net)
                 if p: return (*p, ref)
         return None
     if anchor_kind in ('LM393-csa-in', 'LM393-in+', 'LM393-in-'):

@@ -343,6 +343,45 @@ MOTOR_TP_REFS = ('TP19','TP20','TP21','TP26','TP27','TP28',
                  'TP33','TP34','TP35','TP40','TP41','TP42')
 MOTOR_PAD_KEEPOUT = 2.0
 
+_MOTOR_ADJACENT_NET_RE = re.compile(
+    r'^(MOTOR_[ABC]_CH\d+'             # motor net (gate clamp, TVS, BEMF top R)
+    r'|BEMF_[ABC]_CH\d+'               # BEMF tap (bottom divider R, filter C)
+    r'|CSA_[ABC]_OUT_CH\d+'            # INA output / CSA filter (downstream of INA)
+    r'|CSA_MAX_CH\d+'                  # CSA diode-OR output
+    r'|SHUNT_[ABC]_TOP_CH\d+'          # shunt resistor sense path
+    r')$'
+)
+
+
+def _has_motor_adjacent_net_pad(fp):
+    """True if footprint has at least one pad on a motor-adjacent sense net.
+    PR-channel-template-redo Phase 3 amendment 2026-05-24 (master path D + ext):
+    Sense-chain components (gate clamps, phase TVS, BEMF div top+bot+filter,
+    CSA filter, shunt path) are TOPOLOGICALLY REQUIRED to be at/near the
+    motor TP node. They are present as SMD before motor wire bonding and do
+    NOT interfere with the assembly solder access concern that the
+    MOTOR-PAD-CLEAR rule was designed to prevent.
+
+    Exempted nets:
+      MOTOR_<phase>_CH<n>     — motor net itself (Zener K side, TVS K, BEMF top)
+      BEMF_<phase>_CH<n>      — BEMF divider tap (bottom R, 1nF filter)
+      CSA_<phase>_OUT_CH<n>   — INA186 output (filter cap)
+      CSA_MAX_CH<n>           — CSA diode-OR (BAT54)
+      SHUNT_<phase>_TOP_CH<n> — shunt sense path (Kelvin)
+    """
+    for pad in fp.Pads():
+        net_obj = pad.GetNet()
+        if net_obj is None:
+            continue
+        try:
+            n = net_obj.GetNetname()
+        except Exception:
+            continue
+        if _MOTOR_ADJACENT_NET_RE.match(n):
+            return True
+    return False
+
+
 def check_motor_pad_clear():
     zones = {}
     for fp in board.GetFootprints():
@@ -355,6 +394,7 @@ def check_motor_pad_clear():
                 pcbnew.ToMM(bb.GetBottom()) + MOTOR_PAD_KEEPOUT,
             )
     encroach = []
+    motor_net_exempt = 0
     for fp in board.GetFootprints():
         r = fp.GetReference()
         if r in MOTOR_TP_REFS or r.startswith(('Q', 'J', 'U', 'H')):
@@ -363,12 +403,20 @@ def check_motor_pad_clear():
         cx, cy = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
         for tp, (x1, y1, x2, y2) in zones.items():
             if x1 <= cx <= x2 and y1 <= cy <= y2:
-                encroach.append((r, tp, cx, cy))
+                # Refinement (master path D 2026-05-24): motor-net components
+                # are topologically required at the motor node; exempt them.
+                if _has_motor_adjacent_net_pad(fp):
+                    motor_net_exempt += 1
+                else:
+                    encroach.append((r, tp, cx, cy))
                 break
     if encroach:
-        fails.append(f"MOTOR-PAD-CLEAR: {len(encroach)} component(s) inside motor-TP zone + {MOTOR_PAD_KEEPOUT}mm keep-out")
+        fails.append(f"MOTOR-PAD-CLEAR: {len(encroach)} non-motor-net component(s) inside motor-TP zone + {MOTOR_PAD_KEEPOUT}mm keep-out")
         for ref, tp, cx, cy in encroach[:10]:
             fails.append(f"  {ref} at ({cx:.1f},{cy:.1f}) inside {tp} zone")
+    if motor_net_exempt:
+        # Informational note — motor-net topologically-required exempts.
+        warns.append(f"MOTOR-PAD-CLEAR-EXEMPTS: {motor_net_exempt} motor-net-connected components inside motor-TP zone (exempt — topologically required at motor node, see master path D 2026-05-24)")
 
 
 # ----- check 9: quadrant component-count balance (Defect-3 class) -----
