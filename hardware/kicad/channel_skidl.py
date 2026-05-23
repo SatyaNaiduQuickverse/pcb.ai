@@ -58,8 +58,10 @@ def make_channel(ch_num, vmotor, v5, v3v3, v3v3a, gnd, dshot_in, tlm, swdio, swc
     led_gpio = Net(f"LED_GPIO_CH{cn}")
 
     # MCU (functional stand-in: Conn_01x32 32-pin placeholder; Phase 4 swaps to AT32F421 custom symbol from components.kicad_sym)
-    mcu = Part("Connector_Generic", "Conn_01x32", value="AT32F421K8T7",
-               footprint="Package_QFP:LQFP-32_7x7mm_P0.8mm")
+    # PR-A4-integrate amendment 5 BOM B-1b: LQFP-32 7x7mm → QFN-32 5x5mm
+    # (AT32F421K8T7 → AT32F421K8U7 — same die, same firmware, JLC C176942)
+    mcu = Part("Connector_Generic", "Conn_01x32", value="AT32F421K8U7",
+               footprint="Package_DFN_QFN:QFN-32-1EP_5x5mm_P0.5mm_EP3.3x3.3mm_ThermalVias")
     mcu[1] += v3v3
     mcu[17] += v3v3
     mcu[5] += v3v3a
@@ -174,10 +176,15 @@ def make_channel(ch_num, vmotor, v5, v3v3, v3v3a, gnd, dshot_in, tlm, swdio, swc
     def half_bridge(gh_net, gl_net, motor_net, shunt_top_net, phase_label):
         r_gh = Part("Device", "R", value="15R", footprint="Resistor_SMD:R_0402_1005Metric")
         r_gl = Part("Device", "R", value="15R", footprint="Resistor_SMD:R_0402_1005Metric")
-        qh = Part("Device", "Q_NMOS", value="AOTL66912",
-                  footprint="Package_TO_SOT_SMD:TO-263-3_TabPin2")
-        ql = Part("Device", "Q_NMOS", value="AOTL66912",
-                  footprint="Package_TO_SOT_SMD:TO-263-3_TabPin2")
+        # PR-A4-integrate amendment 5 BOM B-1a: AOTL66912 TO-263 → BSC014N06NS PDFN-8
+        # Same Infineon part as Q1-Q4 protection FETs (JLC C113391).
+        # 60V V_DS, 1.45mΩ R_DS(on) (3× lower than AOTL66912 4.5mΩ — better thermals),
+        # 170A @T_C=100°C. 4× parallel handles 4ch × 100A peak with margin.
+        # Pin map: G→4, S→1,2,3, D→5,6,7,8 (handled by fix_fet_netlist_drop.py).
+        qh = Part("Device", "Q_NMOS", value="BSC014N06NS",
+                  footprint="Package_DFN_QFN:W-PDFN-8-1EP_6x5mm_P1.27mm_EP3x3mm")
+        ql = Part("Device", "Q_NMOS", value="BSC014N06NS",
+                  footprint="Package_DFN_QFN:W-PDFN-8-1EP_6x5mm_P1.27mm_EP3x3mm")
         qh["D"] += vmotor
         qh["S"] += motor_net
         r_gh[1] += gh_net; r_gh[2] += qh["G"]

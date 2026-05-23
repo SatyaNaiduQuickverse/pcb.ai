@@ -183,12 +183,16 @@ def main():
             if 1 <= int(r[1:]) <= 4:
                 keepouts.append((x, y, 3.5, 4.0, layer))
             elif 5 <= int(r[1:]) <= 28:
-                keepouts.append((x, y, 8.5, 5.7, layer))
+                # PR-A4-integrate amendment 5g B-1a: Q5-Q28 now PDFN-8 5×6mm
+                # (was TO-263 10×9). Keep-out shrinks from 17×11.4 to 6×5mm.
+                keepouts.append((x, y, 3.5, 3.0, layer))
         elif r.startswith('U'):
             # Most ICs: ~3×3mm half-bbox
             keepouts.append((x, y, 3.5, 3.5, layer))
-        elif r in ('J18', 'J23', 'J28', 'J33'):  # MCU LQFP-32 ~5×5
-            keepouts.append((x, y, 4.0, 4.0, layer))
+        elif r in ('J18', 'J23', 'J28', 'J33'):
+            # PR-A4-integrate amendment 5g B-1b: MCU now QFN-32 5×5mm
+            # (was LQFP-32 7×7). Keep-out shrinks from 8×8 to 5.5×5.5.
+            keepouts.append((x, y, 2.75, 2.75, layer))
         elif r in ('J19', 'J24', 'J29', 'J34'):  # DRV8300 HVQFN-24 ~4×4
             keepouts.append((x, y, 3.0, 3.0, layer))
         elif r in ('J2', 'J3', 'J4', 'J5', 'J6'):  # Buck ICs ~3×3

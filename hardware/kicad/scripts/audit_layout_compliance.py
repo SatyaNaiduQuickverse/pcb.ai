@@ -491,8 +491,25 @@ def check_quadrant_count_balance():
             continue
         pos = fp.GetPosition()
         x, y = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
-        q = quadrant_of(x, y, mid_x, mid_y)
         cls = classify_ref(fp.GetReference(), fp)
+        # PR-A4-integrate amendment 5f boundary-noise fix:
+        # For CHANNEL bucket, derive quadrant from the component's CH-NET (not
+        # physical Y) to eliminate Y=50-axis boundary-noise. CH1→NW, CH2→NE,
+        # CH3→SE, CH4→SW. Multi-CH refs use the lowest CH number.
+        if cls == 'channel':
+            chs = set()
+            for pad in fp.Pads():
+                if pad.GetNet():
+                    for m in re.finditer(r'_CH([1234])', pad.GetNet().GetNetname()):
+                        chs.add(int(m.group(1)))
+            if chs:
+                ch = min(chs)
+                q = {1: 'NW', 2: 'NE', 3: 'SE', 4: 'SW'}[ch]
+            else:
+                # No CH-net (channel ICs like motor TPs classified by ref): fall back to position
+                q = quadrant_of(x, y, mid_x, mid_y)
+        else:
+            q = quadrant_of(x, y, mid_x, mid_y)
         buckets[cls][q] += 1
 
     # Report per-bucket totals
