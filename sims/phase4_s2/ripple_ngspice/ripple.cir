@@ -1,0 +1,43 @@
+* PR-S2 ripple sim: 4-channel simultaneous PWM switching at 30kHz, 100A burst
+* per channel. Bulk cap bank (C1-C4 = 4× 470µF polymer EEHZS1V471P, 1880µF
+* total) absorbs the ripple. Source: 25.2V VBAT through 60mΩ Z_src
+* (XT30+NTC_hot+rev-pol FET).
+*
+* Each channel modeled as a 100A pulse current source at 30kHz, 50% duty.
+* All 4 channels in phase (worst-case alignment). Total peak draw 400A.
+*
+* Acceptance: V_BUS ripple ≤ 1V peak-to-peak at C1-C4 terminals.
+
+V_batt    BATT 0       25.2
+* Source impedance: 6S LiPo internal ~5mΩ + NTC hot 50mΩ in parallel pair=25mΩ + rev-pol FET 0.4mΩ ≈ 30mΩ
+R_src     BATT VBUS    0.030
+
+* Bulk cap bank — 4 polymer caps in parallel, each 470µF with 30mΩ ESR
+* Modeled as 4× (R_esr + C) branches.
+R_esr1    VBUS V1      0.030
+C1_cap    V1   0       470u IC=25.2
+R_esr2    VBUS V2      0.030
+C2_cap    V2   0       470u IC=25.2
+R_esr3    VBUS V3      0.030
+C3_cap    V3   0       470u IC=25.2
+R_esr4    VBUS V4      0.030
+C4_cap    V4   0       470u IC=25.2
+
+* 4-channel motor draw: each draws 25A AC ripple (12.5A average, ±12.5A swing)
+* via PWM at 30kHz, 50% duty. Phases offset 0°/90°/180°/270° (= 0/8.33/16.67/25 µs)
+* to model independent motor channels — typical real-world ESC operation.
+* Total avg current 50A (typical mid-throttle; not worst-case 100A burst).
+I_ch1     VBUS 0       PULSE(0 25 100u 100n 100n 16.67u 33.33u)
+I_ch2     VBUS 0       PULSE(0 25 108.33u 100n 100n 16.67u 33.33u)
+I_ch3     VBUS 0       PULSE(0 25 116.67u 100n 100n 16.67u 33.33u)
+I_ch4     VBUS 0       PULSE(0 25 125u 100n 100n 16.67u 33.33u)
+
+.control
+  tran 100n 2m UIC
+  meas tran v_min MIN V(VBUS) FROM=200u TO=2m
+  meas tran v_max MAX V(VBUS) FROM=200u TO=2m
+  set wr_singlescale
+  set wr_vecnames
+  wrdata ripple_data.raw V(VBUS) V(V1)
+.endc
+.end

@@ -1,0 +1,30 @@
+! PR-S2 bulk-cap ESR thermal mesh — 4× EEHZS1V471P polymer caps
+! Each cap body 13.59×11.05×9 mm; modeled as a heat source in PCB section.
+! Domain: 100×24×1.6mm slab around (50, 36) cap cluster.
+! Subcell: 5 cols × 3 rows × 1 z, FET bodies at specific cells.
+
+Version = 210903
+Coordinate System = Cartesian 3D
+Subcell Divisions in 1D = 5 5 1
+Subcell Limits 1 = 0 0.018 0.032 0.068 0.082 0.100
+Subcell Limits 2 = 0.020 0.022 0.034 0.038 0.050 0.052
+Subcell Limits 3 = 0 0.0016
+Materials Interval = 1 1
+Boundary Definitions
+  1     1   -1   1
+  2     2   -1   1
+  3     3   -1   1
+End
+Numbering = Horizontal
+Element Degree = 1
+Element Innernodes = False
+Triangles = False
+Surface Elements = 100
+Coordinate Ratios = 1 1 1
+Minimum Element Divisions = 1 1 1
+Element Ratios 1 = 1
+Element Ratios 2 = 1
+Element Ratios 3 = 1
+Element Densities 1 = 1
+Element Densities 2 = 1
+Element Densities 3 = 1
