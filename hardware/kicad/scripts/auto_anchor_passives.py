@@ -226,6 +226,55 @@ def main():
                 return True
         return False
 
+    # Master 2026-05-24 Sai-catch #12 structural fix [[feedback-anchor-outside-parent-body]]:
+    # Derive silk-bbox of every PLACED footprint that's "large enough to host"
+    # (area ≥ 5 mm² — captures 0805 and up, all ICs, all bulk caps, inductors,
+    # connectors). Any candidate position inside one of these regions + 1mm
+    # margin is rejected — prevents small passives being anchored UNDER a
+    # parent's solderable body.
+    SILK_MARGIN = 1.0  # mm
+    HOST_MIN_AREA_MM2 = 5.0
+    silk_keepouts = []  # (xmin, ymin, xmax, ymax, layer, ref)
+
+    def _silk_bbox_of(fp):
+        silk_pts = []; ctyd_pts = []
+        for d in fp.GraphicalItems():
+            if not isinstance(d, pcbnew.PCB_SHAPE): continue
+            l = d.GetLayer()
+            bb = d.GetBoundingBox()
+            box = (bb.GetLeft()/1e6, bb.GetTop()/1e6, bb.GetRight()/1e6, bb.GetBottom()/1e6)
+            if l in (pcbnew.F_SilkS, pcbnew.B_SilkS): silk_pts.append(box)
+            elif l in (pcbnew.F_CrtYd, pcbnew.B_CrtYd): ctyd_pts.append(box)
+        pts = silk_pts or ctyd_pts
+        if not pts: return None
+        xs = [b[0] for b in pts] + [b[2] for b in pts]
+        ys = [b[1] for b in pts] + [b[3] for b in pts]
+        return (min(xs), min(ys), max(xs), max(ys))
+
+    for r, (x, y, layer_str, rot) in placed.items():
+        if r.startswith('H'): continue  # mount holes already covered
+        fp = fp_by_ref.get(r)
+        if fp is None: continue
+        ssb = _silk_bbox_of(fp)
+        if ssb is None: continue
+        # Translate from footprint-local to actual placed position
+        fx_cur = fp.GetPosition().x / 1e6
+        fy_cur = fp.GetPosition().y / 1e6
+        dx = x - fx_cur; dy = y - fy_cur
+        sx0, sy0, sx1, sy1 = ssb[0]+dx, ssb[1]+dy, ssb[2]+dx, ssb[3]+dy
+        area = (sx1 - sx0) * (sy1 - sy0)
+        if area < HOST_MIN_AREA_MM2: continue
+        silk_keepouts.append((sx0, sy0, sx1, sy1, layer_str, r))
+
+    def inside_silk_body(nx, ny, layer):
+        """True if (nx,ny) is inside any placed component's silk-bbox + margin."""
+        for sx0, sy0, sx1, sy1, slayer, sref in silk_keepouts:
+            if slayer != layer: continue
+            if sx0 - SILK_MARGIN <= nx <= sx1 + SILK_MARGIN and \
+               sy0 - SILK_MARGIN <= ny <= sy1 + SILK_MARGIN:
+                return True
+        return False
+
     auto_placements = {}
     no_parent = []
     far_anchored = []
@@ -280,6 +329,8 @@ def main():
                 if nx < 1.5 or nx > 98.5 or ny < 1.5 or ny > 93.5:
                     continue
                 if inside_keepout(nx, ny, layer):
+                    continue
+                if inside_silk_body(nx, ny, layer):
                     continue
                 collide = False
                 for occ_xyl in occupied:
@@ -364,6 +415,8 @@ def main():
                     nx, ny = round(x, 1), round(y, 1)
                     if inside_keepout(nx, ny, layer):
                         x += 2.4; continue
+                    if inside_silk_body(nx, ny, layer):
+                        x += 2.4; continue
                     collide = False
                     for ox_o, oy_o, layer_o in occupied:
                         if layer_o != layer: continue
@@ -400,6 +453,7 @@ def main():
                     x = x_int / 10.0
                     nx, ny = round(x, 1), round(y, 1)
                     if inside_keepout(nx, ny, layer): continue
+                    if inside_silk_body(nx, ny, layer): continue
                     tb = [bb + (ref,) for bb in update_pad_bbox_for_ref(ref, (nx, ny))]
                     if has_pad_collision(tb): continue
                     collide = False

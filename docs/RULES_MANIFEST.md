@@ -69,6 +69,7 @@ files to confirm every named function/script in this manifest actually exists).
 | 11 | fp-layer-mismatch (text-edit-without-flip trap recurrence) | 2026-05-24 | `flip_bcu_footprints.py` | `check_fp_layer_mismatch()` (audit_layout) | 2026-05-24 master | ✅ **NEW this PR** — the 162-footprint trap that masked PR #71 audit |
 | 12 | LED-indicator stub on power net (track-width sub-class) | PR #67 amendment | `fix_led_stub_width.py` | `check_track_width()` (audit_routing) | 2026-05-24 master | ✅ **NEW this PR** — was one-shot patch; now codified |
 | 13 | ZONE_FILLER on-pad-via absorption trap | PR-routing-final O1 | offset-via-with-stub pattern in `route_power_plane_stitch.py` (NEW) | (audit_meta could grow `check_post_zonefill_vias` step — TBD) | 2026-05-24 master | ⚠️ Trap documented `[[reference-pcbnew-zone-filler-onpad-trap]]`; deeper DRC pad-to-plane connectivity under master/Sai review |
+| 14 | component-inside-body (small fp inside larger fp's silk bbox; fab-blocking) | 2026-05-24 Sai-catch #12 | `relocate_inside_body_invaders.py` (WIP) + structural fix to `auto_anchor_passives.py` + `place_channel_passives_role_aware.py` (silk-bbox keep-out for hosts ≥5mm²) | `check_component_inside_body()` (audit_layout) — area-ratio ≥4×, same-layer, motor-adjacent-net exempt | 2026-05-24 master | ✅ **NEW gate added**; 46 fab-blockers detected on master baseline; relocation strategy under master/Sai review per `[[feedback-anchor-outside-parent-body]]` |
 
 ---
 

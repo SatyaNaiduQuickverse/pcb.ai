@@ -556,6 +556,61 @@ def in_ic_body_zone(x, y, fp_data, parent_ref=None):
     return None
 
 
+# Master 2026-05-24 Sai-catch #12 structural fix [[feedback-anchor-outside-parent-body]]:
+# Reject candidate positions inside any large component's silk bbox + 1mm.
+# Class fix for: 0402 R/C + small diodes placed UNDER C1-C4 bulk caps,
+# C33, U1 Hall (Allegro_CB_PFF spans 18×6mm), U2/U3/U5 ICs, etc.
+# Uses footprint silk outline geometry (not courtyard) since silk = solderable body.
+SILK_KEEPOUT_MARGIN = 1.0
+SILK_HOST_MIN_AREA = 5.0  # mm²: 0805 and smaller are too small to be hosts
+
+_silk_keepouts_cache = None  # list of (xmin, ymin, xmax, ymax, layer_str, ref)
+
+
+def _build_silk_keepouts(fp_data):
+    """Read silk-bbox of every placed footprint with area ≥ SILK_HOST_MIN_AREA.
+    Cached per-process. Returns list of keepout tuples."""
+    global _silk_keepouts_cache
+    if _silk_keepouts_cache is not None:
+        return _silk_keepouts_cache
+    out = []
+    for ref, d in fp_data.items():
+        if ref.startswith('H'): continue
+        fp = d.get('fp')
+        if fp is None: continue
+        silk_pts = []; ctyd_pts = []
+        for sh in fp.GraphicalItems():
+            if not isinstance(sh, pcbnew.PCB_SHAPE): continue
+            ly = sh.GetLayer()
+            bb = sh.GetBoundingBox()
+            box = (bb.GetLeft()/1e6, bb.GetTop()/1e6,
+                   bb.GetRight()/1e6, bb.GetBottom()/1e6)
+            if ly in (pcbnew.F_SilkS, pcbnew.B_SilkS): silk_pts.append(box)
+            elif ly in (pcbnew.F_CrtYd, pcbnew.B_CrtYd): ctyd_pts.append(box)
+        pts = silk_pts or ctyd_pts
+        if not pts: continue
+        xs = [b[0] for b in pts] + [b[2] for b in pts]
+        ys = [b[1] for b in pts] + [b[3] for b in pts]
+        sx0, sy0, sx1, sy1 = min(xs), min(ys), max(xs), max(ys)
+        area = (sx1 - sx0) * (sy1 - sy0)
+        if area < SILK_HOST_MIN_AREA: continue
+        out.append((sx0, sy0, sx1, sy1, d['layer'], ref))
+    _silk_keepouts_cache = out
+    return out
+
+
+def in_silk_body(x, y, fp_data, parent_ref=None, layer='F.Cu'):
+    """True if (x,y) is inside any placed component's silk-bbox + 1mm margin.
+    parent_ref is exempted (its own spiral will start inside its own bbox)."""
+    for sx0, sy0, sx1, sy1, slay, sref in _build_silk_keepouts(fp_data):
+        if sref == parent_ref: continue
+        if slay != layer: continue
+        if sx0 - SILK_KEEPOUT_MARGIN <= x <= sx1 + SILK_KEEPOUT_MARGIN and \
+           sy0 - SILK_KEEPOUT_MARGIN <= y <= sy1 + SILK_KEEPOUT_MARGIN:
+            return sref
+    return None
+
+
 def spiral_positions(cx, cy, max_dist):
     """Yield (x, y) positions on a 0.5mm spiral from (cx, cy) up to max_dist."""
     step = 0.5
@@ -614,6 +669,11 @@ def place_one(ref, d, anchor_xy, max_dist, ch_num, fp_data, placed_set, pad_idx)
             continue
         # IC body bbox keep-out — don't place inside IC pad extent
         if in_ic_body_zone(x, y, fp_data, parent_ref=parent_ref):
+            continue
+        # Master 2026-05-24 Sai #12: silk-bbox keep-out — don't place inside any
+        # large component's solderable body. Class fix for under-bulk-cap, under-Hall.
+        if in_silk_body(x, y, fp_data, parent_ref=parent_ref,
+                        layer=d.get('layer', 'F.Cu')):
             continue
         dist = ((x - ax) ** 2 + (y - ay) ** 2) ** 0.5
         if dist > max_dist + 2.0:

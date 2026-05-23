@@ -407,6 +407,95 @@ def _has_motor_adjacent_net_pad(fp):
     return False
 
 
+def _silk_bbox_mm(fp):
+    """Return (xmin, ymin, xmax, ymax) of footprint silk outline drawings.
+    Falls back to courtyard, then to overall BBox if neither present.
+    Silk outline = the solderable body envelope (what physically lands on PCB)."""
+    silk_pts = []
+    ctyd_pts = []
+    for d in fp.GraphicalItems():
+        if not isinstance(d, pcbnew.PCB_SHAPE):
+            continue
+        layer = d.GetLayer()
+        if layer in (pcbnew.F_SilkS, pcbnew.B_SilkS):
+            bucket = silk_pts
+        elif layer in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
+            bucket = ctyd_pts
+        else:
+            continue
+        bb = d.GetBoundingBox()
+        bucket.append((pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetTop()),
+                       pcbnew.ToMM(bb.GetRight()), pcbnew.ToMM(bb.GetBottom())))
+    pts = silk_pts or ctyd_pts
+    if not pts:
+        bb = fp.GetBoundingBox()
+        return (pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetTop()),
+                pcbnew.ToMM(bb.GetRight()), pcbnew.ToMM(bb.GetBottom()))
+    xs = [b[0] for b in pts] + [b[2] for b in pts]
+    ys = [b[1] for b in pts] + [b[3] for b in pts]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+# Master 2026-05-24 Sai-catch #12: component-inside-body class.
+# Small component placed UNDER a larger component's solderable body — fab blocker.
+# Discovered when polymer bulk caps C1-C4 had 0402 passives + small diodes inside
+# their silk-bbox region. Master directive:
+#   - SILK bbox (not courtyard) as container
+#   - Area ratio: container > 4× contained
+#   - Same-layer only
+#   - Exempt motor-adjacent-net components (topologically required at motor node)
+# See [[feedback-anchor-outside-parent-body]] memory.
+def check_component_inside_body():
+    """Fail when a small component's pad center OR component center lies inside
+    a 4×-or-larger same-layer component's silk bbox."""
+    fps = list(board.GetFootprints())
+    info = []
+    for fp in fps:
+        ref = fp.GetReference()
+        if ref.startswith('H'):  # skip mounting holes
+            continue
+        b = _silk_bbox_mm(fp)
+        area = (b[2] - b[0]) * (b[3] - b[1])
+        if area <= 0:
+            continue
+        pos = fp.GetPosition()
+        cx = pcbnew.ToMM(pos.x); cy = pcbnew.ToMM(pos.y)
+        pads = [(pcbnew.ToMM(p.GetPosition().x), pcbnew.ToMM(p.GetPosition().y))
+                for p in fp.Pads()]
+        info.append({
+            'ref': ref, 'fp': fp, 'bbox': b, 'area': area,
+            'cx': cx, 'cy': cy, 'pads': pads,
+            'layer': fp.GetLayer(),
+            'motor_exempt': _has_motor_adjacent_net_pad(fp),
+        })
+
+    bugs = []
+    for inhabitant in info:
+        if inhabitant['motor_exempt']:
+            continue
+        ia = inhabitant['area']
+        for host in info:
+            if host['ref'] == inhabitant['ref']: continue
+            if host['layer'] != inhabitant['layer']: continue
+            if host['area'] < 4.0 * ia: continue  # container must be ≥4× contained
+            bx0, by0, bx1, by1 = host['bbox']
+            ctr_in = bx0 <= inhabitant['cx'] <= bx1 and by0 <= inhabitant['cy'] <= by1
+            pads_in = sum(1 for (px, py) in inhabitant['pads']
+                          if bx0 <= px <= bx1 and by0 <= py <= by1)
+            if ctr_in or pads_in > 0:
+                bugs.append((inhabitant['ref'], host['ref'],
+                             ctr_in, pads_in,
+                             inhabitant['cx'], inhabitant['cy'],
+                             host['fp'].GetFPID().GetUniStringLibId()))
+    if bugs:
+        fails.append(f"COMPONENT-INSIDE-BODY: {len(bugs)} component(s) placed inside a ≥4× larger same-layer host's silk bbox (fab-blocking)")
+        for inv, host, ctr, pads, x, y, hlib in bugs[:20]:
+            marker = "CTR+PADS" if ctr else f"PADS={pads}"
+            fails.append(f"  {inv} inside {host} ({hlib}) at ({x:.2f},{y:.2f}) [{marker}]")
+        if len(bugs) > 20:
+            fails.append(f"  ... and {len(bugs) - 20} more")
+
+
 # NEW check: coincident-placement bugs (master 2026-05-24 PR #71 reject)
 def check_coincident_placement():
     """Pairs of components within 1.5mm center-to-center on same layer.
@@ -974,6 +1063,7 @@ check_label_overlap()
 check_silk_on_pad()
 check_quadrant_count_balance()
 check_per_channel_passive_quadrant()
+check_component_inside_body()
 
 print(f"=== Layout compliance audit: {os.path.basename(sys.argv[1])} ===")
 print(f"Components: {len(items)}")
