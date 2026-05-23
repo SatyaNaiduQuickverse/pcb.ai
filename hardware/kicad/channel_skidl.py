@@ -15,14 +15,23 @@ skidl.set_default_tool(skidl.KICAD)
 
 
 def make_channel(ch_num, vmotor, v5, v3v3, v3v3a, gnd, dshot_in, tlm, swdio, swclk,
-                 global_ovuv_n=None, kill_bus=None):
+                 vref_2v5, global_ovuv_n=None, kill_bus=None):
     """Instantiate one ESC channel.
+
+    PR-centralize-vref (Phase 2 of channel-template-redo, 2026-05-23):
+        TL431 + bias R + bypass C moved OUT of make_channel to main script —
+        VREF_2V5 is now a board-global shared reference. Per-channel cluster now
+        adds only a 10nF local bypass cap at the divider entry tap (HF decoupling
+        at the hysteresis-feedback injection node). TLM pull-up also removed
+        (was 4× parallel 10K = 2.5kΩ effective, accidental; now 1× central 10K
+        in main script).
 
     Phase 3-redo additions: gate clamps, hardware current-limit,
     NTC + OTP comparator, local bypass cap stack, motor-phase TVS,
     per-channel kill rail.
 
     Args:
+        vref_2v5: board-global 2.5V reference (from central TL431 in main script).
         global_ovuv_n: global TPS3700 fault output (active-low). When LOW,
             disables all channels. Wire-OR'd into kill_bus (open-drain).
         kill_bus: per-board channel kill signal node. Forms wire-OR (active-low)
@@ -104,17 +113,10 @@ def make_channel(ch_num, vmotor, v5, v3v3, v3v3a, gnd, dshot_in, tlm, swdio, swc
     mcu[24] += swclk
     mcu[27] += dshot_in
     mcu[29] += tlm
-    # Phase 3b-detail: 10kΩ pull-up on TLM (PB6) to +3V3.
-    # AM32 source verification (serial_telemetry.c L27-34): PB6 is configured
-    # PUSH-PULL + internal pull-up + half-duplex single-line. External pull-up
-    # is NOT strictly required, but FPV reference designs add it for noise
-    # immunity on the shared TX/RX line with FC UART. Pending master URGENT
-    # adjudication 2026-05-22 on push-pull vs skip — worker recommended (a).
-    r_tlm_pu = Part("Device", "R", value="10K",
-                    footprint="Resistor_SMD:R_0402_1005Metric",
-                    description=f"TLM pull-up to +3V3 CH{cn} (noise immunity for half-duplex)")
-    r_tlm_pu[1] += tlm
-    r_tlm_pu[2] += v3v3
+    # PR-centralize-vref Phase 2 (2026-05-23): per-channel TLM pull-up REMOVED.
+    # Phase 1 audit found that 4× per-channel 10K pull-ups in parallel = 2.5kΩ
+    # effective, which was unintentional (TLM is shared half-duplex single-line
+    # bus across all 4 MCUs + FC). Single 10K to V3V3 lives in main script now.
     mcu[21] += Net(f"PA11_NC_CH{cn}")
     mcu[22] += Net(f"PA12_NC_CH{cn}")
     mcu[25] += led_gpio
@@ -311,21 +313,17 @@ def make_channel(ch_num, vmotor, v5, v3v3, v3v3a, gnd, dshot_in, tlm, swdio, swc
                   description=f"NTC 10kΩ B25/100=4250K (Murata NCP18WF104) CH{cn}")
     rt_ntc[1] += ntc_node; rt_ntc[2] += gnd
 
-    # TL431 voltage reference — 2.5V fixed (REF tied to cathode)
-    # Source: Diodes/onsemi TL431LIDBZ, JLC C7976 (Basic tier)
-    vref_2v5 = Net(f"VREF_2V5_CH{cn}")
-    u_tl431 = Part("Reference_Voltage", "TL431DBZ", value="TL431LI",
-                   footprint="Package_TO_SOT_SMD:SOT-23")
-    u_tl431[1] += vref_2v5   # REF (tied to cathode for 2.5V mode)
-    u_tl431[2] += vref_2v5   # CATHODE
-    u_tl431[3] += gnd        # ANODE
-    r_tl431_bias = Part("Device", "R", value="2K",
-                        footprint="Resistor_SMD:R_0402_1005Metric",
-                        description=f"TL431 cathode bias resistor CH{cn} (~400µA Ik)")
-    r_tl431_bias[1] += v3v3; r_tl431_bias[2] += vref_2v5
-    c_vref_bp = Part("Device", "C", value="100nF",
-                     footprint="Capacitor_SMD:C_0402_1005Metric")
-    c_vref_bp[1] += vref_2v5; c_vref_bp[2] += gnd
+    # PR-centralize-vref Phase 2 (2026-05-23): TL431 + bias R + bulk bypass C
+    # MOVED to main script (single central instance for all 4 channels). Phase 1
+    # audit verified: 200µA/channel load, 4-ch shared = 800µA; hysteresis
+    # (r_fb_i) injects at VREF_I_TRIP divider tap, NOT at VREF_2V5 → no
+    # inter-channel coupling on the shared rail. See docs/PHASE4_ARCHITECTURE_REVIEW.md.
+    # Per-channel: add 10nF local bypass at the divider/hysteresis injection
+    # node for HF decoupling (impedance-to-ground at the comparator-input bypass).
+    c_vref_local = Part("Device", "C", value="10nF",
+                        footprint="Capacitor_SMD:C_0402_1005Metric",
+                        description=f"VREF_2V5 local bypass CH{cn} (HF decoupling at divider tap)")
+    c_vref_local[1] += vref_2v5; c_vref_local[2] += gnd
 
     # Derived reference for I_TRIP @ 2.4V (= 120A @ 20 mV/A from INA186)
     # Divider: 2.4 = 2.5 × (24k/(1k+24k)) → R_high=1k, R_low=24k from VREF_2V5 to GND.
@@ -479,7 +477,9 @@ if __name__ == "__main__":
     tlm = Net("TLM_TEST")
     swdio = Net("SWDIO_CH1_TEST")
     swclk = Net("SWCLK_CH1_TEST")
-    ma, mb, mc = make_channel(1, vmotor, v5, v3v3, v3v3a, gnd, dshot, tlm, swdio, swclk)
+    vref_2v5 = Net("VREF_2V5_TEST")
+    ma, mb, mc, kln, krn = make_channel(1, vmotor, v5, v3v3, v3v3a, gnd, dshot, tlm,
+                                         swdio, swclk, vref_2v5)
     print(f"Channel 1 motor nets: A={ma.name} B={mb.name} C={mc.name}")
     out = "/home/novatics64/escworker/pcb.ai/hardware/kicad/channel_skidl_test.net"
     generate_netlist(file_=out)

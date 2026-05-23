@@ -826,6 +826,45 @@ R_CURR_PD = Part("Device", "R", value="100K",
 R_CURR_PD[1] += CURR_OUT
 R_CURR_PD[2] += GND
 
+# ─────────── PR-centralize-vref Phase 2 (2026-05-23): central TL431 + TLM pull-up ───────────
+# Phase 1 audit (docs/PHASE4_ARCHITECTURE_REVIEW.md) showed VREF_2V5 is high-Z DC
+# with no inter-channel coupling concern when shared. Centralizing saves ~48mm²
+# (~12mm²/channel zone) and removes the per-channel TL431 clusters that were
+# blocking density-limited placement in PR #68.
+#
+# Bias resistor sizing (datasheet TL431 I_K(min) = 1.0 mA):
+#   Load: 200µA/channel × 4 channels = 0.8 mA shared
+#   Total I_K = 1.0 mA (min for regulation) + 0.8 mA (load) = 1.8 mA target
+#   r_bias = (V3V3 - VREF) / I_K = (3.3 - 2.5) / 1.8 mA ≈ 444Ω → E24 390Ω pick
+#     → nominal I_K = (3.3 - 2.5) / 390 = 2.05 mA (+14% above min, gives margin
+#       against V3V3 sag to 3.135V at LDO 5% tolerance: I_K(worst) = 1.63 mA ≥ 1 mA ✓)
+#   Alternative 470Ω rejected — only +35% margin, V3V3 sag drops I_K to 1.35 mA.
+VREF_2V5 = Net("VREF_2V5")  # board-global; no _CH<n> suffix
+U_VREF_TL431 = Part("Reference_Voltage", "TL431DBZ", value="TL431LI",
+                    footprint="Package_TO_SOT_SMD:SOT-23",
+                    description="Central 2.5V reference (4-ch shared) — REF tied to cathode")
+U_VREF_TL431[1] += VREF_2V5   # REF (= cathode for 2.5V mode)
+U_VREF_TL431[2] += VREF_2V5   # CATHODE
+U_VREF_TL431[3] += GND        # ANODE
+R_VREF_BIAS = Part("Device", "R", value="390R",
+                   footprint="Resistor_SMD:R_0402_1005Metric",
+                   description="TL431 cathode bias resistor (4-ch shared load, I_K=2.05mA)")
+R_VREF_BIAS[1] += V3V3
+R_VREF_BIAS[2] += VREF_2V5
+C_VREF_BP = Part("Device", "C", value="100nF",
+                 footprint="Capacitor_SMD:C_0402_1005Metric",
+                 description="Central VREF_2V5 bulk bypass cap at TL431 cathode")
+C_VREF_BP[1] += VREF_2V5
+C_VREF_BP[2] += GND
+
+# Central TLM pull-up — was 4× 10K parallel = 2.5kΩ effective (accidental).
+# Now 1× 10K to V3V3 near TLM_CLEAN net (post-ESD, pre-channel-MCUs).
+R_TLM_PU = Part("Device", "R", value="10K",
+                footprint="Resistor_SMD:R_0402_1005Metric",
+                description="Central TLM pull-up to +3V3 (shared half-duplex bus to FC + 4×MCU)")
+R_TLM_PU[1] += TLM_CLEAN
+R_TLM_PU[2] += V3V3
+
 # ─────────── 4× channel instantiation (Phase 3c hierarchy) ────────────────────
 from channel_skidl import make_channel
 
@@ -854,6 +893,7 @@ for ch_num in range(1, 5):
         tlm=TLM_BUS,
         swdio=swdio,
         swclk=swclk,
+        vref_2v5=VREF_2V5,        # PR-centralize-vref Phase 2 — shared 2.5V reference
         global_ovuv_n=GLOBAL_OVUV_N,
         kill_bus=kill_bus_ch,
     )
