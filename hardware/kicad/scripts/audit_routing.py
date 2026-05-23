@@ -81,22 +81,32 @@ SIGNAL_MIN_WIDTH = 0.15
 
 
 def net_class(netname):
-    """Return (class_name, min_width_mm) for a net."""
+    """Return (class_name, min_width_mm) for a net.
+
+    Signal-vs-power discrimination: nets with 'VMOTOR_DIV', 'PG_VMOTOR',
+    'VMOTOR_SUPER_CT' (sense/status low-current signals) are SIGNAL class,
+    not VMOTOR power class. Only true VMOTOR power rails get 1.0mm.
+    """
     if not netname:
         return ('NO_NET', 0)
-    if 'VMOTOR' in netname or netname == '+VMOTOR':
+    # High-current power rails (1.0mm min)
+    if netname in ('+VMOTOR', 'VMOTOR_CH', 'VMOTOR_HALL_HI', 'VMOTOR_HALL_LO'):
         return ('VMOTOR', 1.0)
-    if 'MOTOR_' in netname:
+    if 'MOTOR_' in netname and not any(x in netname for x in ('_DIV', '_SUPER', 'PG_', 'SENSE')):
         return ('MOTOR', 1.0)
     if 'SHUNT_' in netname:
         return ('SHUNT', 1.0)
     if 'BATGND' in netname:
         return ('BATGND', 1.0)
+    # +BATT is a high-current rail
+    if netname == '+BATT' or netname == 'BATT_NTC':
+        return ('VMOTOR', 1.0)
+    # V5/V9/Buck power rails (medium current)
     if netname.startswith('+V5') or '_V5_' in netname:
         return ('V5', 0.3)
     if netname.startswith('+V9') or '_V9_' in netname:
         return ('V9', 0.3)
-    if netname.startswith('V_BUCK') or 'BUCK' in netname and 'OUT' in netname:
+    if netname.startswith('V_BUCK') or ('BUCK' in netname and 'OUT' in netname):
         return ('V_BUCK', 0.3)
     if netname.startswith('+3V3') or netname.startswith('V3V3'):
         return ('V3V3', 0.25)
