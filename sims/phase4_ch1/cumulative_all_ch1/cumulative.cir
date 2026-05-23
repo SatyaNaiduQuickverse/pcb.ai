@@ -1,0 +1,47 @@
+* PR-CH1 cumulative ALL+CH1 — full board operating model:
+* S1 XT30 input + S2 bulk caps + S3 Hall/supervisor + S5 BEC + CH1 motor PWM
+* @ 100A burst.
+* Validate: V_BATT stable, V_HALL noise <10mV, supervisor doesn't false-trip,
+* BEC rails stable.
+
+* S1 input
+V_batt   BATT 0      25.2
+R_ntc    BATT N1     0.025   ; NTC pair hot-state steady (2× MF72-5D25 // = 25mΩ)
+R_rpol   N1   VBUS   0.425m
+
+* S2 bulk caps (1880µF, 7.5mΩ ESR equivalent)
+R_esr    VBUS V1     0.0075
+C_bulk   V1   0      1880u IC=25.2
+
+* CH1 PWM load — 25A AC ripple component @ 30kHz PWM (50A avg load typical),
+* 50% duty. Plus 50A DC baseline = ~75A avg → ~50A continuous current draw.
+I_dc     VBUS 0      50
+I_ch1    VBUS 0      PULSE(0 25 200u 50n 50n 16.67u 33.33u)
+
+* S5 buck V5_FC (5V) ripple modeling
+B_v5fc   V5_FC 0     V = 5.0 + 0.015*sin(2*3.14159*500e3*TIME)
+
+* S3 supervisor input divider on VBUS
+R19      VBUS INA    348k
+R20      INA  0      23.2k
+
+* Hall sense (post V5_FC PSRR + filter)
+R31      V5_FC HALL_OUT_DIV  10k
+R32      HALL_OUT_DIV 0      20k
+C44      HALL_OUT_DIV 0      10n IC=1.667
+
+.ic V(V1)=25.2 V(HALL_OUT_DIV)=1.667
+
+.control
+  tran 100n 2m UIC
+  meas tran v_bus_max MAX V(VBUS) FROM=500u TO=2m
+  meas tran v_bus_min MIN V(VBUS) FROM=500u TO=2m
+  meas tran v_ina_max MAX V(INA) FROM=500u TO=2m
+  meas tran v_ina_min MIN V(INA) FROM=500u TO=2m
+  meas tran v_hall_max MAX V(HALL_OUT_DIV) FROM=500u TO=2m
+  meas tran v_hall_min MIN V(HALL_OUT_DIV) FROM=500u TO=2m
+  set wr_singlescale
+  set wr_vecnames
+  wrdata cumulative_data.raw V(VBUS) V(INA) V(HALL_OUT_DIV)
+.endc
+.end

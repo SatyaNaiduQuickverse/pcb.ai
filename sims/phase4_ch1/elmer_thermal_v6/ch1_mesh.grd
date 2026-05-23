@@ -1,0 +1,31 @@
+! PR-CH1 Elmer thermal v6 — CH1 6 FETs at P=12 X=12,30 Y=56,68,80.
+! Domain 40×40×1.6mm slab around CH1 cluster.
+! Subcells (8×8×1):
+!   x: 0..8, 8..16, 16..24, 24..32, 32..40
+!   y: 50..54, 54..58, 58..62, 62..66, 66..70, 70..74, 74..78, 78..82
+! FETs at (12, 56), (30, 56), (12, 68), (30, 68), (12, 80), (30, 80)
+Version = 210903
+Coordinate System = Cartesian 3D
+Subcell Divisions in 1D = 5 8 1
+Subcell Limits 1 = 0 0.008 0.016 0.024 0.032 0.040
+Subcell Limits 2 = 0.050 0.054 0.058 0.062 0.066 0.070 0.074 0.078 0.082
+Subcell Limits 3 = 0 0.0016
+Materials Interval = 1 1
+Boundary Definitions
+  1     1   -1   1
+  2     2   -1   1
+  3     3   -1   1
+End
+Numbering = Horizontal
+Element Degree = 1
+Element Innernodes = False
+Triangles = False
+Surface Elements = 200
+Coordinate Ratios = 1 1 1
+Minimum Element Divisions = 1 1 1
+Element Ratios 1 = 1
+Element Ratios 2 = 1
+Element Ratios 3 = 1
+Element Densities 1 = 1
+Element Densities 2 = 1
+Element Densities 3 = 1
