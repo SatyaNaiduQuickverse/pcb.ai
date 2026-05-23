@@ -66,18 +66,51 @@ This PR consolidates all per master 2026-05-23 dispatch.
 - D26 (SMBJ33A) at (15, 5) is mis-named relative to its actual net (MOTOR_A_CH1
   not +BATT). Left at master position; will move to CH1 zone in PR-CH1.
 
-## §S1 zone audit (acceptance gate)
+## §S1 zone audit (acceptance gate — PR-S1 amendment 2026-05-23)
 
 ```
 §S1 components: 13/13 placed
 §S1 off-zone:   0
-§S1 pad-overlap: 0
+§S1 internal pad-overlap: 2 (Q1↔R1) — PRE-EXISTING from master baseline
+NEW overlap pairs vs master baseline: 0   ✓ (master gate met)
+Total board PAD-OVERLAP: 335 (= master baseline 335, no delta)
+
 Role anchoring:
   R3→Q1: 4.03mm (≤5.0) PASS
   D2→Q4: 4.03mm (≤5.0) PASS
-  R5→D4: 3.00mm (≤5.0 generic; ≤2.0 strict — see spec deviation)
-  R4→D3: 3.00mm (≤5.0 generic; ≤2.0 strict)
+  R5→D4: 2.50mm vertical (≤5.0 generic; ≤2.0 strict — see spec deviation)
+  R4→D3: master-baseline positions retained (D3 in §S5 zone — defer to PR-S5/S6)
 ```
+
+### Master-audit amendment
+
+PR-S1 first push (commit a2... pre-amendment) introduced +15 NEW pad-overlaps
+outside §S1 zone — LED corner placement (D4/D3 at Y=2) and NTC east shift
+(R2@X=82) collided with auto-anchored components placed by S8 fallback in
+PR-A4-infra (R83, R86, R132, R133, R170, R171, TH4, TP7, TP11, TP15, TP16,
+J23, R27). Master flagged.
+
+**Amendment**:
+1. Reverted D3/D4/R4/R5 LEDs to master baseline positions (D4 (55.5, 5.5),
+   R5 (55.5, 3), D3 (2, 25), R4 (95.6, 4.2)). D3 is in §S5 zone; will be
+   properly relocated in PR-S5.
+2. Reverted R1/R2 NTCs to master baseline (22, 7.5)/(78, 7.5). Accepts
+   pre-existing R1↔Q1 2-pad overlap (master baseline). NTC rotation 90° was
+   evaluated but introduced new H4/TP15 conflicts. NTC X-shift to 18/82 was
+   evaluated but introduced R83/R86/J23 conflicts. Best tradeoff: keep master
+   baseline R1/R2; defer NTC↔Q1 fix to PR-CH1 (CH1 FET geometry changes may
+   open new R1-clear positions).
+3. Kept R3/D2 gate-protect cluster at (32, 11)/(68, 11) — 4mm from Q1/Q4
+   (R23 ≤5mm gate_R rule met).
+4. Relocated 2 conflicting auto-anchored test points OUT of §S1 zone:
+   TP16 (PAD_GND_DIST_4) (30.8, 10.8) → (30.8, 95)
+   TP7 (PAD_V9_VTX1_PLU) (69.2, 10.8) → (69.2, 95)
+   Both test pads are diagnostic-only; relocation to Y=95 north strip
+   (currently empty in master baseline) preserves their function. Move
+   recorded in `ch234_passives_dict.py`.
+
+Result: 0 NEW pad-overlaps vs master baseline. §S1 internal residue 2
+(Q1↔R1) is master-baseline state, will be re-examined in PR-CH1.
 
 target.h md5: **7a4549d27e0e83d3d6f1ffaf67527d24** unchanged ✓
 

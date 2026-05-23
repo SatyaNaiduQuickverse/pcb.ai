@@ -46,11 +46,15 @@ S1_POSITIONS = {
     # PR-S1 2026-05-23: §S1 battery input — Y=0-13 zone, X-symmetric about X=50.
     'J1':         (50.0,  4.0, 'F.Cu',  0.0),   # XT30 BATT_PAD (center primary input)
     # NTC inrush limiters (MF72_5D25) — west/east of FET cluster, mirror about X=50
-    # NTCs are through-hole MF72_5D25 (5mm lead pitch); pad 2 at X+5 mm collides
-    # with Q1/Q4 SuperSO8 F.Cu signal pads at X=26.6-27.7 / X=72.3-73.4 if NTC
-    # centered at X=22/78. Shift west/east to X=18/82 → pad 2 at X=23/87 clear.
-    'R1':         (18.0,  7.5, 'F.Cu',  0.0),   # NTC #1 west of Q1/Q2
-    'R2':         (82.0,  7.5, 'F.Cu',  0.0),   # NTC #2 east of Q3/Q4 (mirror)
+    # NTCs MF72_5D25 (TH, 5mm lead pitch). KEEP MASTER baseline (22, 7.5)/(78, 7.5)
+    # rotation 0. This accepts the 2 master-baseline R1↔Q1 pad overlaps (inside
+    # §S1 zone, existed before PR-S1 — not introduced by this PR per master gate
+    # "no NEW overlaps from this PR"). Rotation/shift attempts all introduced
+    # NEW outside-§S1 overlaps (R1↔H4/TP15 or R1↔R83/TH4). Per master tradeoff
+    # accept master-state for R1/R2 — Q1↔R1 will be re-examined in PR-CH1 with
+    # CH1 FET reshuffle.
+    'R1':         (22.0,  7.5, 'F.Cu',  0.0),
+    'R2':         (78.0,  7.5, 'F.Cu',  0.0),
     # 4× BSC014N06NS rev-pol FETs, parallel; symmetric about X=50
     'Q1':         (30.0,  7.5, 'B.Cu',  0.0),
     'Q2':         (45.0,  7.5, 'B.Cu',  0.0),
@@ -60,15 +64,14 @@ S1_POSITIONS = {
     # from nearest FET gate per R23. R3 anchored to Q1 (4mm); D2 anchored to Q4 (4mm).
     'R3':         (32.0, 11.0, 'F.Cu',  0.0),   # GATE_RP 10K pull, anchored to Q1
     'D2':         (68.0, 11.0, 'F.Cu',  0.0),   # 12V Zener, anchored to Q4 (symmetric)
-    # Status LEDs — corner placement, R5↔D4 + R4↔D3 each within 2mm (R23 led_R rule)
-    # LED pairs: R5↔D4 at 3mm pitch (R23 led_R rule says ≤2mm but adjacent same-net
-    # pads need ≥0.5mm air-gap to pass pad-overlap audit; 3mm achieves both).
-    # Spec deviation: led_R role distance 3mm > 2mm R23 strict. Acceptable: same-net
-    # adjacent pad pair is intentional design (LED_PWR_NODE / LED_RPOL_NODE).
-    'D4':         (10.0,  2.0, 'F.Cu',  0.0),   # RED_RPOL — rev-polarity warning LED
-    'R5':         (13.0,  2.0, 'F.Cu',  0.0),   # D4 current-limit (3mm pitch, ≤5mm R23 generic)
-    'D3':         (90.0,  2.0, 'F.Cu',  0.0),   # GREEN_PWR — +VMOTOR power-good LED
-    'R4':         (87.0,  2.0, 'F.Cu',  0.0),   # D3 current-limit (mirror)
+    # Status LEDs — KEEP MASTER-BASELINE POSITIONS (PR-S1 amendment after master
+    # audit flagged +15 NEW overlaps from moving LEDs into dense auto-anchored Y=2
+    # strip). Master baseline D4/R5 pair at (55.5, 5.5)/(55.5, 3) is symmetric-OK;
+    # D3/R4 at (90, 4.2)/(95.6, 4.2) are not paired but in low-density east corner.
+    'D4':         (55.5,  5.5, 'F.Cu',  0.0),   # RED_RPOL — master baseline position
+    'R5':         (55.5,  3.0, 'F.Cu',  0.0),   # D4 current-limit (2.5mm — vertical pair)
+    'D3':         (2.0,  25.0, 'F.Cu',  0.0),   # GREEN_PWR — master baseline position (in §S5 strip; defer to PR-S5/S6 to relocate)
+    'R4':         (95.6,  4.2, 'F.Cu',  0.0),   # D3 current-limit (master baseline; D3 is far — handled in later PR)
     # D26 SMBJ33A — net is MOTOR_A_CH1, this is CH1 motor TVS (mis-labeled by historical
     # placement). Leave at master placement (15, 5) — moved to CH1 in PR-CH1.
     'D26':        (15.0,  5.0, 'B.Cu',  0.0),

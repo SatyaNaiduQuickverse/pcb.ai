@@ -7859,7 +7859,7 @@
 	(footprint "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P5.08mm_Vertical"
 		(layer "F.Cu")
 		(uuid "10afb9ed-cb34-4103-b736-59de25e10ca6")
-		(at 82.00 7.50 0.0)
+		(at 78.00 7.50 0.0)
 		(descr "Resistor, Axial_DIN0207 series, Axial, Vertical, pin pitch=5.08mm, 0.25W = 1/4W, length*diameter=6.3*2.5mm^2, http://cdn-reichelt.de/documents/datenblatt/B400/1_4W%23YAG.pdf")
 		(tags "Resistor Axial_DIN0207 series Axial Vertical pin pitch 5.08mm 0.25W = 1/4W length 6.3mm diameter 2.5mm")
 		(property "Reference" "R2"
@@ -22766,7 +22766,7 @@
 	(footprint "Resistor_SMD:R_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "2a553a72-d1bd-4e4d-a56d-daf7db124e69")
-		(at 87.00 2.00 0.0)
+		(at 95.60 4.20 0.0)
 		(descr "Resistor SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R4"
@@ -29935,7 +29935,7 @@
 	(footprint "Resistor_SMD:R_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "39948347-8d23-443c-9d27-cbe82e71c0a9")
-		(at 13.00 2.00 0.0)
+		(at 55.50 3.00 0.0)
 		(descr "Resistor SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R5"
@@ -60473,7 +60473,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "76d7c48a-a944-459d-b1ab-0619b1be35e3")
-		(at 30.80 10.80 0.0)
+		(at 30.80 95.00 0.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP16"
@@ -69109,7 +69109,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "8ba56258-ef0d-4928-9d85-4a2114f5d245")
-		(at 69.20 10.80 0.0)
+		(at 69.20 95.00 0.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP7"
@@ -95263,7 +95263,7 @@
 	(footprint "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P5.08mm_Vertical"
 		(layer "F.Cu")
 		(uuid "be0c768d-f94d-4a26-8d33-eb36eafd77a3")
-		(at 18.00 7.50 0.0)
+		(at 22.00 7.50 0.0)
 		(descr "Resistor, Axial_DIN0207 series, Axial, Vertical, pin pitch=5.08mm, 0.25W = 1/4W, length*diameter=6.3*2.5mm^2, http://cdn-reichelt.de/documents/datenblatt/B400/1_4W%23YAG.pdf")
 		(tags "Resistor Axial_DIN0207 series Axial Vertical pin pitch 5.08mm 0.25W = 1/4W length 6.3mm diameter 2.5mm")
 		(property "Reference" "R1"
@@ -96956,7 +96956,7 @@
 	(footprint "LED_SMD:LED_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "c418cce3-82f2-4ac0-88a8-afcb60dcd94e")
-		(at 90.00 2.00 0.0)
+		(at 2.00 25.00 0.0)
 		(descr "LED SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: http://www.tortai-tech.com/upload/download/2011102023233369053.pdf), generated with kicad-footprint-generator")
 		(tags "LED")
 		(property "Reference" "D3"
@@ -118859,7 +118859,7 @@
 	(footprint "LED_SMD:LED_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "ec453eae-ba02-49f8-ab03-6dc35cb5e8d1")
-		(at 10.00 2.00 0.0)
+		(at 55.50 5.50 0.0)
 		(descr "LED SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: http://www.tortai-tech.com/upload/download/2011102023233369053.pdf), generated with kicad-footprint-generator")
 		(tags "LED")
 		(property "Reference" "D4"
@@ -128466,9 +128466,21 @@
 
 	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
 
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "67531aef-62f5-4b13-be1e-4fff0d991cfc")
+		(uuid "21d332a0-5302-4675-a36f-8f4f6ecd5ff7")
 		(at 44.60 37.50 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128476,13 +128488,13 @@
 		(property "Reference" "H1"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "9782c482-1e18-4ba1-b45d-edc6f213106e")
+			(uuid "82de01dc-661e-4370-9196-7c154106826a")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "75572cd2-ead6-4d42-bdf7-e714d876c68b")
+			(uuid "6e4e0a67-96cf-4b51-8c8c-8f25dfc12cce")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128490,12 +128502,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "ddcfd5e9-66c5-4913-9a65-cb18a985878f")
+			(uuid "c5c10c36-12ef-499e-9fce-9be0619ea78d")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "d59812e5-af82-4dd0-9a5c-95cfaefcae52")
+		(uuid "935608fe-212b-4a12-9d6b-523828703ffe")
 		(at 51.80 37.50 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128503,13 +128515,13 @@
 		(property "Reference" "H2"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "7204814c-acb0-4a75-8e8b-092dbf4240dd")
+			(uuid "3c925124-bd00-404d-bfc7-d7632763dded")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "1165d2fe-01e5-463b-8c7b-67133b8cf0b0")
+			(uuid "2ed11457-b282-4e35-8efa-2b7758e1e9f0")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128517,12 +128529,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "bd469a19-d0b7-4682-8bcc-17034e5edef8")
+			(uuid "fe7d87a6-6c55-48ba-b719-0c94c549c139")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "76cc36a1-991b-4e2e-a89a-7420025fdb35")
+		(uuid "416936ef-fa0f-4a9a-8812-65ad4d9eee53")
 		(at 2.00 2.00 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128530,13 +128542,13 @@
 		(property "Reference" "H3"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "c9ab9377-9bc8-4f9b-a8d3-44f87ac63d08")
+			(uuid "9d023ad2-fd42-415f-8a71-fa051bbc0ca6")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "e66f4451-661a-4b3e-90f8-7a9e032571aa")
+			(uuid "4a41654c-5dec-4ee1-954d-4188f0e476f3")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128544,12 +128556,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "00c5ff36-fa18-4483-a83d-ac9ef8beadc8")
+			(uuid "06c046b7-ebe0-4844-95ce-3c1cbf26cb8d")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "0c798b48-5cb1-41e6-bac6-68d663ace6ad")
+		(uuid "041eb5c4-100f-48c7-9774-7eaacb805ed1")
 		(at 23.60 2.00 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128557,13 +128569,13 @@
 		(property "Reference" "H4"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "8aae061f-24c5-448b-9aae-934048d8caf0")
+			(uuid "bcb90b76-a9f2-404d-b3b8-a8cbcf04eb29")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "45f52e87-65ef-4f64-80ec-43d8a63cde1d")
+			(uuid "e55efa46-9d87-4ce7-bc27-33df6a5e1b1c")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128571,7 +128583,7 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "c9bbd539-0c16-41c7-bfbc-eb5a086b4e8d")
+			(uuid "75a39495-3285-425a-8035-36c91840d75a")
 		)
 	)
 )
