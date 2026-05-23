@@ -1,0 +1,34 @@
+* PR-S6 pair-wise S2→S6 crosstalk: V_BUS ripple at 30kHz couples capacitively into
+* adjacent DShot trace. Acceptance: induced noise on DShot ≤ 100mV
+* (well below 3.3V threshold).
+*
+* Geometry: V_BUS plane (S2 bulk caps) has 0.46V pk-pk ripple at 30kHz fundamental.
+* DShot trace runs ~10mm away from V_BUS bulk cap region. Coupling capacitance
+* estimated 0.5pF per cm of trace adjacency, total ~1pF for 20mm shared length.
+* Receiver Z = 10k (high-Z) || 12pF (load cap).
+
+* Aggressor (V_BUS ripple): 0.46V pk-pk @ 30kHz square wave (worst-case)
+V_aggr    VBUS_RIP 0   PULSE(-0.23 0.23 1u 100n 100n 16.67u 33.33u)
+
+* Coupling capacitor (1pF between V_BUS and DShot trace)
+C_couple  VBUS_RIP DSHOT_RX  1p
+
+* DShot receiver loading
+R_term    DSHOT_RX 0  10k
+C_load    DSHOT_RX 0  12p
+
+* DC bias (DShot idle high typical)
+V_bias    BIAS 0       3.3
+R_bias    BIAS DSHOT_RX  1Meg
+
+.ic V(DSHOT_RX)=3.3
+
+.control
+  tran 100n 100u UIC
+  meas tran v_p2p MAX V(DSHOT_RX) FROM=20u TO=100u
+  meas tran v_low MIN V(DSHOT_RX) FROM=20u TO=100u
+  set wr_singlescale
+  set wr_vecnames
+  wrdata crosstalk_data.raw V(DSHOT_RX) V(VBUS_RIP)
+.endc
+.end

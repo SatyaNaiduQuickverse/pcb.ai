@@ -1,0 +1,41 @@
+* PR-S6 DShot SI sim — DShot600 signal at 600kHz nominal carrier, 350Mbps actual.
+* DShot600 timing: T_total = 1.67µs per bit, ~600ns per half-bit pulse.
+* Acceptance per master: rise time ≤200ns, no overshoot >5%, ringing ≤3 cycles.
+*
+* Setup: MCU GPIO push-pull driver with ~50Ω output Z → 50mm 50Ω microstrip
+* (0.2mm trace over 0.2mm dielectric to GND plane) → USBLC6 ESD (capacitive
+* load ~3pF) → J14 FC connector (capacitive load ~2pF) → motor controller input
+* (high-Z, ~10pF cable + receiver C). Total far-end C ~15pF.
+
+* MCU GPIO driver (V_OH=3.3V, R_out ~50Ω)
+V_gpio    GPIO_IN 0    PULSE(0 3.3 100ns 50n 50n 600n 1.67u)
+R_driver  GPIO_IN N1   50
+
+* 50mm trace modeled as 5 LC segments (1cm each)
+L1  N1 N2  5n
+C1  N2 0   2p
+L2  N2 N3  5n
+C2  N3 0   2p
+L3  N3 N4  5n
+C3  N4 0   2p
+L4  N4 N5  5n
+C4  N5 0   2p
+L5  N5 RX  5n
+C5  RX 0   2p
+
+* USBLC6 ESD diode capacitance (3pF)
+C_esd  RX 0  3p
+* J14 connector + motor controller far-end load
+C_load RX 0  12p
+R_load RX 0  10k
+
+.control
+  tran 1n 5u UIC
+  meas tran v_max MAX V(RX) FROM=100n TO=800n
+  meas tran v_min MIN V(RX) FROM=100n TO=800n
+  meas tran t_rise TRIG V(RX) VAL=0.33 RISE=1 TARG V(RX) VAL=2.97 RISE=1
+  set wr_singlescale
+  set wr_vecnames
+  wrdata dshot_data.raw V(RX) V(GPIO_IN)
+.endc
+.end
