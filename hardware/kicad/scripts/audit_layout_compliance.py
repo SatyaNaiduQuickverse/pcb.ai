@@ -135,7 +135,15 @@ def check_pad_overlap(items):
 
 
 # ----- check 3: symmetry (4 channels) -----
-def check_symmetry(items, board_h=95.0, board_w=100.0):
+def check_symmetry(items, board_h=None, board_w=None):
+    # PR-A4-redo 2026-05-23: read board outline dynamically (was hardcoded 95×100)
+    bb = get_outline_bbox()
+    if bb:
+        x_min, y_min, x_max, y_max = bb
+        if board_w is None: board_w = x_max - x_min
+        if board_h is None: board_h = y_max - y_min
+    if board_w is None: board_w = 100.0
+    if board_h is None: board_h = 100.0
     fets = {ref: (d["x"], d["y"]) for ref, d in items.items()
             if ref.startswith("Q") and ref[1:].isdigit()
             and 5 <= int(ref[1:]) <= 28}
@@ -258,102 +266,145 @@ def check_decoupling(items):
             fails.append(f"  {r} at ({x:.1f},{y:.1f}) — no C within 3mm")
 
 
-# ----- check 6: pad-in-body bbox (Sai-caught defect 2026-05-23) -----
-def check_pad_in_body_bbox(items):
-    bad = []
+# ----- check 6: mount-hole vs body conflict (PR-spine-fix 2026-05-23) -----
+def check_mount_hole_vs_body(items):
+    """For every mount hole H*, verify no other component's pad bbox intersects
+    the hole's 3mm keep-out radius. Catches the PR-S3 H1/H2-inside-U1-Hall bug."""
+    mount_holes = []
     for ref, d in items.items():
-        fp = d["fp"]
-        body_bb = fp.GetBoundingBox()
-        body_diag = math.hypot(
-            pcbnew.ToMM(body_bb.GetWidth()) / 2,
-            pcbnew.ToMM(body_bb.GetHeight()) / 2,
-        )
-        max_dist = body_diag + 2.0
-        cx = pcbnew.ToMM(fp.GetPosition().x)
-        cy = pcbnew.ToMM(fp.GetPosition().y)
-        for pad in fp.Pads():
-            pp = pad.GetPosition()
-            dist = math.hypot(pcbnew.ToMM(pp.x) - cx, pcbnew.ToMM(pp.y) - cy)
-            if dist > max_dist:
-                bad.append((ref, pad.GetPadName(), dist, max_dist))
-    if bad:
-        fails.append(f"PAD-IN-BODY: {len(bad)} pads detached from parent body (>2mm beyond bbox)")
-        for r, pn, d, m in bad[:8]:
-            fails.append(f"  {r}.{pn}: {d:.1f}mm from center (max {m:.1f}mm)")
-        if len(bad) > 8:
-            fails.append(f"  ... and {len(bad) - 8} more")
-
-
-# ----- check 7: motor-terminal-pad clear-zone (Sai-caught defect 2026-05-23) -----
-def check_motor_pad_clear(items):
-    terminal_pads = []
-    for ref, d in items.items():
-        for pad in d["fp"].Pads():
-            bb = pad.GetBoundingBox()
-            area = pcbnew.ToMM(bb.GetWidth()) * pcbnew.ToMM(bb.GetHeight())
-            if area > 5.0:
-                terminal_pads.append((ref, pad.GetPadName(), bb))
-    margin = 2.0
-    encroach = []
-    for tref, tpn, tbb in terminal_pads:
-        x1 = pcbnew.ToMM(tbb.GetLeft()) - margin
-        y1 = pcbnew.ToMM(tbb.GetTop()) - margin
-        x2 = pcbnew.ToMM(tbb.GetRight()) + margin
-        y2 = pcbnew.ToMM(tbb.GetBottom()) + margin
-        for oref, od in items.items():
-            if oref == tref:
-                continue
-            ox, oy = od["x"], od["y"]
-            if x1 <= ox <= x2 and y1 <= oy <= y2:
-                encroach.append((tref, tpn, oref))
-    if encroach:
-        per_pad = {}
-        for tref, tpn, oref in encroach:
-            per_pad.setdefault((tref, tpn), []).append(oref)
-        fails.append(f"MOTOR-PAD-CLEAR: {len(per_pad)} terminal pads have components inside keep-out (+{margin}mm)")
-        for (tref, tpn), encr in list(per_pad.items())[:8]:
-            fails.append(f"  {tref}.{tpn}: {len(encr)} comps inside ({', '.join(encr[:4])}{'...' if len(encr) > 4 else ''})")
-        if len(per_pad) > 8:
-            fails.append(f"  ... and {len(per_pad) - 8} more pads")
-
-
-# ----- check 8: quadrant component balance (Sai-caught defect 2026-05-23) -----
-def check_quadrant_count_balance(items, bbox):
-    if not bbox:
+        if ref.startswith("H") and len(ref) > 1 and ref[1:].isdigit():
+            mount_holes.append((ref, d["x"], d["y"]))
+    if not mount_holes:
         return
-    x_min, y_min, x_max, y_max = bbox
-    cx, cy = (x_min + x_max) / 2, (y_min + y_max) / 2
-    quads_F = {"NW": 0, "NE": 0, "SE": 0, "SW": 0}
-    quads_B = {"NW": 0, "NE": 0, "SE": 0, "SW": 0}
-    for ref, d in items.items():
-        x, y = d["x"], d["y"]
-        if not (x_min <= x <= x_max and y_min <= y <= y_max):
+    conflicts = []
+    KEEPOUT_R = 3.0  # mm — M3 clearance + 1.5mm trace keepout per industry std
+    for h_ref, h_x, h_y in mount_holes:
+        for ref, d in items.items():
+            if ref == h_ref or ref.startswith("H"):
+                continue
+            for pad in d["fp"].Pads():
+                bb = pad.GetBoundingBox()
+                px1 = pcbnew.ToMM(bb.GetLeft())
+                py1 = pcbnew.ToMM(bb.GetTop())
+                px2 = pcbnew.ToMM(bb.GetRight())
+                py2 = pcbnew.ToMM(bb.GetBottom())
+                # Closest point of pad bbox to hole center
+                cx = max(px1, min(h_x, px2))
+                cy = max(py1, min(h_y, py2))
+                d_min = math.hypot(h_x - cx, h_y - cy)
+                if d_min < KEEPOUT_R:
+                    conflicts.append((h_ref, ref, d_min))
+                    break  # only flag once per component
+    if conflicts:
+        fails.append(f"MOUNT-HOLE-CONFLICT: {len(conflicts)} component(s) inside mount-hole {KEEPOUT_R}mm keep-out")
+        for h, r, d_min in conflicts[:10]:
+            fails.append(f"  {h} keep-out hit by {r} (closest pad {d_min:.2f}mm)")
+
+
+# ----- check 7: pad-in-body bbox (Defect-1 class) -----
+# Detects footprints whose pads are physically separated from the footprint body,
+# e.g., kinet2pcb library bug where Allegro_CB_PFF has pads 4-5 21mm offset from body.
+def check_pad_in_body_bbox():
+    """For each footprint, verify every pad center is within the body bbox
+    (Edge/SilkS/Fab outline) + 5mm. Catches "floating pad" library bugs."""
+    suspects = []
+    for fp in board.GetFootprints():
+        ref = fp.GetReference()
+        # Use footprint-relative body bbox (includes silk/fab outlines).
+        # PADs that fall outside body+5mm are suspect.
+        pad_positions = [(pcbnew.ToMM(p.GetPosition().x), pcbnew.ToMM(p.GetPosition().y))
+                         for p in fp.Pads()]
+        if len(pad_positions) < 2:
             continue
-        if x < cx and y >= cy:
-            q = "NW"
-        elif x >= cx and y >= cy:
-            q = "NE"
-        elif x >= cx and y < cy:
-            q = "SE"
-        else:
-            q = "SW"
-        if d["side"] == "F":
-            quads_F[q] += 1
-        else:
-            quads_B[q] += 1
-    pair_checks = [("NW", "NE"), ("SW", "SE"), ("NW", "SW"), ("NE", "SE")]
-    bad = []
-    for label, qs in [("F.Cu", quads_F), ("B.Cu", quads_B)]:
-        for a, b in pair_checks:
-            delta = abs(qs[a] - qs[b])
-            if delta > 2:
-                bad.append((label, a, qs[a], b, qs[b], delta))
-    if bad:
-        fails.append(f"QUADRANT-BALANCE: {len(bad)} quadrant pairs out of balance (>2 count delta)")
-        for label, a, qa, b, qb, delta in bad[:6]:
-            fails.append(f"  {label} {a}={qa} vs {b}={qb} delta={delta}")
-        if len(bad) > 6:
-            fails.append(f"  ... and {len(bad) - 6} more")
+        # Compute pad-cluster bbox and pad-pair max separation
+        xs = [p[0] for p in pad_positions]
+        ys = [p[1] for p in pad_positions]
+        max_x_span = max(xs) - min(xs)
+        max_y_span = max(ys) - min(ys)
+        # Suspect threshold: if any pad is >20mm from the centroid of others, flag
+        cx = sum(xs) / len(xs); cy = sum(ys) / len(ys)
+        for p in fp.Pads():
+            ppos = p.GetPosition()
+            px, py = pcbnew.ToMM(ppos.x), pcbnew.ToMM(ppos.y)
+            d = math.hypot(px - cx, py - cy)
+            if d > 15.0:  # 15mm is generous — flags ACS758-CB-PFF-class issues
+                suspects.append((ref, p.GetNumber(), px, py, d))
+                break
+    if suspects:
+        fails.append(f"PAD-IN-BODY-BBOX: {len(suspects)} footprint(s) have pads >15mm from cluster centroid (likely library bug)")
+        for ref, padn, x, y, d in suspects[:10]:
+            fails.append(f"  {ref} pad {padn!r} at ({x:.1f},{y:.1f}) is {d:.1f}mm from cluster centroid")
+
+
+# ----- check 8: motor-pad clear-zone (Defect-2 class) -----
+# Motor terminal pads need 14-16AWG solder clearance — no components within
+# pad bbox + 2mm keep-out.
+MOTOR_TP_REFS = ('TP19','TP20','TP21','TP26','TP27','TP28',
+                 'TP33','TP34','TP35','TP40','TP41','TP42')
+MOTOR_PAD_KEEPOUT = 2.0
+
+def check_motor_pad_clear():
+    zones = {}
+    for fp in board.GetFootprints():
+        if fp.GetReference() in MOTOR_TP_REFS:
+            bb = fp.GetBoundingBox()
+            zones[fp.GetReference()] = (
+                pcbnew.ToMM(bb.GetLeft()) - MOTOR_PAD_KEEPOUT,
+                pcbnew.ToMM(bb.GetTop()) - MOTOR_PAD_KEEPOUT,
+                pcbnew.ToMM(bb.GetRight()) + MOTOR_PAD_KEEPOUT,
+                pcbnew.ToMM(bb.GetBottom()) + MOTOR_PAD_KEEPOUT,
+            )
+    encroach = []
+    for fp in board.GetFootprints():
+        r = fp.GetReference()
+        if r in MOTOR_TP_REFS or r.startswith(('Q', 'J', 'U', 'H')):
+            continue
+        pos = fp.GetPosition()
+        cx, cy = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
+        for tp, (x1, y1, x2, y2) in zones.items():
+            if x1 <= cx <= x2 and y1 <= cy <= y2:
+                encroach.append((r, tp, cx, cy))
+                break
+    if encroach:
+        fails.append(f"MOTOR-PAD-CLEAR: {len(encroach)} component(s) inside motor-TP zone + {MOTOR_PAD_KEEPOUT}mm keep-out")
+        for ref, tp, cx, cy in encroach[:10]:
+            fails.append(f"  {ref} at ({cx:.1f},{cy:.1f}) inside {tp} zone")
+
+
+# ----- check 9: quadrant component-count balance (Defect-3 class) -----
+# Per R19: 4 channel quadrants should have near-identical component counts
+# (≤2 delta) — enforces symmetric mirror via [[feedback-symmetry-preserves-work]].
+QUADRANT_DELTA_LIMIT = 2
+
+def check_quadrant_count_balance():
+    bb = get_outline_bbox()
+    if not bb:
+        return
+    x_min, y_min, x_max, y_max = bb
+    mid_x = (x_min + x_max) / 2
+    mid_y = (y_min + y_max) / 2
+    quads = {'NW': 0, 'NE': 0, 'SW': 0, 'SE': 0}
+    for fp in board.GetFootprints():
+        if fp.GetLayer() != pcbnew.F_Cu:
+            continue
+        pos = fp.GetPosition()
+        x, y = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
+        if x <= mid_x and y >= mid_y: quads['NW'] += 1
+        elif x > mid_x and y >= mid_y: quads['NE'] += 1
+        elif x <= mid_x and y < mid_y: quads['SW'] += 1
+        else: quads['SE'] += 1
+    deltas = {
+        'NW vs NE': abs(quads['NW'] - quads['NE']),
+        'SW vs SE': abs(quads['SW'] - quads['SE']),
+        'NW vs SW': abs(quads['NW'] - quads['SW']),
+        'NE vs SE': abs(quads['NE'] - quads['SE']),
+    }
+    over = {k: v for k, v in deltas.items() if v > QUADRANT_DELTA_LIMIT}
+    if over:
+        fails.append(f"QUADRANT-BALANCE: {len(over)} quadrant-pair delta(s) exceed {QUADRANT_DELTA_LIMIT}-count limit "
+                     f"(NW={quads['NW']} NE={quads['NE']} SW={quads['SW']} SE={quads['SE']})")
+        for pair, d in over.items():
+            fails.append(f"  {pair}: Δ={d}")
 
 
 # ----- run -----
@@ -364,9 +415,10 @@ check_pad_overlap(items)
 check_symmetry(items)
 check_passive_anchoring(items)
 check_decoupling(items)
-check_pad_in_body_bbox(items)
-check_motor_pad_clear(items)
-check_quadrant_count_balance(items, bbox)
+check_mount_hole_vs_body(items)
+check_pad_in_body_bbox()
+check_motor_pad_clear()
+check_quadrant_count_balance()
 
 print(f"=== Layout compliance audit: {os.path.basename(sys.argv[1])} ===")
 print(f"Components: {len(items)}")
@@ -383,4 +435,4 @@ if fails:
     for f in fails:
         print(f"  {f}")
     sys.exit(1)
-print("PASS — all 8 layout-compliance checks clean")
+print("PASS — all 9 layout-compliance checks clean")

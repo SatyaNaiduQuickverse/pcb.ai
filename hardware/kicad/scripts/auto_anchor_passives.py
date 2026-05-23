@@ -207,6 +207,14 @@ def main():
         elif r.startswith('H') and len(r) > 1 and r[1:].isdigit():
             keepouts.append((x, y, 3.0, 3.0, 'F.Cu'))
             keepouts.append((x, y, 3.0, 3.0, 'B.Cu'))
+        # PR-A4-integrate amendment 5 Defect-2 fix 2026-05-23:
+        # Motor terminal TPs need 2mm clear-zone for 14-16AWG soldering.
+        # TestPoint_Pad_D3.0mm with silkscreen extends bbox to 10.6×6.7mm;
+        # half-bbox + 2mm keepout = 7.3×5.3. Apply to both layers (defensive).
+        elif r in ('TP19','TP20','TP21','TP26','TP27','TP28',
+                   'TP33','TP34','TP35','TP40','TP41','TP42'):
+            keepouts.append((x, y, 7.3, 5.3, 'F.Cu'))
+            keepouts.append((x, y, 7.3, 5.3, 'B.Cu'))
         # Cap/R/D: small ~1mm; rely on occupancy grid
 
     def inside_keepout(nx, ny, layer):

@@ -15,6 +15,24 @@ PCB = "/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb"
 MARGIN = 0.4  # mm clearance — larger to break local minima
 MAX_ITER = 12
 
+# PR-A4-integrate amendment 5 Defect-2 fix 2026-05-23: motor-TP keep-out zones.
+# 12 motor terminal pads (TP19/20/21/26/27/28/33/34/35/40/41/42) need 2mm
+# clear-zone for 14-16AWG solder volume. TP footprint is TestPoint_Pad_D3.0mm
+# with silkscreen courtyard extending bbox to ~10.6×6.7mm. Half-bbox + 2mm = 7.3×5.3.
+MOTOR_TP_ZONES = [
+    # (cx, cy, hx, hy) — full clear bbox = (cx-hx, cy-hy)-(cx+hx, cy+hy)
+    (5, 56, 7.3, 5.3), (5, 68, 7.3, 5.3), (5, 80, 7.3, 5.3),
+    (95, 56, 7.3, 5.3), (95, 68, 7.3, 5.3), (95, 80, 7.3, 5.3),
+    (95, 44, 7.3, 5.3), (95, 32, 7.3, 5.3), (95, 20, 7.3, 5.3),
+    (5, 44, 7.3, 5.3), (5, 32, 7.3, 5.3), (5, 20, 7.3, 5.3),
+]
+
+def in_motor_tp_zone(x, y):
+    for cx, cy, hx, hy in MOTOR_TP_ZONES:
+        if cx - hx <= x <= cx + hx and cy - hy <= y <= cy + hy:
+            return True
+    return False
+
 def load_dict():
     d = {}
     txt = CH234_DICT.read_text()
@@ -96,6 +114,15 @@ def main():
             old = placements[mv]
             nx = max(1.5, min(98.5, old[0] + dx))
             ny = max(1.5, min(98.5, old[1] + dy))
+            # PR-A4-integrate amendment 5 Defect-2 fix: skip if landing in motor-TP zone
+            if in_motor_tp_zone(nx, ny):
+                # Push further inward (toward X=50) to escape zone
+                if nx < 50:
+                    nx = max(13.5, nx)
+                else:
+                    nx = min(86.5, nx)
+                if in_motor_tp_zone(nx, ny):
+                    continue  # give up this iter; will retry next
             placements[mv] = (nx, ny, old[2], old[3])
             moved.add(mv)
         save_dict(placements)
