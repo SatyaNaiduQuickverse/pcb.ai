@@ -120,9 +120,14 @@ def mirror_tracks(board, target_ch):
         new_via.SetPosition(pcbnew.VECTOR2I(mm_to_iu(np_mm[0]), mm_to_iu(np_mm[1])))
         new_via.SetWidth(v.GetWidth())
         new_via.SetDrill(v.GetDrillValue())
-        # Layer pair: top/bottom or blind/buried — preserve
-        new_via.SetTopLayer(v.GetTopLayer())
-        new_via.SetBottomLayer(v.GetBottomLayer())
+        # Layer pair preserve via LayerPair() tuple (KiCad 9 API)
+        try:
+            pair = v.LayerPair()
+            new_via.SetLayerPair(pair[0], pair[1])
+        except Exception:
+            # Fallback: assume through-hole F.Cu ↔ B.Cu
+            new_via.SetTopLayer(pcbnew.F_Cu)
+            new_via.SetBottomLayer(pcbnew.B_Cu)
         new_via.SetNet(new_net)
         board.Add(new_via)
         n_vias_added += 1
