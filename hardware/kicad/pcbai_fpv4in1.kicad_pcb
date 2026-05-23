@@ -4810,7 +4810,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "07d1a647-2ec0-4985-bf80-e6c6ab416e0a")
-		(at 70.00 80.00 0.0)
+		(at 60.00 69.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R10"
@@ -5582,7 +5582,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "099a8617-5365-42dc-abc2-40fda233f839")
-		(at 76.00 80.00 0.0)
+		(at 60.00 78.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R12"
@@ -6233,7 +6233,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "0bcdab9f-9e2d-4635-aa8e-5686314d95a8")
-		(at 70.00 82.00 0.0)
+		(at 60.00 70.50 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R11"
@@ -25101,7 +25101,7 @@
 	(footprint "Capacitor_SMD:C_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "2f6bcf0d-1df9-478e-ac8b-b7d9e88ce18d")
-		(at 30.00 86.00 0.0)
+		(at 45.50 72.00 0.0)
 		(descr "Capacitor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C7"
@@ -30980,7 +30980,7 @@
 	(footprint "Capacitor_SMD:C_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "3d0a3e55-3246-42b0-8152-9b7fd416b504")
-		(at 65.00 86.00 0.0)
+		(at 54.50 72.00 0.0)
 		(descr "Capacitor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C14"
@@ -45400,7 +45400,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "56b4e165-9e13-4121-94c8-c756dbe7bb2b")
-		(at 76.00 82.00 0.0)
+		(at 60.00 79.50 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R13"
@@ -50971,7 +50971,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "5ff719ab-2735-4cc3-b8b6-e0915f2f8217")
-		(at 24.00 82.00 0.0)
+		(at 40.00 70.50 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R7"
@@ -52215,7 +52215,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "63d9ddc8-1709-4661-8a84-c92c96236991")
-		(at 28.00 80.00 0.0)
+		(at 40.00 78.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R8"
@@ -62166,7 +62166,7 @@
 	(footprint "Capacitor_SMD:C_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "7a74c8d7-c898-4808-adbf-5a10523e2fd0")
-		(at 52.00 86.00 0.0)
+		(at 45.50 80.00 0.0)
 		(descr "Capacitor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C11"
@@ -63344,7 +63344,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "7e901d68-b2f6-4e4a-8bd6-4fd73dd2e3fe")
-		(at 28.00 82.00 0.0)
+		(at 40.00 79.50 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R9"
@@ -66990,7 +66990,7 @@
 	(footprint "Capacitor_SMD:C_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "8695a479-d671-41cc-a9a3-12935680ed86")
-		(at 80.00 86.00 0.0)
+		(at 54.50 80.00 0.0)
 		(descr "Capacitor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "capacitor")
 		(property "Reference" "C17"
@@ -88568,7 +88568,7 @@
 	(footprint "Resistor_SMD:R_0402_1005Metric"
 		(layer "F.Cu")
 		(uuid "b2ffa29f-c371-4fa0-8487-45f1c8623237")
-		(at 24.00 80.00 0.0)
+		(at 40.00 69.00 0.0)
 		(descr "Resistor SMD 0402 (1005 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R6"
@@ -128528,9 +128528,12 @@
 	
 	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
 
+	
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "f975c364-c38c-4bb2-a13c-c2c7d55ff31d")
+		(uuid "63bf5d32-8810-4c77-b617-d8b3575e48aa")
 		(at 5.0 95.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128538,13 +128541,13 @@
 		(property "Reference" "H1"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "5a17bd96-3b0e-47df-a6ae-9f9928fbb981")
+			(uuid "53718f04-8450-4d83-b028-61a1e10b7785")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "8ded0ebc-dbfd-4e0e-9229-7d0811a0a314")
+			(uuid "93a006db-3298-4d8f-a6ef-fcb05bba813d")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128552,12 +128555,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "3d89d045-a215-4531-8f7b-4e0f938bbd9c")
+			(uuid "74abe117-90b1-4350-92e6-eeb2dd77ca29")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "c771ba2d-c3c3-4fa7-9d76-d4e856b89aea")
+		(uuid "099e1254-283e-474c-b955-a9ddea57f8e3")
 		(at 95.0 95.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128565,13 +128568,13 @@
 		(property "Reference" "H2"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "6ec62832-da42-460f-a27b-0f722edbd570")
+			(uuid "e6e11b41-957e-49d7-93f8-ff92412d50ae")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "67d65b59-011e-44cf-87d1-a14c0bce9f65")
+			(uuid "8aa3c988-c759-4485-9266-a88700cc66a0")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128579,12 +128582,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "1ce6035e-fd4a-4ece-b27b-03fd80248c12")
+			(uuid "3736d8f4-8ea3-4e31-ab00-a73a5b9812c6")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "48e8ba4e-6dfb-49e2-bc0d-d27e6ef65c1b")
+		(uuid "29b2137e-6dca-4af9-a551-968f495d24d3")
 		(at 5.0 5.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128592,13 +128595,13 @@
 		(property "Reference" "H3"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "3eccf7e2-b466-401d-9d6a-7da48536284f")
+			(uuid "3a1a46ed-4fc3-4e32-ac9e-77aa4737f2f5")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "6cd40aad-2120-4f23-bb8e-3a2fbab3cc8a")
+			(uuid "d786b8c2-f5f1-4d14-8ec9-f8f9a2dcbbda")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128606,12 +128609,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "1db7edbc-eac1-441b-ae82-692ea91a7a54")
+			(uuid "3a3600fb-762f-44ba-b079-c2775477f391")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "290ff731-dee1-4b81-aea9-20953bc02ffc")
+		(uuid "17b976e1-8772-4644-a25c-e352c0711764")
 		(at 95.0 5.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128619,13 +128622,13 @@
 		(property "Reference" "H4"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "0fb5bae9-7f33-40d5-8484-75eff3d2ab1f")
+			(uuid "7b18f00d-2040-465c-931d-007c479a0de6")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "d86adcce-bf4f-486f-aa61-bd0ecc97d508")
+			(uuid "9160662a-b36d-4032-8012-9b9f927f047d")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128633,7 +128636,7 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "c5d4aa6c-b4b2-41f3-8a14-9466c113aca7")
+			(uuid "53281376-2c6e-4f2f-8062-796bd4bf143e")
 		)
 	)
 )

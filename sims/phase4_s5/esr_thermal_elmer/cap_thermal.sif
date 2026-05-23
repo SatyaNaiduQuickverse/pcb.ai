@@ -1,0 +1,88 @@
+! PR-S2 bulk-cap ESR thermal sim
+! Domain: 100×24×1.6mm PCB section around bulk caps at (25,28)(75,28)(25,44)(75,44).
+! Power per cap: I_rms² × ESR. From ripple sim, AC ripple current ~25A pk-pk
+! at 30kHz across the 4-cap bank → I_rms per cap ~5A (shared across 4 caps).
+! Actual ESR thermal at 50A continuous board current with 25% AC component:
+!   I_rms_ac_total ≈ 12.5A; per cap ≈ 3.1A. P_per_cap = 3.1² × 30mΩ = 0.29W.
+! Conservative continuous case: I_rms 5A per cap → P = 5²×0.030 = 0.75W per cap.
+! Volumetric heat source: 0.75W / (ρ=2700 × V=1.07e-7 m³ for 13.6×11×1.6mm slab) = 2596 W/kg per cap region.
+! Acceptance: T_J ≤ 105°C polymer cap max temp rating.
+
+Header
+  Mesh DB "." "cap_mesh"
+End
+
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 50
+  Output Intervals = 1
+  Output File = "cap_thermal.result"
+  Post File = "cap_thermal.vtu"
+End
+
+Body 1
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+
+Equation 1
+  Name = "Heat Equation"
+  Active Solvers(2) = 1 2
+End
+
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Variable Dofs = 1
+  Linear System Solver = "Direct"
+  Linear System Direct Method = "UMFPack"
+  Linear System Convergence Tolerance = 1.0e-6
+  Steady State Convergence Tolerance = 1.0e-5
+  Nonlinear System Max Iterations = 1
+End
+
+Solver 2
+  Equation = "SaveScalars"
+  Procedure = "SaveData" "SaveScalars"
+  Filename = "cap_max_temp.dat"
+  Variable 1 = "Temperature"
+  Operator 1 = max
+End
+
+Material 1
+  Density = 2700.0
+  Heat Conductivity = 60.0
+  Heat Capacity = 800.0
+End
+
+! Heat source in cap body regions:
+! C1@(25,28) X=[18.2,31.8] Y=[22.5,33.5]
+! C2@(75,28) X=[68.2,81.8] Y=[22.5,33.5]
+! C3@(25,44) X=[18.2,31.8] Y=[38.5,49.5]
+! C4@(75,44) X=[68.2,81.8] Y=[38.5,49.5]
+! In mesh-clamped Y range [20, 52]: C-band at Y∈[22, 34] and Y∈[38, 50]
+Body Force 1
+  Heat Source = Variable Coordinate
+    Real MATC "tx_x=tx(0); tx_y=tx(1); in_x = ((tx_x>=0.018)*(tx_x<=0.032)) + ((tx_x>=0.068)*(tx_x<=0.082)); in_y = ((tx_y>=0.022)*(tx_y<=0.034)) + ((tx_y>=0.038)*(tx_y<=0.050)); 2596.0 * in_x * in_y"
+End
+
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 1500.0
+  External Temperature = 60.0
+End
+Boundary Condition 2
+  Target Boundaries(1) = 2
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 80.0
+  External Temperature = 60.0
+End
+Boundary Condition 3
+  Target Boundaries(1) = 3
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 10.0
+  External Temperature = 60.0
+End
