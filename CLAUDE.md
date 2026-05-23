@@ -138,6 +138,34 @@ These behaviors prevent lost time. Re-read them at the start of every session.
     one found is fixed properly, however long it takes. Time flexes to the quality
     bar, not the reverse. When tempted to wave something off, verify it and document
     the verification instead.
+18. **Sim execution gate (4-point evidence) — BINDING.** Every PR claiming sim
+    results MUST include: (a) output artifact (`.result`/`.vtu`/`.raw`/`.h5`)
+    committed to repo, (b) artifact `mtime` > input deck `mtime`, (c) reported
+    numbers from extract-script run against THAT artifact (reproducible), (d) literal
+    exec command documented in PR doc. Master REJECTS any sim PR failing any check.
+    See memory `[[feedback-sim-execution-gate]]`.
+19. **Symmetry preserves work.** N-instance designs (channels, mirrored subsystems)
+    MUST be pure geometric transforms of one locked reference. No per-instance fudge.
+    Dispatch must specify the explicit transform (e.g. `CH2 = mirror(CH1, X=50)`);
+    worker applies mechanically. Asymmetry multiplies sim/audit/spec work N-fold.
+    See memory `[[feedback-symmetry-preserves-work]]`.
+20. **Spec-vs-placement gate.** Master audit of any multi-instance subsystem PR MUST
+    run `scripts/verify_spec_diff.py` — extract coords from `.kicad_pcb`, apply
+    locked transforms, FAIL if any delta > 0.5mm. Sims use as-placed coords, can't
+    validate spec compliance. Same gate-weight as bbox-overlap.
+    See memory `[[feedback-spec-vs-placement-gate]]`.
+21. **Worker deviation disclosure.** ANY divergence from dispatch geometry/spec —
+    even mechanically necessary — MUST be flagged in PR doc with reason +
+    alternative considered. Silent in-PR adjustments BANNED. PR doc REQUIRES a
+    "Spec deviations" section (write "None" if empty).
+    See memory `[[feedback-worker-deviation-disclosure]]`.
+22. **Verify artifact, not tool exit code.** Parent class for #5/#18/#20. Tool
+    success ≠ artifact correct. Always verify the artifact directly: file exists,
+    content valid, timestamp fresh, content matches expectation. Examples that
+    caught this: kinet2pcb silent component drop, pad-only verify missing 1616
+    bbox overlaps, sim-claimed-not-executed. See memory
+    `[[reference-kinet2pcb-silent-drop]]` `[[reference-placement-bbox-overlap-bug]]`
+    `[[reference-sim-claimed-not-executed]]`.
 
 ## 4. Engineering rigor
 
