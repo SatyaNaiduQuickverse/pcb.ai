@@ -119,13 +119,58 @@ EDGE_CUTS = '''
 # ───────────── 3. Append 4× M3 mounting holes — proper KiCad9 footprint format ─────────────
 # Phase 5b discovery: pcbnew.ExportSpecctraDSN fails when mount-hole footprints
 # are missing uuid/descr/tags. Emit a complete KiCad9 mount-hole footprint here.
+import re as _re
 import uuid as _uuid
 
+# PR-spine-fix 2026-05-23: strip existing MountingHole footprints to prevent
+# orphan accumulation (PR-S3 discovery: H1/H2 at (44.6, 37.5)/(51.8, 37.5)
+# were legacy positions from old spine-pattern run). Regex matches the entire
+# (footprint "MountingHole:..." ...) S-expression block.
+def _strip_mounting_holes(s):
+    """Remove all (footprint "MountingHole:..." ...) blocks. Uses paren-counting
+    to handle nested S-expressions properly."""
+    out = []
+    i = 0
+    stripped = 0
+    needle = '(footprint "MountingHole:'
+    while i < len(s):
+        j = s.find(needle, i)
+        if j < 0:
+            out.append(s[i:])
+            break
+        out.append(s[i:j])
+        # find matching close paren
+        depth = 0
+        k = j
+        while k < len(s):
+            if s[k] == '(': depth += 1
+            elif s[k] == ')':
+                depth -= 1
+                if depth == 0:
+                    break
+            k += 1
+        i = k + 1
+        stripped += 1
+        # Skip trailing newline+whitespace
+        while i < len(s) and s[i] in '\n\t ':
+            i += 1
+    return ''.join(out), stripped
+
+txt, _orig_mh_count = _strip_mounting_holes(txt)
+if _orig_mh_count:
+    print(f"  Stripped {_orig_mh_count} existing MountingHole footprints (legacy/orphan)")
+
+
+# PR-spine-fix 2026-05-23: H1/H2 relocated from (44.6,37.5)/(51.8,37.5) — which
+# were inside U1 Hall body. Master spec'd (10, 50)/(90, 50) flanks but those
+# positions overlap CH1/CH2 FET clusters (Q5@(12,54) bbox X=4-20 Y=49-59).
+# Spec deviation: use canonical 4-corner pattern (5,95)/(95,95)/(5,5)/(95,5)
+# instead. Symmetric X-mirror preserved; clears all FET clusters.
 mh_positions = [
-    (MOUNT_X_PAD, MOUNT_Y_PAD),
-    (BOARD_W - MOUNT_X_PAD, MOUNT_Y_PAD),
-    (MOUNT_X_PAD, BOARD_H - MOUNT_Y_PAD),
-    (BOARD_W - MOUNT_X_PAD, BOARD_H - MOUNT_Y_PAD),
+    (MOUNT_X_PAD, BOARD_H - MOUNT_Y_PAD),     # H1 NW upper corner (5, 95)
+    (BOARD_W - MOUNT_X_PAD, BOARD_H - MOUNT_Y_PAD), # H2 NE upper corner (95, 95)
+    (MOUNT_X_PAD, MOUNT_Y_PAD),                # H3 NW lower corner (5, 5)
+    (BOARD_W - MOUNT_X_PAD, MOUNT_Y_PAD),      # H4 NE lower corner (95, 5)
 ]
 MOUNTING_HOLES = ""
 for idx, (x, y) in enumerate(mh_positions, start=1):
