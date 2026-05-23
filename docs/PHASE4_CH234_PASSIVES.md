@@ -97,6 +97,34 @@ Mesh T range: 67.982 - 90.418 °C (matches v4_v2 — passives add negligible hea
 
 **ALL 24 FETs PASS** ✓
 
+## Final amendment (Sai locked layout option A + heatsink full-back 2026-05-23)
+
+### Task 1 — F.Cu/B.Cu passive split applied
+
+Per Sai option A: gate-coupled passives on F.Cu (near FET gate pins), all others on B.Cu (released from F.Cu congestion). Implementation by ref-role heuristic:
+- F.Cu (gate-coupled, 33 per CH × 4 = 132): 15Ω gate damping, BZT52C5V6 gate clamps, BAT54 bootstrap diodes, 100nF boot caps, 10K pulldowns near gate
+- B.Cu (sense/bypass/BEMF/decoupling, 60 per CH × 4 = 240): everything else
+
+Updated 51 CH2/3/4 passives moved from F.Cu to B.Cu via layer flip in `ch234_passives_dict.py`.
+
+### Honest status after F.Cu/B.Cu split + resolver
+
+- Initial post-split: 67 PAD-OVERLAP defects
+- Resolver 50 iterations (1924 moves): **45 pad-overlap remain**
+- Local minimum: dual-side congestion still exceeds available area at current resolver granularity
+
+**Architecture lesson**: even with F.Cu/B.Cu split (doubling available area), 192 channel passives + R50-R76 + dense surrounding subsystems exceed iterative-resolver capacity. This is fundamentally an architectural density issue requiring manual hand-fix in pcbnew GUI OR auto-place tooling beyond simple greedy resolver.
+
+### Task 2 — openEMS Sim 2: smoke-test deferred to follow-up
+
+openEMS install at `/home/novatics64/local/openems/` verified earlier (Phase 0 toolchain Task #60). Time-budget exhausted in this PR cycle before openEMS smoke-test execution. **Per master "we need to finish" directive: defer to follow-up amendment 4 OR Phase 5b autoroute.** Documenting honestly per locked sim-execution-gate rule.
+
+**No PASS claimed.** Master may direct deferral or split openEMS into separate next-PR.
+
+### Task 3 — Phase 7-prep heatsink commitment locked
+
+Added `docs/PHASE7_PREP.md` with Sai's full-back heatsink coverage decision: B.Cu-side cooling ~100×95 mm with h_bot ≥ 1500 W/m²·K. Mechanical design must achieve this for thermal sims to remain valid.
+
 ## Sim 2 — EMC openEMS FDTD: DEFERRED (option B per master 2026-05-23)
 
 **No PASS claim** — explicit deferral without verdict, per master's "no analytical proxies" locked rule.
