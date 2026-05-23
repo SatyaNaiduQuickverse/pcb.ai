@@ -1,0 +1,17 @@
+* PR-S5 cumulative S2 + S5 — V_BATT total noise (S2 30kHz ripple 0.46V pk-pk
+* + S5 500kHz switching transients). Acceptance: total noise ≤500mV peak.
+
+* V_BATT with combined noise sources
+B_vbat  VBAT 0  V = 25.2 + 0.23*sin(2*3.14159*30e3*TIME) + 0.015*sin(2*3.14159*500e3*TIME)
+
+R_load  VBAT 0  10
+
+.control
+  tran 100n 1m UIC
+  meas tran v_max MAX V(VBAT) FROM=200u TO=1m
+  meas tran v_min MIN V(VBAT) FROM=200u TO=1m
+  set wr_singlescale
+  set wr_vecnames
+  wrdata cumulative_data.raw V(VBAT)
+.endc
+.end

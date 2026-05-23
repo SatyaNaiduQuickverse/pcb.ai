@@ -1,0 +1,36 @@
+* PR-S5 Buck regulation sim — V5_FC TPS54560 buck @ 500kHz.
+* V_IN = 25.2V → V_OUT = 5V. R_L = 5Ω (1A typical load).
+* Behavioral model: PWM switching with duty = V_OUT/V_IN = 0.198.
+*
+* Acceptance: V_OUT ±2% over V_IN 20-26V; output ripple ≤50mV pk-pk at 500kHz.
+
+V_in    VIN 0       25.2
+
+* Buck switching node — PWM @ 500kHz, duty=0.198 → V_OUT = 5.0V at V_IN=25.2V.
+* Use triangular ramp (more direct than sin): sw_on when ramp < duty.
+B_ramp   RAMP 0   V = (TIME * 500e3) - floor(TIME * 500e3)
+B_sw     SW   0   V = (V(RAMP) < 0.198) ? V(VIN) : 0
+
+* Inductor L1 4.7µH with DCR 50mΩ
+L1      SW   N1   4.7u IC=1.0
+R_dcr   N1   VOUT 0.050
+
+* Output filter cap 22µF + ESR 10mΩ
+R_esr   VOUT N2   0.010
+C_out   N2   0    22u IC=5.0
+
+* Load 5Ω = 1A nominal
+R_load  VOUT 0    5
+
+.ic V(VOUT)=5.0
+
+.control
+  tran 50n 1m UIC
+  meas tran v_avg AVG V(VOUT) FROM=900u TO=1m
+  meas tran v_max MAX V(VOUT) FROM=900u TO=1m
+  meas tran v_min MIN V(VOUT) FROM=900u TO=1m
+  set wr_singlescale
+  set wr_vecnames
+  wrdata buck_data.raw V(SW) V(VOUT)
+.endc
+.end

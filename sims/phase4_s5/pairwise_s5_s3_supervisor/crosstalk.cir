@@ -1,0 +1,22 @@
+* PR-S5 pair-wise sim — S5 switching noise → S3 V_BATT supervisor (J11)
+* Buck switching transients at 500kHz couple via V_BATT trace.
+* Acceptance: V_BATT_sense noise at J11 pin ≤50mV peak.
+
+V_dc      VBUS_DC 0    25.2
+* S5 buck switching ripple ~30mV at 500kHz on V_BATT (analytical from earlier)
+B_sw      VBUS 0       V = 25.2 + 0.015 * sin(2*3.14159*500e3*TIME)
+
+* Supervisor input divider R19+R20 (PR-S3)
+R19  VBUS INA  348k
+R20  INA  0    23.2k
+R_ina_load  INA 0   100Meg
+
+.control
+  tran 100n 1m UIC
+  meas tran v_ina_max MAX V(INA) FROM=500u TO=1m
+  meas tran v_ina_min MIN V(INA) FROM=500u TO=1m
+  set wr_singlescale
+  set wr_vecnames
+  wrdata s5_supervisor_data.raw V(VBUS) V(INA)
+.endc
+.end

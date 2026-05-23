@@ -1,0 +1,31 @@
+* PR-S5 pair-wise — S5 switching noise → Hall VCC + output noise
+* Hall VCC sourced from V5_FC (post-buck). Switching ripple couples directly.
+* Acceptance: V_HALL_OUT noise ≤10mV at end-to-end.
+
+* V5_FC rail with buck switching ripple (~30mV pk-pk at 500kHz from buck)
+B_v5fc    V5_FC 0      V = 5.0 + 0.015 * sin(2*3.14159*500e3*TIME)
+
+* Hall VCC bridge R30 (0Ω) + bypass C42 (1uF), C43 (100nF)
+R30       V5_FC HALL_VCC  0.001
+C42       HALL_VCC 0       1u IC=5.0
+C43       HALL_VCC 0       100n IC=5.0
+
+* Hall transfer (simplified) — V_OUT senses ripple via PSRR (~50dB at 500kHz)
+B_hall_psrr  HALL_OUT_RAW 0  V = 2.5 + (V(HALL_VCC) - 5.0) * 0.003
+
+* Hall output filter R31 (10K) + R32 (20K) divider + C44 (10nF)
+R31       HALL_OUT_RAW HALL_OUT_DIV   10k
+R32       HALL_OUT_DIV 0               20k
+C44       HALL_OUT_DIV 0               10n IC=1.667
+
+.ic V(HALL_OUT_DIV)=1.667 V(HALL_VCC)=5.0
+
+.control
+  tran 100n 2m UIC
+  meas tran v_hall_max MAX V(HALL_OUT_DIV) FROM=1m TO=2m
+  meas tran v_hall_min MIN V(HALL_OUT_DIV) FROM=1m TO=2m
+  set wr_singlescale
+  set wr_vecnames
+  wrdata hall_noise_data.raw V(V5_FC) V(HALL_VCC) V(HALL_OUT_DIV)
+.endc
+.end

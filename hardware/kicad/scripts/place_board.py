@@ -358,20 +358,25 @@ S5_POSITIONS = {
     # Buck #4 V9_VTX1 + L4
     'J5':  (57.0, 80.0, 'F.Cu', 0.0),
     'L4':  (57.0, 80.0, 'B.Cu', 0.0),
-    # FB resistors — 0402 in top strip Y=70-72 lateral area (outside spine pocket bucks)
-    'R6':  (24.0, 80.0, 'F.Cu', 0.0),    # V5_FC FB top 52K3
-    'R7':  (24.0, 82.0, 'F.Cu', 0.0),    # V5_FC FB bot 10K
-    'R8':  (28.0, 80.0, 'F.Cu', 0.0),    # V5_PI5 FB top 52K3
-    'R9':  (28.0, 82.0, 'F.Cu', 0.0),    # V5_PI5 FB bot 10K
-    'R10': (70.0, 80.0, 'F.Cu', 0.0),    # V5_AI FB top 52K3
-    'R11': (70.0, 82.0, 'F.Cu', 0.0),    # V5_AI FB bot 10K
-    'R12': (76.0, 80.0, 'F.Cu', 0.0),    # V9_VTX1 FB top 102K
-    'R13': (76.0, 82.0, 'F.Cu', 0.0),    # V9_VTX1 FB bot 10K
-    # Boot caps — 0402 in top strip Y=76 (close to S6 BAT/USBLC6 row but between gaps)
-    'C7':  (30.0, 86.0, 'F.Cu', 0.0),    # Buck 1 boot 100nF
-    'C11': (52.0, 86.0, 'F.Cu', 0.0),    # Buck 2 boot
-    'C14': (65.0, 86.0, 'F.Cu', 0.0),    # Buck 3 boot
-    'C17': (80.0, 86.0, 'F.Cu', 0.0),    # Buck 4 boot
+    # PR-S5 2026-05-23: FB resistors RE-ANCHORED per-buck within R23 3mm + X-mirror.
+    # Each buck's FB pair adjacent to its IC; FB pairs mirror about X=50.
+    # Buck #1 V5_FC J2@(43, 72) → R6/R7 cluster east of J2
+    'R6':  (40.0, 69.0, 'F.Cu', 0.0),    # V5_FC FB top 52K3 (3mm N of J2)
+    'R7':  (40.0, 70.5, 'F.Cu', 0.0),    # V5_FC FB bot 10K
+    # Buck #2 V5_PI5 J3@(43, 80) → R8/R9 cluster
+    'R8':  (40.0, 78.0, 'F.Cu', 0.0),    # V5_PI5 FB top 52K3 (3mm N of J3)
+    'R9':  (40.0, 79.5, 'F.Cu', 0.0),    # V5_PI5 FB bot 10K
+    # Buck #3 V5_AI J4@(57, 72) → R10/R11 cluster (mirror_X of R6/R7)
+    'R10': (60.0, 69.0, 'F.Cu', 0.0),    # V5_AI FB top 52K3 (mirror_X of R6)
+    'R11': (60.0, 70.5, 'F.Cu', 0.0),    # V5_AI FB bot 10K
+    # Buck #4 V9_VTX1 J5@(57, 80) → R12/R13 cluster (mirror_X of R8/R9)
+    'R12': (60.0, 78.0, 'F.Cu', 0.0),    # V9_VTX1 FB top 102K (mirror_X of R8)
+    'R13': (60.0, 79.5, 'F.Cu', 0.0),    # V9_VTX1 FB bot 10K
+    # Boot caps — within 2mm of buck IC BST pin per R23
+    'C7':  (45.5, 72.0, 'F.Cu', 0.0),    # Buck 1 boot 100nF (2.5mm E of J2)
+    'C11': (45.5, 80.0, 'F.Cu', 0.0),    # Buck 2 boot
+    'C14': (54.5, 72.0, 'F.Cu', 0.0),    # Buck 3 boot (mirror_X of C7)
+    'C17': (54.5, 80.0, 'F.Cu', 0.0),    # Buck 4 boot (mirror_X of C11)
     # ── INPUT-side strip Y=12-19 between S1 components (per master amendment 2026-05-23) ──
     # 4× Schottky D5-D8 — between S1 Q3/Q4 FET columns + east of R2 NTC
     'D5':  (48.0, 14.0, 'F.Cu', 0.0),    # V5_FC catch diode SS54
