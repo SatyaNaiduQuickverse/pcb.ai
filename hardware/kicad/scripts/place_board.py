@@ -37,6 +37,53 @@ from collections import defaultdict
 PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb")
 
 # ────────────────────────────────────────────────────────────────────
+# S0: Central spine — global shared resources (PR-channel-template-redo
+# Phase 3, 2026-05-23). After PR-centralize-vref (PR #70), VREF_2V5 +
+# TLM pull-up live as 1× central instances instead of 4× per-channel.
+# Master dispatch §step-1: TL431 at X=50, Y=45-55 near supervisor cluster.
+# R_TLM_PU near J14 FC connector (TLM source pin 4 → J14@50,90).
+# ────────────────────────────────────────────────────────────────────
+S0_POSITIONS = {
+    'U2':  (50.00, 48.00, 'F.Cu', 0.0),    # Central TL431 SOT-23 — central spine, 10mm N of J11 supervisor
+    'R39': (47.00, 48.00, 'F.Cu', 0.0),    # TL431 bias 390R — 3mm W of U2 (REF/CATHODE pin)
+    'C50': (50.00, 50.50, 'F.Cu', 0.0),    # VREF_2V5 bulk bypass 100nF — 2.5mm S of U2
+    'R40': (52.00, 87.00, 'F.Cu', 0.0),    # TLM pull-up 10K — 3mm SE of J14 (TLM source pin 4)
+}
+S0_EXPECTED_VALUES = {
+    'U2':  'TL431LI',
+    'R39': '390R',
+    'C50': '100nF',
+    'R40': '10K',
+}
+
+
+def place_central_spine(fps_by_ref, placements):
+    """S0 — central spine (PR-channel-template-redo Phase 3).
+    Places centralized shared resources from PR-centralize-vref refactor."""
+    placed = 0
+    missing = []
+    mismatched = []
+    for ref, pos in S0_POSITIONS.items():
+        fp = fps_by_ref.get(ref)
+        if not fp:
+            missing.append(ref)
+            continue
+        expected = S0_EXPECTED_VALUES[ref]
+        if expected not in fp['value']:
+            mismatched.append((ref, expected, fp['value']))
+            continue
+        x, y, layer, rot = pos
+        placements[ref] = (x, y, layer, rot)
+        placed += 1
+    if missing:
+        print(f"  WARN: S0 components missing: {missing}")
+    if mismatched:
+        for ref, exp, act in mismatched:
+            print(f"  WARN: S0 {ref} value mismatch — expected '{exp}', got '{act}'")
+    return placed
+
+
+# ────────────────────────────────────────────────────────────────────
 # S1: Battery input subsystem (per docs/PHASE4_SUBSYSTEMS.md §S1)
 # Zone: X=20-80, Y=0-13 (bottom edge band, but RP FET 2×2 cluster spills
 # to y=18 due to SuperSO8 5×6 body + minimum-clearance requirement;
@@ -550,11 +597,13 @@ S4_CH1_POSITIONS = {
     # to clear pad overlaps. SOIC-8 LM393 (U3) is 6.9×4.4mm; its pad bbox
     # (44.55-51.45) overlapped U2 SOT-23 (43.33-46.67). Shifted X to give
     # clean separation.
-    # 5i: U2 SOT-23 east pad at X=41.67 was overlapping U3 LM393 west pad at X=41.55.
-    # Shifted U2 to X=38 (east pad X=39.67, gap 1.9mm to U3).
-    'U2': (38.00, 86.00, 'F.Cu', 0.0),     # TL431 SOT-23
+    # PR-channel-template-redo Phase 3 2026-05-23: U2 (TL431) MOVED to S0 central
+    # spine (50, 48). CH1 now has just LM393 (U3) + 74LVC1G08 (U4) on east edge of
+    # quadrant. C78 (10nF c_vref_local) anchors VREF_2V5 entry at the channel's
+    # divider tap, near U3 LM393 inputs.
     'U3': (45.00, 84.00, 'F.Cu', 0.0),     # LM393 SOIC-8 — east pads end at X=48.45
-    'U4': (38.00, 78.00, 'F.Cu', 0.0),     # 74LVC1G08 SOT-353 — under U2
+    'U4': (38.00, 78.00, 'F.Cu', 0.0),     # 74LVC1G08 SOT-353 — west of U3 (freed area where U2 was)
+    'C78': (38.00, 82.00, 'F.Cu', 0.0),    # c_vref_local CH1 10nF — between U3 and U4, near divider tap
     'D15': (10.00, 50.50, 'F.Cu', 0.0),     # RED_KILL_FW (north of H1 keep-out (10, 50))
     'D19': (45.00, 66.00, 'F.Cu', 0.0),     # RED_FAULT_HW (south of MCU)
     'D33': (44.50, 68.00, 'F.Cu', 0.0),     # RED status
@@ -601,11 +650,12 @@ S4_CH1_POSITIONS = {
 }
 S4_CH1_EXPECTED_VALUES = {
     'TP19': 'MOTOR_A_CH1', 'TP20': 'MOTOR_B_CH1', 'TP21': 'MOTOR_C_CH1',
-    'Q5':  'AOTL66912', 'Q6':  'AOTL66912', 'Q7':  'AOTL66912',
-    'Q8':  'AOTL66912', 'Q9':  'AOTL66912', 'Q10': 'AOTL66912',
+    # BOM amendment 5 (PR-A4-integrate): AOTL66912 TO-263 → BSC014N06NS PDFN-8
+    'Q5':  'BSC014N06NS', 'Q6':  'BSC014N06NS', 'Q7':  'BSC014N06NS',
+    'Q8':  'BSC014N06NS', 'Q9':  'BSC014N06NS', 'Q10': 'BSC014N06NS',
     'J18': 'AT32F421', 'J19': 'DRV8300',
     'J20': 'INA186', 'J21': 'INA186', 'J22': 'INA186',
-    'U2':  'TL431', 'U3':  'LM393', 'U4':  '74LVC1G08',
+    'U3':  'LM393', 'U4':  '74LVC1G08', 'C78': '10nF',
     'D15': 'RED', 'D19': 'RED', 'D33': 'RED',
     'TH1': '10K_B4250',
     'R56': '0.2mR', 'R57': '0.2mR', 'R58': '0.2mR',
@@ -680,10 +730,12 @@ S4_CH234_POSITIONS = {
     'J25':  (95.0, 62.0, 'F.Cu', 0.0),    # CH2 INA #A (mirror of J20@5,62)
     'J27':  (95.0, 74.0, 'F.Cu', 0.0),    # CH2 INA #B (mirror of J21@5,74)
     'J26':  (60.0, 92.0, 'F.Cu', 0.0),    # CH2 INA #C (mirror_X of J22@40,92)
-    # 5i: mirror_X of new U2/U3/U4 (X=38, 45, 38)
-    'U5':   (62.0, 86.0, 'F.Cu', 0.0),    # CH2 TL431 (mirror_X of U2@38)
-    'U6':   (55.0, 84.0, 'F.Cu', 0.0),    # CH2 LM393 (mirror_X of U3@45)
-    'U7':   (62.0, 78.0, 'F.Cu', 0.0),    # CH2 74LVC1G08 (mirror_X of U4@38)
+    # PR-channel-template-redo Phase 3 2026-05-23: TL431 removed from per-channel
+    # (now S0 central spine). LM393/AND refs SHIFTED in new netlist:
+    # old U6(LM393)→new U5, old U7(AND)→new U6. Coords are mirror_X of CH1.
+    'U5':   (55.0, 84.0, 'F.Cu', 0.0),    # CH2 LM393 (mirror_X of U3@45)
+    'U6':   (62.0, 78.0, 'F.Cu', 0.0),    # CH2 74LVC1G08 (mirror_X of U4@38)
+    'C108': (62.0, 82.0, 'F.Cu', 0.0),    # c_vref_local CH2 10nF (mirror_X of C78@38)
     'D16':  (90.0, 50.5, 'F.Cu', 0.0),    # CH2 RED_KILL_FW (mirror of D15@10,50.5)
     'D20':  (55.0, 66.0, 'F.Cu', 0.0),    # CH2 RED_FAULT_HW (mirror of D19@45,66)
     'D48':  (55.0, 70.0, 'F.Cu', 0.0),    # CH2 RED (mirror of D33@45,70)
@@ -708,10 +760,12 @@ S4_CH234_POSITIONS = {
     'J30':  (95.0, 38.0, 'F.Cu',   0.0),  # CH3 INA #A (rot of J20@5,62)
     'J32':  (95.0, 26.0, 'F.Cu',   0.0),  # CH3 INA #B (rot of J21@5,74)
     'J31':  (60.0,  8.0, 'F.Cu',   0.0),  # CH3 INA #C (180-rot of J22@40,92)
-    # 5i: 180°-rot of new U2/U3/U4 (X=38,45,38)
-    'U8':   (62.0, 14.0, 'F.Cu',   0.0),  # CH3 TL431 (180-rot of U2@38,86)
-    'U9':   (55.0, 16.0, 'F.Cu',   0.0),  # CH3 LM393 (180-rot of U3@45,84)
-    'U10':  (62.0, 22.0, 'F.Cu',   0.0),  # CH3 74LVC1G08 (180-rot of U4@38,78)
+    # PR-channel-template-redo Phase 3 2026-05-23: TL431 removed (S0 central).
+    # CH3 LM393/AND refs SHIFTED: old U9(LM393)→new U7, old U10(AND)→new U8.
+    # Coords are 180°-rot(50,50) of CH1 counterparts.
+    'U7':   (55.0, 16.0, 'F.Cu',   0.0),  # CH3 LM393 (180-rot of U3@45,84)
+    'U8':   (62.0, 22.0, 'F.Cu',   0.0),  # CH3 74LVC1G08 (180-rot of U4@38,78)
+    'C138': (62.0, 18.0, 'F.Cu',   0.0),  # c_vref_local CH3 10nF (180-rot of C78@38,82)
     'TH3':  (55.0, 18.0, 'B.Cu',   0.0),  # CH3 NTC (rot of TH1@45,82)
     'D17':  (90.0, 49.5, 'F.Cu',   0.0),  # CH3 RED_KILL_FW (rot of D15@10,50.5)
     'D21':  (55.0, 34.0, 'F.Cu',   0.0),  # CH3 RED_FAULT_HW (rot of D19@45,66)
@@ -736,10 +790,12 @@ S4_CH234_POSITIONS = {
     'J35':  (5.0,  38.0, 'F.Cu', 0.0),    # CH4 INA #A (mirror_Y of J20@5,62)
     'J36':  (5.0,  26.0, 'F.Cu', 0.0),    # CH4 INA #B (mirror_Y of J21@5,74)
     'J37':  (40.0,  8.0, 'F.Cu', 0.0),    # CH4 INA #C (mirror_Y of J22@40,92)
-    # 5i: mirror_Y of new U2/U3/U4 (X=38,45,38)
-    'U11':  (38.0, 14.0, 'F.Cu', 0.0),    # CH4 TL431 (mirror_Y of U2@38,86)
-    'U12':  (45.0, 16.0, 'F.Cu', 0.0),    # CH4 LM393 (mirror_Y of U3@45,84)
-    'U13':  (38.0, 22.0, 'F.Cu', 0.0),    # CH4 74LVC1G08 (mirror_Y of U4@38,78)
+    # PR-channel-template-redo Phase 3 2026-05-23: TL431 removed (S0 central).
+    # CH4 LM393/AND refs SHIFTED: old U12(LM393)→new U9, old U13(AND)→new U10.
+    # Coords are mirror_Y(50) of CH1 counterparts.
+    'U9':   (45.0, 16.0, 'F.Cu', 0.0),    # CH4 LM393 (mirror_Y of U3@45,84)
+    'U10':  (38.0, 22.0, 'F.Cu', 0.0),    # CH4 74LVC1G08 (mirror_Y of U4@38,78)
+    'C168': (38.0, 18.0, 'F.Cu', 0.0),    # c_vref_local CH4 10nF (mirror_Y of C78@38,82)
     'TH4':  (45.0, 18.0, 'B.Cu', 0.0),    # CH4 NTC (mirror_Y of TH1@45,82)
     'D18':  (10.0, 49.5, 'F.Cu', 0.0),    # CH4 RED_KILL_FW (mirror_Y of D15@10,50.5)
     'D22':  (45.0, 34.0, 'F.Cu', 0.0),    # CH4 RED_FAULT_HW (mirror_Y of D19@45,66)
@@ -793,6 +849,7 @@ def place_auto_anchored(fps_by_ref, placements):
 # defined (S1-S6 + S4 CH1 + S4 CH234 + S8 auto-anchored fallback). Subsystem PRs
 # will refine each in turn.
 ALL_PLACERS = [
+    ('S0', 'Central spine (TL431, TLM PU)',  place_central_spine),
     ('S1', 'Battery input',         place_battery_input),
     ('S2', 'Bulk cap bank',         place_bulk_caps),
     ('S3', 'Supervisor + Hall',     place_supervisor_hall),
