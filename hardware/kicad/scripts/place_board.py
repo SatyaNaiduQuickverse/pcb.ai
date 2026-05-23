@@ -511,7 +511,7 @@ S4_CH1_POSITIONS = {
     # PR-A4-integrate amendment 2: J18/J19 + CH-mirror MCUs need OFF-Y=50-axis to avoid
     # mirror-position collisions (CH1+CH4 at Y=50 mirror to same spot, same for CH2+CH3).
     # Place J18 at NE corner of CH1 quadrant (45, 86). Mirror positions don't collide.
-    'J18': (45.0, 86.0, 'F.Cu', 0.0),     # CH1 MCU at NE corner of CH1 quadrant
+    'J18': (32.0, 86.0, 'F.Cu', 0.0),     # CH1 MCU per master corner-spread (32,86)
     'J19': (40.0, 62.0, 'F.Cu', 0.0),     # DRV8300 (kept — 6mm east of FET cluster)
     # INA186 column on west edge X=5 between motor pads and FETs
     'J20': (5.0, 62.0, 'F.Cu', 0.0),      # Phase A INA186 (south of motor pad TP19@56)
@@ -641,7 +641,7 @@ S4_CH234_POSITIONS = {
     'Q15':  (88.0, 80.0, 'B.Cu', 180.0),  # Phase C hi
     'Q16':  (70.0, 80.0, 'B.Cu', 180.0),  # Phase C lo
     # PR-CH2 2026-05-23: CH2 ICs/shunts/LEDs/protection → mirror_X(50) of CH1
-    'J23':  (55.0, 86.0, 'F.Cu', 0.0),    # CH2 MCU (mirror_X of J18@45,86)
+    'J23':  (68.0, 86.0, 'F.Cu', 0.0),    # CH2 MCU mirror_X(J18@32,86)
     'J24':  (60.0, 62.0, 'F.Cu', 0.0),    # CH2 DRV8300 (mirror_X of J19@40,62)
     'J25':  (95.0, 62.0, 'F.Cu', 0.0),    # CH2 INA #A (mirror of J20@5,62)
     'J27':  (95.0, 74.0, 'F.Cu', 0.0),    # CH2 INA #B (mirror of J21@5,74)
@@ -668,7 +668,7 @@ S4_CH234_POSITIONS = {
     'Q21':  (88.0, 20.0, 'B.Cu',   0.0),  # rot of Q9@(12,80)
     'Q22':  (70.0, 20.0, 'B.Cu',   0.0),  # rot of Q10@(30,80)
     # PR-CH3 ICs/LEDs/shunts via 180°-rot of CH1 counterparts (X'=100-X, Y'=100-Y)
-    'J28':  (55.0, 14.0, 'F.Cu',   0.0),  # CH3 MCU (180°-rot of J18@45,86)
+    'J28':  (68.0, 14.0, 'F.Cu',   0.0),  # CH3 MCU 180°-rot(J18@32,86)
     'J29':  (60.0, 38.0, 'F.Cu',   0.0),  # CH3 DRV (180°-rot of J19@40,62)
     'J30':  (95.0, 38.0, 'F.Cu',   0.0),  # CH3 INA #A (rot of J20@5,62)
     'J32':  (95.0, 26.0, 'F.Cu',   0.0),  # CH3 INA #B (rot of J21@5,74)
@@ -695,7 +695,7 @@ S4_CH234_POSITIONS = {
     'Q27':  (12.0, 20.0, 'B.Cu', 0.0),    # mirror_Y of Q9@(12,80)
     'Q28':  (30.0, 20.0, 'B.Cu', 0.0),    # mirror_Y of Q10@(30,80)
     # PR-CH4 ICs/LEDs/shunts via mirror_Y of CH1 counterparts
-    'J33':  (45.0, 14.0, 'F.Cu', 0.0),    # CH4 MCU (mirror_Y of J18@45,86)
+    'J33':  (32.0, 14.0, 'F.Cu', 0.0),    # CH4 MCU mirror_Y(J18@32,86)
     'J34':  (40.0, 38.0, 'F.Cu', 0.0),    # CH4 DRV (mirror_Y of J19@40,62)
     'J35':  (5.0,  38.0, 'F.Cu', 0.0),    # CH4 INA #A (mirror_Y of J20@5,62)
     'J36':  (5.0,  26.0, 'F.Cu', 0.0),    # CH4 INA #B (mirror_Y of J21@5,74)
