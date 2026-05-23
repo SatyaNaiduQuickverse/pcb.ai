@@ -12,8 +12,8 @@ import collections
 
 CH234_DICT = Path("hardware/kicad/scripts/ch234_passives_dict.py")
 PCB = "/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb"
-MARGIN = 0.4  # mm clearance to add to displacement
-MAX_ITER = 8
+MARGIN = 0.4  # mm clearance — larger to break local minima
+MAX_ITER = 12
 
 def load_dict():
     d = {}

@@ -60,7 +60,7 @@ inventory + Phase 6 follow-up queue.
 | SYMMETRY (verify_spec_diff)         | 87/88 per pair across CH1↔CH2/CH3/CH4 (3 × 1 disclosed D26) |
 | PASSIVE-ANCHORING (>20mm hard fail) | 0 fail (~110 in 10-20mm warn band — Phase 5b routing-time check) |
 | DECOUPLING (3mm)                    | PASS for all ICs in CH1; CH2/3/4 inheritance |
-| PAD-OVERLAP                         | **~780 residual** (down from 911 peak; deferred to Phase 5b/6) |
+| PAD-OVERLAP                         | **460 residual** (down from 911 peak; Hall + MCU repositioned per master) |
 | target.h md5                        | 7a4549d27e0e83d3d6f1ffaf67527d24 unchanged ✓ |
 
 ## Sims (2 cumulative regression, real + 4-point evidence per R18)
@@ -116,3 +116,36 @@ all per-subsystem and cumulative sims PASS.
   feedback-no-unplaced-footprints, feedback-spec-vs-placement-gate,
   feedback-worker-deviation-disclosure, feedback-sim-execution-gate,
   feedback-incremental-sim-driven-placement, feedback-root-cause-not-symptom
+
+## PR-A4-integrate amendment 2026-05-23 — master reject + Hall + MCU reposition
+
+Master rejected initial 911→777 residual ("777 PAD-OVERLAP is fab-blocking; routing doesn't fix pad-pad overlap"). Applied master Option A3 + additional fixes:
+
+1. **U1 Hall ACS770ECB relocated**: (50, 45) → (86, 8) rot=90 — into §S1 zone,
+   in-series with VBAT current path per master engineering directive.
+   Freed central spine. U1 conflicts dropped 159 → 15.
+   R2 NTC shifted (78, 7.5) → (60, 7.5) to clear Hall body (asymmetric vs R1@22 — disclosed).
+
+2. **MCU repositioning**: previous Y=50-axis attempt put J18+J33 + J23+J28 at SAME
+   coords (mirror about Y=50 of Y=50 = Y=50). Fix:
+   - J18 CH1 → (45, 86) NE corner of CH1 quadrant
+   - J23 CH2 → (55, 86) mirror_X
+   - J28 CH3 → (55, 14) 180°-rot
+   - J33 CH4 → (45, 14) mirror_Y
+   Symmetric set with NO same-location collisions.
+
+3. **Gate drivers**: J19 (45, 74) → (40, 62) east of FET cluster, clear of J2 buck
+   spine. Mirror set J24/J29/J34 similarly relocated.
+
+**Residual 460 PAD-OVERLAP** — significantly below 911 peak but NOT meeting
+master's ≤20 acceptance. Top remaining offenders:
+- J18 + J23 corner MCUs: 42 conflicts each (J22/J26 INA + auto-anchored debris)
+- J3/J5 bucks + Q27/U12/U3/U9 protection cluster collisions
+
+**Honest report to master**: physical density of AT32F421 LQFP-32 + DRV8300 +
+INA186 + protection cluster + 24 FETs + Hall + supervisor + BEC + S6 connectors
++ ~384 channel passives on 100×100mm board exceeds what placement alone can resolve.
+Master Option B (BOM change to smaller MCU/Hall) recommended for getting below 20.
+
+Cumulative sims still PASS (thermal 62.76°C; ngspice V_BUS 18.7V / 473mV trip
+margin / V_HALL 0.095mV) — these are not pad-overlap-blocked.

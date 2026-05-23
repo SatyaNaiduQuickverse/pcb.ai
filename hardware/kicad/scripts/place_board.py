@@ -54,7 +54,7 @@ S1_POSITIONS = {
     # accept master-state for R1/R2 — Q1↔R1 will be re-examined in PR-CH1 with
     # CH1 FET reshuffle.
     'R1':         (22.0,  7.5, 'F.Cu',  0.0),
-    'R2':         (78.0,  7.5, 'F.Cu',  0.0),
+    'R2':         (60.0,  7.5, 'F.Cu',  0.0),    # PR-A4-integrate: shifted W from 78 to clear U1 Hall body now at (86, 8). Asymmetric vs R1@22.
     # 4× BSC014N06NS rev-pol FETs, parallel; symmetric about X=50
     'Q1':         (30.0,  7.5, 'B.Cu',  0.0),
     'Q2':         (45.0,  7.5, 'B.Cu',  0.0),
@@ -185,11 +185,12 @@ S3_POSITIONS = {
     # Body bbox at 0° rot = (42.1, 20.3)..(61.7, 46.0); pad 4 (primary current)
     # at (52.96, 22.97) extends north. Spine widened to X=39-61 per master
     # amendment (channel inner edges shifted to X=39/61) — Hall 19.65mm fits.
-    'U1':  (50.0, 45.0, 'F.Cu', 0.0),
-    # PR-spine-fix 2026-05-23: H1/H2 mount holes RELOCATED to (10, 50)/(90, 50)
-    # flanks (was inside Hall body). J11 now placed at master-dispatched (50, 38)
-    # central-spine position. R19/R20/C41/R21 anchored 3-5mm per R23.
-    'J11': (50.0, 38.0, 'F.Cu', 0.0),    # TPS3700 supervisor — central spine
+    'U1':  (86.0,  8.0, 'F.Cu', 90.0),   # ACS770ECB Hall — rot=90 lays 13.6mm tall × 27mm wide in §S1 zone per master Option A3
+    # PR-A4-integrate amendment 2026-05-23: U1 Hall RELOCATED (50, 45) → (88, 8)
+    # per master Option A3. Hall in-series with VBAT current path in §S1 zone.
+    # Engineering benefit: direct current measurement, frees central spine.
+    # Spec deviation: Hall+supervisor symmetry broken; supervisor stays central.
+    'J11': (50.0, 38.0, 'F.Cu', 0.0),    # TPS3700 supervisor — central spine (kept)
     'R19': (47.0, 36.0, 'F.Cu', 0.0),    # 348K OVP/UVP divider top — 3mm NW of J11
     'R20': (53.0, 36.0, 'F.Cu', 0.0),    # 23K2 OVP/UVP divider bot — 3mm NE (mirror)
     'C41': (50.0, 40.0, 'F.Cu', 0.0),    # 100nF inrush-delay cap — 2mm S of J11
@@ -505,8 +506,13 @@ S4_CH1_POSITIONS = {
     # for new FET row Y=56/68/80. Gate driver ≤10mm from FET cluster center
     # per industry-standard practice (≤10mm gate driver-to-FET).
     # CH1 MCU at (45, 62) — between FET rows 56/68, just east of FET X-cluster (X<38)
-    'J18': (43.0, 62.0, 'F.Cu', 0.0),     # AT32F421 MCU LQFP-32 (PR-CH2: shifted X=45→43 to give CH2 J23 mirror @ X=57 a 2mm gap from spine X=50)
-    'J19': (45.0, 74.0, 'F.Cu', 0.0),     # DRV8300 gate driver (≤7mm from all 6 FETs)
+    # PR-A4-integrate amendment: J18 MCU + J19 DRV repositioned to clear J2 buck
+    # (43, 70) and gate-driver-buck collision. New positions still ≤10mm from FETs.
+    # PR-A4-integrate amendment 2: J18/J19 + CH-mirror MCUs need OFF-Y=50-axis to avoid
+    # mirror-position collisions (CH1+CH4 at Y=50 mirror to same spot, same for CH2+CH3).
+    # Place J18 at NE corner of CH1 quadrant (45, 86). Mirror positions don't collide.
+    'J18': (45.0, 86.0, 'F.Cu', 0.0),     # CH1 MCU at NE corner of CH1 quadrant
+    'J19': (40.0, 62.0, 'F.Cu', 0.0),     # DRV8300 (kept — 6mm east of FET cluster)
     # INA186 column on west edge X=5 between motor pads and FETs
     'J20': (5.0, 62.0, 'F.Cu', 0.0),      # Phase A INA186 (south of motor pad TP19@56)
     'J21': (5.0, 74.0, 'F.Cu', 0.0),      # Phase B INA186 (between motor B/C pads)
@@ -635,8 +641,8 @@ S4_CH234_POSITIONS = {
     'Q15':  (88.0, 80.0, 'B.Cu', 180.0),  # Phase C hi
     'Q16':  (70.0, 80.0, 'B.Cu', 180.0),  # Phase C lo
     # PR-CH2 2026-05-23: CH2 ICs/shunts/LEDs/protection → mirror_X(50) of CH1
-    'J23':  (57.0, 62.0, 'F.Cu', 0.0),    # CH2 MCU AT32F421 (mirror of J18@43,62)
-    'J24':  (55.0, 74.0, 'F.Cu', 0.0),    # CH2 DRV8300 (mirror of J19@45,74)
+    'J23':  (55.0, 86.0, 'F.Cu', 0.0),    # CH2 MCU (mirror_X of J18@45,86)
+    'J24':  (60.0, 62.0, 'F.Cu', 0.0),    # CH2 DRV8300 (mirror_X of J19@40,62)
     'J25':  (95.0, 62.0, 'F.Cu', 0.0),    # CH2 INA #A (mirror of J20@5,62)
     'J27':  (95.0, 74.0, 'F.Cu', 0.0),    # CH2 INA #B (mirror of J21@5,74)
     'J26':  (60.0, 86.0, 'F.Cu', 0.0),    # CH2 INA #C (mirror of J22@40,86)
@@ -662,8 +668,8 @@ S4_CH234_POSITIONS = {
     'Q21':  (88.0, 20.0, 'B.Cu',   0.0),  # rot of Q9@(12,80)
     'Q22':  (70.0, 20.0, 'B.Cu',   0.0),  # rot of Q10@(30,80)
     # PR-CH3 ICs/LEDs/shunts via 180°-rot of CH1 counterparts (X'=100-X, Y'=100-Y)
-    'J28':  (57.0, 38.0, 'F.Cu',   0.0),  # CH3 MCU (rot of J18@43,62)
-    'J29':  (55.0, 26.0, 'F.Cu',   0.0),  # CH3 DRV (rot of J19@45,74)
+    'J28':  (55.0, 14.0, 'F.Cu',   0.0),  # CH3 MCU (180°-rot of J18@45,86)
+    'J29':  (60.0, 38.0, 'F.Cu',   0.0),  # CH3 DRV (180°-rot of J19@40,62)
     'J30':  (95.0, 38.0, 'F.Cu',   0.0),  # CH3 INA #A (rot of J20@5,62)
     'J32':  (95.0, 26.0, 'F.Cu',   0.0),  # CH3 INA #B (rot of J21@5,74)
     'J31':  (60.0, 14.0, 'F.Cu',   0.0),  # CH3 INA #C (rot of J22@40,86)
@@ -689,8 +695,8 @@ S4_CH234_POSITIONS = {
     'Q27':  (12.0, 20.0, 'B.Cu', 0.0),    # mirror_Y of Q9@(12,80)
     'Q28':  (30.0, 20.0, 'B.Cu', 0.0),    # mirror_Y of Q10@(30,80)
     # PR-CH4 ICs/LEDs/shunts via mirror_Y of CH1 counterparts
-    'J33':  (43.0, 38.0, 'F.Cu', 0.0),    # CH4 MCU (mirror_Y of J18@43,62)
-    'J34':  (45.0, 26.0, 'F.Cu', 0.0),    # CH4 DRV (mirror_Y of J19@45,74)
+    'J33':  (45.0, 14.0, 'F.Cu', 0.0),    # CH4 MCU (mirror_Y of J18@45,86)
+    'J34':  (40.0, 38.0, 'F.Cu', 0.0),    # CH4 DRV (mirror_Y of J19@40,62)
     'J35':  (5.0,  38.0, 'F.Cu', 0.0),    # CH4 INA #A (mirror_Y of J20@5,62)
     'J36':  (5.0,  26.0, 'F.Cu', 0.0),    # CH4 INA #B (mirror_Y of J21@5,74)
     'J37':  (40.0, 14.0, 'F.Cu', 0.0),    # CH4 INA #C (mirror_Y of J22@40,86)
