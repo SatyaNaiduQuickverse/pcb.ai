@@ -45,10 +45,15 @@ def collect_audit_functions():
 
 
 def collect_scripts():
-    """Return set of script filenames in hardware/kicad/scripts/."""
-    if not SCRIPTS_DIR.exists():
-        return set()
-    return {p.name for p in SCRIPTS_DIR.glob("*.py")}
+    """Return set of script filenames in hardware/kicad/scripts/ + parent dir
+    (e.g., setup_board.py lives at hardware/kicad/ not scripts/)."""
+    out = set()
+    if SCRIPTS_DIR.exists():
+        out.update(p.name for p in SCRIPTS_DIR.glob("*.py"))
+    parent = SCRIPTS_DIR.parent
+    if parent.exists():
+        out.update(p.name for p in parent.glob("*.py"))
+    return out
 
 
 def parse_manifest():
