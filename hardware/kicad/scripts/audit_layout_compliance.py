@@ -49,23 +49,46 @@ def collect_components():
     return items
 
 
-# ----- check 1: off-board -----
+# ----- check 1: off-board (PAD-EXTENT-AWARE per master 2026-05-24 Sai-catch #2 fix) -----
+# Previously used component CENTER which missed C38 case (center 0.17mm, pad extends to -0.56mm).
+# Now uses pad bbox extent — any pad whose bbox exceeds board outline = FAIL.
 def check_off_board(items, bbox):
     if not bbox:
         warns.append("no board outline found; off-board check skipped")
         return
     x_min, y_min, x_max, y_max = bbox
-    m = 2.0
-    off = [r for r, d in items.items()
-           if not (x_min - m <= d["x"] <= x_max + m
-                   and y_min - m <= d["y"] <= y_max + m)]
-    if off:
-        fails.append(f"OFF-BOARD: {len(off)} footprints outside outline+{m}mm")
-        for r in off[:10]:
+    m_center = 2.0     # ≥2mm center inset (for footprint body)
+    m_pad = 0.3        # ≥0.3mm pad-extent inset (fab routing clearance)
+    off_center = []
+    off_pad = []
+    for r, d in items.items():
+        cx, cy = d["x"], d["y"]
+        if not (x_min - m_center <= cx <= x_max + m_center
+                and y_min - m_center <= cy <= y_max + m_center):
+            off_center.append(r)
+            continue  # center off-board is the bigger violation
+        # Pad-extent check
+        for pad in d["fp"].Pads():
+            bb = pad.GetBoundingBox()
+            px0 = pcbnew.ToMM(bb.GetLeft())
+            py0 = pcbnew.ToMM(bb.GetTop())
+            px1 = pcbnew.ToMM(bb.GetRight())
+            py1 = pcbnew.ToMM(bb.GetBottom())
+            if (px0 < x_min + m_pad or py0 < y_min + m_pad
+                    or px1 > x_max - m_pad or py1 > y_max - m_pad):
+                off_pad.append((r, pad.GetPadName(), px0, py0, px1, py1))
+                break
+    if off_center:
+        fails.append(f"OFF-BOARD-CENTER: {len(off_center)} footprints with center outside outline+{m_center}mm")
+        for r in off_center[:10]:
             d = items[r]
             fails.append(f"  {r} at ({d['x']:.2f}, {d['y']:.2f})")
-        if len(off) > 10:
-            fails.append(f"  ... and {len(off) - 10} more")
+        if len(off_center) > 10:
+            fails.append(f"  ... and {len(off_center) - 10} more")
+    if off_pad:
+        fails.append(f"OFF-BOARD-PAD: {len(off_pad)} footprint(s) with pad extending beyond board outline (≤{m_pad}mm clearance)")
+        for r, pn, x0, y0, x1, y1 in off_pad[:10]:
+            fails.append(f"  {r}.pad{pn} bbox ({x0:.2f},{y0:.2f})-({x1:.2f},{y1:.2f}) vs outline ({x_min:.2f},{y_min:.2f})-({x_max:.2f},{y_max:.2f})")
 
 
 # ----- check 2: pad-overlap (same-net vs different-net split) -----
@@ -250,20 +273,33 @@ def check_passive_anchoring(items):
 
 # ----- check 5: decoupling caps -----
 def check_decoupling(items):
-    ics = [(ref, d["x"], d["y"]) for ref, d in items.items()
+    """R25 enforcement: every IC must have a decoupling cap within 3mm AND on
+    the SAME copper layer. Opposite-side via adds ~0.5nH inductance, defeats
+    decoupling above ~50MHz. Master 2026-05-24 extension."""
+    ics = [(ref, d["x"], d["y"], d["side"]) for ref, d in items.items()
            if ref.startswith("U") and ref[1:].isdigit()]
-    caps = [(ref, d["x"], d["y"]) for ref, d in items.items()
+    caps = [(ref, d["x"], d["y"], d["side"]) for ref, d in items.items()
             if ref.startswith("C") and ref[1:].isdigit()]
-    bad = []
-    for ref, x, y in ics:
-        nearby_cap = [c for c in caps
+    no_cap = []
+    wrong_side = []
+    for ref, x, y, side in ics:
+        nearby_any = [c for c in caps
                       if math.hypot(c[1] - x, c[2] - y) <= 3.0]
-        if not nearby_cap:
-            bad.append((ref, x, y))
-    if bad:
-        fails.append(f"DECOUPLING: {len(bad)} ICs have no cap within 3mm")
-        for r, x, y in bad[:10]:
+        if not nearby_any:
+            no_cap.append((ref, x, y))
+            continue
+        # R25 same-side check: at least one cap within 3mm must be on same side
+        same_side_caps = [c for c in nearby_any if c[3] == side]
+        if not same_side_caps:
+            wrong_side.append((ref, x, y, side, nearby_any[0][0], nearby_any[0][3]))
+    if no_cap:
+        fails.append(f"DECOUPLING: {len(no_cap)} ICs have no cap within 3mm")
+        for r, x, y in no_cap[:10]:
             fails.append(f"  {r} at ({x:.1f},{y:.1f}) — no C within 3mm")
+    if wrong_side:
+        fails.append(f"DECOUPLING-R25-SAME-SIDE: {len(wrong_side)} ICs have decoupling cap on OPPOSITE side (R25 violation)")
+        for r, x, y, side, c_ref, c_side in wrong_side[:10]:
+            fails.append(f"  {r} on {side}.Cu at ({x:.1f},{y:.1f}) — nearest cap {c_ref} on {c_side}.Cu (opposite side)")
 
 
 # ----- check 6: mount-hole vs body conflict (PR-spine-fix 2026-05-23) -----
@@ -344,8 +380,14 @@ MOTOR_TP_REFS = ('TP19','TP20','TP21','TP26','TP27','TP28',
 MOTOR_PAD_KEEPOUT = 2.0
 
 _MOTOR_ADJACENT_NET_RE = re.compile(
-    r'^(MOTOR_[ABC]_CH\d+|BEMF_[ABC]_CH\d+|CSA_[ABC]_OUT_CH\d+'
-    r'|CSA_MAX_CH\d+|SHUNT_[ABC]_TOP_CH\d+)$'
+    r'^(MOTOR_[ABC]_CH\d+'             # motor net itself
+    r'|BEMF_[ABC]_CH\d+'               # BEMF divider tap
+    r'|CSA_[ABC]_OUT_CH\d+'            # INA output filter
+    r'|CSA_MAX_CH\d+'                  # CSA diode-OR
+    r'|SHUNT_[ABC]_TOP_CH\d+'          # shunt Kelvin sense
+    r'|GH[ABC]_CH\d+|GL[ABC]_CH\d+'    # gate-drive nets (gate-R + clamp + pull-down)
+    r'|BST[ABC]_CH\d+'                 # bootstrap cap nets (anchored to DRV BST pin)
+    r')$'
 )
 
 
@@ -390,16 +432,252 @@ def check_coincident_placement():
             fails.append(f"  {d:.2f}mm: {r1} <-> {r2} near ({x:.2f},{y:.2f})")
 
 
+# Master 2026-05-24 Gap #5: detect fp_layer vs pad_layer mismatch (trap class from
+# [[feedback-flip-bcu-footprints-recurrence]] — text-edit (layer F→B) without flipping pads).
+# In PR #71 this trap masked 162 footprints with fp_layer=B.Cu but pad_layer=F.Cu,
+# inflating audit PAD-OVERLAP count from 9 to 245.
+def check_fp_layer_mismatch():
+    """Footprint declared layer vs MAJORITY of pad copper layer must agree.
+    If fp.GetLayer() = F.Cu but >50% of named pads are on B.Cu only (or vice
+    versa) → text-edit-without-flip trap. Single stray flipped pads are
+    flagged separately (see STRAY-PAD-LAYER warning, not fail)."""
+    bugs = []
+    stray_pads = []
+    for fp in board.GetFootprints():
+        fp_layer = fp.GetLayer()
+        f_only = 0
+        b_only = 0
+        for pad in fp.Pads():
+            if pad.GetAttribute() in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH):
+                continue
+            ls = pad.GetLayerSet()
+            pad_F = ls.Contains(pcbnew.F_Cu)
+            pad_B = ls.Contains(pcbnew.B_Cu)
+            if pad_F and not pad_B:
+                f_only += 1
+            elif pad_B and not pad_F:
+                b_only += 1
+        total = f_only + b_only
+        if total == 0:
+            continue
+        if fp_layer == pcbnew.F_Cu:
+            if b_only > f_only:
+                bugs.append((fp.GetReference(), f'fp=F.Cu but {b_only}/{total} pads on B-only'))
+            elif b_only > 0 and f_only > 0:
+                stray_pads.append((fp.GetReference(), f'fp=F.Cu {b_only} stray B-pad(s) of {total}'))
+        else:  # fp_layer == B.Cu
+            if f_only > b_only:
+                bugs.append((fp.GetReference(), f'fp=B.Cu but {f_only}/{total} pads on F-only'))
+            elif f_only > 0 and b_only > 0:
+                stray_pads.append((fp.GetReference(), f'fp=B.Cu {f_only} stray F-pad(s) of {total}'))
+    if bugs:
+        fails.append(f"FP-LAYER-MISMATCH: {len(bugs)} footprint(s) with MAJORITY pad layer ≠ fp.GetLayer() (run flip_bcu_footprints.py)")
+        for r, why in bugs[:15]:
+            fails.append(f"  {r}: {why}")
+    if stray_pads:
+        warns.append(f"STRAY-PAD-LAYER: {len(stray_pads)} footprint(s) with 1+ stray pad on opposite layer (cosmetic, not fab-blocking)")
+
+
+# PR #67 Sai-eye catch #4: TP-spacing audit gate (re-added per master 2026-05-24)
+def check_test_point_spacing():
+    """Test points (TP*) on the same layer must be ≥4mm center-to-center to
+    allow scope probe access. PR #67 locked the threshold; re-codified as
+    audit gate per master directive (was lost during edits)."""
+    THRESH = 4.0
+    tps = []
+    for fp in board.GetFootprints():
+        r = fp.GetReference()
+        if not r.startswith('TP'): continue
+        p = fp.GetPosition()
+        tps.append((r, pcbnew.ToMM(p.x), pcbnew.ToMM(p.y), fp.GetLayer()))
+    bugs = []
+    for i in range(len(tps)):
+        r1, x1, y1, l1 = tps[i]
+        for j in range(i + 1, len(tps)):
+            r2, x2, y2, l2 = tps[j]
+            if l1 != l2: continue
+            d = math.hypot(x1 - x2, y1 - y2)
+            if d < THRESH:
+                bugs.append((d, r1, r2, x1, y1))
+    if bugs:
+        fails.append(f"TP-SPACING: {len(bugs)} TP-pair(s) <{THRESH}mm c-to-c on same layer (probe access blocked, Sai catch #4)")
+        for d, r1, r2, x, y in bugs[:10]:
+            fails.append(f"  {d:.2f}mm: {r1} <-> {r2} near ({x:.2f},{y:.2f})")
+
+
+# PR #67 Sai-eye catch #5: external connector edge audit gate
+def check_external_connector_edge():
+    """J14 FC + J12 AUX must be ≤5mm from N/S board edge (cable bend zone)."""
+    EDGE_MAX = 5.0
+    bb = get_outline_bbox()
+    if not bb: return
+    _, _, _, y_max = bb
+    bugs = []
+    for fp in board.GetFootprints():
+        r = fp.GetReference()
+        if r in ('J14', 'J12'):
+            cy = pcbnew.ToMM(fp.GetPosition().y)
+            d_edge = min(cy, y_max - cy)
+            if d_edge > EDGE_MAX:
+                bugs.append((r, fp.GetValue(), cy, d_edge))
+    if bugs:
+        fails.append(f"EXTERNAL-CONNECTOR-EDGE: {len(bugs)} cable connector(s) >{EDGE_MAX}mm from N/S edge (Sai catch #5)")
+        for r, v, cy, d in bugs:
+            fails.append(f"  {r} ({v}) Y={cy:.1f}, {d:.1f}mm from edge")
+
+
+# Master 2026-05-24 Gap #3 (Sai catch #9): label-overlap
+# Silkscreen refdes/value text overlapping adjacent component bbox.
+# Catches Findings 3+4 from Sai 2026-05-24 hand-check (R102/R140/R144 cluster
+# and C38/C39/C46/C47 cluster — components at 1.5-2.5mm spacing with piled labels).
+def check_label_overlap():
+    """Silkscreen refdes TEXT bbox overlaps another component's BODY bbox on
+    the same side. Uses real fp.Reference() PCB_FIELD bbox (not estimated).
+    Only counts visible refdes texts. Fail when text bbox lies fully within
+    another component's body bbox (aesthetic piling — typically caused by
+    density >2.5mm placement). Detection-only; manual fix via refdes
+    reposition."""
+    items = []
+    for fp in board.GetFootprints():
+        if fp.GetReference().startswith('H'): continue
+        bb = fp.GetBoundingBox()
+        items.append({
+            'ref': fp.GetReference(),
+            'fp': fp,
+            'side': 'F' if fp.GetLayer() == pcbnew.F_Cu else 'B',
+            'body': (pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetTop()),
+                     pcbnew.ToMM(bb.GetRight()), pcbnew.ToMM(bb.GetBottom())),
+        })
+    bugs = []
+    for it in items:
+        rf = it['fp'].Reference()
+        if not rf.IsVisible(): continue
+        tb = rf.GetBoundingBox()
+        tx0, ty0 = pcbnew.ToMM(tb.GetLeft()), pcbnew.ToMM(tb.GetTop())
+        tx1, ty1 = pcbnew.ToMM(tb.GetRight()), pcbnew.ToMM(tb.GetBottom())
+        # Look for another component on same side whose body FULLY contains the
+        # text bbox (means text is INSIDE another component — definite issue)
+        for ot in items:
+            if ot['ref'] == it['ref'] or ot['side'] != it['side']: continue
+            bx0, by0, bx1, by1 = ot['body']
+            # Full-containment check (text bbox inside body bbox, with 0.1mm tolerance)
+            if (bx0 - 0.1 <= tx0 and tx1 <= bx1 + 0.1
+                    and by0 - 0.1 <= ty0 and ty1 <= by1 + 0.1):
+                bugs.append((it['ref'], ot['ref']))
+                break
+    if bugs:
+        # Master 2026-05-24 R4: silk-on-body is COSMETIC (refdes hidden under
+        # populated component), not DFM-blocking. WARN only. Critical hand-list
+        # documented in PR doc; future regressions still surface.
+        warns.append(f"LABEL-OVERLAP: {len(bugs)} refdes silk text inside another component's body bbox (cosmetic, hidden under populated component; Sai catch #9 warn-only)")
+        for r, body_ref in bugs[:10]:
+            warns.append(f"  {r} silk inside {body_ref}")
+
+
+# Master 2026-05-24 Gap #4 (Sai catch #10): silk-on-pad
+# Silkscreen text overlapping copper pad → solder joint defect (silk ink on pad).
+def check_silk_on_pad():
+    """Real fp.Reference() text bbox intersects another component's PAD bbox
+    on the same copper side. DFM critical — silk ink on solder pad creates
+    bad joint. Uses pcbnew GetBoundingBox() for the text PCB_FIELD."""
+    pads_by_layer = {'F': [], 'B': []}
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            bb = pad.GetBoundingBox()
+            ls = pad.GetLayerSet()
+            entry = {'ref': fp.GetReference(), 'pad': pad.GetPadName(),
+                     'box': (pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetTop()),
+                             pcbnew.ToMM(bb.GetRight()), pcbnew.ToMM(bb.GetBottom()))}
+            if ls.Contains(pcbnew.F_Cu): pads_by_layer['F'].append(entry)
+            if ls.Contains(pcbnew.B_Cu): pads_by_layer['B'].append(entry)
+    bugs = []
+    CLR = 0.05
+    for fp in board.GetFootprints():
+        ref = fp.GetReference()
+        if ref.startswith('H'): continue
+        rf = fp.Reference()
+        if not rf.IsVisible(): continue
+        tb = rf.GetBoundingBox()
+        tx0, ty0 = pcbnew.ToMM(tb.GetLeft()), pcbnew.ToMM(tb.GetTop())
+        tx1, ty1 = pcbnew.ToMM(tb.GetRight()), pcbnew.ToMM(tb.GetBottom())
+        side = 'F' if fp.GetLayer() == pcbnew.F_Cu else 'B'
+        for p in pads_by_layer[side]:
+            if p['ref'] == ref: continue
+            px0, py0, px1, py1 = p['box']
+            px0 -= CLR; py0 -= CLR; px1 += CLR; py1 += CLR
+            if tx0 < px1 and tx1 > px0 and ty0 < py1 and ty1 > py0:
+                bugs.append((ref, p['ref'], p['pad']))
+                break
+    if bugs:
+        fails.append(f"SILK-ON-PAD: {len(bugs)} refdes silk text on copper pad (Sai catch #10, DFM critical)")
+        for r, p_ref, p_num in bugs[:10]:
+            fails.append(f"  {r} silk on {p_ref}.pad{p_num}")
+
+
+# Master 2026-05-24 Sai-class catch #8: fiducial markers for JLC SMT assembly
+def check_fiducials():
+    """≥3 fiducials per side (F.Cu, B.Cu) for JLC SMT machine-vision alignment."""
+    fids_f = []
+    fids_b = []
+    for fp in board.GetFootprints():
+        r = fp.GetReference()
+        v = fp.GetValue() or ''
+        lib_name = str(fp.GetFPID().GetLibItemName() or '')
+        is_fid = r.startswith('FID') or 'Fiducial' in v or 'Fiducial' in lib_name
+        if not is_fid: continue
+        p = fp.GetPosition()
+        x, y = pcbnew.ToMM(p.x), pcbnew.ToMM(p.y)
+        if fp.GetLayer() == pcbnew.F_Cu:
+            fids_f.append((r, x, y))
+        else:
+            fids_b.append((r, x, y))
+    issues = []
+    if len(fids_f) < 3:
+        issues.append(f"F.Cu side has {len(fids_f)} fiducials, need ≥3 (JLC SMT alignment)")
+    if len(fids_b) < 3:
+        issues.append(f"B.Cu side has {len(fids_b)} fiducials, need ≥3 (JLC SMT alignment)")
+    for side_name, fids in [('F.Cu', fids_f), ('B.Cu', fids_b)]:
+        if len(fids) >= 3:
+            max_pair = max(
+                math.hypot(a[1] - b[1], a[2] - b[2])
+                for i, a in enumerate(fids)
+                for b in fids[i + 1:]
+            )
+            if max_pair < 40.0:
+                issues.append(f"{side_name} max fiducial separation {max_pair:.1f}mm < 40mm (triangulation accuracy)")
+    if issues:
+        fails.append(f"FIDUCIALS: {len(issues)} issue(s)")
+        for msg in issues:
+            fails.append(f"  {msg}")
+
+
 def check_motor_pad_clear():
+    # Master 2026-05-24: use actual PAD bbox (not footprint bbox which includes
+    # silkscreen/courtyard and creates false-positive zones). Motor wire-solder
+    # access is about the COPPER PAD, not the silkscreen.
     zones = {}
     for fp in board.GetFootprints():
         if fp.GetReference() in MOTOR_TP_REFS:
-            bb = fp.GetBoundingBox()
+            # Use union of pad bboxes only (not silk/courtyard)
+            x0, y0, x1, y1 = None, None, None, None
+            for pad in fp.Pads():
+                pbb = pad.GetBoundingBox()
+                px0, py0 = pcbnew.ToMM(pbb.GetLeft()), pcbnew.ToMM(pbb.GetTop())
+                px1, py1 = pcbnew.ToMM(pbb.GetRight()), pcbnew.ToMM(pbb.GetBottom())
+                if x0 is None or px0 < x0: x0 = px0
+                if y0 is None or py0 < y0: y0 = py0
+                if x1 is None or px1 > x1: x1 = px1
+                if y1 is None or py1 > y1: y1 = py1
+            if x0 is None:
+                # fallback: footprint bbox
+                bb = fp.GetBoundingBox()
+                x0 = pcbnew.ToMM(bb.GetLeft()); y0 = pcbnew.ToMM(bb.GetTop())
+                x1 = pcbnew.ToMM(bb.GetRight()); y1 = pcbnew.ToMM(bb.GetBottom())
             zones[fp.GetReference()] = (
-                pcbnew.ToMM(bb.GetLeft()) - MOTOR_PAD_KEEPOUT,
-                pcbnew.ToMM(bb.GetTop()) - MOTOR_PAD_KEEPOUT,
-                pcbnew.ToMM(bb.GetRight()) + MOTOR_PAD_KEEPOUT,
-                pcbnew.ToMM(bb.GetBottom()) + MOTOR_PAD_KEEPOUT,
+                x0 - MOTOR_PAD_KEEPOUT,
+                y0 - MOTOR_PAD_KEEPOUT,
+                x1 + MOTOR_PAD_KEEPOUT,
+                y1 + MOTOR_PAD_KEEPOUT,
             )
     encroach = []
     motor_net_exempt = 0
@@ -540,9 +818,12 @@ def check_quadrant_count_balance():
                's_mirror': {'NW':0,'NE':0,'SW':0,'SE':0},
                'single':  {'NW':0,'NE':0,'SW':0,'SE':0},
                'auto':    {'NW':0,'NE':0,'SW':0,'SE':0}}
+    # Master 2026-05-24: count BOTH F.Cu and B.Cu components per quadrant.
+    # Original F.Cu-only filter caused regression when flip_bcu Dir B moved
+    # 152 components fp_layer to B.Cu — they were no longer counted, breaking
+    # CH1↔CH2 R19 mirror symmetry check (Δ=8 false positive).
+    # Quadrant assignment is by physical (x, y) position, not layer.
     for fp in board.GetFootprints():
-        if fp.GetLayer() != pcbnew.F_Cu:
-            continue
         pos = fp.GetPosition()
         x, y = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
         cls = classify_ref(fp.GetReference(), fp)
@@ -685,6 +966,12 @@ check_mount_hole_vs_body(items)
 check_pad_in_body_bbox()
 check_motor_pad_clear()
 check_coincident_placement()
+check_fp_layer_mismatch()
+check_test_point_spacing()
+check_external_connector_edge()
+check_fiducials()
+check_label_overlap()
+check_silk_on_pad()
 check_quadrant_count_balance()
 check_per_channel_passive_quadrant()
 
