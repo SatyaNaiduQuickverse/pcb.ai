@@ -1,0 +1,47 @@
+* PR-S3 pair-wise S2→S3 crosstalk:
+* (a) V_BUS ripple → U2 supervisor V_BATT_sense input
+* (b) V_BUS ripple → U1 Hall VCC + output noise
+*
+* Acceptance:
+*   (a) V_BATT_sense ripple at U2 INA pin ≤ 50mV (margin below 1.65V trip)
+*   (b) V_HALL_OUT noise ≤ 10mV pk-pk (within 25% of Hall 8mV intrinsic noise)
+
+* Aggressor: V_BUS at 25V DC + 0.46V pk-pk ripple at 30kHz
+V_dc      VBUS_DC 0    25.2
+V_ripple  VBUS_AC VBUS_DC  AC 0.23 SIN(0 0.23 30k 0 0)
+* Combine via voltage source (workaround: use sum)
+* Actually use single SIN source biased at 25.2V
+B_vbus    VBUS 0   V = 25.2 + 0.23 * sin(2 * 3.14159 * 30e3 * TIME)
+
+* (a) Supervisor input divider: R19 (348K) + R20 (23.2K)
+R19  VBUS INA  348k
+R20  INA  0    23.2k
+* Effective Z at INA pin from divider: 348k || 23.2k ≈ 21.7k
+* INA is high-Z (>10M typical) input — assume 100M load
+R_ina_load  INA 0   100Meg
+
+* (b) Hall VCC bypass model: 1uF + 100nF parallel from VCC to GND.
+* Hall VCC sourced from V5_FC rail (5V) via R30 (0Ω bridge). V_BUS doesn't
+* DIRECTLY couple to Hall VCC. But V_BUS PLANE coupling to nearby HALL_VOUT
+* trace can induce noise.
+* Model: V_BUS-to-Hall_VOUT coupling cap ~0.5pF (10mm trace adjacency on B.Cu).
+C_couple  VBUS HALL_VOUT  0.5p
+* Hall VOUT loaded by R31 (10K) + R32 (20K) divider + C44 (10nF) filter
+R31  HALL_VOUT HALL_OUT_DIV  10k
+R32  HALL_OUT_DIV 0           20k
+C44  HALL_OUT_DIV 0           10n
+* Hall internal output Z ~1Ω (low)
+R_hall_int  HALL_VOUT_INT HALL_VOUT  1
+V_hall_dc   HALL_VOUT_INT 0  2.5
+
+.control
+  tran 1u 2m UIC
+  meas tran v_ina_max MAX V(INA) FROM=500u TO=2m
+  meas tran v_ina_min MIN V(INA) FROM=500u TO=2m
+  meas tran v_hall_max MAX V(HALL_OUT_DIV) FROM=500u TO=2m
+  meas tran v_hall_min MIN V(HALL_OUT_DIV) FROM=500u TO=2m
+  set wr_singlescale
+  set wr_vecnames
+  wrdata s2_s3_crosstalk.raw V(VBUS) V(INA) V(HALL_VOUT) V(HALL_OUT_DIV)
+.endc
+.end
