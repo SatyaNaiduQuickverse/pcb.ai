@@ -650,16 +650,33 @@ S4_CH234_POSITIONS = {
     'R94':  (92.0, 60.0, 'F.Cu', 0.0),    # CH2 shunt Phase A (mirror of R56@8,60)
     'R95':  (92.0, 72.0, 'F.Cu', 0.0),    # CH2 shunt Phase B (mirror of R57@8,72)
     'R96':  (92.0, 84.0, 'F.Cu', 0.0),    # CH2 shunt Phase C (mirror of R58@8,84)
-    # CH3 SE (mirror both axes)
-    'TP33': (95.0, 41.0, 'F.Cu',   0.0),  # mirror y=54 → 41
-    'TP34': (95.0, 29.0, 'F.Cu',   0.0),  # mirror y=66 → 29
-    'TP35': (95.0, 17.0, 'F.Cu',   0.0),  # mirror y=78 → 17
-    'Q17':  (88.0, 41.0, 'B.Cu',   0.0),  # Phase A hi
-    'Q18':  (70.0, 41.0, 'B.Cu',   0.0),  # Phase A lo
-    'Q19':  (88.0, 30.0, 'B.Cu',   0.0),  # Phase B hi
-    'Q20':  (70.0, 30.0, 'B.Cu',   0.0),  # Phase B lo
-    'Q21':  (88.0, 19.0, 'B.Cu',   0.0),  # Phase C hi
-    'Q22':  (70.0, 19.0, 'B.Cu',   0.0),  # Phase C lo
+    # PR-CH3 2026-05-23: CH3 = 180°-rotate of CH1 about (50, 50). Y'=100-Y.
+    # CH1 Y=56/68/80 → CH3 Y=44/32/20. P=12 preserved.
+    'TP33': (95.0, 44.0, 'F.Cu',   0.0),  # rot of TP19@(5,56)
+    'TP34': (95.0, 32.0, 'F.Cu',   0.0),  # rot of TP20@(5,68)
+    'TP35': (95.0, 20.0, 'F.Cu',   0.0),  # rot of TP21@(5,80)
+    'Q17':  (88.0, 44.0, 'B.Cu',   0.0),  # rot of Q5@(12,56)
+    'Q18':  (70.0, 44.0, 'B.Cu',   0.0),  # rot of Q6@(30,56)
+    'Q19':  (88.0, 32.0, 'B.Cu',   0.0),  # rot of Q7@(12,68)
+    'Q20':  (70.0, 32.0, 'B.Cu',   0.0),  # rot of Q8@(30,68)
+    'Q21':  (88.0, 20.0, 'B.Cu',   0.0),  # rot of Q9@(12,80)
+    'Q22':  (70.0, 20.0, 'B.Cu',   0.0),  # rot of Q10@(30,80)
+    # PR-CH3 ICs/LEDs/shunts via 180°-rot of CH1 counterparts (X'=100-X, Y'=100-Y)
+    'J28':  (57.0, 38.0, 'F.Cu',   0.0),  # CH3 MCU (rot of J18@43,62)
+    'J29':  (55.0, 26.0, 'F.Cu',   0.0),  # CH3 DRV (rot of J19@45,74)
+    'J30':  (95.0, 38.0, 'F.Cu',   0.0),  # CH3 INA #A (rot of J20@5,62)
+    'J32':  (95.0, 26.0, 'F.Cu',   0.0),  # CH3 INA #B (rot of J21@5,74)
+    'J31':  (60.0, 14.0, 'F.Cu',   0.0),  # CH3 INA #C (rot of J22@40,86)
+    'U8':   (55.0, 14.0, 'F.Cu',   0.0),  # CH3 TL431 (rot of U2@45,86)
+    'U9':   (52.0, 16.0, 'F.Cu',   0.0),  # CH3 LM393 (rot of U3@48,84)
+    'U10':  (55.0, 22.0, 'F.Cu',   0.0),  # CH3 74LVC1G08 (rot of U4@45,78)
+    'TH3':  (55.0, 18.0, 'F.Cu',   0.0),  # CH3 NTC (rot of TH1@45,82)
+    'D17':  (90.0, 49.5, 'F.Cu',   0.0),  # CH3 RED_KILL_FW (rot of D15@10,50.5)
+    'D21':  (55.0, 34.0, 'F.Cu',   0.0),  # CH3 RED_FAULT_HW (rot of D19@45,66)
+    'D63':  (55.0, 30.0, 'F.Cu',   0.0),  # CH3 RED (rot of D33@45,70)
+    'R132': (92.0, 40.0, 'F.Cu',   0.0),  # CH3 shunt Phase A (rot of R56@8,60)
+    'R133': (92.0, 28.0, 'F.Cu',   0.0),  # CH3 shunt Phase B (rot of R57@8,72)
+    'R134': (92.0, 16.0, 'F.Cu',   0.0),  # CH3 shunt Phase C (rot of R58@8,84)
     # CH4 SW (mirror y about Y=47.5)
     'TP40': (5.0, 41.0, 'F.Cu', 180.0),
     'TP41': (5.0, 29.0, 'F.Cu', 180.0),
