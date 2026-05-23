@@ -179,6 +179,11 @@ These behaviors prevent lost time. Re-read them at the start of every session.
     useful. Master gate REJECTS any PR with off-board footprints. Combined gate
     `scripts/audit_layout_compliance.py` enforces this + bbox/symmetry/decoupling/anchoring.
     See `[[feedback-no-unplaced-footprints]]`.
+25. **Same-side decoupling.** Decoupling cap MUST be on the same copper layer as
+    the IC's VDD/VCC pin it decouples. Opposite-side via adds ~0.5nH inductance →
+    decoupling effectiveness degrades sharply above ~50MHz. Sub-rule of R23 (no
+    passive island) — distance ≤3mm AND same layer. Master audit verifies layer
+    match for gate drivers, MCU, op-amps, supervisor. See `[[feedback-same-side-decoupling]]`.
 
 ## 4. Engineering rigor
 
