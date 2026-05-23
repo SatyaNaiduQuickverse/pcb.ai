@@ -1,0 +1,32 @@
+! PR-S1 rev-pol FET ROW thermal mesh — 4× BSC014N06NS in row at Y=7.5,
+! X=30/45/55/70 (board 100mm wide). Board section: 100×16×1.6mm.
+! FET body assumed 5×6mm bbox (SuperSO8); centered at Y=7.5 → body Y=4.5-10.5.
+! Subcell layout (9 cols × 3 rows × 1 z-stack):
+!   x: 0..27.5, 27.5..32.5, 32.5..42.5, 42.5..47.5, 47.5..52.5, 52.5..57.5, 57.5..67.5, 67.5..72.5, 72.5..100
+!   y: 0..4.5, 4.5..10.5, 10.5..16
+! Q1 at (col=2, row=2), Q2 at (col=4, row=2), Q3 at (col=6, row=2), Q4 at (col=8, row=2)
+Version = 210903
+Coordinate System = Cartesian 3D
+Subcell Divisions in 1D = 9 3 1
+Subcell Limits 1 = 0 0.0275 0.0325 0.0425 0.0475 0.0525 0.0575 0.0675 0.0725 0.100
+Subcell Limits 2 = 0 0.0045 0.0105 0.016
+Subcell Limits 3 = 0 0.0016
+Materials Interval = 1 1
+Boundary Definitions
+  1     1   -1   1    ! z=0 (B.Cu)
+  2     2   -1   1    ! z=1.6 (F.Cu)
+  3     3   -1   1    ! sides
+End
+Numbering = Horizontal
+Element Degree = 1
+Element Innernodes = False
+Triangles = False
+Surface Elements = 200
+Coordinate Ratios = 1 1 1
+Minimum Element Divisions = 5 3 2
+Element Ratios 1 = 1
+Element Ratios 2 = 1
+Element Ratios 3 = 1
+Element Densities 1 = 1
+Element Densities 2 = 1
+Element Densities 3 = 1

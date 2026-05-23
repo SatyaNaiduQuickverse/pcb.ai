@@ -43,32 +43,48 @@ PCB = Path("/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad
 # acceptable since adjacent S2 bulk-cap zone (Y=13-42) is empty at PR-time).
 # ────────────────────────────────────────────────────────────────────
 S1_POSITIONS = {
-    # PR-A4-c 2026-05-23: S1 single-row revert (Y=0-13 zone per A4-b spec)
-    'J1':         (50.0,  4.0, 'F.Cu',  0.0),   # BATT_PAD (XT30)
-    'D26':        (15.0,  5.0, 'B.Cu',  0.0),   # SMBJ33A TVS (moved west)
-    'R1':         (22.0,  7.5, 'F.Cu',  0.0),   # NTC #1 west
-    'R2':         (78.0,  7.5, 'F.Cu',  0.0),   # NTC #2 east
-    # 4 RP FETs single row at y=10 (B.Cu), 4× parallel BSC014N06NS
+    # PR-S1 2026-05-23: §S1 battery input — Y=0-13 zone, X-symmetric about X=50.
+    'J1':         (50.0,  4.0, 'F.Cu',  0.0),   # XT30 BATT_PAD (center primary input)
+    # NTC inrush limiters (MF72_5D25) — west/east of FET cluster, mirror about X=50
+    # NTCs MF72_5D25 (TH, 5mm lead pitch). KEEP MASTER baseline (22, 7.5)/(78, 7.5)
+    # rotation 0. This accepts the 2 master-baseline R1↔Q1 pad overlaps (inside
+    # §S1 zone, existed before PR-S1 — not introduced by this PR per master gate
+    # "no NEW overlaps from this PR"). Rotation/shift attempts all introduced
+    # NEW outside-§S1 overlaps (R1↔H4/TP15 or R1↔R83/TH4). Per master tradeoff
+    # accept master-state for R1/R2 — Q1↔R1 will be re-examined in PR-CH1 with
+    # CH1 FET reshuffle.
+    'R1':         (22.0,  7.5, 'F.Cu',  0.0),
+    'R2':         (78.0,  7.5, 'F.Cu',  0.0),
+    # 4× BSC014N06NS rev-pol FETs, parallel; symmetric about X=50
     'Q1':         (30.0,  7.5, 'B.Cu',  0.0),
     'Q2':         (45.0,  7.5, 'B.Cu',  0.0),
     'Q3':         (55.0,  7.5, 'B.Cu',  0.0),
     'Q4':         (70.0,  7.5, 'B.Cu',  0.0),
-    # Note: Q3/Q4 spill into Y=13-17 (nominally bulk-cap S2 zone) — RP FET
-    # SuperSO8 5×6 body × 2 rows requires ≥12mm vertical span; spec'd Y=0-13
-    # zone is too tight. Per master spec §S1 the 2×2 cluster centers at (50, 11);
-    # we adopt a slightly south-offset cluster (50, 13.5) to keep ≥1mm gap to
-    # row-1 (J1, D26) bbox. S2 bulk caps will avoid the (40-60, 13-17) range.
+    # Rev-pol FET gate cluster — R3 (10K pull) + D2 (12V Zener clamp) ≤5mm
+    # from nearest FET gate per R23. R3 anchored to Q1 (4mm); D2 anchored to Q4 (4mm).
+    'R3':         (32.0, 11.0, 'F.Cu',  0.0),   # GATE_RP 10K pull, anchored to Q1
+    'D2':         (68.0, 11.0, 'F.Cu',  0.0),   # 12V Zener, anchored to Q4 (symmetric)
+    # Status LEDs — KEEP MASTER-BASELINE POSITIONS (PR-S1 amendment after master
+    # audit flagged +15 NEW overlaps from moving LEDs into dense auto-anchored Y=2
+    # strip). Master baseline D4/R5 pair at (55.5, 5.5)/(55.5, 3) is symmetric-OK;
+    # D3/R4 at (90, 4.2)/(95.6, 4.2) are not paired but in low-density east corner.
+    'D4':         (55.5,  5.5, 'F.Cu',  0.0),   # RED_RPOL — master baseline position
+    'R5':         (55.5,  3.0, 'F.Cu',  0.0),   # D4 current-limit (2.5mm — vertical pair)
+    'D3':         (2.0,  25.0, 'F.Cu',  0.0),   # GREEN_PWR — master baseline position (in §S5 strip; defer to PR-S5/S6 to relocate)
+    'R4':         (95.6,  4.2, 'F.Cu',  0.0),   # D3 current-limit (master baseline; D3 is far — handled in later PR)
+    # D26 SMBJ33A — net is MOTOR_A_CH1, this is CH1 motor TVS (mis-labeled by historical
+    # placement). Leave at master placement (15, 5) — moved to CH1 in PR-CH1.
+    'D26':        (15.0,  5.0, 'B.Cu',  0.0),
 }
-# Expected SKiDL values per ref (sanity check; abort if mismatched)
 S1_EXPECTED_VALUES = {
     'J1':  'BATT_PAD',
     'D26': 'SMBJ33A',
-    'R1':  'MF72_5D25',
-    'R2':  'MF72_5D25',
-    'Q1':  'BSC014N06NS',
-    'Q2':  'BSC014N06NS',
-    'Q3':  'BSC014N06NS',
-    'Q4':  'BSC014N06NS',
+    'R1':  'MF72_5D25',  'R2':  'MF72_5D25',
+    'Q1':  'BSC014N06NS', 'Q2':  'BSC014N06NS', 'Q3':  'BSC014N06NS', 'Q4':  'BSC014N06NS',
+    'R3':  '10K',
+    'D2':  '12V',
+    'D4':  'RED_RPOL',   'D3':  'GREEN_PWR',
+    'R4':  '5K1',        'R5':  '5K1',
 }
 
 

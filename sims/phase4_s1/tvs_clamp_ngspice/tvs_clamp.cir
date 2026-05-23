@@ -1,0 +1,37 @@
+* PR-S1 TVS clamp sim: 600V transient (load-dump scenario) at +BATT
+* Note: PR-S1 actually has no +BATT TVS (D26 is CH1 MOTOR_A TVS); the TVS
+* protection is at +VMOTOR side via D5-D8 SS54 and per-channel SMBJ33A.
+* For S1, the TVS clamp test models +VMOTOR-line clamping by D5 (SS54 = 40V Schottky)
+* and the bus polymer caps (1880µF). Acceptance: V_clamp ≤ 55V (Q1-Q4 V_DS_max = 60V).
+*
+* Transient pulse: 100us 100A spike injected onto +VMOTOR (simulates motor flyback
+* or load-dump). V_BATT held at 25.2V via source impedance R_src=10mΩ (XT30+NTC hot).
+
+* 600V transient pulse layered on V_BATT (load-dump per ISO 16750-2 Test A)
+* Pulse: 25.2V baseline → 600V spike for 200us → recover. Source impedance R_src=4Ω
+* per ISO 16750-2 (representative load-dump source). For inductive flyback this is
+* much higher; we use the ISO worst-case.
+V_batt    BATT 0       PULSE(25.2 600 1m 10u 10u 200u 10m)
+R_src     BATT VBUS    4                ; ISO 16750-2 source impedance
+
+* Bulk cap bank
+R_esr     VBUS V1      7.5m
+C_bulk    V1   0       1880u IC=25.2
+
+* TVS clamp model (SMBJ33A: VBR=33V, VCL=53.3V @ Ipp=Imax, dynamic R=20mΩ)
+* Piecewise: leak 1uA up to 33V, breaks at 33V, dynamic R=20mΩ above breakdown.
+* Use B-source for I(V) curve.
+B_tvs     VBUS 0       I = (V(VBUS)<33) ? 1u*V(VBUS) : (V(VBUS)-33)/0.02
+* Note: V_DS_max for BSC014N06NS = 60V, SMBJ33A V_CL max = 55V @ Ipp = 50A.
+
+* (Pulse source applied above; no separate I_pulse needed.)
+
+.control
+  tran 100n 5m UIC
+  meas tran v_peak MAX V(VBUS)
+  set wr_singlescale
+  set wr_vecnames
+  wrdata tvs_data.raw V(VBUS) V(V1)
+.endc
+
+.end

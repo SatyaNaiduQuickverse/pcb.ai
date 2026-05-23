@@ -9165,7 +9165,7 @@
 	(footprint "Diode_SMD:D_SOD-323"
 		(layer "F.Cu")
 		(uuid "12cf8f12-4b3e-4509-933f-fd34c7d07532")
-		(at 17.50 18.00 0.0)
+		(at 68.00 11.00 0.0)
 		(descr "SOD-323")
 		(tags "SOD-323")
 		(property "Reference" "D2"
@@ -60473,7 +60473,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "76d7c48a-a944-459d-b1ab-0619b1be35e3")
-		(at 30.80 10.80 0.0)
+		(at 30.80 95.00 0.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP16"
@@ -69109,7 +69109,7 @@
 	(footprint "TestPoint:TestPoint_Pad_D3.0mm"
 		(layer "F.Cu")
 		(uuid "8ba56258-ef0d-4928-9d85-4a2114f5d245")
-		(at 69.20 10.80 0.0)
+		(at 69.20 95.00 0.0)
 		(descr "SMD pad as test Point, diameter 3.0mm")
 		(tags "test point SMD pad")
 		(property "Reference" "TP7"
@@ -99588,7 +99588,7 @@
 	(footprint "Resistor_SMD:R_0603_1608Metric"
 		(layer "F.Cu")
 		(uuid "c8b48fe7-7f34-42d2-b0d7-b4f54a2523ab")
-		(at 17.50 20.50 0.0)
+		(at 32.00 11.00 0.0)
 		(descr "Resistor SMD 0603 (1608 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R3"
@@ -128451,9 +128451,36 @@
 
 	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
 
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "51c8842c-a1f3-4992-a183-58e234acc39a")
+		(uuid "21d332a0-5302-4675-a36f-8f4f6ecd5ff7")
 		(at 44.60 37.50 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128461,13 +128488,13 @@
 		(property "Reference" "H1"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "9a239979-36f7-471b-8ab8-81287d746ccf")
+			(uuid "82de01dc-661e-4370-9196-7c154106826a")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "9fd0827a-8677-4c39-94e6-6c099a5e8457")
+			(uuid "6e4e0a67-96cf-4b51-8c8c-8f25dfc12cce")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128475,12 +128502,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "04361b5f-63c3-4d2e-a34e-c201760685d6")
+			(uuid "c5c10c36-12ef-499e-9fce-9be0619ea78d")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "7fc16fd5-f165-407f-b776-026f6ec93708")
+		(uuid "935608fe-212b-4a12-9d6b-523828703ffe")
 		(at 51.80 37.50 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128488,13 +128515,13 @@
 		(property "Reference" "H2"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "5074ce06-54ba-4c75-9278-d22266c24c59")
+			(uuid "3c925124-bd00-404d-bfc7-d7632763dded")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "94b74d19-cdcf-4060-92cc-0a3261d63d88")
+			(uuid "2ed11457-b282-4e35-8efa-2b7758e1e9f0")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128502,12 +128529,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "e5db00b6-16c6-4644-9a51-fb48bf562b2f")
+			(uuid "fe7d87a6-6c55-48ba-b719-0c94c549c139")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "c35a7294-ba4d-40ce-9a1a-4d52f567dbd7")
+		(uuid "416936ef-fa0f-4a9a-8812-65ad4d9eee53")
 		(at 2.00 2.00 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128515,13 +128542,13 @@
 		(property "Reference" "H3"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "19dcbeb2-13ef-4e0a-af00-5ae5c01ac424")
+			(uuid "9d023ad2-fd42-415f-8a71-fa051bbc0ca6")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "79ee2f74-4493-4555-b255-633684533537")
+			(uuid "4a41654c-5dec-4ee1-954d-4188f0e476f3")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128529,12 +128556,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "b26f7e24-88e6-477f-b953-a15c8a1c8028")
+			(uuid "06c046b7-ebe0-4844-95ce-3c1cbf26cb8d")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "19bb1f97-b5c9-43e1-98ba-76cffb085b34")
+		(uuid "041eb5c4-100f-48c7-9774-7eaacb805ed1")
 		(at 23.60 2.00 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128542,13 +128569,13 @@
 		(property "Reference" "H4"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "d0f2c9f0-e6ae-4a43-869e-6ad150ffa1a9")
+			(uuid "bcb90b76-a9f2-404d-b3b8-a8cbcf04eb29")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "1faf37aa-7fbc-45c9-a1a3-b4a0da09720f")
+			(uuid "e55efa46-9d87-4ce7-bc27-33df6a5e1b1c")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128556,7 +128583,7 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "5ed501dd-a539-4b80-aeca-9210515078da")
+			(uuid "75a39495-3285-425a-8035-36c91840d75a")
 		)
 	)
 )

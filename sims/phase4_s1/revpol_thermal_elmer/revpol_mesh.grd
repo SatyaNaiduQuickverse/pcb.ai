@@ -1,0 +1,41 @@
+! PR-S1 rev-pol FET thermal mesh — 4× BSC014N06NS at Y=7.5, X=30/45/55/70
+! Domain: 100×20×3mm slab of PCB (S1 zone + adjacent margin)
+! Q1-Q4 footprint bbox ~7×7mm each (SuperSO8); model each as 7×7 heat source.
+! Mesh: 50×10×3 subcells (uniform) — 1500 cells, 1704 nodes.
+
+Version = 211103
+Coordinate System = Cartesian 3D
+Subcell Divisions in 1D = 4
+Subcell Limits 1 = 0 30 50 70 100
+Subcell Divisions in 2D = 4
+Subcell Limits 2 = 0 4 11 14 20
+Subcell Divisions in 3D = 1
+Subcell Limits 3 = 0 3
+Material Structure in 2D
+  1 1 1 1
+  1 2 2 1
+  1 1 1 1
+  1 1 1 1
+End
+Materials Interval = 1 2
+Boundary Definitions
+! BC 1: top surface (F.Cu, h_top=80, convection)
+  1   -1   1   1
+! BC 2: bottom surface (B.Cu, h_bot=1500 with heatsink)
+  2   -2   1   1
+! BC 3: sides (h_sides=10)
+  3   -3   1   1
+End
+Numbering = Horizontal
+Element Degree = 1
+Element Innernodes = False
+Triangles = False
+Surface Elements = 4
+Coordinate Ratios = 1 1 1
+Minimum Element Divisions = 1 1 1
+Element Ratios 1 = 1
+Element Ratios 2 = 1
+Element Ratios 3 = 1
+Element Densities 1 = 1
+Element Densities 2 = 1
+Element Densities 3 = 1
