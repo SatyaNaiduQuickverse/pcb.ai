@@ -67,6 +67,7 @@ files to confirm every named function/script in this manifest actually exists).
 | 9 | label-overlap (silkscreen refdes piling) | 2026-05-24 | (manual: re-position refdes via KiCad GUI or hide silk for tight clusters) | `check_label_overlap()` (audit_layout) | 2026-05-24 master | ✅ **NEW this PR** — detection only; manual fix |
 | 10 | silk-on-pad (silk text touching copper pad, DFM) | 2026-05-24 | (manual: re-position refdes off pad) | `check_silk_on_pad()` (audit_layout) | 2026-05-24 master | ✅ **NEW this PR** — detection only; manual fix |
 | 11 | fp-layer-mismatch (text-edit-without-flip trap recurrence) | 2026-05-24 | `flip_bcu_footprints.py` | `check_fp_layer_mismatch()` (audit_layout) | 2026-05-24 master | ✅ **NEW this PR** — the 162-footprint trap that masked PR #71 audit |
+| 12 | LED-indicator stub on power net (track-width sub-class) | PR #67 amendment | `fix_led_stub_width.py` | `check_track_width()` (audit_routing) | 2026-05-24 master | ✅ **NEW this PR** — was one-shot patch; now codified |
 
 ---
 

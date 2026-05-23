@@ -127976,7 +127976,7 @@
 	(segment
 		(start 15.79 96)
 		(end 18.82 96)
-		(width 0.15)
+		(width 1)
 		(locked yes)
 		(layer "F.Cu")
 		(net 9)
@@ -128345,7 +128345,7 @@
 	(segment
 		(start 84.21 96)
 		(end 82.83 96)
-		(width 0.15)
+		(width 1)
 		(locked yes)
 		(layer "F.Cu")
 		(net 12)

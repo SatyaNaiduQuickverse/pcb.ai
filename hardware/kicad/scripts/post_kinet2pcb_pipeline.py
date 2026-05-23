@@ -51,6 +51,7 @@ PIPELINE = [
     ('place_swd_boot_tps.py',             'Algorithmic SWD/BOOT TP placement (Sai catch #4)',       False),
     ('place_fiducials.py',                'JLC SMT fiducials F.Cu + B.Cu (Sai catch #8)',           False),
     ('fix_coincident_placements.py',      'Clear <1.5mm coincident-placement bugs',                  False),
+    ('fix_led_stub_width.py',             'Widen LED indicator stubs on power nets (PR #67 amendment)', False),
 ]
 
 
