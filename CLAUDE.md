@@ -166,6 +166,19 @@ These behaviors prevent lost time. Re-read them at the start of every session.
     bbox overlaps, sim-claimed-not-executed. See memory
     `[[reference-kinet2pcb-silent-drop]]` `[[reference-placement-bbox-overlap-bug]]`
     `[[reference-sim-claimed-not-executed]]`.
+23. **No passive island — anchor to parent device.** Every R / C / L MUST be placed
+    within its parent subsystem cluster, anchored to a specific parent device pin.
+    Max distance per role: IC decoupling ≤3mm, FET gate-R ≤5mm, bootstrap-C ≤2mm,
+    sense-R in source path, op-amp feedback ≤3mm, LED limit-R ≤2mm, pull-R ≤5mm.
+    NO "passive islands" — sweeping passives into spare real estate (B.Cu spine
+    pocket, board corner) is BANNED. Islands defeat decoupling, increase EMI, fail
+    compliance. See `[[feedback-no-passive-island]]`.
+24. **No off-board footprints.** Every PR MUST verify ZERO footprints with center
+    outside the board outline + 2mm margin. kinet2pcb parks unplaced components at
+    default off-board grid silently — they look "imported" but aren't anywhere
+    useful. Master gate REJECTS any PR with off-board footprints. Combined gate
+    `scripts/audit_layout_compliance.py` enforces this + bbox/symmetry/decoupling/anchoring.
+    See `[[feedback-no-unplaced-footprints]]`.
 
 ## 4. Engineering rigor
 
