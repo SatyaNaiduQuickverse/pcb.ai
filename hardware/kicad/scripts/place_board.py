@@ -435,11 +435,11 @@ S5_POSITIONS = {
     'D9': (12.00, 38.00, 'F.Cu', 0.0),    # SS54
     'F2': (5.00, 14.00, 'F.Cu', 0.0),    # V9_VTX2 polyfuse (V_IN side)
     'R14': (13.50, 18.00, 'F.Cu', 0.0),    # FB top 102K
-    'R15': (15.00, 22.00, 'F.Cu', 0.0),    # FB bot 10K
-    'C20': (12.50, 26.00, 'F.Cu', 0.0),    # boot 100nF
-    'L10': (4.00, 38.00, 'F.Cu', 0.0),    # V9_VTX2 ferrite
+    'R15': (13.50, 22.00, 'F.Cu', 0.0),    # FB bot 10K
+    'C20': (5.00, 26.00, 'F.Cu', 0.0),    # boot 100nF
+    'L10': (5.00, 38.00, 'F.Cu', 0.0),    # V9_VTX2 ferrite
     'D14': (13.50, 36.00, 'F.Cu', 0.0),    # V9_VTX2 TVS SMAJ9.0A
-    'C21': (13.50, 47.50, 'F.Cu', 0.0),    # C_OUT 22uF
+    'C21': (13.50, 40.00, 'F.Cu', 0.0),    # C_OUT 22uF
     # ── LDO + Supervisor — PR-A4-integrate amendment 5c: split X=49/X=51 for
     #    NW/NE balance (was both at X=50 → counted as NW per audit quadrant rule).
     #    J13 stays NW(X=49), J10 moves NE(X=51). Functionally equivalent positions.
