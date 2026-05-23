@@ -1,0 +1,22 @@
+* PR-CH1 gate ringing sim — Q5 turn-on at 100A burst.
+* DRV8300 driver output → R_g (15Ω) → Q5 GATE. Bootstrap C 1µF.
+* Gate loop: R_g + L_loop (5nH parasitic) + C_GS (AOTL66912 ~2nF input cap)
+* Acceptance: V_GS overshoot ≤5% (target V_GS=12V → max 12.6V), ringing ≤3 cycles.
+
+V_drv     DRV_OUT 0    PULSE(0 12 100n 5n 5n 5u 10u)
+R_g       DRV_OUT GATE  15
+L_loop    GATE   GATE_INT  5n
+C_gs      GATE_INT 0   2n IC=0
+R_int     GATE_INT 0   1Meg
+
+.ic V(GATE_INT)=0
+
+.control
+  tran 0.5n 1u UIC
+  meas tran v_gs_max MAX V(GATE_INT)
+  meas tran v_gs_min MIN V(GATE_INT) FROM=500n TO=1u
+  set wr_singlescale
+  set wr_vecnames
+  wrdata gate_ringing_data.raw V(DRV_OUT) V(GATE_INT)
+.endc
+.end

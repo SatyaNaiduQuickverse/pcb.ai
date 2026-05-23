@@ -56,9 +56,23 @@ def load_netlist():
     return out
 
 
+def load_mount_holes_from_pcb():
+    """Read mount-hole positions directly from PCB (set by setup_board.py)."""
+    board = pcbnew.LoadBoard(str(PCB))
+    mh = {}
+    for fp in board.GetFootprints():
+        ref = fp.GetReference()
+        if ref.startswith('H') and len(ref) > 1 and ref[1:].isdigit():
+            p = fp.GetPosition()
+            mh[ref] = (p.x/1e6, p.y/1e6, 'F.Cu', 0.0)
+    return mh
+
+
 def load_existing_placements():
     """Parse place_board.py + ch234_passives_dict.py for already-placed refs."""
     placed = {}  # ref → (x, y, layer, rot)
+    # PR-CH1: include mount holes from PCB (setup_board.py-owned)
+    placed.update(load_mount_holes_from_pcb())
     PB = open("hardware/kicad/scripts/place_board.py").read()
     # Find all dict literals like 'XYZ': (x, y, 'F.Cu'/'B.Cu', rot)
     for m in re.finditer(r"'([A-Z]+\d+)'\s*:\s*\(\s*([\d.]+),\s*([\d.]+),\s*'([^']+)',\s*([\d.]+)\)", PB):
@@ -185,6 +199,10 @@ def main():
             pass  # test points are small
         elif r in ('J1',):  # XT30
             keepouts.append((x, y, 5.0, 4.0, layer))
+        # PR-CH1 2026-05-23: mount-hole 3mm keep-out — applies to both layers
+        elif r.startswith('H') and len(r) > 1 and r[1:].isdigit():
+            keepouts.append((x, y, 3.0, 3.0, 'F.Cu'))
+            keepouts.append((x, y, 3.0, 3.0, 'B.Cu'))
         # Cap/R/D: small ~1mm; rely on occupancy grid
 
     def inside_keepout(nx, ny, layer):

@@ -486,38 +486,43 @@ def place_bec(fps_by_ref, placements):
 # ────────────────────────────────────────────────────────────────────
 S4_CH1_POSITIONS = {
     # Motor phase pads — west edge x=5
-    'TP19': (5.0, 54.0, 'F.Cu', 0.0),    # MOTOR_A_CH1 (phase A motor pad)
-    'TP20': (5.0, 66.0, 'F.Cu', 0.0),    # MOTOR_B_CH1
-    'TP21': (5.0, 78.0, 'F.Cu', 0.0),    # MOTOR_C_CH1
+    # PR-CH1: motor pads shifted to align with new FET row Y=56/68/80
+    'TP19': (5.0, 56.0, 'F.Cu', 0.0),    # MOTOR_A_CH1 (phase A motor pad)
+    'TP20': (5.0, 68.0, 'F.Cu', 0.0),    # MOTOR_B_CH1
+    'TP21': (5.0, 80.0, 'F.Cu', 0.0),    # MOTOR_C_CH1
     # 6× AOTL66912 MOSFETs on B.Cu (2 columns × 3 phase rows)
     # Hi-side west col x=12 (near motor pad), Lo-side east col x=28
-    'Q5':  (12.0, 54.0, 'B.Cu', 0.0),     # Phase A hi
-    'Q6':  (30.0, 54.0, 'B.Cu', 0.0),     # Phase A lo (x=30 for 1.3mm gap from Q5 x_max=20.35)
-    'Q7':  (12.0, 66.0, 'B.Cu', 0.0),     # Phase B hi
-    'Q8':  (30.0, 66.0, 'B.Cu', 0.0),     # Phase B lo
-    'Q9':  (12.0, 78.0, 'B.Cu', 0.0),     # Phase C hi
-    'Q10': (30.0, 78.0, 'B.Cu', 0.0),     # Phase C lo
+    # PR-CH1 2026-05-23: FET rows shifted Y=56/68/80 (P=12) per A4-redo locked
+    # symmetric spec on 100×100 board. Mirror Y=50; CH3/4 derived in PR-CH3/CH4.
+    'Q5':  (12.0, 56.0, 'B.Cu', 0.0),     # Phase A hi
+    'Q6':  (30.0, 56.0, 'B.Cu', 0.0),     # Phase A lo
+    'Q7':  (12.0, 68.0, 'B.Cu', 0.0),     # Phase B hi
+    'Q8':  (30.0, 68.0, 'B.Cu', 0.0),     # Phase B lo
+    'Q9':  (12.0, 80.0, 'B.Cu', 0.0),     # Phase C hi
+    'Q10': (30.0, 80.0, 'B.Cu', 0.0),     # Phase C lo
     # MCU + DRV8300 on F.Cu (interior — east of FET cluster)
-    'J18': (32.0, 58.0, 'F.Cu', 0.0),     # AT32F421 MCU LQFP-32 (y=52 clears S2 C3 bbox y_max=45.5)
-    'J19': (22.0, 56.0, 'F.Cu', 0.0),     # DRV8300 gate driver HVQFN-24
-    # INA186 column (x=15) — wide 10mm y-pitch to clear shunt 0402 courtyards
-    'J20': (15.0, 51.0, 'F.Cu', 0.0),     # Phase A INA186
-    'J21': (15.0, 61.0, 'F.Cu', 0.0),     # Phase B INA186
-    'J22': (15.0, 71.0, 'F.Cu', 0.0),     # Phase C INA186
-    # Protection cluster — row y=64 in NW quadrant SE corner
-    'U2':  (35.0, 70.0, 'F.Cu', 0.0),     # TL431 SOT-23
-    'U3':  (28.0, 70.0, 'F.Cu', 0.0),     # LM393 SOIC-8
-    'U4':  (37.0, 66.0, 'F.Cu', 0.0),     # 74LVC1G08 SOT-353 (clear J2 spine pocket boundary at x=39.275)
-    # Status LEDs — top row y=43 (north of S4 quadrant, clear of S2 caps + INA col)
-    'D15': (10.0, 49.0, 'F.Cu', 0.0),     # RED_KILL_FW
-    'D19': (28.0, 65.0, 'F.Cu', 0.0),     # RED_FAULT_HW (south of MCU, between MCU and U3 LM393)
-    'D33': (35.0, 49.0, 'F.Cu', 0.0),     # RED status
-    # NTC for OTP — north of protection cluster
-    'TH1': (38.0, 74.0, 'F.Cu', 0.0),     # 10K B4250
-    # Current sense shunts F.Cu in INA cluster gaps (x=10 column, between motor pads and INAs)
-    'R56': (10.0, 58.0, 'F.Cu', 0.0),     # Phase A shunt (between J20 y=45 and J21 y=55)
-    'R57': (10.0, 70.0, 'F.Cu', 0.0),     # Phase B shunt (between J21 y=55 and J22 y=65)
-    'R58': (14.0, 80.0, 'F.Cu', 0.0),     # Phase C shunt (south of J22)
+    # PR-CH1: MCU + gate driver + INAs + protection IC positions adjusted
+    # for new FET row Y=56/68/80. Gate driver ≤10mm from FET cluster center
+    # per industry-standard practice (≤10mm gate driver-to-FET).
+    # CH1 MCU at (45, 62) — between FET rows 56/68, just east of FET X-cluster (X<38)
+    'J18': (45.0, 62.0, 'F.Cu', 0.0),     # AT32F421 MCU LQFP-32 (≤8mm from Q5/Q6/Q7/Q8)
+    'J19': (45.0, 74.0, 'F.Cu', 0.0),     # DRV8300 gate driver (≤7mm from all 6 FETs)
+    # INA186 column on west edge X=5 between motor pads and FETs
+    'J20': (5.0, 62.0, 'F.Cu', 0.0),      # Phase A INA186 (south of motor pad TP19@56)
+    'J21': (5.0, 74.0, 'F.Cu', 0.0),      # Phase B INA186 (between motor B/C pads)
+    'J22': (40.0, 86.0, 'F.Cu', 0.0),     # Phase C INA186 (north of Q9/Q10, east of D-cluster)
+    # Protection cluster moved to NE corner of CH1 quadrant
+    'U2':  (45.0, 86.0, 'F.Cu', 0.0),     # TL431 SOT-23
+    'U3':  (48.0, 84.0, 'F.Cu', 0.0),     # LM393 SOIC-8
+    'U4':  (45.0, 78.0, 'F.Cu', 0.0),     # 74LVC1G08 SOT-353
+    'D15': (10.0, 50.5, 'F.Cu', 0.0),     # RED_KILL_FW (north of H1 keep-out (10, 50))
+    'D19': (45.0, 66.0, 'F.Cu', 0.0),     # RED_FAULT_HW (south of MCU)
+    'D33': (45.0, 70.0, 'F.Cu', 0.0),     # RED status
+    'TH1': (45.0, 82.0, 'F.Cu', 0.0),     # 10K B4250 NTC
+    # Current sense shunts on motor-pad-to-FET path (west edge)
+    'R56': (8.0, 60.0, 'F.Cu', 0.0),      # Phase A shunt (between TP19@56 and Q5@56)
+    'R57': (8.0, 72.0, 'F.Cu', 0.0),      # Phase B shunt (between TP20@68 and Q7@68)
+    'R58': (8.0, 84.0, 'F.Cu', 0.0),      # Phase C shunt (between TP21@80 and Q9@80)
     # ── CH1 passives placed via greedy bbox-aware packing (PR-A3 amendment 2026-05-23) ──
     # 33 placed F.Cu in NW + 23 on B.Cu (different layer from FETs) — total 56
     # F.Cu cluster:

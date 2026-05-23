@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<VTKFile type="RectilinearGrid" version="0.1" byte_order="LittleEndian" header_type="UInt32" compressor="vtkZLibDataCompressor">
+  <RectilinearGrid WholeExtent="0 0 0 0 0 0">
+  <Piece Extent="0 0 0 0 0 0">
+    <PointData>
+      <DataArray type="Float32" Name="RotH-Field" NumberOfComponents="3" format="binary" RangeMin="0.00009001474395375561" RangeMax="0.00009001474395375561">
+        AQAAAACAAAAMAAAAFAAAAA==eJzTYuTertC52FyzcvsOABbFBII=
+        <InformationKey name="L2_NORM_RANGE" location="vtkDataArray" length="2">
+          <Value index="0">
+            9.0014743954e-05
+          </Value>
+          <Value index="1">
+            9.0014743954e-05
+          </Value>
+        </InformationKey>
+      </DataArray>
+    </PointData>
+    <CellData>
+    </CellData>
+    <Coordinates>
+      <DataArray type="Float64" Name="Array 0x3b607960" format="binary" RangeMin="-0.0005" RangeMax="-0.0005">
+        AQAAAACAAAAIAAAAEAAAAA==eJz7s/LjJd8kh/0AGeAFFw==
+      </DataArray>
+      <DataArray type="Float64" Name="Array 0x3b607ba0" format="binary" RangeMin="-0.00005" RangeMax="-0.00005">
+        AQAAAACAAAAIAAAAEAAAAA==eJzTdZZ5/ciMaz8ADYEDWQ==
+      </DataArray>
+      <DataArray type="Float64" Name="Array 0x3b607de0" format="binary" RangeMin="0.00075" RangeMax="0.00075">
+        AQAAAACAAAAIAAAAEAAAAA==eJz7VZe1p2Syhz0AFcoELQ==
+      </DataArray>
+    </Coordinates>
+  </Piece>
+  </RectilinearGrid>
+</VTKFile>

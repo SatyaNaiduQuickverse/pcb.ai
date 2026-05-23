@@ -1,0 +1,73 @@
+! PR-CH1 Elmer thermal v6 — 6 CH1 AOTL66912 FETs at P=12 Y=56/68/80.
+! Continuous case: 70A per channel through 6 FETs = ~12A per FET avg.
+! P_per_FET = 12² × 4mΩ_hot = 0.58W. Total CH1 = 3.5W.
+! Volumetric heat source: 0.58W / (ρ=2700 × V=1.7e-7 m³) = 1264 W/kg in FET regions.
+! AOTL66912 bbox 16.15×10.8 → half=8.08×5.4. FET volume ~16.15×10.8×0.4mm = 6.97e-8 m³ × 6 = 4.18e-7 m³.
+
+Header
+  Mesh DB "." "ch1_mesh"
+End
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 50
+  Output Intervals = 1
+  Output File = "ch1_thermal.result"
+  Post File = "ch1_thermal.vtu"
+End
+Body 1
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+Equation 1
+  Name = "Heat Equation"
+  Active Solvers(2) = 1 2
+End
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Variable Dofs = 1
+  Linear System Solver = "Direct"
+  Linear System Direct Method = "UMFPack"
+  Linear System Convergence Tolerance = 1.0e-6
+  Steady State Convergence Tolerance = 1.0e-5
+  Nonlinear System Max Iterations = 1
+End
+Solver 2
+  Equation = "SaveScalars"
+  Procedure = "SaveData" "SaveScalars"
+  Filename = "ch1_max_temp.dat"
+  Variable 1 = "Temperature"
+  Operator 1 = max
+End
+Material 1
+  Density = 2700.0
+  Heat Conductivity = 60.0
+  Heat Capacity = 800.0
+End
+! Per-FET heat source: 6 indicators at FET body (16.15×10.8mm centered on FET coord)
+! Q5 (12, 56), Q6 (30, 56), Q7 (12, 68), Q8 (30, 68), Q9 (12, 80), Q10 (30, 80)
+! Half-X 0.0081, half-Y 0.0054
+Body Force 1
+  Heat Source = Variable Coordinate
+    Real MATC "tx_x=tx(0); tx_y=tx(1); in_fet = 0; if ((abs(tx_x-0.012)<0.0081)*(abs(tx_y-0.056)<0.0054)) {in_fet=1}; if ((abs(tx_x-0.030)<0.0081)*(abs(tx_y-0.056)<0.0054)) {in_fet=1}; if ((abs(tx_x-0.012)<0.0081)*(abs(tx_y-0.068)<0.0054)) {in_fet=1}; if ((abs(tx_x-0.030)<0.0081)*(abs(tx_y-0.068)<0.0054)) {in_fet=1}; if ((abs(tx_x-0.012)<0.0081)*(abs(tx_y-0.080)<0.0054)) {in_fet=1}; if ((abs(tx_x-0.030)<0.0081)*(abs(tx_y-0.080)<0.0054)) {in_fet=1}; 1264.0 * in_fet"
+End
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 1500.0
+  External Temperature = 60.0
+End
+Boundary Condition 2
+  Target Boundaries(1) = 2
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 80.0
+  External Temperature = 60.0
+End
+Boundary Condition 3
+  Target Boundaries(1) = 3
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 10.0
+  External Temperature = 60.0
+End
