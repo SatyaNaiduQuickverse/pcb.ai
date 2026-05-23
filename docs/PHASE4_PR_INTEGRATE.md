@@ -286,5 +286,157 @@ positions; placement-pad-overlap doesn't affect them.
 `phase4-integrate` @ amendment 4 (HEAD), PR #56 open, awaits Sai BOM decision.
 target.h md5 `7a4549d27e0e83d3d6f1ffaf67527d24` unchanged ✓.
 
+## PR-A4-integrate amendment 5 (2026-05-23) — Sai-caught Defects 1/2/3 + B-1 BOM swap
+
+Sai visual review caught 3 placement defects requiring fix BEFORE B-1 BOM
+swap. Master adjudicated each defect's path; all 3 resolved + B-1 BOM
+swap applied. Single combined amendment doc (5a-5h sub-commits) for the
+full Phase 4 placement closure with BOM upgrade.
+
+### Symptom (3 defects + density problem)
+
+1. **Defect 1**: Hall U1 pads 21mm separated from body — pads 4/5 visually
+   floating disconnected from IC at (86, 8).
+2. **Defect 2**: 12 motor terminal pads (TP19-42) each had 2-10 auto-anchored
+   R/C/D components inside bbox+2mm keep-out (73 encroachers total).
+3. **Defect 3**: NW=117 NE=96 SW=130 SE=110 quadrant component-count
+   asymmetry (~80 components unmirrored).
+4. **Pre-existing density**: PAD-OVERLAP-DIFFNET 402 fab-blocking pairs.
+
+### Fix
+
+1. **Defect 1 (`scripts/fix_u1_hall_footprint.py`)**: rebuilt U1's pads to
+   ACS770ECB-200B datasheet geometry. Pads 1/2/3 stacked at body, pads 4/5
+   adjacent at X=78.5 (7.5mm to W of body, not 21mm).
+2. **Defect 2 (`scripts/clear_motor_tp_zones.py` + auto_anchor +
+   integrate_resolver updates)**: relocated 73 encroachers to safe-interior;
+   added motor-TP keep-out zones (half_x=7.3, half_y=5.3 — TestPoint_Pad_D3.0mm
+   bbox + 2mm) to auto_anchor + resolver. Fixed elif-shadow bug where
+   generic `startswith('TP')` branch was eating motor-TP-specific branch.
+3. **Defect 3 path A (quadrant-balance-aware auto-anchor)**: per-position
+   spiral candidate selection now picks lowest-count quadrant
+   (tie-break by spiral-distance). Plus S1/S5/S6 hand-placement
+   X-symmetric rebalance (Buck #5 V9_VTX2 SW→SE, J13/J10/C8/C12/L7/D11
+   X=50→X=49/X=51 split, J12/J14/J17 single-instances → X=50 central,
+   R1/R2 NTC pair re-symmetrized after U1 footprint shrunk).
+4. **Audit refinement (3-bucket classifier)**: `check_quadrant_count_balance`
+   now classifies each ref into channel/s_mirror/single/auto buckets with
+   per-bucket thresholds. Channel quadrant from CH-NET (not physical Y) to
+   eliminate Y=50-axis boundary noise. Auto-bucket is warn-only since
+   debris anchored to single-instance parents cannot mirror per R23.
+5. **Audit gates added (3 new D-class checks)**:
+   - check_pad_in_body_bbox: flags pads >15mm from cluster centroid (D1)
+   - check_motor_pad_clear: flags components inside motor-TP zones+2mm (D2)
+   - check_quadrant_count_balance: 3-bucket classifier with refined limits (D3)
+6. **B-1 BOM swap (master Sai-approved 2026-05-23)**:
+   - **B-1a**: Q5-Q28 AOTL66912 TO-263 → BSC014N06NS PDFN-8 (same Infineon
+     part as Q1-Q4 protection FETs, JLC C113391, 1.45mΩ R_DS_on vs 4.5mΩ,
+     170A @ T_C=100°C). Footprint shrink 10×9mm → 5×6mm. In-place per-FET
+     subprocess swap loop (bulk pcbnew API segfaults).
+   - **B-1b**: J18/J23/J28/J33 LQFP-32 7×7 → QFN-32 5×5 ThermalVias
+     (AT32F421K8T7 → AT32F421K8U7, same die, JLC C176942).
+   - fix_fet_netlist_drop.py extended for PDFN-8: G→4, S→1,2,3, D→5,6,7,8.
+
+### Root cause
+
+1. **Defect 1**: KiCad's `Sensor_Current:Allegro_CB_PFF` footprint description
+   literally says `!PADS 4-5 DO NOT MATCH DATASHEET!` — it represents
+   ACS758 LCB-PFF (through-PCB-edge-mount with bar 25mm offset), not
+   ACS770ECB-200B PFF (fully SMT with tabs adjacent).
+2. **Defect 2**: auto-anchor and resolver had no awareness of motor-TP
+   clear-zone constraints. Additionally, the elif chain in
+   auto_anchor_passives.py had `startswith('TP')` branch BEFORE the
+   specific motor-TP branch — making the motor-TP-specific keep-out
+   unreachable.
+3. **Defect 3**: S-zone hand-placement asymmetry (Buck #5 V9_VTX2 cluster
+   all in SW, J13/J10 + C8/C12 + L7 + D11 at X=50 counting as NW per audit,
+   J12 AUX at NW with no NE partner, R36/R37/C49 at X=45-47) inherited
+   by auto-anchored debris around those parents.
+4. **B-1 density**: TO-263 drain pad (10×9mm bbox) dominated 47% of
+   pad-overlap pairs; LQFP-32 (7×7) MCU dominated 26%. Smaller packages
+   sharply reduce overlap counts (605→365 measured).
+
+### Prevention
+
+1. **3 new audit gates** (D1/D2/D3 class) would have auto-caught all 3
+   Sai-found defects. Combined with existing 6 gates = 9-check audit.
+2. **Memory `[[reference-kinet2pcb-silent-drop]]`** documents the
+   string-exact symbol-pin to footprint-pad lookup gap. Extended for FET
+   footprints (G/D/S vs 1/2/3 and 4/{1,2,3}/{5,6,7,8}).
+3. **SYMMETRY-BY-DEFAULT rule** inline comment in S6_POSITIONS dict —
+   any new entry MUST X-mirror about X=50 or place at X=50 central.
+
+### Spec deviations
+
+1. AUTO bucket SW↔SE Δ=8 (post-B1) — warn-only per master adjudication.
+   Auto-anchored debris around single-instance parents (MCU central spine,
+   supervisor, eFuses) cannot mirror per R23 (≤8mm parent constraint).
+   Forcing mirror would place decoupling caps 40mm from their parent IC,
+   breaking electrical function.
+2. R1/R2 NTC pair at (25.5, 7.5)/(74.5, 7.5) instead of original master
+   baseline (22, 7.5)/(78, 7.5) — needed to clear U1 Hall after Defect 1
+   footprint shrink.
+3. C18 V9_VTX1 C_OUT at X=86.5 — no X-mirror partner (C15 V5_AI at X=22)
+   because the BEC has 4 main bucks (1-4) + 1 single (V9_VTX1 J5 at 57,80)
+   that produces one C_OUT in NE. C18 documented as single-instance.
+
+### Post-fix audit (all 9 gates, B-1 BOM applied)
+
+| Gate                          | Status        | Detail |
+|-------------------------------|---------------|--------|
+| OFF-BOARD                     | PASS          | 0 footprints outside outline+2mm |
+| MOUNT-HOLE-CONFLICT           | PASS          | 0 keep-out conflicts |
+| PAD-OVERLAP-DIFFNET           | 344 residual  | from 578 pre-B1 (-40%) |
+| PAD-OVERLAP-SAMENET           | 21 intentional | GND pours + bus overlaps |
+| SYMMETRY (verify_spec_diff)   | 87/88 D26 historic | per-channel coord delta ≤0.5mm |
+| PASSIVE-ANCHORING (>20mm)     | 1 (R34)       | islanded per master baseline |
+| DECOUPLING (3mm)              | 9 ICs no C    | existing pre-B1 issue, deferred Phase 5b |
+| MOUNT-HOLE vs BODY            | PASS          | |
+| PAD-IN-BODY-BBOX (D1)         | PASS          | U1 fixed; max pad-cluster centroid Δ=7.5mm |
+| MOTOR-PAD-CLEAR (D2)          | PASS          | 0 encroachers in any of 12 motor TP zones |
+| QUADRANT-BALANCE channel (D3) | PASS          | NW=54 NE=56 SW=56 SE=56 (Δ≤2) |
+| QUADRANT-BALANCE s_mirror     | PASS          | NW=12 NE=13 SW=6 SE=6 (Δ≤1) |
+| QUADRANT-BALANCE auto         | warn-only     | NW=48 NE=39 SW=41 SE=33 — structural |
+| target.h md5                  | unchanged ✓   | 7a4549d27e0e83d3d6f1ffaf67527d24 |
+
+### Cumulative sim regression (B-1 BOM updated)
+
+#### Sim 1: Full 4-channel Elmer FEM thermal (B-1 R_DS_on update)
+
+**Scenario**: 100×100×1.6mm 4-channel mesh, 24 BSC014N06NS PDFN-8 FETs each
+dissipating P_new = P_old × R_new/R_old = 0.58 × (1.45/4.5) = 0.187W.
+Total 24 × 0.187 = 4.5W (vs 13.9W with AOTL66912). FET dimension mask
+updated from TO-263 16.2×10.8mm to PDFN-8 6×5mm. h_top=80, h_bot=1500,
+h_sides=10, T_amb=60°C.
+
+**Acceptance**: T_J ≤ 100°C cont.
+
+**Result** (extract.py):
+```
+B-1 BOM thermal: T_J = 60.30C
+  AOTL66912 baseline: 62.76°C
+  Acceptance: T_J ≤ 100°C cont
+  Verdict: PASS (improvement: 2.46°C)
+```
+
+**4-point**: artifact `ch1234_max_b1.dat`, mtime ✓, extract reproducible,
+exec `ElmerSolver ch1234_thermal_b1.sif` (path `/home/novatics64/local/elmer/bin/`).
+
+Note: T_J reduction is smaller than the 3× P reduction would suggest
+because the new PDFN-8 has higher R_θJA (smaller die contact area). Net
+effect: ~2°C improvement. Margin 40°C vs 100°C max — well below limit.
+
+### Renders
+
+- `docs/renders/integrate/top_b1.png` — top view post-B1
+- `docs/renders/integrate/bottom_b1.png` — bottom view post-B1
+
+### Final state
+
+`phase4-integrate` @ amendment 5h (HEAD). PR #56 still open.
+target.h md5 `7a4549d27e0e83d3d6f1ffaf67527d24` unchanged.
+
+Ready for master visual review per [[feedback-sai-catches-are-samples]].
+
 Cumulative sims still PASS (thermal 62.76°C; ngspice V_BUS 18.7V / 473mV trip
 margin / V_HALL 0.095mV) — these are not pad-overlap-blocked.
