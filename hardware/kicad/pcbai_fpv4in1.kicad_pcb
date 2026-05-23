@@ -128487,9 +128487,15 @@
 
 	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
 
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
+
+	(gr_rect (start 0 0) (end 100.0 100.0) (stroke (width 0.05) (type solid)) (fill no) (layer "Edge.Cuts"))
+
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "5659ff1b-b431-47b7-b20e-26c6e1a47607")
+		(uuid "5d096f1d-1262-4afd-a11a-a02c6b340ea0")
 		(at 44.60 37.50 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128497,13 +128503,13 @@
 		(property "Reference" "H1"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "d8613f6e-9403-4e52-aca8-6eff3ab71ab4")
+			(uuid "5eb493ac-63b5-48c9-b4ca-cc9d05b7121c")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "02bf0ce9-96ba-47c9-84d5-6bcc4bce2bc1")
+			(uuid "5d653d12-dc3c-410f-ada7-8d71855ddfd4")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128511,12 +128517,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "fd946cf3-666e-4c80-842f-b0ea5315c1dd")
+			(uuid "029b5499-ddec-44d8-b033-8e393e19210b")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "8dea06ff-ea8e-4057-a714-ba3ea8023d83")
+		(uuid "a5a49135-75b6-4ffb-8dec-a0e70d7729c3")
 		(at 51.80 37.50 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128524,13 +128530,13 @@
 		(property "Reference" "H2"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "60c08114-d7c3-4755-b2f3-d38cd3955fb0")
+			(uuid "197da195-222a-438d-8c28-f1d49801f4eb")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "e93857a5-ff6a-4203-9baa-7d20a81f1735")
+			(uuid "93872374-c325-4500-bbf5-320dd0433b78")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128538,12 +128544,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "cb5a42fd-d39c-4d41-87ce-0bfc0103f0bc")
+			(uuid "f73cb5d4-4f40-461e-ba97-607d7df092c4")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "826f35bf-2939-4833-b3fa-fc9ebd1780ad")
+		(uuid "8b165f0d-9916-42ca-8ce8-021c379299b4")
 		(at 2.00 2.00 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128551,13 +128557,13 @@
 		(property "Reference" "H3"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "890a317b-ac53-4dc2-8304-162af501adf6")
+			(uuid "8969ff64-f036-4a8e-8017-3e8775f3a060")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "bfcf4043-44f7-4c4f-95f4-c48d5b12b22f")
+			(uuid "561997a6-1683-4c1c-89a8-a56e3f5b036d")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128565,12 +128571,12 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "fb380dcd-7220-4e10-b8d9-0b05a7eeb5d2")
+			(uuid "f99a4c2f-6f17-4121-a2c4-29493c42ae8b")
 		)
 	)
 	(footprint "MountingHole:MountingHole_3.2mm_M3"
 		(layer "F.Cu")
-		(uuid "2d3e392a-cd41-4028-b31b-1b00a7c0fba0")
+		(uuid "80ee80e4-2359-4e5e-bf7c-ce1d0e92cc5e")
 		(at 23.60 2.00 0.0)
 		(descr "Mounting Hole 3.2mm, M3 — Phase 4b-REDO2 90×75 custom pattern")
 		(tags "mountinghole M3")
@@ -128578,13 +128584,13 @@
 		(property "Reference" "H4"
 			(at 0 -4.15 0)
 			(layer "F.SilkS")
-			(uuid "a0f333de-977f-4eb7-9bfe-8e8fb69ca90e")
+			(uuid "a912d968-59e6-4b81-b405-07ebf534eda9")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(property "Value" "MountingHole"
 			(at 0 4.15 0)
 			(layer "F.Fab")
-			(uuid "20c01545-df96-4544-9b46-ff5ca2880446")
+			(uuid "a1618c7d-4d69-4aa8-95e1-fee4faf7a155")
 			(effects (font (size 1 1) (thickness 0.15)))
 		)
 		(pad "" thru_hole circle
@@ -128592,7 +128598,7 @@
 			(size 6 6)
 			(drill 3.2)
 			(layers "*.Cu" "*.Mask")
-			(uuid "65a6eb77-f3e4-4be8-bb2d-c1e1bf37ae7c")
+			(uuid "b9bdf77a-b593-49da-8cb4-a95b1a4f13ac")
 		)
 	)
 )

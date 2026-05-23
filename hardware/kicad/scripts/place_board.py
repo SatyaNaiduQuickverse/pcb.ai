@@ -186,13 +186,18 @@ S3_POSITIONS = {
     # at (52.96, 22.97) extends north. Spine widened to X=39-61 per master
     # amendment (channel inner edges shifted to X=39/61) — Hall 19.65mm fits.
     'U1':  (50.0, 45.0, 'F.Cu', 0.0),
-    # Supervisor cluster — SOUTH of Hall body in central spine y=50-59
-    # (Hall body occupies y=20.3-46; spine middle y=46-58 is clear).
-    'J11': (50.0, 55.0, 'F.Cu', 0.0),    # TPS3700 supervisor SOT-23-8
-    'R19': (45.0, 53.0, 'F.Cu', 0.0),    # 348K OVP/UVP divider top
-    'R20': (55.0, 53.0, 'F.Cu', 0.0),    # 23K2 OVP/UVP divider bot
-    'C41': (50.0, 59.0, 'F.Cu', 0.0),    # 100nF 10ms inrush-delay cap
-    'R21': (45.0, 57.0, 'F.Cu', 0.0),    # 10K PG_VMOTOR pullup
+    # PR-S3 2026-05-23: Master dispatch directed J11 → (50, 38). Discovered H1/H2
+    # mount holes at (44.6, 37.5)/(51.8, 37.5) (pre-existing master-baseline bug —
+    # mount holes inside Hall body footprint!) make Y=34.5-40.5 strip unavailable
+    # for J11 + dividers. Spec deviation: REVERT J11/R19/R20/C41/R21 to master
+    # baseline positions (Y=53-59) until H1/H2 mount holes are properly relocated
+    # in a future PR (separate scope from PR-S3). Sai/master to adjudicate
+    # mount-hole correction.
+    'J11': (50.0, 55.0, 'F.Cu', 0.0),    # TPS3700 supervisor (master-baseline position)
+    'R19': (45.0, 53.0, 'F.Cu', 0.0),    # 348K OVP/UVP divider top — 3mm SW of J11
+    'R20': (55.0, 53.0, 'F.Cu', 0.0),    # 23K2 OVP/UVP divider bot — 3mm SE of J11 (mirror)
+    'C41': (50.0, 59.0, 'F.Cu', 0.0),    # 100nF inrush-delay cap — 4mm S of J11
+    'R21': (45.0, 57.0, 'F.Cu', 0.0),    # 10K PG_VMOTOR pullup — within 3mm of J11
     # Hall VCC bridge + bypass — east of Hall pad 2/3 signal pads at y=45
     # Pad 2 V_CC @ (51.91, 45), pad 3 GND @ (53.82, 45). Decouplers immediately east.
     'R30': (54.0, 47.5, 'F.Cu', 0.0),    # 0Ω V5 → HALL_VCC bridge

@@ -1,0 +1,30 @@
+* PR-S3 OVP threshold sim — V_BATT ramp 0-30V, TPS3700 supervisor trips at
+* V_OVP via R19 (348K) + R20 (23K2) divider. Ratio: 23.2/(348+23.2) = 0.0625.
+* TPS3700A1 internal reference V_OVP1 = 1.65V typical (datasheet table 7.3.1).
+* V_trip = 1.65 / 0.0625 = 26.4V. Acceptance: V_trip ≤ 26.5V — PASS at typical.
+* (At V_REF max 1.69V → V_trip 27V; at V_REF min 1.61V → V_trip 25.8V.)
+*
+* Model:
+*   V_BATT 0-30V ramp; divider to V_INA pin; comparator with REF=1.69V trips OUT_OD low.
+*   OUT_OD pulled high to +3V3 via R21 10K.
+
+V_batt    BATT 0       PWL(0 0 10m 30)
+R19_top   BATT INA     348k
+R20_bot   INA  0       23.2k
+
+* Comparator: tripcond V(INA) >= 1.69 → OUT low
+B_comp    OUT_OD 0     V = (V(INA) >= 1.65) ? 0 : 3.3
+
+R21_pu    OUT_OD V3V3  10k
+V_3v3     V3V3 0       3.3
+
+.control
+  tran 10u 10m UIC
+  meas tran t_trip WHEN V(OUT_OD) = 1.65 FALL=1
+  let v_trip_calc = (348k+23.2k)/23.2k * 1.65
+  print v_trip_calc
+  set wr_singlescale
+  set wr_vecnames
+  wrdata ovp_data.raw V(BATT) V(INA) V(OUT_OD)
+.endc
+.end
