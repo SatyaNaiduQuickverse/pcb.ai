@@ -1,0 +1,43 @@
+=== Layout compliance audit: pcbai_fpv4in1.kicad_pcb ===
+Components: 585
+Board outline: (0.0,0.0) to (100.0,100.0) mm
+
+WARNINGS:
+  PASSIVE-ANCHORING: 162 passives 10-20mm from nearest parent (verify role)
+
+FAIL (35 issues):
+  PAD-OVERLAP: 364 pad pairs overlap on same layer
+    Q5.2 <-> TP19.1
+    Q5.2 <-> C75.1
+    Q5.2 <-> C75.2
+    Q5.2 <-> R56.2
+    Q5.2 <-> D15.1
+    Q5.2 <-> D15.2
+    Q5.2 <-> D24.1
+    Q5.2 <-> D24.2
+    ... and 356 more
+  SYMMETRY: CH3 row pitch 11.00mm (expected 12.00mm)
+  SYMMETRY: CH4 row pitch 11.00mm (expected 12.00mm)
+  SYMMETRY: Q5@(12.0,54.0) Y-mirror partner Q23@(12.0,41.0) deviates (0.0,5.0) mm from expected (12.0,46.0)
+  SYMMETRY: Q8@(30.0,66.0) Y-mirror partner Q26@(30.0,30.0) deviates (0.0,4.0) mm from expected (30.0,34.0)
+  SYMMETRY: Q10@(30.0,78.0) Y-mirror partner Q28@(30.0,19.0) deviates (0.0,3.0) mm from expected (30.0,22.0)
+  SYMMETRY: Q6@(30.0,54.0) Y-mirror partner Q24@(30.0,41.0) deviates (0.0,5.0) mm from expected (30.0,46.0)
+  SYMMETRY: Q7@(12.0,66.0) Y-mirror partner Q25@(12.0,30.0) deviates (0.0,4.0) mm from expected (12.0,34.0)
+  SYMMETRY: Q9@(12.0,78.0) Y-mirror partner Q27@(12.0,19.0) deviates (0.0,3.0) mm from expected (12.0,22.0)
+  PASSIVE-ANCHORING: 5 passives >20mm from any FET/IC parent (likely islanded)
+    C83 at (50.0,91.5) -> nearest Q16 @ 24.1 mm
+    C82 at (47.6,91.5) -> nearest Q10 @ 22.2 mm
+    C84 at (52.4,91.5) -> nearest Q16 @ 22.2 mm
+    R38 at (52.5,90.0) -> nearest Q16 @ 21.2 mm
+    C47 at (47.6,89.5) -> nearest Q10 @ 21.0 mm
+  DECOUPLING: 10 ICs have no cap within 3mm
+    U13 at (56.0,61.0) — no C within 3mm
+    U12 at (54.8,17.4) — no C within 3mm
+    U5 at (61.0,68.0) — no C within 3mm
+    U2 at (35.0,70.0) — no C within 3mm
+    U9 at (4.4,83.4) — no C within 3mm
+    U4 at (37.0,66.0) — no C within 3mm
+    U7 at (54.0,55.0) — no C within 3mm
+    U3 at (28.0,70.0) — no C within 3mm
+    U6 at (2.0,83.4) — no C within 3mm
+    U1 at (50.0,45.0) — no C within 3mm
