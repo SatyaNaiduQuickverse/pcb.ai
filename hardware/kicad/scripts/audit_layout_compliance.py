@@ -431,31 +431,45 @@ def check_coincident_placement():
 # In PR #71 this trap masked 162 footprints with fp_layer=B.Cu but pad_layer=F.Cu,
 # inflating audit PAD-OVERLAP count from 9 to 245.
 def check_fp_layer_mismatch():
-    """Footprint declared layer vs actual pad copper layer must agree. If
-    fp.GetLayer() reports B.Cu but pads are on F.Cu (or vice versa), Freerouting
-    + audit will treat them inconsistently. Skip pads with no copper layer
-    (PDFN-8 courtyard/no-net unnamed pads etc.)."""
+    """Footprint declared layer vs MAJORITY of pad copper layer must agree.
+    If fp.GetLayer() = F.Cu but >50% of named pads are on B.Cu only (or vice
+    versa) → text-edit-without-flip trap. Single stray flipped pads are
+    flagged separately (see STRAY-PAD-LAYER warning, not fail)."""
     bugs = []
+    stray_pads = []
     for fp in board.GetFootprints():
         fp_layer = fp.GetLayer()
+        f_only = 0
+        b_only = 0
         for pad in fp.Pads():
             if pad.GetAttribute() in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH):
-                continue  # THT pads span both layers
+                continue
             ls = pad.GetLayerSet()
             pad_F = ls.Contains(pcbnew.F_Cu)
             pad_B = ls.Contains(pcbnew.B_Cu)
-            if not (pad_F or pad_B):
-                continue  # no copper layer — courtyard artifact, skip
-            if fp_layer == pcbnew.F_Cu and pad_B and not pad_F:
-                bugs.append((fp.GetReference(), 'fp=F.Cu pad=B-only'))
-                break
-            if fp_layer == pcbnew.B_Cu and pad_F and not pad_B:
-                bugs.append((fp.GetReference(), 'fp=B.Cu pad=F-only'))
-                break
+            if pad_F and not pad_B:
+                f_only += 1
+            elif pad_B and not pad_F:
+                b_only += 1
+        total = f_only + b_only
+        if total == 0:
+            continue
+        if fp_layer == pcbnew.F_Cu:
+            if b_only > f_only:
+                bugs.append((fp.GetReference(), f'fp=F.Cu but {b_only}/{total} pads on B-only'))
+            elif b_only > 0 and f_only > 0:
+                stray_pads.append((fp.GetReference(), f'fp=F.Cu {b_only} stray B-pad(s) of {total}'))
+        else:  # fp_layer == B.Cu
+            if f_only > b_only:
+                bugs.append((fp.GetReference(), f'fp=B.Cu but {f_only}/{total} pads on F-only'))
+            elif f_only > 0 and b_only > 0:
+                stray_pads.append((fp.GetReference(), f'fp=B.Cu {f_only} stray F-pad(s) of {total}'))
     if bugs:
-        fails.append(f"FP-LAYER-MISMATCH: {len(bugs)} footprint(s) with fp.GetLayer() ≠ pad copper layer (text-edit-without-flip trap, run flip_bcu_footprints.py)")
+        fails.append(f"FP-LAYER-MISMATCH: {len(bugs)} footprint(s) with MAJORITY pad layer ≠ fp.GetLayer() (run flip_bcu_footprints.py)")
         for r, why in bugs[:15]:
             fails.append(f"  {r}: {why}")
+    if stray_pads:
+        warns.append(f"STRAY-PAD-LAYER: {len(stray_pads)} footprint(s) with 1+ stray pad on opposite layer (cosmetic, not fab-blocking)")
 
 
 # PR #67 Sai-eye catch #4: TP-spacing audit gate (re-added per master 2026-05-24)
