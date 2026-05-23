@@ -570,6 +570,55 @@ def check_quadrant_count_balance():
         warns.append(f"AUTO-BUCKET: {w}")
 
 
+# ----- check 12: PER-CHANNEL PASSIVE QUADRANT (Sai-eye-catch #6, 2026-05-23) -----
+# Every R/C/L/D with a single _CH[1234] net must reside inside its parent channel
+# quadrant. Cross-quadrant placement breaks R23 gate-R ≤5mm rule + violates
+# symmetry [[feedback-symmetry-preserves-work]].
+# Derived from locked FET positions Q5-Q28:
+#   CH1 = Q5-Q10  at (12-30, 56-80)         → X=0-50,  Y=50-100
+#   CH2 = mirror_X(CH1)        (Q11-Q16)    → X=50-100, Y=50-100
+#   CH3 = 180°-rot(CH1, 50,50) (Q17-Q22)    → X=50-100, Y=0-50
+#   CH4 = mirror_Y(CH1)        (Q23-Q28)    → X=0-50,  Y=0-50
+# BOUNDARY_TOL: shared-bus caps placed on the central spine legitimately
+# straddle a quadrant axis — exempt those within tol of a half-axis line.
+CHAN_ZONES = {
+    'CH1': (0, 50, 50, 100),
+    'CH2': (50, 50, 100, 100),
+    'CH3': (50, 0, 100, 50),
+    'CH4': (0, 0, 50, 50),
+}
+BOUNDARY_TOL = 2.0
+
+def check_per_channel_passive_quadrant():
+    vio = []
+    for ref, d in items.items():
+        if not ref.startswith(('R', 'C', 'D', 'L')):
+            continue
+        fp = d['fp']
+        chs = set()
+        for p in fp.Pads():
+            if p.GetNet():
+                m = re.search(r'_CH([1234])$', p.GetNet().GetNetname())
+                if m:
+                    chs.add(int(m.group(1)))
+        if len(chs) != 1:
+            continue
+        ch_name = f'CH{next(iter(chs))}'
+        x, y = d['x'], d['y']
+        x1, y1, x2, y2 = CHAN_ZONES[ch_name]
+        # Boundary tolerance: shared-bus passives straddling X=50 or Y=50
+        if abs(x - 50.0) <= BOUNDARY_TOL or abs(y - 50.0) <= BOUNDARY_TOL:
+            continue
+        if not (x1 <= x <= x2 and y1 <= y <= y2):
+            vio.append((ref, ch_name, x, y))
+    if vio:
+        fails.append(f"CH-PASSIVE-QUADRANT: {len(vio)} channel-tagged passives outside parent quadrant")
+        for ref, ch, x, y in sorted(vio)[:15]:
+            fails.append(f"  {ref} expected {ch} actual ({x:.1f},{y:.1f})")
+        if len(vio) > 15:
+            fails.append(f"  ... and {len(vio) - 15} more")
+
+
 # ----- run -----
 items = collect_components()
 bbox = get_outline_bbox()
@@ -582,6 +631,7 @@ check_mount_hole_vs_body(items)
 check_pad_in_body_bbox()
 check_motor_pad_clear()
 check_quadrant_count_balance()
+check_per_channel_passive_quadrant()
 
 print(f"=== Layout compliance audit: {os.path.basename(sys.argv[1])} ===")
 print(f"Components: {len(items)}")
