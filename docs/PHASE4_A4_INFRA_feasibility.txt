@@ -1,0 +1,13 @@
+=== Pre-placement dimensional feasibility check ===
+Board: 100.0×100.0 mm
+FET package half-bbox: (8.08, 5.4) (AOTL66912 TO-263)
+JLC clearance: ≥1.0mm pad-pad
+
+[Row pitch] All channels P=12.0mm ✓ — PASS
+[Y-symmetry] top rows [56.0, 68.0, 80.0] ↔ bot rows [20.0, 32.0, 44.0] about 50.0 — PASS
+[CH3/4 ↔ S1] S1 FET top=11.00, CH bot edge=14.60, gap=3.60mm (need ≥1.0mm) — PASS
+[CH1/2 ↔ CH3/4] top of CH3/4=49.40, bot of CH1/2=50.60, gap=1.20mm — PASS
+[CH1/2 ↔ S6] CH top edge=85.40, S6 zone start=87.0, gap=1.60mm — PASS
+[Board bounds] FET y-range [14.60, 85.40] vs board [0, 100.0] — PASS
+
+=== OVERALL: PASS — geometry is dimensionally feasible ===

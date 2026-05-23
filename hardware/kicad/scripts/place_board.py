@@ -46,13 +46,13 @@ S1_POSITIONS = {
     # PR-A4-c 2026-05-23: S1 single-row revert (Y=0-13 zone per A4-b spec)
     'J1':         (50.0,  4.0, 'F.Cu',  0.0),   # BATT_PAD (XT30)
     'D26':        (15.0,  5.0, 'B.Cu',  0.0),   # SMBJ33A TVS (moved west)
-    'R1':         (22.0, 10.0, 'F.Cu',  0.0),   # NTC #1 west
-    'R2':         (78.0, 10.0, 'F.Cu',  0.0),   # NTC #2 east
+    'R1':         (22.0,  7.5, 'F.Cu',  0.0),   # NTC #1 west
+    'R2':         (78.0,  7.5, 'F.Cu',  0.0),   # NTC #2 east
     # 4 RP FETs single row at y=10 (B.Cu), 4× parallel BSC014N06NS
-    'Q1':         (30.0, 10.0, 'B.Cu',  0.0),
-    'Q2':         (45.0, 10.0, 'B.Cu',  0.0),
-    'Q3':         (55.0, 10.0, 'B.Cu',  0.0),
-    'Q4':         (70.0, 10.0, 'B.Cu',  0.0),
+    'Q1':         (30.0,  7.5, 'B.Cu',  0.0),
+    'Q2':         (45.0,  7.5, 'B.Cu',  0.0),
+    'Q3':         (55.0,  7.5, 'B.Cu',  0.0),
+    'Q4':         (70.0,  7.5, 'B.Cu',  0.0),
     # Note: Q3/Q4 spill into Y=13-17 (nominally bulk-cap S2 zone) — RP FET
     # SuperSO8 5×6 body × 2 rows requires ≥12mm vertical span; spec'd Y=0-13
     # zone is too tight. Per master spec §S1 the 2×2 cluster centers at (50, 11);
@@ -644,7 +644,31 @@ def place_channels_234(fps_by_ref, placements):
     return placed
 
 
-# Registry of subsystem placers in spec order
+def place_auto_anchored(fps_by_ref, placements):
+    """S8 (PR-A4-infra) — auto-anchored fill placements per R23 (no-island) + R24
+    (no-unplaced). Picks up ANY netlist ref not placed by other subsystem placers
+    and assigns it a slot near its electrical parent (FET/IC/connector) via
+    scripts/auto_anchor_passives.py. Slots persisted in ch234_passives_dict.py."""
+    try:
+        from ch234_passives_dict import CH234_PASSIVES
+    except ImportError:
+        return 0
+    placed = 0
+    for ref, pos in CH234_PASSIVES.items():
+        if ref in placements:
+            continue
+        fp = fps_by_ref.get(ref)
+        if not fp:
+            continue
+        x, y, layer, rot = pos
+        placements[ref] = (x, y, layer, rot)
+        placed += 1
+    return placed
+
+
+# Registry of subsystem placers in spec order. PR-A4-infra structure: 8 functions
+# defined (S1-S6 + S4 CH1 + S4 CH234 + S8 auto-anchored fallback). Subsystem PRs
+# will refine each in turn.
 ALL_PLACERS = [
     ('S1', 'Battery input',         place_battery_input),
     ('S2', 'Bulk cap bank',         place_bulk_caps),
@@ -653,6 +677,7 @@ ALL_PLACERS = [
     ('S5', 'BEC subsystem',         place_bec),
     ('S4 CH1', 'Channel #1 template (NW)', place_channel_ch1),
     ('S4 CH234', 'Channels 2/3/4 mirror', place_channels_234),
+    ('S8 auto', 'Auto-anchored remainder',  place_auto_anchored),
 ]
 
 

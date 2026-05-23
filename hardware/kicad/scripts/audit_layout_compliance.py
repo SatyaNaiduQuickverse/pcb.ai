@@ -110,7 +110,15 @@ def check_pad_overlap(items):
 
 
 # ----- check 3: symmetry (4 channels) -----
-def check_symmetry(items, board_h=95.0, board_w=100.0):
+def check_symmetry(items, board_h=None, board_w=None):
+    # PR-A4-redo 2026-05-23: read board outline dynamically (was hardcoded 95×100)
+    bb = get_outline_bbox()
+    if bb:
+        x_min, y_min, x_max, y_max = bb
+        if board_w is None: board_w = x_max - x_min
+        if board_h is None: board_h = y_max - y_min
+    if board_w is None: board_w = 100.0
+    if board_h is None: board_h = 100.0
     fets = {ref: (d["x"], d["y"]) for ref, d in items.items()
             if ref.startswith("Q") and ref[1:].isdigit()
             and 5 <= int(ref[1:]) <= 28}
