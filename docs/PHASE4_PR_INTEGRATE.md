@@ -168,5 +168,123 @@ pads at netname="" — kinet2pcb dropped their netlist. Memory
 [[reference-kinet2pcb-silent-drop]] applies. This is a Phase 2 netlist defect,
 not a placement defect, but inflates raw PAD-OVERLAP.
 
+## PR-A4-integrate amendment 4 (2026-05-23) — netlist root-cause fix + true count revealed
+
+**Path B mandatory per master root-cause-not-symptom directive.**
+
+### Symptom
+422 raw pad-pair overlaps after amendment 3. Initial categorization gave a
+conservative-low estimate of 198 "true fab-blocking" by excluding 205 pairs
+involving unnetted Q1-Q28 FETs (assumed to be netlist-drop artifacts that
+would resolve into same-net once nets restored).
+
+### Fix
+`hardware/kicad/scripts/fix_fet_netlist_drop.py` (NEW). Parses
+`pcbai_fpv4in1.net` for `(ref Qx)(pin S|G|D)` tuples and applies standard
+package pin mapping to attach the right net to the right physical pad:
+
+| Symbol pin | TO-263-3_TabPin2 (Q5-Q28) | W-PDFN-8-1EP_6x5 (Q1-Q4) |
+|------------|---------------------------|--------------------------|
+| G          | pad "1"                   | pad "4"                  |
+| D          | pad "2" (both instances)  | pads "5","6","7","8"     |
+| S          | pad "3"                   | pads "1","2","3"         |
+
+Result: 128 pads on 28 FETs now correctly netted. 0 new net objects needed
+(all symbolic names — GND, BATGND, GATE_RP, VMOTOR_CH, MOTOR_X_CHy, N$NN —
+already existed in board from other components' netlist).
+
+### Root cause
+**kinet2pcb silent-drop on FET footprint** per [[reference-kinet2pcb-silent-drop]].
+
+SKiDL exports `Device:Q_NMOS` symbol-pin names `S`/`G`/`D` (the schematic-side
+pin identifiers) into the .net file. The assigned KiCad footprints
+(`TO-263-3_TabPin2`, `W-PDFN-8-1EP_6x5mm`) have **numeric** pad names
+("1"/"2"/"3" or "1"-"8"). kinet2pcb's pad-lookup is string-exact — no
+symbol-pin→footprint-pad alias map → silently dropped all 28 FET nets,
+leaving 84 pad assignments un-applied. **No error, no warning** — the
+artifact looked imported.
+
+This is a class-23-style kinet2pcb defect on any component whose symbol
+pin names differ from footprint pad numbers. Affects FETs (G/D/S vs 1/2/3),
+will likely affect bipolar transistors (B/C/E vs 1/2/3) and JFETs.
+
+### Prevention
+1. **Audit enhancement (amendment 3)**: same-net vs diff-net split surfaces
+   netlist-drop artifacts vs real geometry conflicts.
+2. **Re-import gate**: any Phase-2 .kicad_pcb regen MUST run
+   `fix_fet_netlist_drop.py` post kinet2pcb until upstream is patched.
+3. **Memory bump**: extend [[reference-kinet2pcb-silent-drop]] to cover
+   FET footprints explicitly.
+
+### Post-fix audit (true numbers)
+
+```
+PAD-OVERLAP-TOTAL: 422 (same-net 20 intentional, different-net 402 FAB-BLOCKING)
+```
+
+| Class                                       | Pre-fix | Post-fix | Δ  |
+|---------------------------------------------|--------:|---------:|----|
+| Total geometric pad-pair overlaps           |    422  |    422   |  0 |
+| Same-net intentional                        |     19  |     20   | +1 |
+| Different-net raw                           |    403  |    402   | -1 |
+| ↳ involving fully-unnetted FP               |    205  |      0   |-205|
+| ↳ both netted = TRUE fab-blocking           |    198  |    402   |+204|
+
+**The 205 "unnetted-artifact" overlaps were NOT same-net intentional in
+disguise — they were genuinely different-net fab-blocking, just masked by
+the netlist drop.** Master's hypothesis that they'd collapse to same-net
+pour share turned out wrong: only +1 same-net pair was actually FET-on-FET
+drain-pour-sharing. The other 204 are FET pads geometrically intersecting
+DIFFERENT-net surrounding component pads (gate driver outputs vs FET drains,
+shunt resistors on FET source, bemf caps on motor-phase nodes, etc).
+
+### Diff-net pair-type breakdown (top 10 of 402)
+
+| Pair       | Count | Interpretation |
+|------------|------:|----------------|
+| CONN ↔ FET |    95 | DRV8300 / MCU LQFP / buck headers landing on FET pads |
+| CONN ↔ L   |    38 | buck-IC connectors overlapping buck inductors |
+| D ↔ FET    |    36 | TVS / gate clamp / reverse-recovery diode on FET |
+| FET ↔ R    |    32 | gate-R / source-shunt-R on FET pad bbox |
+| CONN ↔ R   |    25 | LQFP/DRV connector overlapping support R |
+| CONN ↔ IC  |    25 | DRV/INA/buck IC overlap |
+| CONN ↔ D   |    16 | header ↔ LED/diode |
+| C ↔ FET    |    15 | bypass cap / bemf cap on FET pad |
+| IC ↔ IC    |    15 | IC bodies on adjacent IC pads |
+| FET ↔ TP   |    12 | test point on motor phase / drain pad |
+
+**FET-involved subtotal: 190 of 402 (47%).** FET drain pad bbox (~16×10mm
+for TO-263) dominates the density problem.
+
+**CONN-involved subtotal: 209 of 402 (52%).** LQFP-32 MCU + HVQFN-24 DRV
++ J3/J5 buck pin-headers are the second density class.
+
+### Decision per master conditional logic
+
+> If post-fix true residual <100: merge | 100-200: master adjudicate | >200: escalate Sai-decision BOM Option B-1.
+
+**402 ≫ 200 → ESCALATE Sai BOM Option B-1.**
+
+Recommended BOM changes (drafted in `/tmp/sai-queue.md`):
+- **AOTL66912 TO-263 → AOTL66912 PowerPak SO-8** (or BSC014N06NS already used
+  for Q1-Q4 — 5×6 SuperSO8): drain pad bbox ~3×4mm vs ~16×10mm. Drops FET-related
+  overlap class from 190 to ~30 with same I_D rating (170A @ T_C=100°C).
+- **AT32F421 LQFP-32 7×7 → AT32F421 QFN-32 5×5** (same die, smaller package
+  JLC C176942): drops MCU-related overlap by ~50%.
+- **DRV8300 HVQFN-24 4×4 → DRV8301 QFN-32 5×5 with integrated buck**: would
+  eliminate the J3/J5 separate-buck-pin-headers (38 + ~25 overlaps).
+
+Expected post-BOM residual: ~50-100 pairs, well into the "single-PR-mergeable"
+band.
+
+### Sims unchanged
+Cumulative thermal (T_J 62.76°C) + ngspice (V_BUS 18.7V, V_INA 1.177V,
+V_HALL 0.095mV) PASS — both based on schematic net topology + locked FET
+positions; placement-pad-overlap doesn't affect them.
+
+### Branch state
+`phase4-integrate` @ amendment 4 (HEAD), PR #56 open, awaits Sai BOM decision.
+target.h md5 `7a4549d27e0e83d3d6f1ffaf67527d24` unchanged ✓.
+
 Cumulative sims still PASS (thermal 62.76°C; ngspice V_BUS 18.7V / 473mV trip
 margin / V_HALL 0.095mV) — these are not pad-overlap-blocked.
