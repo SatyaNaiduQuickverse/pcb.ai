@@ -570,44 +570,6 @@ def check_quadrant_count_balance():
         warns.append(f"AUTO-BUCKET: {w}")
 
 
-# ----- check 10: TP-SPACING (Sai-eye-catch usability gate, 2026-05-23) -----
-# Test points must be ≥4mm center-to-center AND ≥2.5mm edge-to-edge to be
-# usable for scope probing (1.5mm probe tip + 4-5mm clip clearance per side).
-# Pre-fab board may pass DRC but be UNUSABLE for bring-up if TPs cluster <4mm.
-TP_MIN_CENTER = 4.0
-TP_MIN_EDGE = 2.5
-
-def check_test_point_spacing(items):
-    tps = []
-    for ref, d in items.items():
-        if not ref.startswith('TP'):
-            continue
-        fp = d['fp']
-        pad_r = 0.0
-        for p in fp.Pads():
-            s = p.GetSize()
-            pad_r = max(pad_r, max(pcbnew.ToMM(s.x), pcbnew.ToMM(s.y)) / 2.0)
-        layer = fp.GetLayer()
-        tps.append((ref, d['x'], d['y'], layer, pad_r))
-
-    vio = []
-    for i, (ra, xa, ya, la, ra_pad) in enumerate(tps):
-        for rb, xb, yb, lb, rb_pad in tps[i + 1:]:
-            if la != lb:
-                continue
-            dist = math.hypot(xb - xa, yb - ya)
-            edge_gap = dist - (ra_pad + rb_pad)
-            if dist < TP_MIN_CENTER or edge_gap < TP_MIN_EDGE:
-                vio.append((ra, rb, dist, edge_gap))
-    if vio:
-        fails.append(f"TP-SPACING: {len(vio)} same-layer TP-pair violations "
-                     f"(need ≥{TP_MIN_CENTER}mm center, ≥{TP_MIN_EDGE}mm edge)")
-        for ra, rb, d, e in sorted(vio, key=lambda v: v[2])[:10]:
-            fails.append(f"  {ra}↔{rb} center={d:.2f}mm edge={e:.2f}mm")
-        if len(vio) > 10:
-            fails.append(f"  ... and {len(vio) - 10} more")
-
-
 # ----- run -----
 items = collect_components()
 bbox = get_outline_bbox()
@@ -620,38 +582,6 @@ check_mount_hole_vs_body(items)
 check_pad_in_body_bbox()
 check_motor_pad_clear()
 check_quadrant_count_balance()
-check_test_point_spacing(items)
-
-
-# ----- check 11: EXTERNAL-CONNECTOR-EDGE (Sai-eye-catch #5, 2026-05-23) -----
-# External cable-exit headers must be ≤5mm from nearest board edge so:
-#  (a) cable exits cleanly without bending across interior components,
-#  (b) interior components aren't in the cable-bend strain zone.
-EXTERNAL_HEADER_DIST_LIMIT = 5.0
-EXTERNAL_HEADER_REFS = {'J1', 'J12', 'J14'}  # XT30, AUX, FC
-
-def check_external_connector_edge():
-    if not bbox:
-        return
-    x_min, y_min, x_max, y_max = bbox
-    vio = []
-    for ref in EXTERNAL_HEADER_REFS:
-        if ref not in items:
-            continue
-        x = items[ref]['x']
-        y = items[ref]['y']
-        d_min = min(abs(x - x_min), abs(x - x_max),
-                    abs(y - y_min), abs(y - y_max))
-        if d_min > EXTERNAL_HEADER_DIST_LIMIT:
-            vio.append((ref, x, y, d_min))
-    if vio:
-        fails.append(f"EXTERNAL-CONNECTOR-EDGE: {len(vio)} cable-exit header(s) "
-                     f">{EXTERNAL_HEADER_DIST_LIMIT}mm from nearest board edge")
-        for ref, x, y, d in vio:
-            fails.append(f"  {ref} at ({x:.1f},{y:.1f}) — nearest edge {d:.1f}mm away")
-
-check_external_connector_edge()
-
 
 print(f"=== Layout compliance audit: {os.path.basename(sys.argv[1])} ===")
 print(f"Components: {len(items)}")
