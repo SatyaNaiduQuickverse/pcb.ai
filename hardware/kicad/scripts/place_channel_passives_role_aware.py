@@ -344,6 +344,85 @@ def in_zone(x, y, ch_num):
             and y0 - QUADRANT_TOL <= y <= y1 + QUADRANT_TOL)
 
 
+def get_pad_bboxes_at(d, new_x, new_y):
+    """Compute pad absolute bboxes if footprint were placed at (new_x, new_y).
+    Returns list of dicts {x0, y0, x1, y1, net, layer_set}.
+
+    Uses footprint rotation + each pad's local offset. layer_set: set of layers
+    the pad appears on (F.Cu, B.Cu, or both for THT). Padded with 0.1mm
+    fab-clearance margin for safer audit-equivalent collision detection.
+    """
+    import math
+    fp = d['fp']
+    rot = d.get('rot', 0)
+    cos_r = math.cos(math.radians(rot))
+    sin_r = math.sin(math.radians(rot))
+    fp_layer = d['layer']  # 'F.Cu' or 'B.Cu'
+    bboxes = []
+    for pad in fp.Pads():
+        # GetFPRelativePosition returns local offset (FP-relative); GetSize returns size
+        pos0 = pad.GetFPRelativePosition()
+        size = pad.GetSize()
+        lx = pos0.x / 1e6
+        ly = pos0.y / 1e6
+        # Rotate local offset by footprint rotation
+        rx = lx * cos_r - ly * sin_r
+        ry = lx * sin_r + ly * cos_r
+        # Pad absolute center if footprint were at (new_x, new_y)
+        px = new_x + rx
+        py = new_y + ry
+        # Pad size — assume axis-aligned with footprint; for SMD pads usually so
+        pw = size.x / 1e6
+        ph = size.y / 1e6
+        # If footprint rotated 90/270, pad bbox W/H swap (approximate for SMD)
+        if rot in (90.0, 270.0):
+            pw, ph = ph, pw
+        m = 0.1  # fab clearance margin
+        # Pad layer detection: SMD on top layer = F.Cu; SMD on bot = B.Cu;
+        # THT through both. For simplicity, follow footprint layer.
+        attr = pad.GetAttribute()
+        if attr == pcbnew.PAD_ATTRIB_PTH or attr == pcbnew.PAD_ATTRIB_NPTH:
+            layer_set = {'F.Cu', 'B.Cu'}
+        else:
+            layer_set = {fp_layer}
+        bboxes.append({
+            'x0': px - pw/2 - m, 'y0': py - ph/2 - m,
+            'x1': px + pw/2 + m, 'y1': py + ph/2 + m,
+            'net': pad.GetNetname(),
+            'layer_set': layer_set,
+        })
+    return bboxes
+
+
+def build_placed_pad_index(placed_set, fp_data):
+    """For each placed ref, get its pad bboxes (at CURRENT footprint position)."""
+    idx = {}
+    for ref in placed_set:
+        d = fp_data[ref]
+        idx[ref] = get_pad_bboxes_at(d, d['x'], d['y'])
+    return idx
+
+
+def pad_bbox_collision(candidate_bboxes, placed_pad_index, ignore_refs=()):
+    """Return (other_ref, layer) of first colliding placed pad, or None."""
+    for other_ref, other_bboxes in placed_pad_index.items():
+        if other_ref in ignore_refs:
+            continue
+        for cb in candidate_bboxes:
+            for ob in other_bboxes:
+                # Same-net pads can overlap (intentional bus/pour) — skip
+                if cb['net'] and cb['net'] == ob['net']:
+                    continue
+                # Different layers don't collide
+                if not (cb['layer_set'] & ob['layer_set']):
+                    continue
+                # Bbox intersection test
+                if (cb['x0'] < ob['x1'] and cb['x1'] > ob['x0']
+                        and cb['y0'] < ob['y1'] and cb['y1'] > ob['y0']):
+                    return (other_ref, list(cb['layer_set'] & ob['layer_set'])[0])
+    return None
+
+
 def collision_with_placed(ref, x, y, fp_data, placed_set, min_clear=1.0):
     """Check if placing `ref` at (x,y) would collide with any already-placed footprint.
     Distance metric: use larger clearance for larger components (rough proxy for
@@ -462,9 +541,11 @@ def is_per_channel_passive(ref, d):
     return any(re.search(r'_CH\d+(?:_|$)', n) for n in d['nets'])
 
 
-def place_one(ref, d, anchor_xy, max_dist, ch_num, fp_data, placed_set):
+def place_one(ref, d, anchor_xy, max_dist, ch_num, fp_data, placed_set, pad_idx):
     """Try to place `ref` near anchor with collision avoidance + zone check.
-    Returns final (x, y) on success, or None on failure."""
+    Returns final (x, y) on success, or None on failure.
+
+    pad_idx: incremental pad-bbox index for placed components."""
     ax, ay, parent_ref = anchor_xy
     # Component-size-aware clearance: own size also matters
     ov = d.get('value', '')
@@ -488,8 +569,8 @@ def place_one(ref, d, anchor_xy, max_dist, ch_num, fp_data, placed_set):
             continue
         if not in_zone(x, y, ch_num):
             continue
-        # Motor-TP keep-out (R20 audit gate)
-        if in_motor_tp_zone(x, y, fp_data, margin=2.0):
+        # Motor-TP keep-out (R20 audit gate) — bumped to 3mm margin per Phase 3 fix
+        if in_motor_tp_zone(x, y, fp_data, margin=3.0):
             continue
         # IC body bbox keep-out — don't place inside IC pad extent
         if in_ic_body_zone(x, y, fp_data, parent_ref=parent_ref):
@@ -497,10 +578,19 @@ def place_one(ref, d, anchor_xy, max_dist, ch_num, fp_data, placed_set):
         dist = ((x - ax) ** 2 + (y - ay) ** 2) ** 0.5
         if dist > max_dist + 2.0:
             continue
-        col = collision_with_placed(ref, x, y, fp_data, placed_set, min_clear=own_clear)
+        # Primary check: pad-bbox collision against placed pad index (canonical
+        # per audit). Computes candidate pad bboxes at (x,y) and intersects with
+        # all placed pads on same layer + different net.
+        candidate_bboxes = get_pad_bboxes_at(d, x, y)
+        col = pad_bbox_collision(candidate_bboxes, pad_idx, ignore_refs=(ref,))
         if col is None:
             return (x, y)
     return None
+
+
+def update_pad_idx(ref, d, x, y, pad_idx):
+    """Update the pad index after placing `ref` at (x, y)."""
+    pad_idx[ref] = get_pad_bboxes_at(d, x, y)
 
 
 def apply_position(ref, fp, x, y, layer=None, rot=None):
@@ -559,6 +649,10 @@ def main():
     per_ch_set = {r for ch in per_ch_refs for (r, *_) in per_ch_refs[ch]}
     placed_set = on_board - per_ch_set
 
+    # Build initial pad-bbox index for placed (non-per-ch) components
+    print(f"Building pad-bbox index for {len(placed_set)} placed components...")
+    pad_idx = build_placed_pad_index(placed_set, fp_data)
+
     # 3) CH1 placement (role-driven) — record role→(x, y, layer, rot) for mirror
     ch1_role_pos = {}  # role_key → (ref, x, y, layer, rot)
     ch1_failed = []
@@ -569,7 +663,7 @@ def main():
         if not anchor_xy:
             ch1_failed.append((ref, role, 'NO_ANCHOR'))
             continue
-        pos = place_one(ref, d, anchor_xy, max_dist, 1, fp_data, placed_set)
+        pos = place_one(ref, d, anchor_xy, max_dist, 1, fp_data, placed_set, pad_idx)
         if not pos:
             ch1_failed.append((ref, role, 'NO_FREE_SLOT'))
             continue
@@ -577,6 +671,7 @@ def main():
         d['x'], d['y'] = x, y
         apply_position(ref, d['fp'], x, y)
         placed_set.add(ref)
+        update_pad_idx(ref, d, x, y, pad_idx)
         ch1_role_pos[role] = (ref, x, y, d['layer'], d['rot'])
 
     print(f"CH1 placed: {len(ch1_role_pos)}, failed: {len(ch1_failed)}")
@@ -596,7 +691,7 @@ def main():
                 if not anchor_xy:
                     ch_failed.append((ref, role, 'NO_CH1_MIRROR_NO_ANCHOR'))
                     continue
-                pos = place_one(ref, d, anchor_xy, max_dist, ch, fp_data, placed_set)
+                pos = place_one(ref, d, anchor_xy, max_dist, ch, fp_data, placed_set, pad_idx)
                 if not pos:
                     ch_failed.append((ref, role, 'NO_FREE_SLOT'))
                     continue
@@ -604,20 +699,21 @@ def main():
             else:
                 _, x1, y1, layer1, rot1 = ch1_role_pos[role]
                 x, y, rot = mirror_transform(ch, x1, y1, rot1)
-                # Check collision; if conflicts, spiral-search near mirror point
-                col = collision_with_placed(ref, x, y, fp_data, placed_set, min_clear=1.2)
+                # Pad-bbox collision check; if conflicts, spiral nearby
+                d = fp_data[ref]
+                cb = get_pad_bboxes_at(d, x, y)
+                col = pad_bbox_collision(cb, pad_idx, ignore_refs=(ref,))
                 if col is not None:
-                    # Refine — spiral around mirror point with reduced max_dist
-                    d = fp_data[ref]
-                    pos = place_one(ref, d, (x, y, 'mirror'), 4.0, ch, fp_data, placed_set)
+                    pos = place_one(ref, d, (x, y, 'mirror'), 4.0, ch, fp_data, placed_set, pad_idx)
                     if not pos:
-                        ch_failed.append((ref, role, f'MIRROR_COL_{col}_NO_ALT'))
+                        ch_failed.append((ref, role, f'MIRROR_COL_{col[0]}_NO_ALT'))
                         continue
                     x, y = pos
             d = fp_data[ref]
             d['x'], d['y'] = x, y
             apply_position(ref, d['fp'], x, y)
             placed_set.add(ref)
+            update_pad_idx(ref, d, x, y, pad_idx)
             ch_n += 1
         print(f"CH{ch} placed: {ch_n}, failed: {len(ch_failed)}")
         for r, role, reason in ch_failed[:10]:
