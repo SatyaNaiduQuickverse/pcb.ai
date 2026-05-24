@@ -95,8 +95,14 @@ def main():
         if any('_CH1' in n for n in sig):
             ch1_by_net_signature.setdefault(sig, []).append(fp)
 
+    def is_anon(n):
+        return n.startswith('N$') or n == ''
+    def strip_anon(sig):
+        return tuple(n for n in sig if not is_anon(n))
+
     moved = 0
     failed = []
+    skipped_non_ch_only = []
     for ref in sorted(ch2_refs):
         fp = board.FindFootprintByReference(ref)
         if fp is None: continue
@@ -105,10 +111,20 @@ def main():
         if partner_ref:
             partner = board.FindFootprintByReference(partner_ref)
         else:
-            # Match by net signature: build CH2's signature, translate _CH2 → _CH1
-            ch2_sig = tuple(sorted(set(ch2_to_ch1_net(pad.GetNetname() or '')
-                                       for pad in fp.Pads())))
-            candidates = ch1_by_net_signature.get(ch2_sig, [])
+            # Check: does this CH2 component actually have _CH2-suffixed nets?
+            ch2_nets = [pad.GetNetname() or '' for pad in fp.Pads()]
+            has_ch2 = any(re.search(r'_CH2$', n) for n in ch2_nets)
+            if not has_ch2:
+                # No CH suffix — cross-channel/global component, leave in place
+                skipped_non_ch_only.append(ref)
+                continue
+            # Match by net signature, strip anonymous N$ + empty for fuzzy match
+            ch2_sig = strip_anon(sorted(set(
+                ch2_to_ch1_net(pad.GetNetname() or '') for pad in fp.Pads())))
+            candidates = []
+            for sig, fps in ch1_by_net_signature.items():
+                if strip_anon(sig) == ch2_sig:
+                    candidates.extend(fps)
             partner = candidates[0] if candidates else None
         if partner is None:
             failed.append(ref)
@@ -119,6 +135,8 @@ def main():
         fp.SetPosition(pcbnew.VECTOR2I(int(new_x * 1e6), int(new_y * 1e6)))
         reset_text_to_body(fp)
         moved += 1
+    if skipped_non_ch_only:
+        print(f"Skipped {len(skipped_non_ch_only)} non-CH-suffixed components (left in place): {skipped_non_ch_only[:10]}")
 
     print(f"Mirrored CH2 components: {moved}/{len(ch2_refs)}")
     if failed:
