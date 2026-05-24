@@ -1,0 +1,20 @@
+=== CH1 thermal — per-FET T_J table (100A burst) ===
+
+Assumptions: T_amb=25.0°C, N_FET=6, P_FET=5.0W, R_θJC=1.0 K/W
+h_top=1000.0 (Phase7 heatsink), h_bot=5.0 (natural)
+A_substrate = 1120 mm²
+Q_total = 30.0 W
+T_substrate = 51.7°C
+
+| FET | XY (mm) | T_substrate (°C) | P_FET (W) | R_θJC (K/W) | T_J (°C) | Margin to 100°C |
+|-----|---------|------------------|-----------|-------------|----------|-----------------|
+| Q5 | (12,54) | 51.7 | 5.0 | 1.0 | 56.7 | +43.3 |
+| Q6 | (30,54) | 51.7 | 5.0 | 1.0 | 56.7 | +43.3 |
+| Q7 | (12,66) | 51.7 | 5.0 | 1.0 | 56.7 | +43.3 |
+| Q8 | (30,66) | 51.7 | 5.0 | 1.0 | 56.7 | +43.3 |
+| Q9 | (12,78) | 51.7 | 5.0 | 1.0 | 56.7 | +43.3 |
+| Q10 | (30,78) | 51.7 | 5.0 | 1.0 | 56.7 | +43.3 |
+
+T_J_max = 56.7°C
+Spec limit = 100°C
+STATUS: PASS — within thermal margin
