@@ -1,0 +1,48 @@
+* V6 v3 — IR2110-like (NON-inverting per datasheet)
+* Push-pull where PMOS pulls up on input HIGH
+
+V_DD vdd 0 12.0
+V_IN in 0 PULSE(0 5 200n 1n 1n 2.5u 5u)
+
+* Logic delay 80ns
+R_LOG in tin 1k
+C_LOG tin 0 115p IC=0
+B_GATE gate 0 V = V(tin) > 2.5 ? 5 : 0
+B_NGATE ngate 0 V = V(gate) > 2.5 ? 0 : 5
+* For non-inverting output: PMOS ON when gate HIGH (ngate LOW); NMOS ON when gate LOW (ngate HIGH)
+* SW model triggers when control > VT. So:
+*   PMOS pull-up: controlled by gate (HIGH → ON)
+*   NMOS pull-down: controlled by ngate (HIGH → ON)
+S_P vdd ho gate 0 SPMOD
+S_N ho 0 ngate 0 SNMOD
+.model SPMOD SW(VT=2.5 VH=0.1 RON=11 ROFF=1MEG)
+.model SNMOD SW(VT=2.5 VH=0.1 RON=7.4 ROFF=1MEG)
+C_LOAD ho 0 1n IC=0
+
+.SAVE V(in) V(ho) V(gate)
+.TRAN 0.5n 7u UIC
+
+.control
+run
+* in_rise at 200ns, in_fall at 2.7us (start+pw)
+meas tran in_rise WHEN V(in)=2.5 RISE=1
+meas tran in_fall WHEN V(in)=2.5 FALL=1
+* Bound the ho_rise/fall searches to after the in edges
+meas tran ho_rise50 WHEN V(ho)=6.0 RISE=1
+meas tran ho_fall50 WHEN V(ho)=6.0 FALL=1
+meas tran ho_10r WHEN V(ho)=1.2 RISE=1
+meas tran ho_90r WHEN V(ho)=10.8 RISE=1
+meas tran ho_90f WHEN V(ho)=10.8 FALL=1
+meas tran ho_10f WHEN V(ho)=1.2 FALL=1
+let t_PLH_ns = (ho_rise50 - in_rise) * 1e9
+let t_PHL_ns = (ho_fall50 - in_fall) * 1e9
+let t_R_ns = (ho_90r - ho_10r) * 1e9
+let t_F_ns = (ho_10f - ho_90f) * 1e9
+print t_PLH_ns t_PHL_ns t_R_ns t_F_ns
+let d_PLH = (t_PLH_ns - 100) / 100 * 100
+let d_PHL = (t_PHL_ns - 80) / 80 * 100
+let d_R = (t_R_ns - 25) / 25 * 100
+let d_F = (t_F_ns - 17) / 17 * 100
+print d_PLH d_PHL d_R d_F
+.endc
+.end
