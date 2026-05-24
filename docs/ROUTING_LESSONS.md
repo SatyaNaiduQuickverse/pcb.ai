@@ -115,5 +115,5 @@ A lesson can be `retired` if later evidence shows the pattern was a false positi
 ## ROUTING_LESSONS_HASH
 
 ```
-ROUTING_LESSONS_HASH = 4d8eea62304304de79d2c5d69f25674e1547fd7290239f812eb28af439e9b1f4
+ROUTING_LESSONS_HASH = 8bd8276b2529833c81a86b536e547fadbaac798d48cd2ba51cdda2f7d2287ae6
 ```

@@ -71,17 +71,33 @@ PER_REF_EAST_EDGE = {
 }
 
 
-def get_ch1_refs(board):
-    """Identify CH1 components: explicit IC list + any FP with a _CH1-suffix net."""
+def get_ch1_refs(board, zone):
+    """Identify CH1 components — three classification paths (master 2026-05-24
+    REJECT #4/#5 expanded classifier):
+      1. Explicit IC list (IC_ANCHORS keys)
+      2. Any FP with a _CH1-suffix net (e.g., MOTOR_A_CH1, +3V3A_CH1)
+      3. Any FP physically inside CH1 zone bbox (catches global-net comps like
+         GND-only caps + VMOTOR_CH passives that sit in CH1 zone)
+    Path 3 ensures zone-internal collisions are visible to the CH1 placement
+    rerun, not just the CH1-suffixed-net subset."""
     refs = set()
+    zx0, zy0, zx1, zy1 = zone
     for fp in board.GetFootprints():
         ref = fp.GetReference()
+        # Skip mount holes + fiducials — fixed at corners by design
+        if ref.startswith('H') or ref.startswith('FID'):
+            continue
         if ref in IC_ANCHORS:
             refs.add(ref); continue
-        for pad in fp.Pads():
-            n = pad.GetNetname() or ''
-            if re.search(r'_CH1$', n):
-                refs.add(ref); break
+        # Path 2: _CH1 net suffix
+        if any(re.search(r'_CH1$', pad.GetNetname() or '')
+               for pad in fp.Pads()):
+            refs.add(ref); continue
+        # Path 3: physically inside CH1 zone bbox
+        p = fp.GetPosition()
+        x, y = pcbnew.ToMM(p.x), pcbnew.ToMM(p.y)
+        if zx0 <= x <= zx1 and zy0 <= y <= zy1:
+            refs.add(ref)
     return refs
 
 
@@ -223,6 +239,12 @@ def position_valid(test_pads, test_layer, test_area_mm2,
         for (tx, ty, _tl) in tp_keepouts:
             if (tx - 3.6) <= x <= (tx + 3.6) and (ty - 3.6) <= y <= (ty + 3.6):
                 return False
+    # TP-TP spacing — if placing a TP, require ≥4mm c-to-c from other TPs
+    # (Sai catch #4: probe access blocked below 4mm). Layer-agnostic.
+    if test_ref and test_ref.startswith('TP'):
+        for (tx, ty, _tl) in tp_keepouts:
+            if math.hypot(tx - x, ty - y) < 4.0:
+                return False
     return True
 
 
@@ -251,7 +273,7 @@ def main():
     print(f"CH1 zone: x=[{zone[0]}-{zone[2]}], y=[{zone[1]}-{zone[3]}]")
 
     board = pcbnew.LoadBoard(PCB)
-    ch1_refs = get_ch1_refs(board)
+    ch1_refs = get_ch1_refs(board, zone)
     print(f"CH1 components: {len(ch1_refs)}")
 
     placed_centers = []

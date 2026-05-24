@@ -939,7 +939,8 @@ def check_motor_pad_clear():
     motor_net_exempt = 0
     for fp in board.GetFootprints():
         r = fp.GetReference()
-        if r in MOTOR_TP_REFS or r.startswith(('Q', 'J', 'U', 'H')):
+        # Master 2026-05-24 PR #91 review: FIDs are silk markers (no body), exempt
+        if r in MOTOR_TP_REFS or r.startswith(('Q', 'J', 'U', 'H', 'FID')):
             continue
         pos = fp.GetPosition()
         cx, cy = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
