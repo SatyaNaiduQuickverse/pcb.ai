@@ -407,6 +407,237 @@ def _has_motor_adjacent_net_pad(fp):
     return False
 
 
+def _silk_bbox_mm(fp):
+    """Return (xmin, ymin, xmax, ymax) of footprint silk outline drawings.
+    Falls back to courtyard, then to overall BBox if neither present.
+    Silk outline = the solderable body envelope (what physically lands on PCB)."""
+    silk_pts = []
+    ctyd_pts = []
+    for d in fp.GraphicalItems():
+        if not isinstance(d, pcbnew.PCB_SHAPE):
+            continue
+        layer = d.GetLayer()
+        if layer in (pcbnew.F_SilkS, pcbnew.B_SilkS):
+            bucket = silk_pts
+        elif layer in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
+            bucket = ctyd_pts
+        else:
+            continue
+        bb = d.GetBoundingBox()
+        bucket.append((pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetTop()),
+                       pcbnew.ToMM(bb.GetRight()), pcbnew.ToMM(bb.GetBottom())))
+    pts = silk_pts or ctyd_pts
+    if not pts:
+        bb = fp.GetBoundingBox()
+        return (pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetTop()),
+                pcbnew.ToMM(bb.GetRight()), pcbnew.ToMM(bb.GetBottom()))
+    xs = [b[0] for b in pts] + [b[2] for b in pts]
+    ys = [b[1] for b in pts] + [b[3] for b in pts]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+# Master 2026-05-24 Sai-catch #12: component-inside-body class.
+# Small component placed UNDER a larger component's solderable body — fab blocker.
+# Discovered when polymer bulk caps C1-C4 had 0402 passives + small diodes inside
+# their silk-bbox region. Master directive:
+#   - SILK bbox (not courtyard) as container
+#   - Area ratio: container > 4× contained
+#   - Same-layer only
+#   - Exempt motor-adjacent-net components (topologically required at motor node)
+# Refinement 2026-05-24 P1 dispatch [[feedback-host-silk-overdraw-exempt]]:
+#   Some library footprints draw silk PAST the mechanical body (for HV creepage
+#   visualization, current-path tab outline, etc.). For these hosts use the
+#   pad-cluster bbox + 1mm margin as "real body" instead of silk bbox — silk
+#   overdraw is a library convention, not actual fab-blocking geometry.
+# Library-specific REAL-BODY bbox override (relative to fp origin in mm).
+# For hosts with overdrawn silk extending past the actual mechanical body
+# (HV creepage outlines, current-path tab visualization, magnetic-field
+# indicators). The override gives the tight body that physically lands on
+# the PCB. Codified per [[feedback-host-silk-overdraw-exempt]].
+HARDCODED_BODY_BBOX_REL = {
+    # Allegro_CB_PFF Hall current sensor — overdrawn silk includes current-path
+    # bus tab. Real chip body ~5×5mm centered on the 3 signal pads, which sit
+    # near fp origin.
+    'Sensor_Current:Allegro_CB_PFF': (-2.5, -2.5, 2.5, 2.5),
+    # ACS770ECB — Allegro family, real body ~13.6×27mm (vertically large package).
+    # fp origin typically at body center. Stub entry — adjust if used.
+    'Sensor_Current:ACS770ECB':      (-13.5, -7.0, 13.5, 7.0),
+}
+
+SILK_OVERDRAW_EXEMPT_PATTERNS = (
+    'Sensor_Current:Allegro_',   # Allegro Hall families (CB_PFF, ACS770, ACS781, etc.)
+    'Sensor_Current:ACS',        # ACS family generally
+    'Sensor_Magnetic:',          # generic magnetic sensors
+    'Sensor_Current:DRV',        # TI DRV-class current/Hall combos
+)
+
+
+def _is_silk_overdraw_exempt_host(fp):
+    lib = fp.GetFPID().GetUniStringLibId()
+    for pat in SILK_OVERDRAW_EXEMPT_PATTERNS:
+        if lib.startswith(pat):
+            return True
+    return False
+
+
+def _hardcoded_body_bbox(fp):
+    """If footprint library has a hardcoded real-body bbox override, return
+    its absolute mm bbox. Else None."""
+    lib = fp.GetFPID().GetUniStringLibId()
+    rel = HARDCODED_BODY_BBOX_REL.get(lib)
+    if rel is None:
+        return None
+    pos = fp.GetPosition()
+    cx = pcbnew.ToMM(pos.x); cy = pcbnew.ToMM(pos.y)
+    return (cx + rel[0], cy + rel[1], cx + rel[2], cy + rel[3])
+
+
+def _pad_cluster_bbox(fp, margin=1.0):
+    """Bounding box of all pad bboxes + margin. Use as real-body proxy for
+    silk-overdraw hosts when no hardcoded override is available."""
+    xs = []; ys = []
+    for pad in fp.Pads():
+        bb = pad.GetBoundingBox()
+        xs.append(pcbnew.ToMM(bb.GetLeft()))
+        xs.append(pcbnew.ToMM(bb.GetRight()))
+        ys.append(pcbnew.ToMM(bb.GetTop()))
+        ys.append(pcbnew.ToMM(bb.GetBottom()))
+    if not xs:
+        return None
+    return (min(xs) - margin, min(ys) - margin,
+            max(xs) + margin, max(ys) + margin)
+
+
+_NON_DECOUPLING_NETS = {'GND', 'BATGND', 'AGND', 'PGND', '', None}
+
+
+def _is_power_net(name):
+    """Power-net heuristics: starts with '+', or matches VCC/VDD/AVCC/AVDD/V5/V3,
+    or contains _VCC_/_VDD_/_5V/_3V3/_PWR."""
+    if not name: return False
+    if name.startswith('+'): return True
+    if name in ('VCC', 'VDD', 'AVCC', 'AVDD', 'VSS', 'VEE'): return True
+    s = name.upper()
+    if any(tok in s for tok in ('_VCC', '_VDD', '_5V', '_3V3', '_PWR',
+                                 'VCC_', 'VDD_', 'HALL_VCC', 'HALL_VDD')):
+        return True
+    return False
+
+
+def _is_r25_decoupling_exempt(inhabitant_fp, host_fp):
+    """R25 exemption: if invader is a cap sharing a non-GND net with host's pad
+    AND within 3mm of that shared-net host pad, EXEMPT (R25 same-side
+    decoupling wins over inside-body — decoupling cap MUST be at VDD pin even
+    if pin is near IC body center).
+
+    Net-share is the durable test: if cap and host share a net (other than
+    GND), and they're <3mm apart on that net's pad, it IS a decoupling
+    relationship regardless of net-naming convention.
+    """
+    iref = inhabitant_fp.GetReference()
+    if not (iref.startswith('C') and iref[1:].isdigit()):
+        return False
+    # Inhabitant's non-GND nets
+    cap_nets = set()
+    for pad in inhabitant_fp.Pads():
+        no = pad.GetNet()
+        if no is None: continue
+        n = no.GetNetname()
+        if n in _NON_DECOUPLING_NETS: continue
+        cap_nets.add(n)
+    if not cap_nets:
+        return False
+    inh_pos = inhabitant_fp.GetPosition()
+    icx = pcbnew.ToMM(inh_pos.x); icy = pcbnew.ToMM(inh_pos.y)
+    for pad in host_fp.Pads():
+        no = pad.GetNet()
+        if no is None: continue
+        n = no.GetNetname()
+        if n not in cap_nets: continue
+        pp = pad.GetPosition()
+        px = pcbnew.ToMM(pp.x); py = pcbnew.ToMM(pp.y)
+        if math.hypot(px - icx, py - icy) <= 3.0:
+            return True
+    return False
+
+
+def check_component_inside_body():
+    """Fail when a small component's pad center OR component center lies inside
+    a 4×-or-larger same-layer component's silk bbox (or pad-cluster bbox for
+    silk-overdraw-exempt hosts).
+
+    R25 exemption: decoupling cap on power net within 3mm of host IC's matching
+    VDD/VCC pin is exempt — R25 same-side-decoupling rule wins. The cap MUST be
+    near the VDD pin even if that pin is inside the IC body bbox."""
+    fps = list(board.GetFootprints())
+    info = []
+    for fp in fps:
+        ref = fp.GetReference()
+        if ref.startswith('H'):  # skip mounting holes
+            continue
+        silk_b = _silk_bbox_mm(fp)
+        # Pick container bbox priority:
+        #   1. Hardcoded real-body override (tightest, library-specific)
+        #   2. Pad-cluster bbox (for silk-overdraw exempt hosts)
+        #   3. Silk bbox (default)
+        hardcoded = _hardcoded_body_bbox(fp)
+        if hardcoded is not None:
+            cbox = hardcoded
+        elif _is_silk_overdraw_exempt_host(fp):
+            cbox = _pad_cluster_bbox(fp, margin=1.0)
+            if cbox is None: cbox = silk_b
+        else:
+            cbox = silk_b
+        area = (cbox[2] - cbox[0]) * (cbox[3] - cbox[1])
+        if area <= 0:
+            continue
+        pos = fp.GetPosition()
+        cx = pcbnew.ToMM(pos.x); cy = pcbnew.ToMM(pos.y)
+        pads = [(pcbnew.ToMM(p.GetPosition().x), pcbnew.ToMM(p.GetPosition().y))
+                for p in fp.Pads()]
+        info.append({
+            'ref': ref, 'fp': fp, 'bbox': cbox, 'area': area,
+            'cx': cx, 'cy': cy, 'pads': pads,
+            'layer': fp.GetLayer(),
+            'motor_exempt': _has_motor_adjacent_net_pad(fp),
+        })
+
+    bugs = []
+    exempts_log = []
+    for inhabitant in info:
+        if inhabitant['motor_exempt']:
+            continue
+        ia = inhabitant['area']
+        for host in info:
+            if host['ref'] == inhabitant['ref']: continue
+            if host['layer'] != inhabitant['layer']: continue
+            if host['area'] < 4.0 * ia: continue  # container must be ≥4× contained
+            bx0, by0, bx1, by1 = host['bbox']
+            ctr_in = bx0 <= inhabitant['cx'] <= bx1 and by0 <= inhabitant['cy'] <= by1
+            pads_in = sum(1 for (px, py) in inhabitant['pads']
+                          if bx0 <= px <= bx1 and by0 <= py <= by1)
+            if ctr_in or pads_in > 0:
+                # R25-decoupling exemption: cap on power net within 3mm of host VDD pin
+                if _is_r25_decoupling_exempt(inhabitant['fp'], host['fp']):
+                    exempts_log.append((inhabitant['ref'], host['ref'], 'R25'))
+                    continue
+                bugs.append((inhabitant['ref'], host['ref'],
+                             ctr_in, pads_in,
+                             inhabitant['cx'], inhabitant['cy'],
+                             host['fp'].GetFPID().GetUniStringLibId()))
+    if exempts_log:
+        warns.append(f"COMPONENT-INSIDE-BODY-EXEMPT: {len(exempts_log)} R25-decoupling cap(s) exempt from gate #15 (within 3mm of host VDD pin per R25)")
+        for inv, host, rule in exempts_log[:10]:
+            warns.append(f"  {inv} inside {host} — {rule}-exempt (power-net decoup)")
+    if bugs:
+        fails.append(f"COMPONENT-INSIDE-BODY: {len(bugs)} component(s) placed inside a ≥4× larger same-layer host's silk bbox (fab-blocking)")
+        for inv, host, ctr, pads, x, y, hlib in bugs[:20]:
+            marker = "CTR+PADS" if ctr else f"PADS={pads}"
+            fails.append(f"  {inv} inside {host} ({hlib}) at ({x:.2f},{y:.2f}) [{marker}]")
+        if len(bugs) > 20:
+            fails.append(f"  ... and {len(bugs) - 20} more")
+
+
 # NEW check: coincident-placement bugs (master 2026-05-24 PR #71 reject)
 def check_coincident_placement():
     """Pairs of components within 1.5mm center-to-center on same layer.
@@ -974,6 +1205,7 @@ check_label_overlap()
 check_silk_on_pad()
 check_quadrant_count_balance()
 check_per_channel_passive_quadrant()
+check_component_inside_body()
 
 print(f"=== Layout compliance audit: {os.path.basename(sys.argv[1])} ===")
 print(f"Components: {len(items)}")
