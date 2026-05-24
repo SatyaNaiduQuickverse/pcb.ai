@@ -130,17 +130,17 @@ cost. Master/owner to validate against per-unit cost target.
 - 6061-T6 aluminum plate stock: McMaster #8975K34 (3" × 6" × 1/16")
 - JLCCNC anodized aluminum machining: ≈ $5-10 per plate at qty 10
 
-## 7. Open questions for owner
+## 7. Open questions — master adjudications (2026-05-24)
 
-| # | Question | Default if no answer |
-|---|---|---|
-| Q1 | Final form factor — is 100×100mm correct, or shrink to standard FPV stack pattern (30.5×30.5)? | Keep 100×100; defer to Phase 7.5 optimization |
-| Q2 | Heat-spreader: aluminum (cheap) or AlN ceramic (high k, expensive)? | Aluminum 6061-T6 |
-| Q3 | Active cooling (small fan) for non-airborne bench testing? | No; rely on propwash + heat-spreader |
-| Q4 | TIM brand preference (3M, T-Global, Bergquist, Laird)? | 3M TC-5022 |
-| Q5 | Mounting strategy: M3 screws + spring washers, or rivnut press-fit? | Screws (serviceable) |
-| Q6 | Heat-spreader integration: separate part (assembly step) or PCB-mounted (LDF / heat-bus) at fab? | Separate part — flexibility |
-| Q7 | IR thermography during bring-up to validate h_bottom assumption? | Yes — fab-out budget for FLIR rental |
+| # | Question | Decision | Notes |
+|---|---|---|---|
+| Q1 | Final form factor — is 100×100mm correct, or shrink to standard FPV stack pattern (30.5×30.5)? | **PENDING SAI** | Potentially fab-impacting. Other 6 are bring-up-time decisions. |
+| Q2 | Heat-spreader: aluminum (cheap) or AlN ceramic (high k, expensive)? | **Al 6061-T6** | AlN is 10× cost, overkill for prototype. AlN only if Sai mandates premium thermal margin. |
+| Q3 | Active cooling (small fan) for non-airborne bench testing? | **YES for bench bring-up, NO for production** | Add to Phase 8 setup note. |
+| Q4 | TIM brand preference (3M, T-Global, Bergquist, Laird)? | **3M TC-5022** | Bergquist Gap Pad / Laird alternatives functionally equivalent; pick on availability + price at order time. |
+| Q5 | Mounting strategy: M3 screws + spring washers, or rivnut press-fit? | **M3 screws (prototype), rivnut for production rev** | Easy disassembly during bring-up. |
+| Q6 | Heat-spreader integration: separate part (assembly step) or PCB-mounted (LDF / heat-bus) at fab? | **Separate spreader** | Simpler fab, removable for rework. |
+| Q7 | IR thermography during bring-up to validate h_bottom assumption? | **YES** | Add to Phase 8 task list. |
 
 ## 8. Risk register
 
@@ -155,11 +155,16 @@ cost. Master/owner to validate against per-unit cost target.
 
 - **This document is doc-only Phase 6.5 / Phase 7-prep prep** (no PCB / fab impact)
 - **Phase 7a freeze (per `docs/DESIGN_PHASES.md`)**: incorporate mech BOM
-  decisions before fab order
-- **Phase 8 bring-up**: validate h_bottom via IR thermography, document any
-  delta vs sim assumption → loop back to sim regression
+  decisions before fab order. Q1 (form factor) must be resolved before freeze.
+- **Phase 8 bring-up** — adopt per master adjudication 2026-05-24:
+  - **Bench setup**: active cooling fan attached to heat-spreader (Q3 yes)
+  - **IR thermography**: FLIR rental or owned camera; thermal map under
+    sustained 70 A continuous + 100 A burst envelopes (Q7 yes). Measured
+    h_bottom delta vs sim assumption logged for regression
+  - **Disassembly**: M3 screws permit pad/spreader rework during bring-up (Q5)
 - **Phase 9 reliability**: HALT testing must include mech-hardware-loaded
-  configuration (not bare PCB)
+  configuration (not bare PCB). If proto Q5=screws holds for HALT,
+  carry forward; otherwise switch to rivnut for production rev.
 
 ## 10. Status
 
