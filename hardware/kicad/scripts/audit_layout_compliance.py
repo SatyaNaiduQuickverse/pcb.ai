@@ -508,10 +508,67 @@ def _pad_cluster_bbox(fp, margin=1.0):
             max(xs) + margin, max(ys) + margin)
 
 
+_NON_DECOUPLING_NETS = {'GND', 'BATGND', 'AGND', 'PGND', '', None}
+
+
+def _is_power_net(name):
+    """Power-net heuristics: starts with '+', or matches VCC/VDD/AVCC/AVDD/V5/V3,
+    or contains _VCC_/_VDD_/_5V/_3V3/_PWR."""
+    if not name: return False
+    if name.startswith('+'): return True
+    if name in ('VCC', 'VDD', 'AVCC', 'AVDD', 'VSS', 'VEE'): return True
+    s = name.upper()
+    if any(tok in s for tok in ('_VCC', '_VDD', '_5V', '_3V3', '_PWR',
+                                 'VCC_', 'VDD_', 'HALL_VCC', 'HALL_VDD')):
+        return True
+    return False
+
+
+def _is_r25_decoupling_exempt(inhabitant_fp, host_fp):
+    """R25 exemption: if invader is a cap sharing a non-GND net with host's pad
+    AND within 3mm of that shared-net host pad, EXEMPT (R25 same-side
+    decoupling wins over inside-body — decoupling cap MUST be at VDD pin even
+    if pin is near IC body center).
+
+    Net-share is the durable test: if cap and host share a net (other than
+    GND), and they're <3mm apart on that net's pad, it IS a decoupling
+    relationship regardless of net-naming convention.
+    """
+    iref = inhabitant_fp.GetReference()
+    if not (iref.startswith('C') and iref[1:].isdigit()):
+        return False
+    # Inhabitant's non-GND nets
+    cap_nets = set()
+    for pad in inhabitant_fp.Pads():
+        no = pad.GetNet()
+        if no is None: continue
+        n = no.GetNetname()
+        if n in _NON_DECOUPLING_NETS: continue
+        cap_nets.add(n)
+    if not cap_nets:
+        return False
+    inh_pos = inhabitant_fp.GetPosition()
+    icx = pcbnew.ToMM(inh_pos.x); icy = pcbnew.ToMM(inh_pos.y)
+    for pad in host_fp.Pads():
+        no = pad.GetNet()
+        if no is None: continue
+        n = no.GetNetname()
+        if n not in cap_nets: continue
+        pp = pad.GetPosition()
+        px = pcbnew.ToMM(pp.x); py = pcbnew.ToMM(pp.y)
+        if math.hypot(px - icx, py - icy) <= 3.0:
+            return True
+    return False
+
+
 def check_component_inside_body():
     """Fail when a small component's pad center OR component center lies inside
     a 4×-or-larger same-layer component's silk bbox (or pad-cluster bbox for
-    silk-overdraw-exempt hosts)."""
+    silk-overdraw-exempt hosts).
+
+    R25 exemption: decoupling cap on power net within 3mm of host IC's matching
+    VDD/VCC pin is exempt — R25 same-side-decoupling rule wins. The cap MUST be
+    near the VDD pin even if that pin is inside the IC body bbox."""
     fps = list(board.GetFootprints())
     info = []
     for fp in fps:
@@ -546,6 +603,7 @@ def check_component_inside_body():
         })
 
     bugs = []
+    exempts_log = []
     for inhabitant in info:
         if inhabitant['motor_exempt']:
             continue
@@ -559,10 +617,18 @@ def check_component_inside_body():
             pads_in = sum(1 for (px, py) in inhabitant['pads']
                           if bx0 <= px <= bx1 and by0 <= py <= by1)
             if ctr_in or pads_in > 0:
+                # R25-decoupling exemption: cap on power net within 3mm of host VDD pin
+                if _is_r25_decoupling_exempt(inhabitant['fp'], host['fp']):
+                    exempts_log.append((inhabitant['ref'], host['ref'], 'R25'))
+                    continue
                 bugs.append((inhabitant['ref'], host['ref'],
                              ctr_in, pads_in,
                              inhabitant['cx'], inhabitant['cy'],
                              host['fp'].GetFPID().GetUniStringLibId()))
+    if exempts_log:
+        warns.append(f"COMPONENT-INSIDE-BODY-EXEMPT: {len(exempts_log)} R25-decoupling cap(s) exempt from gate #15 (within 3mm of host VDD pin per R25)")
+        for inv, host, rule in exempts_log[:10]:
+            warns.append(f"  {inv} inside {host} — {rule}-exempt (power-net decoup)")
     if bugs:
         fails.append(f"COMPONENT-INSIDE-BODY: {len(bugs)} component(s) placed inside a ≥4× larger same-layer host's silk bbox (fab-blocking)")
         for inv, host, ctr, pads, x, y, hlib in bugs[:20]:
