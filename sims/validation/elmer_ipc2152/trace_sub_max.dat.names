@@ -1,0 +1,9 @@
+Metadata for SaveScalars file: ./trace_sub_max.dat
+Elmer version: 26.2
+Elmer revision: 03313b2
+Elmer compilation date: 2026-05-20
+Solver input file: trace_substrate.sif
+File started at: 2026/05/24 09:00:00
+ 
+Variables in columns of matrix: 
+   1: max: temperature

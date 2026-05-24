@@ -1,0 +1,23 @@
+##### ElmerGrid input file for IPC-2152 trace
+Version = 210903
+Coordinate System = Cartesian 3D
+Subcell Divisions in 3D = 1 1 1
+Subcell Sizes 1D = 0.05
+Subcell Sizes 2D = 0.000254
+Subcell Sizes 3D = 0.000035
+Material Structure in 2D
+  1
+End
+Materials Interval = 1 1
+Boundary Definitions
+! type out int double
+  1     -1  1    1.0
+End
+Numbering = Horizontal
+Element Degree = 1
+Element Innernodes = False
+Triangles = False
+Surface Elements = 1
+Coordinate Ratios = 1
+Minimum Element Divisions = 4 1 1
+Reference Density = 1.0

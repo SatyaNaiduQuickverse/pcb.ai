@@ -1,0 +1,35 @@
+* V5 — TPS5430 datasheet ripple — actual buck topology
+* V_IN=15, V_OUT=5 (D=0.333), L=15µH, fsw=500kHz, C_OUT=100µF al ESR=50mΩ
+* Datasheet typical V_pp ≈ 50 mV @ 3A
+*
+* Switch node = 15V when FET ON, 0V when OFF (ideal). PWM duty=0.333.
+* L between sw and vout. C_OUT + R_ESR (parallel to load).
+
+V_VIN vin 0 15.0
+
+* Switch FET: PULSE 0→15V at 500kHz, 33.3% duty (PW=666ns out of 2µs)
+V_SW sw 0 PULSE(0 15 0 5n 5n 0.666u 2u)
+* Inductor
+L_OUT sw vout_x 15u IC=3
+* Output cap ESR series
+R_ESR vout_x vout_cap 50m
+C_OUT vout_cap 0 100u IC=5
+* Load
+R_LOAD vout_x 0 1.667
+
+.SAVE V(vout_x) V(vout_cap) V(sw) I(L_OUT)
+.TRAN 10n 100u UIC
+
+.control
+run
+* Steady-state V_pp: measure last 20µs
+meas tran vmin MIN V(vout_x) FROM=80u TO=100u
+meas tran vmax MAX V(vout_x) FROM=80u TO=100u
+let vpp_mv = (vmax - vmin) * 1000
+print vpp_mv
+* Datasheet target ~50 mV
+let datasheet_mv = 50
+let delta_pct = (vpp_mv - datasheet_mv) / datasheet_mv * 100
+print delta_pct
+.endc
+.end

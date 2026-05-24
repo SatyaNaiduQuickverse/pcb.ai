@@ -1,0 +1,51 @@
+! V2 — Elmer HeatControl tutorial canonical regression
+! Reference: Elmer Models Manual, Section "HeatControl" tutorial
+! 1D rod with Dirichlet BC; T_max should match analytical
+! For canonical test: thin rod L=1m, k=1, q=1, T(0)=T(L)=0 → T_max = L²q/(8k) = 0.125 K
+! Our setup: rod 0.05m, k=401 (Cu), q=2.13e8 W/m³, T(BC)=25°C
+! Analytical: T_max = 25 + L²×q/(8×k) = 25 + 0.05²×2.13e8/(8×401) = 25 + 165.9 = 190.9°C
+
+Header
+  Mesh DB "." "trace_mesh"
+End
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 50
+  Output File = "heatcontrol.result"
+End
+Body 1
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+Equation 1
+  Active Solvers(1) = 1
+End
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Linear System Solver = Direct
+  Linear System Direct Method = UMFPack
+  Steady State Convergence Tolerance = 1.0e-5
+End
+Solver 2
+  Exec Solver = After All
+  Equation = "SaveScalars"
+  Procedure = "SaveData" "SaveScalars"
+  Filename = "heatcontrol_max.dat"
+  Variable 1 = Temperature
+  Operator 1 = max
+End
+Material 1
+  Density = 8960
+  Heat Capacity = 385
+  Heat Conductivity = 401
+End
+Body Force 1
+  Heat Source = 2.13e8
+End
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Temperature = 25.0
+End

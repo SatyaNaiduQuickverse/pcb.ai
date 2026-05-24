@@ -1,0 +1,54 @@
+! V1 — IPC-2152 Fig 4-1 thermal validation
+! 1D rod model: trace 0.254mm × 35µm × 50mm, 1A
+! Heat source: I²R per mm length = 1² × 1.89mΩ/mm = 1.89 mW/mm
+! Per unit volume: 1.89e-3 / (0.254e-3 × 35e-6 × 1e-3) = 2.13e8 W/m³
+! Free air convection h ≈ 10 W/m²K, ambient 25°C
+! Per IPC-2152 Fig 4-1: ΔT ≈ 7°C above ambient
+
+Header
+  Mesh DB "." "trace_mesh"
+End
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 50
+  Output File = "trace_ipc.result"
+End
+Body 1
+  Equation = 1
+  Material = 1
+  Body Force = 1
+End
+Equation 1
+  Active Solvers(1) = 1
+End
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Linear System Solver = Direct
+  Linear System Direct Method = UMFPack
+  Steady State Convergence Tolerance = 1.0e-5
+End
+Solver 2
+  Exec Solver = After All
+  Equation = "SaveScalars"
+  Procedure = "SaveData" "SaveScalars"
+  Filename = "trace_ipc_max.dat"
+  Variable 1 = Temperature
+  Operator 1 = max
+End
+Material 1
+  Name = "Copper"
+  Density = 8960
+  Heat Capacity = 385
+  Heat Conductivity = 401
+End
+Body Force 1
+  Heat Source = 2.13e8
+End
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 10.0
+  External Temperature = 25.0
+End
