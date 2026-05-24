@@ -56,7 +56,7 @@ def get_ch2_refs(board, zone):
         if ref.startswith('H') or ref.startswith('FID'): continue
         if ref in refs: continue
         # _CH2 net suffix
-        if any(re.search(r'_CH2$', pad.GetNetname() or '') for pad in fp.Pads()):
+        if any(re.search(r'_CH2(_|$)', pad.GetNetname() or '') for pad in fp.Pads()):
             refs.add(ref); continue
         # Physically in zone
         p = fp.GetPosition()
@@ -84,7 +84,7 @@ def main():
     # Build net-share map: for each non-IC CH2 component, find CH1 partner by
     # comparing nets (cap C99 with MOTOR_A_CH2 ↔ cap C59 with MOTOR_A_CH1)
     def ch2_to_ch1_net(net):
-        return re.sub(r'_CH2$', '_CH1', net)
+        return re.sub(r'_CH2(_|$)', '_CH1', net)
 
     ch1_by_net_signature = {}
     for fp in board.GetFootprints():
@@ -113,7 +113,7 @@ def main():
         else:
             # Check: does this CH2 component actually have _CH2-suffixed nets?
             ch2_nets = [pad.GetNetname() or '' for pad in fp.Pads()]
-            has_ch2 = any(re.search(r'_CH2$', n) for n in ch2_nets)
+            has_ch2 = any(re.search(r'_CH2(_|$)', n) for n in ch2_nets)
             if not has_ch2:
                 # No CH suffix — cross-channel/global component, leave in place
                 skipped_non_ch_only.append(ref)
