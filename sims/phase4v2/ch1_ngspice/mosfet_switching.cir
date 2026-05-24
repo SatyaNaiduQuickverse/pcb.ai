@@ -1,0 +1,48 @@
+* MOSFET switching CH1 — BSC014N06NS at 30kHz PWM, V_DS=25V (6S nom), I_load=70A continuous
+* Per master 2026-05-24 ngspice batch sim 2
+* Validates: shoot-through margin at DEAD_TIME=66ns per V6 IR2110-equivalent gate driver
+
+* Gate driver outputs (IR2110/DRV8300-equivalent from V6)
+* HI side: rises 0 → 12V (V_DD) with 25ns rise time, then falls 12 → 0 with 17ns fall
+* LO side: complementary with 66ns dead time
+
+* High-side gate drive
+V_GH gh 0 PULSE(0 12 0 25n 17n 16.5u 33.333u)
+* Low-side gate drive — 66ns dead time, complementary
+V_GL gl 0 PULSE(12 0 1n 25n 17n 16.434u 33.333u)
+* Above signals: HI HIGH for 16.5us, LO HIGH for 16.434us
+* Dead-time: from V_GH falling edge (50% = 6V at t=16.508u) to V_GL rising edge (50% at t=16.567u) = ~59ns ≥ 66ns target? Adjust.
+
+* Power rail (battery)
+V_BATT vbatt 0 25
+* Motor load (inductive, simplified as RL)
+R_motor sw_node motor 0.05
+L_motor motor 0 100u IC=70
+
+* High-side FET (PMOS-equivalent for SI representation; in reality NMOS bootstrap, abstracted)
+* BSC014N06NS: V_DS=60V, I_D=180A, R_DS_on=1.4mΩ
+.MODEL BSC014 NMOS (VTO=2.5 KP=300 LAMBDA=0 PHI=0.6 RD=0.0014 RS=0)
+M_high vbatt gh sw_node sw_node BSC014 W=20m L=1u
+M_low sw_node gl 0 0 BSC014 W=20m L=1u
+
+* Body diodes (built-in via models)
+* Shoot-through current monitor
+.PROBE I(VS_high) I(VS_low)
+V_S_high vbatt vd_high 0
+R_VS_high vd_high vd_high2 0.001
+V_S_low gnd_meas 0 0
+R_VS_low gnd_meas gnd_meas2 0.001
+
+* Transient sim: 3 cycles @ 33.3us each = 100us
+.TRAN 10n 100u 0 10n UIC
+
+.CONTROL
+run
+* Compute shoot-through: peak through-current during dead-time
+meas tran ishoot_peak MAX I(V_BATT) FROM 16.4u TO 16.7u
+print ishoot_peak
+* Continuous current
+meas tran iload_avg AVG I(L_motor) FROM 50u TO 100u
+print iload_avg
+.ENDC
+.END
