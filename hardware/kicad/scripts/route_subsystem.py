@@ -206,8 +206,11 @@ def route_cbs(board, nets, zone_bbox, ce_obj):
         if is_audit_power:
             width = 1.0
             layer = "In3.Cu" if net == "+VMOTOR" else "F.Cu"
+        elif net in ('+3V3', '+5V', '+9V', '+5V_AI', '+5V_FC', '+V5_PI5'):
+            width = 0.25   # V3V3 class
+            layer = "F.Cu"
         else:
-            width = 0.15   # signal default per audit table
+            width = 0.15
             layer = "F.Cu"
         # MST star: connect pad[0] to all others via L-shape
         rx, ry, _ = pad_list[0]
