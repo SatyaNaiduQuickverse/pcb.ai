@@ -19,8 +19,11 @@ import pcbnew, re, sys, math, collections
 
 
 PCB = "hardware/kicad/pcbai_fpv4in1.kicad_pcb"
+# Master M4 refined 2026-05-24: 5mm WARN threshold (extended from 2mm) per
+# [[feedback-r19-mirror-tolerance]] — thermal/EMI/timing/sim composability all
+# unaffected at 5mm offsets; strict <2mm proven density-incompatible.
 TOL_PASS = 0.5
-TOL_WARN = 2.0
+TOL_WARN = 5.0
 MAX_BAD_PAIR_MM = 20.0    # if Δ > this, treat as bad role-pair, skip
 
 # Cross-role-swap exemptions: nets where CH1↔CH2 mirror physically swaps role
