@@ -25,8 +25,8 @@ Per master v2 review #1: CH1-CH4 tightened to EXCLUDE the 35-65 central spine
 | CH2 (channel B) | 65 | 50 | 100 | 82 | NE — mirror_X(CH1) |
 | CH3 (channel C) | 65 | 18 | 100 | 50 | SE — mirror_X(CH4) |
 | CH4 (channel D) | 0 | 18 | 35 | 50 | SW — bottom-pair template |
-| S2 bulk caps | 35 | 40 | 65 | 60 | central — 4× polymer caps low-ESR |
-| S3 supervisor+Hall | 35 | 18 | 65 | 40 | central spine — TL431 + Hall |
+| S2 bulk caps | 40 | 40 | 60 | 60 | central — 4× polymer caps low-ESR |
+| S3 supervisor+Hall | 40 | 18 | 60 | 40 | central spine — TL431 + Hall |
 | S5 BEC east strip | 35 | 50 | 40 | 82 | east of CH1 spine — 5mm BEC bus (CH1/CH2 feed) |
 | S5 BEC west strip | 60 | 50 | 65 | 82 | west of CH2 spine — 5mm BEC bus (S5-2) |
 | S5 BEC south strip | 35 | 18 | 40 | 50 | for CH3/CH4 (mirror) |
@@ -48,10 +48,10 @@ Per master v2 review #3: S6→CHn now 4 explicit rows.
 |---|---|---|---|---|
 | S1 → S3 | (50, 18) | 4 mm | +BATT, BATGND | central spine to bulk |
 | S3 → S2 | (50, 40) | 4 mm | +BATT, BATGND, BUS_CURR_HALL_OUT | bulk caps + sensor |
-| S2 → CH1 | (35, 50) | 4 mm | +VMOTOR, GND | feed CH1 FETs |
-| S2 → CH2 | (65, 50) | 4 mm | +VMOTOR, GND | feed CH2 FETs |
-| S2 → CH3 | (65, 50) | 4 mm | +VMOTOR, GND | feed CH3 FETs (mirror_Y of CH1) |
-| S2 → CH4 | (35, 50) | 4 mm | +VMOTOR, GND | feed CH4 FETs |
+| S2 → CH1 | (40, 50) | 4 mm | +VMOTOR, GND | feed CH1 FETs |
+| S2 → CH2 | (60, 50) | 4 mm | +VMOTOR, GND | feed CH2 FETs |
+| S2 → CH3 | (60, 50) | 4 mm | +VMOTOR, GND | feed CH3 FETs (mirror_Y of CH1) |
+| S2 → CH4 | (40, 50) | 4 mm | +VMOTOR, GND | feed CH4 FETs |
 | S6 → CH1 | (17, 82) | 2 mm | DShot_CH1, TLM_CH1, KILL_CH1 | FC commands CH1 |
 | S6 → CH2 | (83, 82) | 2 mm | DShot_CH2, TLM_CH2, KILL_CH2 | FC commands CH2 |
 | S6 → CH3 | (83, 50) | 2 mm | DShot_CH3, TLM_CH3, KILL_CH3 | FC→CH3 (south, mirror) |
@@ -84,7 +84,7 @@ Run `python3 hardware/kicad/scripts/compute_board_invariant_hash.py --write`
 to compute and write.
 
 ```
-BOARD_INVARIANT_HASH = 23b291cbe55eec134c3ae824d2be47d441e77d16932334f981b39208bc4a68a2
+BOARD_INVARIANT_HASH = b6766bd3223baef22f56dbc8f10003fb366d46162a044326bd61b2e6ec84c03e
 ```
 
 ## Audit gate
