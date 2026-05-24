@@ -94,6 +94,14 @@ files to confirm every named function/script in this manifest actually exists).
 
 ---
 
+## Phase 7-prep deliverables (informational, not auditable)
+
+| # | Doc | Class | Notes |
+|---|---|---|---|
+| P7-1 | `docs/PHASE7_MECH_PREP.md` | mech-hardware spec (heatsink + TIM + mounting) | Doc-only; specifies hardware to realize Phase 5c thermal sim h_bottom=1500 W/m²K. Master 2026-05-24 adjudicated Q2-Q7; Q1 (form factor) pending Sai. Informational entry — not gated by audit_meta. |
+
+---
+
 ## GAP summary — to address in this PR
 
 | Gap | Type | Action |
