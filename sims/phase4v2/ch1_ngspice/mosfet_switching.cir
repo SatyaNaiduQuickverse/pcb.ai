@@ -1,0 +1,49 @@
+* CH1 MOSFET switching transient — BSC014N06NS at 30kHz PWM, V_BUS=25V
+* Per master 2026-05-24 v8 REJECT — debug with .OPTION GEAR + UIC + pre-charge BST
+* Validates shoot-through current during 66ns dead time
+
+.OPTION RELTOL=5e-3 VNTOL=1e-5 ABSTOL=1e-12
+.OPTION METHOD=GEAR
+.OPTION ITL4=50 ITL5=50
+
+V_BUS vbus 0 25.0
+
+* Simplified gate drivers (HI grounded reference for stability)
+V_GH gh 0 PULSE(0 12 1u 25n 17n 16.5u 33.333u)
+V_GL gl 0 PULSE(12 0 1.066u 25n 17n 16.434u 33.333u)
+
+* BSC014N06NS NMOS — simplified L1 model
+.MODEL BSC014 NMOS LEVEL=1 VTO=2.5 KP=300 LAMBDA=0 PHI=0.6 RD=0.0014 RS=0.0007
++ CGSO=2n CGDO=0.5n CBD=2n CBS=2n
+
+* Half-bridge: HI=M_HS, LO=M_LS, common switch node
+M_HS vbus gh_int sw_node sw_node BSC014 W=20m L=1u
+M_LS sw_node gl_int 0 0 BSC014 W=20m L=1u
+
+* Gate-R (4.7Ω damping, from sim 4)
+R_GH gh gh_int 4.7
+R_GL gl gl_int 4.7
+
+* Inductive motor load — 100µH + 0.05Ω + 1.5V back-EMF
+L_motor sw_node lmotor_out 100u IC=10
+R_motor lmotor_out bemf 0.05
+V_bemf bemf 0 1.5
+
+.IC V(gh)=0 V(gl)=12 V(gh_int)=0 V(gl_int)=12 V(sw_node)=0
+
+.TRAN 0.5n 35u 0 0.5n UIC
+
+.CONTROL
+run
+* Bus current = shoot-through indicator (load current = via inductor only)
+* Shoot-through window: 16.5us-16.7us
+meas tran ibus_max max i(V_BUS) from=16.5u to=16.7u
+meas tran ibus_min min i(V_BUS) from=16.5u to=16.7u
+meas tran iload_avg avg i(L_motor) from=25u to=35u
+meas tran iload_max max i(L_motor) from=25u to=35u
+write mosfet_switching.raw
+print ibus_max ibus_min iload_avg iload_max
+.SAVE @M_HS[id] @M_LS[id]
+.ENDC
+.ENDC
+.END

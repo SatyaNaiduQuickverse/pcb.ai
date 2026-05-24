@@ -60,6 +60,26 @@
 - **Status**: active
 - **Sim cross-check**: post-route audit becomes pre-route avoidance
 
+### L8 — Comparator-class ICs exempt from local decoupling cap
+
+- **Date**: 2026-05-24
+- **Pattern**: low-speed analog comparators (LM393/LM339/LM319/LM193/LM2901/LM2903/TL3221/TLV3201/TLV3202/MCP6541) flagged by R25 audit for missing local 100nF, but don't physically require one
+- **Observation**: Phase 4-v2 Step 2 PR-CH1 — U3 LM393 had no shared-net +3V3 cap in CH1; geometric fixup couldn't fit inside SOIC-8 silk + 3mm radius window; investigation showed no CH1 decoupling cap exists in schematic for U3
+- **Root cause** (physics): comparators switch ~5mA at <100kHz. Board-level +3V3 plane decoupling (S5 BEC caps) presents supply impedance ~1Ω at 100kHz → V_noise ~5mV → after comparator PSRR -30dB → 150µV output ripple << 10-50mV typical hysteresis. False trigger probability negligible. Local 100nF benefits high-speed digital (MCU/DRV gate-drive) and op-amps with GHz GBW, NOT comparators with kHz response.
+- **Cost adjustment**: `audit_layout_compliance.check_decoupling` EXEMPTS ICs matching `COMPARATOR_VALUE_RE` from the "C within 3mm" rule. Surfaces as `DECOUPLING-L8-COMPARATOR-EXEMPT` warn count for visibility.
+- **Status**: proposed
+- **Sim cross-check**: pending — supply impedance + PSRR math per IR2110/LM393 datasheets
+
+### L6 — Test-point keep-out is layer-agnostic (probe access in XY)
+
+- **Date**: 2026-05-24
+- **Pattern**: placement scripts filter keepout by layer (F.Cu test point ignores B.Cu components and vice versa); but `audit_layout_compliance.MOTOR-PAD-CLEAR` evaluates keepout in XY only.
+- **Observation**: Phase 4-v2 Step 2 PR-CH1 v3.1 — R69 placed at (16.32, 72.64) on B.Cu near TP21 at (14.23, 75.37) on F.Cu. `position_valid` skipped the keepout because `tl != test_layer`; audit flagged it.
+- **Root cause** (physics): a B.Cu component sticks UP into the test-probe envelope of an F.Cu pad (and vice versa). Component height + body extent invades the probe-finger swing volume regardless of which copper layer the pad lives on. The audit captures this: probe access is a 3D mechanical constraint approximated as 2D XY keepout, NOT a per-layer copper constraint.
+- **Cost adjustment**: placement scripts MUST enforce TP keepout (TP pad bbox + 2 mm) in XY for any non-sense-net component, regardless of layer. `constraint_engine.cost_at` should treat motor-TP zones as 3D keepouts (cost `+∞` for top + bottom layers within the XY zone). Same rule for any future user-probed test point (BEMF taps, IH/IL sense taps, gate-drive scope points).
+- **Status**: proposed
+- **Sim cross-check**: pending master review
+
 ---
 
 ## Lesson template for new entries
@@ -95,5 +115,5 @@ A lesson can be `retired` if later evidence shows the pattern was a false positi
 ## ROUTING_LESSONS_HASH
 
 ```
-ROUTING_LESSONS_HASH = 4d8eea62304304de79d2c5d69f25674e1547fd7290239f812eb28af439e9b1f4
+ROUTING_LESSONS_HASH = 8bd8276b2529833c81a86b536e547fadbaac798d48cd2ba51cdda2f7d2287ae6
 ```
