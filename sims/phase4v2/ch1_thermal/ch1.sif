@@ -1,13 +1,9 @@
-! Phase 4-v2 Step 2 PR-A CH1 thermal sim
-! Per master 2026-05-24 SAI DIRECTIVE + spec
-! Bodies: 1=FR4 substrate, 2-7=Q5/Q6/Q7/Q8/Q9/Q10 (PDFN-8 BSC014N06NS)
-! Heat per FET: P_diss = I²×R_DS_on×duty + Q_sw×V_DS×f_sw
-!   = (70)² × 1.4e-3 × 0.5 + 100e-9 × 25 × 30e3 = 3.43 + 0.075 ≈ 3.5W per FET
-!   At burst: 100A → 5W per FET (master spec). Volume = 6×5×1 = 30 mm³ = 3e-8 m³
-!   → q_volumetric = 5 / 3e-8 = 1.67e8 W/m³
-! BC: top=substrate (h=5 natural), bottom=substrate (h=5 natural),
-!     FET-top=heatsink (h=15 with Phase7 heatsink)
-! Ambient: 25°C = 298.15 K
+! Phase 4-v2 Step 2 PR-A CH1 thermal sim (option b: substrate-distributed)
+! Per master 2026-05-24 APPROVE option b.
+! T_J = T_substrate + P_FET × R_θJC (R_θJC ≈ 1 K/W for BSC014N06NS PDFN-8)
+! Substrate: 35×32×1.6mm FR4
+! Heat: 6 FETs × 5W = 30W → q_volumetric = 30 / (35e-3×32e-3×1.6e-3) = 1.67e7 W/m³
+! BC: top h=15 (heatsink), bottom h=5 (natural), ambient 25°C = 298.15 K
 
 Header
   Mesh DB "." "ch1_mesh"
@@ -21,48 +17,10 @@ Simulation
   Post File = "ch1.vtu"
 End
 
-! ----- Bodies -----
 Body 1
-  Name = "FR4 substrate"
+  Name = "FR4 substrate (CH1)"
   Equation = 1
   Material = 1
-  Body Force = 2
-End
-
-Body 2
-  Name = "Q5"
-  Equation = 1
-  Material = 2
-  Body Force = 1
-End
-Body 3
-  Name = "Q6"
-  Equation = 1
-  Material = 2
-  Body Force = 1
-End
-Body 4
-  Name = "Q7"
-  Equation = 1
-  Material = 2
-  Body Force = 1
-End
-Body 5
-  Name = "Q8"
-  Equation = 1
-  Material = 2
-  Body Force = 1
-End
-Body 6
-  Name = "Q9"
-  Equation = 1
-  Material = 2
-  Body Force = 1
-End
-Body 7
-  Name = "Q10"
-  Equation = 1
-  Material = 2
   Body Force = 1
 End
 
@@ -94,7 +52,6 @@ Solver 2
   Variable 2 = Temperature
 End
 
-! ----- Materials -----
 Material 1
   Name = "FR4"
   Density = 1850
@@ -102,47 +59,23 @@ Material 1
   Heat Conductivity = 0.30
 End
 
-Material 2
-  Name = "Silicon (BSC014N06NS die)"
-  Density = 2330
-  Heat Capacity = 700
-  Heat Conductivity = 130
-End
-
-! ----- Heat sources -----
 Body Force 1
-  Name = "FET_dissipation"
-  Heat Source = 1.67e8     ! W/m³ → 5W per 3e-8 m³ FET volume
+  Name = "CH1_FET_dissipation"
+  Heat Source = 1.67e7
 End
 
-! Substrate-distributed loss component (Cu plane I²R + parasitic at 100A burst)
-! ~5W total spread → uniform substrate volumetric heat source
-Body Force 2
-  Name = "substrate_parasitic"
-  Heat Source = 2.79e6     ! W/m³ → 5W per 1.792e-6 m³ substrate volume
-End
-
-! ----- Boundary conditions -----
-! BC 1: substrate top face (heatsink-equipped per Phase7, h=15)
 Boundary Condition 1
+  Name = "top_heatsink"
   Target Boundaries(1) = 1
   Heat Flux BC = True
   Heat Transfer Coefficient = 15.0
   External Temperature = 298.15
 End
 
-! BC 2: substrate bottom face (natural convection, h=5)
 Boundary Condition 2
+  Name = "bottom_natural"
   Target Boundaries(1) = 2
   Heat Flux BC = True
   Heat Transfer Coefficient = 5.0
-  External Temperature = 298.15
-End
-
-! BC 3: FET top face (heatsink attached, h=15)
-Boundary Condition 3
-  Target Boundaries(1) = 3
-  Heat Flux BC = True
-  Heat Transfer Coefficient = 15.0
   External Temperature = 298.15
 End
