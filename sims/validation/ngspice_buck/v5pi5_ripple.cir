@@ -1,0 +1,26 @@
+* V5 REWORK v2 — OUR V5_PI5 ripple, model AC ripple only
+* Force V_OUT held; inject triangle current at cap; measure V at cap node.
+* OUR design: 22µF MLCC ESR=2mΩ, ΔI_L = 1.42 A pp triangle
+* Erickson V_pp ≈ ΔI_L × ESR = 2.84 mV
+
+V_OUT vout 0 5.0
+R_ESR vout vesr 2m
+C_OUT vesr 0 22u IC=0
+* Triangle current 1.42 A pp at 600 kHz (1 cycle = 1.667 µs)
+I_RIPPLE vesr 0 PULSE(-0.71 0.71 0 0.833u 0.833u 1n 1.667u)
+
+.SAVE V(vesr)
+.TRAN 10n 100u UIC
+
+.control
+run
+* Settled after a few cycles (no DC discharge since V_OUT held)
+meas tran vmin MIN V(vesr) FROM=80u TO=100u
+meas tran vmax MAX V(vesr) FROM=80u TO=100u
+let vpp_mv = (vmax - vmin) * 1000
+print vmin vmax vpp_mv
+let predicted_mv = 2.85
+let delta_pct = (vpp_mv - predicted_mv) / predicted_mv * 100
+print predicted_mv delta_pct
+.endc
+.end

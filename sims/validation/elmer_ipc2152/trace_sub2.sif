@@ -1,0 +1,70 @@
+! V1 — IPC-2152 trace + substrate with proper mesh
+Header
+  Mesh DB "." "trace_sub2_mesh"
+End
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 50
+  Output File = "trace_sub2.result"
+End
+Body 1
+  Equation = 1
+  Material = 1
+End
+Body 2
+  Equation = 1
+  Material = 2
+  Body Force = 1
+End
+Equation 1
+  Active Solvers(1) = 1
+End
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Linear System Solver = Direct
+  Linear System Direct Method = UMFPack
+  Steady State Convergence Tolerance = 1.0e-5
+End
+Solver 2
+  Exec Solver = After All
+  Equation = "SaveScalars"
+  Procedure = "SaveData" "SaveScalars"
+  Filename = "trace_sub2_max.dat"
+  Variable 1 = Temperature
+  Operator 1 = max
+End
+Material 1
+  Name = "FR4"
+  Density = 1850
+  Heat Capacity = 1300
+  Heat Conductivity = 0.30
+End
+Material 2
+  Name = "Copper"
+  Density = 8960
+  Heat Capacity = 385
+  Heat Conductivity = 401
+End
+! Trace volume in mesh: 1 hex × 5 wide = 5 × (0.01m × 0.01m × 35µm) = 1.75e-6 m³
+! P = 94mW into that volume → q = 94e-3 / 1.75e-6 = 5.37e4 W/m³
+! (Mesh is coarse; trace is single layer entire ny mid-row, NOT actual 0.254mm)
+! For coarse-mesh validation: scale heat source so total power = 94mW
+Body Force 1
+  Heat Source = 5.37e4
+End
+! Top BC: natural convection h=5 W/m²K, T_amb=25°C
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 5.0
+  External Temperature = 25.0
+End
+! Bottom BC: natural convection
+Boundary Condition 2
+  Target Boundaries(1) = 2
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 5.0
+  External Temperature = 25.0
+End
