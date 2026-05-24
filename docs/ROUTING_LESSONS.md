@@ -60,6 +60,20 @@
 - **Status**: active
 - **Sim cross-check**: post-route audit becomes pre-route avoidance
 
+### L9 — Mirror partner lookup needs dual-strategy match
+
+- **Date**: 2026-05-24
+- **Pattern**: subsystem mirror script (CH2 = mirror_X(CH1)) using single-strategy partner match
+- **Observation**: Phase 4-v2 Step 2 PR-CH2 — net-signature-only match produced false positives (D39 matched TP19 because both had only MOTOR_A_CH1 after stripping anonymous N$ nets); position-only match would risk wrong-prefix matches (e.g., a CH1 R near where a CH2 D should mirror).
+- **Root cause** (physics-equivalent): mirror partner identity is a constraint over (net-equivalence, ref-prefix, mirror-position) — any single dimension is ambiguous. Pure net-match fails on shared anonymous nets; pure ref-prefix is ambiguous (R56/R60 same prefix); pure position-match risks finding any unrelated nearby component.
+- **Cost adjustment** (codified in `place_subsystem_ch2_mirror.py`): 3-tier match cascade:
+  1. **IC partner ref-list** (hardcoded Q5→Q11, J18→J28, U3→U5 etc.)
+  2. **EXACT net-set match** (after stripping `N\$` anonymous nets) + **same ref-prefix letter** — strict, no false positives from fuzzy fragments
+  3. **Geometric-position fallback**: find CH1 fp of same ref-prefix letter at expected mirror_X(CH2.current_xy) within 2mm
+  Components failing all three → genuine asymmetric component → surface to Sai-queue (don't mirror, flag in PR doc).
+- **Status**: proposed
+- **Sim cross-check**: pending — PR #92 will validate via 0 CH1↔CH2 violations + low CH2-internal collision count
+
 ### L8 — Comparator-class ICs exempt from local decoupling cap
 
 - **Date**: 2026-05-24
@@ -115,5 +129,5 @@ A lesson can be `retired` if later evidence shows the pattern was a false positi
 ## ROUTING_LESSONS_HASH
 
 ```
-ROUTING_LESSONS_HASH = 8bd8276b2529833c81a86b536e547fadbaac798d48cd2ba51cdda2f7d2287ae6
+ROUTING_LESSONS_HASH = 653191193df439c6ea8e62f2d25f38424658c43b7cb8f843cc540146a3bf7d02
 ```
