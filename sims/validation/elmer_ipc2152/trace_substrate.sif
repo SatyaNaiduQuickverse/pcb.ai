@@ -1,0 +1,74 @@
+! V1 — IPC-2152 trace + substrate co-simulation
+! Geometry: 50×50×1.6mm FR4 substrate + 0.254×35µm×50mm Cu trace on top
+! Material 1: FR4 substrate
+! Material 2: Cu trace (only the trace volume has heat source)
+! Convection: top + bottom surfaces, h=10 W/m²K, T_amb=25°C
+! Expected per IPC-2152 Fig 4-1: ΔT ≈ 7°C above 25°C ambient
+
+Header
+  Mesh DB "." "trace_sub_mesh"
+End
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 50
+  Output File = "trace_sub.result"
+  Post File = "trace_sub.vtu"
+End
+Body 1
+  Equation = 1
+  Material = 1
+End
+Body 2
+  Equation = 1
+  Material = 2
+  Body Force = 1
+End
+Equation 1
+  Active Solvers(1) = 1
+End
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Linear System Solver = Direct
+  Linear System Direct Method = UMFPack
+  Steady State Convergence Tolerance = 1.0e-5
+End
+Solver 2
+  Exec Solver = After All
+  Equation = "SaveScalars"
+  Procedure = "SaveData" "SaveScalars"
+  Filename = "trace_sub_max.dat"
+  Variable 1 = Temperature
+  Operator 1 = max
+End
+Material 1
+  Name = "FR4"
+  Density = 1850
+  Heat Capacity = 1300
+  Heat Conductivity = 0.30
+End
+Material 2
+  Name = "Copper"
+  Density = 8960
+  Heat Capacity = 385
+  Heat Conductivity = 401
+End
+! Heat source only in trace (Body 2): 2.13e8 W/m³ at 1A
+Body Force 1
+  Heat Source = 2.13e8
+End
+! Top surface (trace exposed) — convection
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 10.0
+  External Temperature = 25.0
+End
+! Bottom surface (substrate underside) — convection
+Boundary Condition 2
+  Target Boundaries(1) = 2
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 10.0
+  External Temperature = 25.0
+End

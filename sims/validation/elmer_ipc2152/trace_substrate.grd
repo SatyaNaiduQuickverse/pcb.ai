@@ -1,0 +1,25 @@
+##### IPC-2152 trace + substrate 3D mesh
+##### Substrate 50mm × 50mm × 1.6mm with 0.254mm × 35µm trace on top
+Version = 210903
+Coordinate System = Cartesian 3D
+Subcell Divisions in 3D = 2 2 2
+Subcell Sizes 1D = 0.025 0.025
+Subcell Sizes 2D = 0.025 0.025
+Subcell Sizes 3D = 0.000035 0.001565
+Material Structure in 2D
+  2 1
+  1 1
+End
+Materials Interval = 1 2
+Boundary Definitions
+! type out int double
+  1     -1  1    1.0
+  2     -1  2    1.0
+End
+Numbering = Horizontal
+Element Innernodes = False
+Triangles = False
+Surface Elements = 1
+Coordinate Ratios = 1
+Minimum Element Divisions = 6 6 4
+Reference Density = 1.0
