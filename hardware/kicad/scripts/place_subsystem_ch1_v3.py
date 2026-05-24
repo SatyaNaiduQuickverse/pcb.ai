@@ -62,6 +62,29 @@ IC_ANCHORS = {
 PAD_CLEARANCE_MM = 0.3
 SILK_BBOX_MARGIN_MM = 0.0   # match audit_layout_compliance _silk_bbox_mm exactly
 
+
+def reset_text_to_body(fp):
+    """KiCad SetPosition() leaves child text fields at their absolute prior
+    positions — they don't auto-follow the body. Reset Reference + Value text
+    to fp center. For small passives (R/C/D/TP — body <3mm), HIDE ref text:
+    dense CH1 layout has no room for visible silk text on every 0402/0603 +
+    audit's SILK-ON-PAD is DFM-blocking; common production practice is to
+    hide refs on small passives, rely on assembly position file for placement.
+    IC refs (U/J/Q) stay visible for assembly cross-check."""
+    pos = fp.GetPosition()
+    rf = fp.Reference()
+    vf = fp.Value()
+    if rf is not None:
+        rf.SetPosition(pos)
+    if vf is not None:
+        vf.SetPosition(pos)
+        vf.SetVisible(False)  # value always hidden on silk
+    ref = fp.GetReference()
+    if rf is not None and ref and ref[0] in ('R', 'C', 'D') and ref[1:].isdigit():
+        rf.SetVisible(False)
+    if rf is not None and ref and ref.startswith('TP'):
+        rf.SetVisible(False)
+
 # Per-ref east-edge bound — master 2026-05-24 directive for collisions with
 # fixed non-CH1 neighbors near CH1 zone east boundary (x=35).
 PER_REF_EAST_EDGE = {
@@ -301,7 +324,7 @@ def main():
         if fp is None: continue
         # Snapshot bbox BEFORE SetPosition (avoid stale cache)
         fp_silk_rel = fp_silk_relative(fp)
-        fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
+        fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6))); reset_text_to_body(fp)
         placed_centers.append((x, y, fp.GetLayer()))
         for pb in fp_pad_bboxes(fp):
             placed_pad_bxs.append(pb)
@@ -371,7 +394,7 @@ def main():
         if chosen is None:
             failed.append(ref)
             continue
-        fp.SetPosition(pcbnew.VECTOR2I(int(chosen[0] * 1e6), int(chosen[1] * 1e6)))
+        fp.SetPosition(pcbnew.VECTOR2I(int(chosen[0] * 1e6), int(chosen[1] * 1e6))); reset_text_to_body(fp)
         placed_centers.append((chosen[0], chosen[1], test_layer))
         for pb in fp_pad_bboxes(fp):
             placed_pad_bxs.append(pb)
@@ -494,7 +517,7 @@ def main():
                 if position_valid(tp, c_fp.GetLayer(), c_area,
                                   new_placed_pads, ic_silk_for_check, tp_keepouts,
                                   is_sense_c, new_placed_centers, tx, ty, zone):
-                    c_fp.SetPosition(pcbnew.VECTOR2I(int(tx*1e6), int(ty*1e6)))
+                    c_fp.SetPosition(pcbnew.VECTOR2I(int(tx*1e6), int(ty*1e6))); reset_text_to_body(c_fp)
                     placed_centers.append((tx, ty, c_fp.GetLayer()))
                     for pb in fp_pad_bboxes(c_fp):
                         placed_pad_bxs.append(pb)
