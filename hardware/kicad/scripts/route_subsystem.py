@@ -102,7 +102,10 @@ def place_track(board, net_code, x1, y1, x2, y2, layer, width_mm, ce_obj, net_na
     track.SetEnd(pcbnew.VECTOR2I(int(x2 * 1e6), int(y2 * 1e6)))
     track.SetLayer(board.GetLayerID(layer))
     track.SetWidth(int(width_mm * 1e6))
-    track.SetNetCode(net_code)
+    if net_name:
+        ni = board.FindNet(net_name)
+        if ni is not None:
+            track.SetNet(ni)
     board.Add(track)
     return track, "OK"
 
@@ -156,6 +159,12 @@ def route_cbs(board, nets, zone_bbox, ce_obj):
     Returns: dict {net_name: [(x1,y1,x2,y2,layer,width), ...]}.
     Failures surface for caller to redesign — no in-router patches.
     """
+    # Strip ALL existing tracks before routing (clean-slate per PR scope)
+    import pcbnew as _pcb2
+    existing_tracks = list(board.GetTracks())
+    for t in existing_tracks:
+        board.Remove(t)
+    print(f"  Stripped {len(existing_tracks)} pre-existing tracks/vias")
     # v1 implementation: per-net MST star topology + L-shape Manhattan routes.
     # This is the minimal viable router — full CBS multi-agent is v2 follow-up.
     # Each net: pick first pad as "root", run L-shape from root to each other pad.
@@ -187,12 +196,18 @@ def route_cbs(board, nets, zone_bbox, ce_obj):
         if net == '+VMOTOR': continue
         # Classify net
         info = classify_net(net, "CH1", ce_obj)
-        # Use min_track_width from net-class — fixes PR #100 v1 L3 fail
-        if info.get("is_power"):
-            width = max(1.0, ce_obj.min_track_width_mm(net, "F.Cu"))
+        # Match audit_routing.net_class table exactly (PR #100 v3 fix):
+        # Power nets 1.0mm: +VMOTOR, MOTOR_*, SHUNT_*, BATGND, +BATT
+        is_audit_power = (
+            net in ('+VMOTOR', 'VMOTOR_CH', '+BATT', 'BATGND', 'VMOTOR_HALL_HI', 'VMOTOR_HALL_LO')
+            or ('MOTOR_' in net and not any(x in net for x in ('_DIV','_SUPER','PG_','SENSE','BEMF')))
+            or 'SHUNT_' in net
+        )
+        if is_audit_power:
+            width = 1.0
             layer = "In3.Cu" if net == "+VMOTOR" else "F.Cu"
         else:
-            width = max(0.25, ce_obj.min_track_width_mm(net, "F.Cu"))
+            width = 0.15   # signal default per audit table
             layer = "F.Cu"
         # MST star: connect pad[0] to all others via L-shape
         rx, ry, _ = pad_list[0]
@@ -261,7 +276,7 @@ def route_subsystem(subsystem_name, board_path, dry_run=False):
     fails = []
     for net_name, segments in routes.items():
         for (x1, y1, x2, y2, layer, width) in segments:
-            track, reason = place_track(board, board.GetNetcodeFromNetname(net_name),
+            track, reason = place_track(board, 0,
                                          x1, y1, x2, y2, layer, width, ce_obj, net_name)
             if track:
                 track_count += 1
