@@ -1,0 +1,53 @@
+! V1 v2 — substrate-only 2D analytical reference
+! 2D analytical: T_top - T_amb = q × t/k + q/h = 0.20 + 7.52 = 7.72°C → T_max = 32.72°C
+! q = 37.6 W/m² uniform on top, h=5 on bottom, T_amb=25°C
+
+Header
+  Mesh DB "." "sub2d_mesh"
+End
+Simulation
+  Coordinate System = "Cartesian 3D"
+  Simulation Type = "Steady State"
+  Steady State Max Iterations = 50
+  Output File = "sub2d.result"
+End
+Body 1
+  Equation = 1
+  Material = 1
+End
+Equation 1
+  Active Solvers(1) = 1
+End
+Solver 1
+  Equation = "Heat Equation"
+  Variable = "Temperature"
+  Linear System Solver = Direct
+  Linear System Direct Method = UMFPack
+  Steady State Convergence Tolerance = 1.0e-5
+End
+Solver 2
+  Exec Solver = After All
+  Equation = "SaveScalars"
+  Procedure = "SaveData" "SaveScalars"
+  Filename = "sub2d_max.dat"
+  Variable 1 = Temperature
+  Operator 1 = max
+End
+Material 1
+  Name = "FR4"
+  Density = 1850
+  Heat Capacity = 1300
+  Heat Conductivity = 0.30
+End
+! Top face: heat flux INTO surface = 37.6 W/m²
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Heat Flux = 37.6
+End
+! Bottom face: natural convection
+Boundary Condition 2
+  Target Boundaries(1) = 2
+  Heat Flux BC = True
+  Heat Transfer Coefficient = 5.0
+  External Temperature = 25.0
+End
