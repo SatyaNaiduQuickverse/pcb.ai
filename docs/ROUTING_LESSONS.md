@@ -60,6 +60,16 @@
 - **Status**: active
 - **Sim cross-check**: post-route audit becomes pre-route avoidance
 
+### L6 — Test-point keep-out is layer-agnostic (probe access in XY)
+
+- **Date**: 2026-05-24
+- **Pattern**: placement scripts filter keepout by layer (F.Cu test point ignores B.Cu components and vice versa); but `audit_layout_compliance.MOTOR-PAD-CLEAR` evaluates keepout in XY only.
+- **Observation**: Phase 4-v2 Step 2 PR-CH1 v3.1 — R69 placed at (16.32, 72.64) on B.Cu near TP21 at (14.23, 75.37) on F.Cu. `position_valid` skipped the keepout because `tl != test_layer`; audit flagged it.
+- **Root cause** (physics): a B.Cu component sticks UP into the test-probe envelope of an F.Cu pad (and vice versa). Component height + body extent invades the probe-finger swing volume regardless of which copper layer the pad lives on. The audit captures this: probe access is a 3D mechanical constraint approximated as 2D XY keepout, NOT a per-layer copper constraint.
+- **Cost adjustment**: placement scripts MUST enforce TP keepout (TP pad bbox + 2 mm) in XY for any non-sense-net component, regardless of layer. `constraint_engine.cost_at` should treat motor-TP zones as 3D keepouts (cost `+∞` for top + bottom layers within the XY zone). Same rule for any future user-probed test point (BEMF taps, IH/IL sense taps, gate-drive scope points).
+- **Status**: proposed
+- **Sim cross-check**: pending master review
+
 ---
 
 ## Lesson template for new entries
