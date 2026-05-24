@@ -38,20 +38,22 @@ PCB = "/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb"
 #   ≥6mm from all INAs (closest: J22 at (3,80) = hypot(17,8)=18.8mm)
 # U4 LM393 at (10,74) — west central, ≥6mm from FETs (Q7@12,68 → hypot(2,6)=6.3mm)
 IC_ANCHORS = {
-    'Q5':  (12.0, 56.0),
-    'Q6':  (30.0, 56.0),
-    'Q7':  (12.0, 67.0),
-    'Q8':  (30.0, 67.0),
-    'Q9':  (12.0, 78.0),   # was (12,80); pads max y=79.5 — clears TLM strip 80-82
+    # 12mm row pitch enforced (audit SYMMETRY strict 0.5mm tolerance).
+    # All FETs shifted south by 2mm to keep Q9/Q10 pad max y=80.5 → 79.5,
+    # clearing TLM/AUX strip (80-82) while maintaining 12mm row spacing.
+    'Q5':  (12.0, 54.0),
+    'Q6':  (30.0, 54.0),
+    'Q7':  (12.0, 66.0),
+    'Q8':  (30.0, 66.0),
+    'Q9':  (12.0, 78.0),
     'Q10': (30.0, 78.0),
-    # Per master 2026-05-24 HIGHWAY_RESERVATION fix
-    'J18': (26.0, 74.0),   # MCU QFN-32 — east of U3, south of Q10; clears TLM strip
-    'J19': (22.0, 62.0),   # DRV HVQFN-24 — south central
-    'J20': (3.0, 56.0),
-    'J21': (3.0, 67.0),
-    'J22': (3.0, 78.0),
-    'U3':  (17.0, 72.0),   # LM393 SOIC-8 — moved west: east pads x=19.48 vs J18 west x=25.56 → 6.08mm clearance
-    'U4':  (8.0, 71.0),    # LM393 SOT-353 — far west, ≥6mm from Q7
+    'J18': (26.0, 72.0),   # MCU QFN-32 — between Q7 (66) and Q9 (78); east of U3
+    'J19': (22.0, 60.0),   # DRV HVQFN-24 — between Q5 (54) and Q7 (66)
+    'J20': (3.0, 54.0),    # INA-A — track Q5 row
+    'J21': (3.0, 66.0),    # INA-B — track Q7 row
+    'J22': (3.0, 78.0),    # INA-C — track Q9 row
+    'U3':  (17.0, 72.0),   # LM393 SOIC-8 — west of J18 by 6mm clearance
+    'U4':  (8.0, 70.0),    # LM393 SOT-353 — far west
     # TP19/20/21 deliberately NOT anchored — let spiral place them via their
     # MOTOR_x_CH1 net (parent = FET source pads). Fixed TP position at x=5 next
     # to INAs at x=3 caused pad collisions (1mm TP pad vs 2mm INA body).

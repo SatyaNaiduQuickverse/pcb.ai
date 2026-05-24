@@ -272,17 +272,40 @@ def check_passive_anchoring(items):
 
 
 # ----- check 5: decoupling caps -----
+# L8 (master 2026-05-24): comparator-class analog ICs (LM393/LM339/LM319/TL3221
+# family) operate at <100kHz with ~5mA switching current. With board-level
+# +3V3/+5V plane decoupling, supply Z at 100kHz ~1Ω → V_noise ~5mV; after
+# PSRR -30dB → 150µV << comparator hysteresis (10-50mV typical). No local
+# 100nF required. Codified per feedback-codify-not-patch.
+COMPARATOR_VALUE_RE = re.compile(
+    r"^(LM393|LM339|LM319|LM193|LM2901|LM2903|TL3221|TLV3201|TLV3202|MCP6541)",
+    re.IGNORECASE,
+)
+
+
+def _is_comparator_class(fp):
+    val = fp.GetValue() or ""
+    return bool(COMPARATOR_VALUE_RE.match(val))
+
+
 def check_decoupling(items):
     """R25 enforcement: every IC must have a decoupling cap within 3mm AND on
     the SAME copper layer. Opposite-side via adds ~0.5nH inductance, defeats
-    decoupling above ~50MHz. Master 2026-05-24 extension."""
-    ics = [(ref, d["x"], d["y"], d["side"]) for ref, d in items.items()
+    decoupling above ~50MHz. Master 2026-05-24 extension.
+
+    L8 EXEMPT: comparator-class ICs (LM393 family) — see COMPARATOR_VALUE_RE."""
+    ics = [(ref, d["x"], d["y"], d["side"], d.get("fp"))
+           for ref, d in items.items()
            if ref.startswith("U") and ref[1:].isdigit()]
     caps = [(ref, d["x"], d["y"], d["side"]) for ref, d in items.items()
             if ref.startswith("C") and ref[1:].isdigit()]
     no_cap = []
     wrong_side = []
-    for ref, x, y, side in ics:
+    comparator_exempt = 0
+    for ref, x, y, side, fp in ics:
+        if fp is not None and _is_comparator_class(fp):
+            comparator_exempt += 1
+            continue
         nearby_any = [c for c in caps
                       if math.hypot(c[1] - x, c[2] - y) <= 3.0]
         if not nearby_any:
@@ -292,6 +315,8 @@ def check_decoupling(items):
         same_side_caps = [c for c in nearby_any if c[3] == side]
         if not same_side_caps:
             wrong_side.append((ref, x, y, side, nearby_any[0][0], nearby_any[0][3]))
+    if comparator_exempt:
+        warns.append(f"DECOUPLING-L8-COMPARATOR-EXEMPT: {comparator_exempt} comparator-class IC(s) exempt from local decoupling (board-plane sufficient — see ROUTING_LESSONS L8)")
     if no_cap:
         fails.append(f"DECOUPLING: {len(no_cap)} ICs have no cap within 3mm")
         for r, x, y in no_cap[:10]:

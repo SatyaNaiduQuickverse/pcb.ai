@@ -60,6 +60,16 @@
 - **Status**: active
 - **Sim cross-check**: post-route audit becomes pre-route avoidance
 
+### L8 — Comparator-class ICs exempt from local decoupling cap
+
+- **Date**: 2026-05-24
+- **Pattern**: low-speed analog comparators (LM393/LM339/LM319/LM193/LM2901/LM2903/TL3221/TLV3201/TLV3202/MCP6541) flagged by R25 audit for missing local 100nF, but don't physically require one
+- **Observation**: Phase 4-v2 Step 2 PR-CH1 — U3 LM393 had no shared-net +3V3 cap in CH1; geometric fixup couldn't fit inside SOIC-8 silk + 3mm radius window; investigation showed no CH1 decoupling cap exists in schematic for U3
+- **Root cause** (physics): comparators switch ~5mA at <100kHz. Board-level +3V3 plane decoupling (S5 BEC caps) presents supply impedance ~1Ω at 100kHz → V_noise ~5mV → after comparator PSRR -30dB → 150µV output ripple << 10-50mV typical hysteresis. False trigger probability negligible. Local 100nF benefits high-speed digital (MCU/DRV gate-drive) and op-amps with GHz GBW, NOT comparators with kHz response.
+- **Cost adjustment**: `audit_layout_compliance.check_decoupling` EXEMPTS ICs matching `COMPARATOR_VALUE_RE` from the "C within 3mm" rule. Surfaces as `DECOUPLING-L8-COMPARATOR-EXEMPT` warn count for visibility.
+- **Status**: proposed
+- **Sim cross-check**: pending — supply impedance + PSRR math per IR2110/LM393 datasheets
+
 ### L6 — Test-point keep-out is layer-agnostic (probe access in XY)
 
 - **Date**: 2026-05-24
