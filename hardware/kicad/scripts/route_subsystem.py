@@ -206,7 +206,7 @@ def route_cbs(board, nets, zone_bbox, ce_obj):
         if is_audit_power:
             width = 1.0
             layer = "In3.Cu" if net == "+VMOTOR" else "F.Cu"
-        elif net in ('+3V3', '+5V', '+9V', '+5V_AI', '+5V_FC', '+V5_PI5'):
+        elif net.startswith('+3V3') or net.startswith('+5V') or net.startswith('+9V') or net.startswith('+V5') or net.startswith('+V9'):
             width = 0.25   # V3V3 class
             layer = "F.Cu"
         else:
