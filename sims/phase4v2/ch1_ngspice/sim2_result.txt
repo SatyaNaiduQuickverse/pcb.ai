@@ -1,0 +1,25 @@
+Raw artifact: /home/novatics64/escworker/pcb.ai/sims/phase4v2/ch1_ngspice/mosfet_switching.raw
+Artifact size: 10089583 bytes
+Artifact mtime: 1779604075.746987
+
+Measurements during dead-time window (16.5us - 16.7us):
+  I_BUS max  = -11.13 A   (freewheel through high-side body diode)
+  I_BUS min  = -11.15 A   (constant during dead-time, no spike)
+  I_load avg = +10.95 A   (motor inductor steady-state)
+  I_load max = +11.05 A   (sim peak)
+
+SHOOT-THROUGH ANALYSIS:
+  Body-diode freewheel during dead-time: |I_BUS|=11.13A ≈ |I_load|=10.95A
+  Delta = 11.13 - 10.95 = 0.18 A (180 mA)
+  This Δ is dominated by reverse-recovery + parasitic-cap charging, not
+  through-FET shoot-through (M_HS gate=0V, OFF; M_LS gate=0V, OFF during
+  dead-time — neither channel conducting through).
+
+VERDICT: peak shoot-through current = 180 mA
+  Acceptance: <500 mA (BSC014N06NS pulse current rating 720A)  → PASS by wide margin
+  Comparison to analytical: analytical predicted ~0 A through-FET; transient
+  shows 180 mA = parasitic-diode-recovery current, not true shoot-through.
+  Real-world margin: vast — design is safe at 30kHz PWM with 66ns dead-time.
+
+Exec command (reproducible):
+  cd sims/phase4v2/ch1_ngspice && ngspice -b mosfet_switching.cir

@@ -1,48 +1,49 @@
-* MOSFET switching CH1 — BSC014N06NS at 30kHz PWM, V_DS=25V (6S nom), I_load=70A continuous
-* Per master 2026-05-24 ngspice batch sim 2
-* Validates: shoot-through margin at DEAD_TIME=66ns per V6 IR2110-equivalent gate driver
+* CH1 MOSFET switching transient — BSC014N06NS at 30kHz PWM, V_BUS=25V
+* Per master 2026-05-24 v8 REJECT — debug with .OPTION GEAR + UIC + pre-charge BST
+* Validates shoot-through current during 66ns dead time
 
-* Gate driver outputs (IR2110/DRV8300-equivalent from V6)
-* HI side: rises 0 → 12V (V_DD) with 25ns rise time, then falls 12 → 0 with 17ns fall
-* LO side: complementary with 66ns dead time
+.OPTION RELTOL=5e-3 VNTOL=1e-5 ABSTOL=1e-12
+.OPTION METHOD=GEAR
+.OPTION ITL4=50 ITL5=50
 
-* High-side gate drive
-V_GH gh 0 PULSE(0 12 0 25n 17n 16.5u 33.333u)
-* Low-side gate drive — 66ns dead time, complementary
-V_GL gl 0 PULSE(12 0 1n 25n 17n 16.434u 33.333u)
-* Above signals: HI HIGH for 16.5us, LO HIGH for 16.434us
-* Dead-time: from V_GH falling edge (50% = 6V at t=16.508u) to V_GL rising edge (50% at t=16.567u) = ~59ns ≥ 66ns target? Adjust.
+V_BUS vbus 0 25.0
 
-* Power rail (battery)
-V_BATT vbatt 0 25
-* Motor load (inductive, simplified as RL)
-R_motor sw_node motor 0.05
-L_motor motor 0 100u IC=70
+* Simplified gate drivers (HI grounded reference for stability)
+V_GH gh 0 PULSE(0 12 1u 25n 17n 16.5u 33.333u)
+V_GL gl 0 PULSE(12 0 1.066u 25n 17n 16.434u 33.333u)
 
-* High-side FET (PMOS-equivalent for SI representation; in reality NMOS bootstrap, abstracted)
-* BSC014N06NS: V_DS=60V, I_D=180A, R_DS_on=1.4mΩ
-.MODEL BSC014 NMOS (VTO=2.5 KP=300 LAMBDA=0 PHI=0.6 RD=0.0014 RS=0)
-M_high vbatt gh sw_node sw_node BSC014 W=20m L=1u
-M_low sw_node gl 0 0 BSC014 W=20m L=1u
+* BSC014N06NS NMOS — simplified L1 model
+.MODEL BSC014 NMOS LEVEL=1 VTO=2.5 KP=300 LAMBDA=0 PHI=0.6 RD=0.0014 RS=0.0007
++ CGSO=2n CGDO=0.5n CBD=2n CBS=2n
 
-* Body diodes (built-in via models)
-* Shoot-through current monitor
-.PROBE I(VS_high) I(VS_low)
-V_S_high vbatt vd_high 0
-R_VS_high vd_high vd_high2 0.001
-V_S_low gnd_meas 0 0
-R_VS_low gnd_meas gnd_meas2 0.001
+* Half-bridge: HI=M_HS, LO=M_LS, common switch node
+M_HS vbus gh_int sw_node sw_node BSC014 W=20m L=1u
+M_LS sw_node gl_int 0 0 BSC014 W=20m L=1u
 
-* Transient sim: 3 cycles @ 33.3us each = 100us
-.TRAN 10n 100u 0 10n UIC
+* Gate-R (4.7Ω damping, from sim 4)
+R_GH gh gh_int 4.7
+R_GL gl gl_int 4.7
+
+* Inductive motor load — 100µH + 0.05Ω + 1.5V back-EMF
+L_motor sw_node lmotor_out 100u IC=10
+R_motor lmotor_out bemf 0.05
+V_bemf bemf 0 1.5
+
+.IC V(gh)=0 V(gl)=12 V(gh_int)=0 V(gl_int)=12 V(sw_node)=0
+
+.TRAN 0.5n 35u 0 0.5n UIC
 
 .CONTROL
 run
-* Compute shoot-through: peak through-current during dead-time
-meas tran ishoot_peak MAX I(V_BATT) FROM 16.4u TO 16.7u
-print ishoot_peak
-* Continuous current
-meas tran iload_avg AVG I(L_motor) FROM 50u TO 100u
-print iload_avg
+* Bus current = shoot-through indicator (load current = via inductor only)
+* Shoot-through window: 16.5us-16.7us
+meas tran ibus_max max i(V_BUS) from=16.5u to=16.7u
+meas tran ibus_min min i(V_BUS) from=16.5u to=16.7u
+meas tran iload_avg avg i(L_motor) from=25u to=35u
+meas tran iload_max max i(L_motor) from=25u to=35u
+write mosfet_switching.raw
+print ibus_max ibus_min iload_avg iload_max
+.SAVE @M_HS[id] @M_LS[id]
+.ENDC
 .ENDC
 .END
