@@ -59,6 +59,14 @@ IC_ANCHORS = {
 PAD_CLEARANCE_MM = 0.3
 SILK_BBOX_MARGIN_MM = 0.0   # match audit_layout_compliance _silk_bbox_mm exactly
 
+# Per-ref east-edge bound — master 2026-05-24 directive for collisions with
+# fixed non-CH1 neighbors near CH1 zone east boundary (x=35).
+PER_REF_EAST_EDGE = {
+    'R59': 33.0,   # avoid non-CH1 C82 at x=36
+    'R60': 33.0,   # mirror of R59 — same constraint
+    'R56': 33.0,   # 2512 shunt; safer to keep east-edge bounded
+}
+
 
 def get_ch1_refs(board):
     """Identify CH1 components: explicit IC list + any FP with a _CH1-suffix net."""
@@ -166,7 +174,8 @@ def fp_pad_bboxes(fp, at_pos=None):
 
 def position_valid(test_pads, test_layer, test_area_mm2,
                    placed_pad_bxs, ic_silk_bxs, tp_keepouts,
-                   is_motor_sense, placed_centers, x, y, zone):
+                   is_motor_sense, placed_centers, x, y, zone,
+                   east_edge=None, test_ref=None):
     """Validate (x,y) for new fp.
     - Inside zone with 0.5mm inset
     - 1.5mm center-to-center clearance same-layer
@@ -176,6 +185,9 @@ def position_valid(test_pads, test_layer, test_area_mm2,
     - motor-TP 2mm keepout for non-sense-net components
     """
     if not (zone[0] + 0.5 <= x <= zone[2] - 0.5 and zone[1] + 0.5 <= y <= zone[3] - 0.5):
+        return False
+    # Per-ref east-edge constraint (master 2026-05-24: R59 x ≤ 33 to avoid C82)
+    if east_edge is not None and x > east_edge:
         return False
     for (px, py, pl) in placed_centers:
         if pl != test_layer: continue
@@ -202,10 +214,10 @@ def position_valid(test_pads, test_layer, test_area_mm2,
             px_c = (b1 + b3) / 2; py_c = (b2 + b4) / 2
             if s1 < px_c < s3 and s2 < py_c < s4:
                 return False
-    # Motor-TP keepout — bbox match audit (TP pad 3mm + 2mm keepout = ±3.5mm)
+    # Motor-TP keepout — bbox match audit; layer-AGNOSTIC (audit cares about
+    # probe access in XY, not per-layer). TP pad 3mm + 2mm keepout = ±3.5mm.
     if not is_motor_sense:
-        for (tx, ty, tl) in tp_keepouts:
-            if tl != test_layer: continue
+        for (tx, ty, _tl) in tp_keepouts:
             if (tx - 3.6) <= x <= (tx + 3.6) and (ty - 3.6) <= y <= (ty + 3.6):
                 return False
     return True
@@ -326,7 +338,9 @@ def main():
                 tp = fp_pad_bboxes(fp, (tx, ty))
                 if position_valid(tp, test_layer, fp_area,
                                   placed_pad_bxs, ic_silk_bxs, tp_keepouts,
-                                  is_sense, placed_centers, tx, ty, zone):
+                                  is_sense, placed_centers, tx, ty, zone,
+                                  east_edge=PER_REF_EAST_EDGE.get(ref),
+                                  test_ref=ref):
                     chosen = (tx, ty); break
             if chosen: break
         if chosen is None:
@@ -364,23 +378,44 @@ def main():
             if math.hypot(cx - ix, cy - iy) <= 3.0:
                 any_near = True; break
         if any_near: continue
-        # Find a CH1 cap to relocate — prefer one currently in zone but far from IC
-        candidates = []
+        # Master 2026-05-24 R25-exempt path: prefer a CH1 cap whose net SHARES
+        # with the IC's power pin (+3V3/+5V/+9V). That cap can sit inside silk
+        # (R25 exemption) — solves SOIC-8 silk-vs-3mm-radius geometric trap.
+        ic_power_nets = set()
+        ic_power_pin_pos = None
+        for pad in ic_fp.Pads():
+            n = pad.GetNetname() or ''
+            if n in ('+3V3', '+5V', '+9V', 'VCC', 'VDD'):
+                ic_power_nets.add(n)
+                if ic_power_pin_pos is None:
+                    pp = pad.GetPosition()
+                    ic_power_pin_pos = (pcbnew.ToMM(pp.x), pcbnew.ToMM(pp.y))
+        shared_candidates = []
+        any_candidates = []
         for fp in board.GetFootprints():
             r = fp.GetReference()
             if not (r.startswith('C') and r[1:].isdigit()): continue
             if r not in ch1_refs: continue
+            cap_nets = {pad.GetNetname() or '' for pad in fp.Pads()}
             cx = pcbnew.ToMM(fp.GetPosition().x)
             cy = pcbnew.ToMM(fp.GetPosition().y)
             d = math.hypot(cx - ix, cy - iy)
+            if cap_nets & ic_power_nets:
+                shared_candidates.append((d, r, fp))
             if d > 5.0:
-                candidates.append((d, r, fp))
+                any_candidates.append((d, r, fp))
+        # R25-exempt prefers cap on shared power net; fallback to any far cap
+        candidates = shared_candidates or any_candidates
         if not candidates:
             print(f"  WARN: no relocatable cap for {ic_ref}")
             continue
-        # Use the closest already-placed one
         candidates.sort()
         _, c_ref, c_fp = candidates[0]
+        # If shared-net cap available + power-pin pos known, target near VDD pin
+        # (R25 audit triggers on cap within 3mm of MATCHING-NET host pad)
+        target_x, target_y = (ic_power_pin_pos
+                              if shared_candidates and ic_power_pin_pos
+                              else (ix, iy))
         # Search around IC for a free slot, same side. Use pad-cluster area.
         c_rel = fp_bbox_relative(c_fp)
         c_area = (c_rel[2] - c_rel[0]) * (c_rel[3] - c_rel[1])
@@ -394,18 +429,32 @@ def main():
                               if not (abs(pc[0]-old_cx)<0.05 and abs(pc[1]-old_cy)<0.05)]
         # (skip removing pad bxs; just don't self-collide via dist check)
         is_sense_c = fp_is_motor_sense(c_fp)
+        # R25-exempt mode: cap can sit INSIDE silk — relax silk-bbox check by
+        # omitting from ic_silk_bxs only the host's silk for this cap
+        r25_mode = bool(shared_candidates)
+        # In R25-exempt mode, cap may sit inside host IC silk — drop host's silk
+        # from the constraint set; other ICs' silks still enforced.
+        if r25_mode:
+            host_silk = silk_bbox_at(fp_silk_relative(ic_fp),
+                                     (ix, iy), ic_fp.GetLayer())
+            ic_silk_for_check = [s for s in ic_silk_bxs
+                                 if not (abs(s[0]-host_silk[0])<0.05 and
+                                         abs(s[2]-host_silk[2])<0.05)]
+        else:
+            ic_silk_for_check = ic_silk_bxs
         for r_step in range(1, 16):
-            r = 0.4 + r_step * 0.2     # 0.6 .. 3.4 mm
+            r = 0.3 + r_step * 0.2     # 0.5 .. 3.3 mm
             n_pts = max(12, r_step * 6)
             done = False
             for i in range(n_pts):
                 theta = 2 * math.pi * i / n_pts
-                tx = ix + r * math.cos(theta)
-                ty = iy + r * math.sin(theta)
+                tx = target_x + r * math.cos(theta)
+                ty = target_y + r * math.sin(theta)
                 tp = fp_pad_bboxes(c_fp, (tx, ty))
-                if math.hypot(tx-ix, ty-iy) > 3.0: continue  # audit DECOUPLING <=3mm
+                # DECOUPLING audit: cap-CENTER must be <=3mm from IC-CENTER
+                if math.hypot(tx-ix, ty-iy) > 3.0: continue
                 if position_valid(tp, c_fp.GetLayer(), c_area,
-                                  new_placed_pads, ic_silk_bxs, tp_keepouts,
+                                  new_placed_pads, ic_silk_for_check, tp_keepouts,
                                   is_sense_c, new_placed_centers, tx, ty, zone):
                     c_fp.SetPosition(pcbnew.VECTOR2I(int(tx*1e6), int(ty*1e6)))
                     placed_centers.append((tx, ty, c_fp.GetLayer()))
