@@ -94,11 +94,12 @@ files to confirm every named function/script in this manifest actually exists).
 
 ---
 
-## Phase 6 + 7-prep deliverables (informational, not auditable)
+## Phase 6 + 6.5 + 7-prep deliverables (informational, not auditable)
 
 | # | Doc | Class | Notes |
 |---|---|---|---|
 | P6-1 | `docs/PHASE6_EMC_PREP.md` | EMC pre-compliance scope (FCC + CE) | Doc-only; identifies 4× DRV / 5× buck / Hall as EMC threat surface. 6-day bring-up test plan, $2.5-3.5k pre-compliance gear budget, 8 owner Q&A. Informational — not gated by audit_meta. |
+| P6.5-1 | `docs/PHASE6_5_3D_CAD.md` + `hardware/kicad/cad/pcbai_fpv4in1.step` + `docs/renders/3d_cad/*.png` | 3D CAD assembly (visual confirmation, mech-fit prep) | Per Sai 2026-05-24 request. 36 unique 3D models, 36/36 PRESENT (1 placeholder U1 Hall/Allegro_CB_PFF — no library STEP). 5 isometric renders, full board STEP. `audit_3d_model_coverage.py` gate added. |
 | P7-1 | `docs/PHASE7_MECH_PREP.md` | mech-hardware spec (heatsink + TIM + mounting) | Doc-only; specifies hardware to realize Phase 5c thermal sim h_bottom=1500 W/m²K. Master 2026-05-24 adjudicated Q2-Q7; Q1 (form factor) pending Sai. Informational entry — not gated by audit_meta. |
 
 ---
