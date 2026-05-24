@@ -118,12 +118,14 @@ def main():
                 # No CH suffix — cross-channel/global component, leave in place
                 skipped_non_ch_only.append(ref)
                 continue
-            # Match by net signature, strip anonymous N$ + empty for fuzzy match
-            ch2_sig = strip_anon(sorted(set(
-                ch2_to_ch1_net(pad.GetNetname() or '') for pad in fp.Pads())))
+            # Match by EXACT non-anon net set (R96 BEMF_A+MOTOR_A must match
+            # CH1 BEMF_A+MOTOR_A, not any single-overlap CH1 fp)
+            ch2_set = frozenset(strip_anon(sorted(set(
+                ch2_to_ch1_net(pad.GetNetname() or '') for pad in fp.Pads()))))
             candidates = []
             for sig, fps in ch1_by_net_signature.items():
-                if strip_anon(sig) == ch2_sig:
+                ch1_set = frozenset(strip_anon(sig))
+                if ch1_set == ch2_set and len(ch2_set) > 0:
                     candidates.extend(fps)
             partner = candidates[0] if candidates else None
         if partner is None:
@@ -133,6 +135,10 @@ def main():
         new_x = 2 * BOARD_CENTER_X - pcbnew.ToMM(p.x)
         new_y = pcbnew.ToMM(p.y)
         fp.SetPosition(pcbnew.VECTOR2I(int(new_x * 1e6), int(new_y * 1e6)))
+        # Pure mirror about vertical X=50 axis: orientation flips horizontal
+        # component (180 - orig). Vertical pads (90°/270°) unchanged.
+        orig_orient = partner.GetOrientation().AsDegrees()
+        fp.SetOrientationDegrees((180 - orig_orient) % 360)
         reset_text_to_body(fp)
         moved += 1
     if skipped_non_ch_only:
