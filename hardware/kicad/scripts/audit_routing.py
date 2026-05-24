@@ -203,6 +203,29 @@ def check_route_symmetry():
 
 
 # ---------- check 3: via density ----------
+def check_plane_via_minimum():
+    """High-current plane nets must have enough stitching vias for current
+    capacity. Per master 2026-05-24 Queue #3: VMOTOR plane carries 280A
+    continuous (4ch × 70A); each 0.3mm-drill via @ 1oz Cu carries ~2-3A
+    continuous (IPC-2152). Need ≥360 vias for 280A with 2.5× safety factor.
+    """
+    PLANE_VIA_MIN = {
+        '+VMOTOR': 360,  # 280A / ~2.5A per via × 2.5x safety
+        # 'GND': implicit (high count from Phase A power-plane-stitch)
+    }
+    via_count = {}
+    for trk in board.GetTracks():
+        if not isinstance(trk, pcbnew.PCB_VIA): continue
+        net = trk.GetNetname()
+        via_count[net] = via_count.get(net, 0) + 1
+    for net, min_count in PLANE_VIA_MIN.items():
+        actual = via_count.get(net, 0)
+        if actual < min_count:
+            fails.append(f"PLANE-VIA-MIN: {net} has {actual} vias (<{min_count} required for current capacity)")
+        else:
+            info.append(f"PLANE-VIA-MIN: {net} = {actual} vias (≥{min_count} ✓)")
+
+
 def check_via_density():
     """No via cluster >2 vias/mm² in HV/MOTOR high-current zones.
     HV zones defined as MOTOR phase pours + bulk cap area + Hall current path."""
@@ -336,6 +359,7 @@ check_via_density()
 check_diff_pair_balance()
 check_track_width()
 check_plane_island()
+check_plane_via_minimum()
 
 print(f"=== Routing compliance audit: {os.path.basename(PCB_PATH)} ===")
 total_tracks = sum(1 for t in board.GetTracks() if not isinstance(t, pcbnew.PCB_VIA))
