@@ -64,6 +64,11 @@ INTER_SUBSYSTEM_NETS = {
     '+3V3', 'V3V3A', 'HALL_VCC_5V',
     # Buck output rails are inter-subsystem (BEC → loads)
     'V_BUCK1_OUT', 'V_BUCK2_OUT', 'V_BUCK3_OUT', 'V_BUCK4_OUT', 'V_BUCK5_OUT',
+    # Master 2026-05-24 REJECT v2 update: cross-subsystem distribution nets
+    '+BATT',           # XT30 → south protection → north supervisor divider
+    'BUS_CURR_HALL_OUT',  # Hall current sense bus to MCU (S3 → CH MCUs)
+    'LED_PG_NODE',     # Power-good LED chain across board
+    'TLM',             # DShot telemetry common return (CH → FC)
 }
 
 # Track-width minimums per net class (mm)
