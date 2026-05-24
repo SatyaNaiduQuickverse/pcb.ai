@@ -40,17 +40,18 @@ PCB = "/home/novatics64/escworker/pcb.ai/hardware/kicad/pcbai_fpv4in1.kicad_pcb"
 IC_ANCHORS = {
     'Q5':  (12.0, 56.0),
     'Q6':  (30.0, 56.0),
-    'Q7':  (12.0, 68.0),
-    'Q8':  (30.0, 68.0),
-    'Q9':  (12.0, 80.0),
-    'Q10': (30.0, 80.0),
-    'J18': (22.0, 80.0),   # MCU QFN-32 — north central, between Q9/Q10
-    'J19': (22.0, 62.0),   # DRV HVQFN-24 — south central, between Q5/Q6
-    'J20': (3.0, 56.0),    # INA-A SOT-363 — west, Q5/Q6 row
-    'J21': (3.0, 68.0),    # INA-B — west, Q7/Q8 row
-    'J22': (3.0, 80.0),    # INA-C — west, Q9/Q10 row
-    'U3':  (20.0, 72.0),   # LM393 SOIC-8 — central, between MCU+DRV
-    'U4':  (10.0, 74.0),   # LM393 SOT-353 — west central
+    'Q7':  (12.0, 67.0),
+    'Q8':  (30.0, 67.0),
+    'Q9':  (12.0, 78.0),   # was (12,80); pads max y=79.5 — clears TLM strip 80-82
+    'Q10': (30.0, 78.0),
+    # Per master 2026-05-24 HIGHWAY_RESERVATION fix
+    'J18': (26.0, 74.0),   # MCU QFN-32 — east of U3, south of Q10; clears TLM strip
+    'J19': (22.0, 62.0),   # DRV HVQFN-24 — south central
+    'J20': (3.0, 56.0),
+    'J21': (3.0, 67.0),
+    'J22': (3.0, 78.0),
+    'U3':  (20.0, 72.0),   # LM393 SOIC-8 — central; decoupling works at (20.6,74.8)
+    'U4':  (8.0, 71.0),    # LM393 SOT-353 — far west, ≥6mm from Q7
     # TP19/20/21 deliberately NOT anchored — let spiral place them via their
     # MOTOR_x_CH1 net (parent = FET source pads). Fixed TP position at x=5 next
     # to INAs at x=3 caused pad collisions (1mm TP pad vs 2mm INA body).
