@@ -52,8 +52,12 @@ def classify_net(net_name, subsystem, ce_obj):
       - expected_current_A: from physics primitives
       - target_z0_ohm: None for non-impedance-controlled, else target
     """
-    # Power priority (1)
-    if net_name in ("+VMOTOR", "+BATT", "GND", "BATGND"):
+    # Power priority (1) — including high-current motor + shunt nets per audit_routing net_class
+    if net_name in ("+VMOTOR", "+BATT", "GND", "BATGND", "VMOTOR_CH"):
+        return {"priority": 1, "is_power": True, "expected_current_A": 70.0, "target_z0_ohm": None}
+    if "MOTOR_" in net_name and not any(x in net_name for x in ("_DIV","_SUPER","PG_","SENSE","BEMF")):
+        return {"priority": 1, "is_power": True, "expected_current_A": 70.0, "target_z0_ohm": None}
+    if "SHUNT_" in net_name:
         return {"priority": 1, "is_power": True, "expected_current_A": 70.0, "target_z0_ohm": None}
     if net_name.startswith("+V"):  # BEC outputs
         return {"priority": 1, "is_power": True, "expected_current_A": 1.0, "target_z0_ohm": None}
@@ -183,11 +187,12 @@ def route_cbs(board, nets, zone_bbox, ce_obj):
         if net == '+VMOTOR': continue
         # Classify net
         info = classify_net(net, "CH1", ce_obj)
+        # Use min_track_width from net-class — fixes PR #100 v1 L3 fail
         if info.get("is_power"):
-            width = 0.5
+            width = max(1.0, ce_obj.min_track_width_mm(net, "F.Cu"))
             layer = "In3.Cu" if net == "+VMOTOR" else "F.Cu"
         else:
-            width = 0.15
+            width = max(0.25, ce_obj.min_track_width_mm(net, "F.Cu"))
             layer = "F.Cu"
         # MST star: connect pad[0] to all others via L-shape
         rx, ry, _ = pad_list[0]
