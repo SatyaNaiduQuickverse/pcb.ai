@@ -202,11 +202,11 @@ def position_valid(test_pads, test_layer, test_area_mm2,
             px_c = (b1 + b3) / 2; py_c = (b2 + b4) / 2
             if s1 < px_c < s3 and s2 < py_c < s4:
                 return False
-    # Motor-TP 2mm keepout for non-sense-net components
+    # Motor-TP keepout — bbox match audit (TP pad 3mm + 2mm keepout = ±3.5mm)
     if not is_motor_sense:
         for (tx, ty, tl) in tp_keepouts:
             if tl != test_layer: continue
-            if math.hypot(tx - x, ty - y) < 3.0:   # 1mm TP + 2mm keepout
+            if (tx - 3.6) <= x <= (tx + 3.6) and (ty - 3.6) <= y <= (ty + 3.6):
                 return False
     return True
 
