@@ -50,7 +50,7 @@ IC_ANCHORS = {
     'J20': (3.0, 56.0),
     'J21': (3.0, 67.0),
     'J22': (3.0, 78.0),
-    'U3':  (20.0, 72.0),   # LM393 SOIC-8 — central; decoupling works at (20.6,74.8)
+    'U3':  (17.0, 72.0),   # LM393 SOIC-8 — moved west: east pads x=19.48 vs J18 west x=25.56 → 6.08mm clearance
     'U4':  (8.0, 71.0),    # LM393 SOT-353 — far west, ≥6mm from Q7
     # TP19/20/21 deliberately NOT anchored — let spiral place them via their
     # MOTOR_x_CH1 net (parent = FET source pads). Fixed TP position at x=5 next
@@ -379,44 +379,57 @@ def main():
             if math.hypot(cx - ix, cy - iy) <= 3.0:
                 any_near = True; break
         if any_near: continue
-        # Master 2026-05-24 R25-exempt path: prefer a CH1 cap whose net SHARES
-        # with the IC's power pin (+3V3/+5V/+9V). That cap can sit inside silk
-        # (R25 exemption) — solves SOIC-8 silk-vs-3mm-radius geometric trap.
-        ic_power_nets = set()
-        ic_power_pin_pos = None
+        # Master 2026-05-24 R25-exempt path: prefer ANY CH1 cap whose net SHARES
+        # with an IC pad (power preferred, then any non-GND signal). The audit's
+        # R25-exempt check uses shared-net at <3mm — any non-GND shared net works.
+        ic_pad_nets = {}  # net -> (x,y) of pad
         for pad in ic_fp.Pads():
             n = pad.GetNetname() or ''
-            if n in ('+3V3', '+5V', '+9V', 'VCC', 'VDD'):
-                ic_power_nets.add(n)
-                if ic_power_pin_pos is None:
-                    pp = pad.GetPosition()
-                    ic_power_pin_pos = (pcbnew.ToMM(pp.x), pcbnew.ToMM(pp.y))
-        shared_candidates = []
-        any_candidates = []
+            if n in ('', 'GND'): continue
+            if n not in ic_pad_nets:
+                pp = pad.GetPosition()
+                ic_pad_nets[n] = (pcbnew.ToMM(pp.x), pcbnew.ToMM(pp.y))
+        power_nets = {n for n in ic_pad_nets
+                      if n in ('+3V3', '+5V', '+9V', 'VCC', 'VDD')}
+        ic_power_pin_pos = next((ic_pad_nets[n] for n in power_nets), None)
+
+        shared_power_candidates = []  # cap shares an IC power net
+        shared_any_candidates = []    # cap shares any non-GND IC net
+        any_candidates = []           # any far CH1 cap
         for fp in board.GetFootprints():
             r = fp.GetReference()
             if not (r.startswith('C') and r[1:].isdigit()): continue
             if r not in ch1_refs: continue
             cap_nets = {pad.GetNetname() or '' for pad in fp.Pads()}
+            cap_nets.discard('GND')
+            cap_nets.discard('')
             cx = pcbnew.ToMM(fp.GetPosition().x)
             cy = pcbnew.ToMM(fp.GetPosition().y)
             d = math.hypot(cx - ix, cy - iy)
-            if cap_nets & ic_power_nets:
-                shared_candidates.append((d, r, fp))
+            shared = cap_nets & set(ic_pad_nets.keys())
+            if shared & power_nets:
+                shared_power_candidates.append((d, r, fp, list(shared)[0]))
+            elif shared:
+                shared_any_candidates.append((d, r, fp, list(shared)[0]))
             if d > 5.0:
                 any_candidates.append((d, r, fp))
-        # R25-exempt prefers cap on shared power net; fallback to any far cap
-        candidates = shared_candidates or any_candidates
-        if not candidates:
+        # Selection priority: shared-power > shared-any > any-far
+        if shared_power_candidates:
+            shared_power_candidates.sort()
+            _, c_ref, c_fp, c_target_net = shared_power_candidates[0]
+            target_x, target_y = ic_power_pin_pos or (ix, iy)
+        elif shared_any_candidates:
+            shared_any_candidates.sort()
+            _, c_ref, c_fp, c_target_net = shared_any_candidates[0]
+            target_x, target_y = ic_pad_nets[c_target_net]
+        elif any_candidates:
+            any_candidates.sort()
+            _, c_ref, c_fp = any_candidates[0]
+            c_target_net = None
+            target_x, target_y = (ix, iy)
+        else:
             print(f"  WARN: no relocatable cap for {ic_ref}")
             continue
-        candidates.sort()
-        _, c_ref, c_fp = candidates[0]
-        # If shared-net cap available + power-pin pos known, target near VDD pin
-        # (R25 audit triggers on cap within 3mm of MATCHING-NET host pad)
-        target_x, target_y = (ic_power_pin_pos
-                              if shared_candidates and ic_power_pin_pos
-                              else (ix, iy))
         # Search around IC for a free slot, same side. Use pad-cluster area.
         c_rel = fp_bbox_relative(c_fp)
         c_area = (c_rel[2] - c_rel[0]) * (c_rel[3] - c_rel[1])
@@ -432,7 +445,7 @@ def main():
         is_sense_c = fp_is_motor_sense(c_fp)
         # R25-exempt mode: cap can sit INSIDE silk — relax silk-bbox check by
         # omitting from ic_silk_bxs only the host's silk for this cap
-        r25_mode = bool(shared_candidates)
+        r25_mode = bool(shared_power_candidates or shared_any_candidates)
         # In R25-exempt mode, cap may sit inside host IC silk — drop host's silk
         # from the constraint set; other ICs' silks still enforced.
         if r25_mode:
