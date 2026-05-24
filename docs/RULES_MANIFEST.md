@@ -49,6 +49,7 @@ files to confirm every named function/script in this manifest actually exists).
 | R23 | No passive island | `place_channel_passives_role_aware.py`, `auto_anchor_passives.py` | `check_passive_anchoring()` (audit_layout L243) | 2026-05-24 master PR #71 | ✅ |
 | R24 | No off-board footprints | `anchor_off_board.py` | `check_off_board()` (audit_layout L55, pad-extent-aware as of 2026-05-24) | 2026-05-24 master | ✅ **upgraded to pad-extent** |
 | R25 | Same-side decoupling | `place_channel_passives_role_aware.py` (anchor + same-layer keep) | sub-rule of `check_decoupling()` (audit_layout L275) — **GAP: doesn't check layer match** | — | ⚠️ GAP — extend check_decoupling to also verify same-layer |
+| R26 | No idle when blocked — advance non-dependent work in parallel | N/A (behavioral, both master + worker) | N/A | 2026-05-24 Sai | ✅ process rule. When blocked on Sai-decision/dependent-PR/worker-task, identify non-dependent work and execute. Idle heartbeat = wasted bandwidth. Master examples: pre-build audit gates, independent sim re-runs, draft upcoming dispatch specs, memory updates, status page refresh. Worker examples: while one sim runs, prep next subsystem's scripts; while master reviews, prep cumulative sim setup. NOT scope creep — only work with clear value regardless of blocker outcome. |
 
 ---
 
