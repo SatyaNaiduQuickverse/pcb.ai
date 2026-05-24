@@ -22,6 +22,7 @@ CH2 partners (mirror_X about X=50):
   J28 (74, 72), J29 (78, 60), J30/31/32 (97, 54/66/78)
   U5 (83, 72), U6 (92, 70)
 """
+import math
 import sys
 import re
 from pathlib import Path
@@ -122,15 +123,44 @@ def main():
             # CH1 BEMF_A+MOTOR_A, not any single-overlap CH1 fp)
             ch2_set = frozenset(strip_anon(sorted(set(
                 ch2_to_ch1_net(pad.GetNetname() or '') for pad in fp.Pads()))))
+            ch2_letter = ''.join(c for c in ref if not c.isdigit())
             candidates = []
             for sig, fps in ch1_by_net_signature.items():
                 ch1_set = frozenset(strip_anon(sig))
                 if ch1_set == ch2_set and len(ch2_set) > 0:
-                    candidates.extend(fps)
+                    for f in fps:
+                        cref = f.GetReference()
+                        cletter = ''.join(c for c in cref if not c.isdigit())
+                        if cletter == ch2_letter:
+                            candidates.append(f)
             partner = candidates[0] if candidates else None
         if partner is None:
-            failed.append(ref)
-            continue
+            # Ref-prefix neighborhood heuristic: find CH1 fp with same ref prefix
+            # whose CURRENT XY is at mirror_X of THIS CH2 fp's current XY (within 5mm).
+            # Catches N$-anonymous-net components where sig match fails.
+            ch2_cur_x = pcbnew.ToMM(fp.GetPosition().x)
+            ch2_cur_y = pcbnew.ToMM(fp.GetPosition().y)
+            ch2_expected_ch1_x = 2 * BOARD_CENTER_X - ch2_cur_x
+            ref_letter = ''.join(c for c in ref if not c.isdigit())
+            best = None; best_d = 5.0
+            for cand_fp in board.GetFootprints():
+                cref = cand_fp.GetReference()
+                if cref == ref: continue
+                cletter = ''.join(c for c in cref if not c.isdigit())
+                if cletter != ref_letter: continue
+                # CH1 candidate must be on CH1 side (x < 50)
+                cp = cand_fp.GetPosition()
+                cx, cy = pcbnew.ToMM(cp.x), pcbnew.ToMM(cp.y)
+                if cx >= 50: continue
+                # match CH1 fp at expected mirror XY
+                d = math.hypot(ch2_expected_ch1_x - cx, ch2_cur_y - cy)
+                if d < best_d:
+                    best = cand_fp; best_d = d
+            if best is not None:
+                partner = best
+            else:
+                failed.append(ref)
+                continue
         p = partner.GetPosition()
         new_x = 2 * BOARD_CENTER_X - pcbnew.ToMM(p.x)
         new_y = pcbnew.ToMM(p.y)
