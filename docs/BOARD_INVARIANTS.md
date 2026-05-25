@@ -17,6 +17,25 @@ Any PR changing this hash WITHOUT explicit "invariant-change" PR title = REJECT.
 Per master v2 review #1: CH1-CH4 tightened to EXCLUDE the 35-65 central spine
 (where S2/S3 sit).
 
+
+## Bilateral layer assignment (per docs/BILATERAL_PLACEMENT.md, 2026-05-26)
+
+Each subsystem zone applies to BOTH F.Cu + B.Cu, with components distributed
+per the bilateral strategy:
+
+| Subsystem | F.Cu role | B.Cu role |
+|---|---|---|
+| S1 battery | BAT_P/BAT_N solder pads + TVS | NTC + fuse (if room) |
+| S2 bulk caps | (empty — top access not needed) | **4× 150µF polymer (under FET clusters)** |
+| S3 supervisor + Hall | ACS770 (current path) + TPS3700 | (none) |
+| S5 BEC | (analog routing if any) | **5× buck + LDO + LC filters** |
+| S6 connectors + ESD | J14 + J12 + USBLC6 + LDO | (none) |
+| CH1-CH4 | HS-FETs + shunt + gate-R + bypass + driver + MCU + INA + BEMF div | LS-FETs + LS decoupling + gate clamps + channel LEDs |
+
+This layer assignment is enforced by G5 layout audit (per-side checks) and
+G_PP6 HV creepage (skips pairs on different layer sets). Multi-layer thermal
+sim at Stage 10 (OQ-007) validates the strategy.
+
 | Subsystem | x_min | y_min | x_max | y_max | Function |
 |---|---|---|---|---|---|
 | S1 battery input | 0 | 82 | 100 | 100 | bottom edge — BAT_P/BAT_N solder pads + NTC + TVS (swapped 2026-05-26 with S6 per Sai mechanical revamp) |
