@@ -41,10 +41,13 @@ def parse_zones(md_path):
     zones = {}
     # Match table rows like: | S1 battery input | 0 | 82 | 100 | 100 | ...
     for m in re.finditer(
-        r"^\|\s*([\w\s+\-/]+?)\s*\|\s*(-?\d+(?:\.\d+)?)\s*\|\s*(-?\d+(?:\.\d+)?)\s*\|\s*(-?\d+(?:\.\d+)?)\s*\|\s*(-?\d+(?:\.\d+)?)\s*\|",
+        r"^\|\s*((?:S[1-6]|CH[1-4])\b[\w\s+\-/()]*?)\s*\|\s*(-?\d+(?:\.\d+)?)\s*\|\s*(-?\d+(?:\.\d+)?)\s*\|\s*(-?\d+(?:\.\d+)?)\s*\|\s*(-?\d+(?:\.\d+)?)\s*\|",
         txt, re.MULTILINE
     ):
         name, xmin, ymin, xmax, ymax = m.groups()
+        # Filter interface/highway rows (S2→CH1 etc.) — only primary subsystem zones
+        if "→" in name or "->" in name or "to " in name:
+            continue
         try:
             zones[name.strip()] = (float(xmin), float(ymin), float(xmax), float(ymax))
         except ValueError:
