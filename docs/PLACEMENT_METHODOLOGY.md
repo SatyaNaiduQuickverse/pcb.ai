@@ -29,7 +29,7 @@ Components whose position is set by **physics outside the PCB** (enclosure, mati
 | XT30 battery connector (J1) | Top edge, mates external XT30 socket | Mech sketch |
 | FC header (J11) | Bottom edge, matches FC pin pitch | Mech sketch |
 | AUX/DShot header (J12) | Bottom edge | Mech sketch |
-| Motor solder pads (per CHn) | 1 per channel at edge, 12mm² each | Phase 2.5 mech |
+| Motor solder pads (per CHn) | **3 phases (A, B, C) per channel**, footprint ESCMotorPad_4x4mm_5via (16mm² pad with 5 thermal vias to In3.Cu 3oz +VMOTOR plane → ~150A/phase capacity, 2.5× margin over 58A RMS burst). 12 pads total (3 phases × 4 channels). Located near board edge per channel quadrant. | Sai 2026-05-25 lock — standard FPV ESC practice; IPC-2152 ampacity |
 | Test points | ≥4mm spacing, clip-accessible | IPC-A-610 + `[[feedback-test-point-spacing]]` |
 | Status LEDs | Visible from top, near function | Visual + bring-up procedure |
 
