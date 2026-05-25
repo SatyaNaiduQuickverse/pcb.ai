@@ -46,10 +46,16 @@ def audit(board, brought):
     stats = {"foundation": 0, "in_zone": 0, "anchored": 0, "parked": 0, "checked": 0}
     for fp in board.GetFootprints():
         ref = fp.GetReference()
-        if ref in foundation:
+        # Lockfile anchors (foundation + motor pads + TPs + LEDs) are placed at
+        # fixed coords by park / the Stage-1 Tier-1 bring; their position is
+        # audit_anchor_positions (G1)'s job, and they are exempt from the
+        # brought-subsystem zone/ghost logic — a channel-roster motor pad placed
+        # in Stage 1 is legitimately on-board before its channel is brought.
+        if ref in anchors:
+            stats["anchored"] += 1
+            continue
+        if ref in foundation:  # foundation w/o concrete anchor entry (shouldn't happen)
             stats["foundation"] += 1
-            if is_parked(fp):
-                fails.append(f"FOUNDATION-PARKED: {ref} should be at lockfile pos")
             continue
         stats["checked"] += 1
         p = fp.GetPosition()
