@@ -123,42 +123,24 @@ nets:
   # MUST live within the motor-pad keep-out zone (R25 same-side decoupling +
   # Erickson loop area + thermal proximity). Placer + audit both honor:
   motor_pad_clear_exempt_nets:
-    # 2026-05-26 worker correction: literal SKiDL net names, no leading "+"
-    # and per-channel suffix varies. Worker will refine on full netlist scan.
-    - "VMOTOR_CH"                    # bulk caps for each phase (all 4 channels share)
-    - "MOTOR_A_CH1"
-    - "MOTOR_B_CH1"
-    - "MOTOR_C_CH1"
-    - "MOTOR_A_CH2"
-    - "MOTOR_B_CH2"
-    - "MOTOR_C_CH2"
-    - "MOTOR_A_CH3"
-    - "MOTOR_B_CH3"
-    - "MOTOR_C_CH3"
-    - "MOTOR_A_CH4"
-    - "MOTOR_B_CH4"
-    - "MOTOR_C_CH4"
-    - "SHUNT_SENSE_POS_CH1"
-    - "SHUNT_SENSE_NEG_CH1"
-    - "SHUNT_SENSE_POS_CH2"
-    - "SHUNT_SENSE_NEG_CH2"
-    - "SHUNT_SENSE_POS_CH3"
-    - "SHUNT_SENSE_NEG_CH3"
-    - "SHUNT_SENSE_POS_CH4"
-    - "SHUNT_SENSE_NEG_CH4"
-    - "BEMF_A_CH1"
-    - "BEMF_B_CH1"
-    - "BEMF_C_CH1"
-    - "BEMF_A_CH2"
-    - "BEMF_B_CH2"
-    - "BEMF_C_CH2"
-    - "BEMF_A_CH3"
-    - "BEMF_B_CH3"
-    - "BEMF_C_CH3"
-    - "BEMF_A_CH4"
-    - "BEMF_B_CH4"
-    - "BEMF_C_CH4"
-  # Components on ANY OTHER net inside motor-pad keep-out = G5 FAIL (drift).
+    # 2026-05-26 worker netlist-verified regex (matches pcbai_fpv4in1.net actuals).
+    # SHUNT, CSA, gate-drive (GH/GL), BST bootstrap, BEMF, MOTOR phases, VMOTOR
+    # bulk — all topologically at the half-bridge node (R23/R25/Erickson loop).
+    # This is the SAME regex as place_subsystem.py _MOTOR_ADJ_NET_RE so placer
+    # and G5 audit agree (worker confirmed).
+    regex: "^(MOTOR_[ABC]_CH\\d+|BEMF_[ABC]_CH\\d+|CSA_[ABC]_OUT_CH\\d+|CSA_MAX_CH\\d+|SHUNT_[ABC]_TOP_CH\\d+|GH[ABC]_CH\\d+|GL[ABC]_CH\\d+|BST[ABC]_CH\\d+|\\+?VMOTOR(_CH\\d*)?)$"
+    # Exempt categories (each verified against pcbai_fpv4in1.net):
+    #   MOTOR_[ABC]_CH[1-4]      — 12 nets, phase outputs at motor pad
+    #   BEMF_[ABC]_CH[1-4]       — 12 nets, back-EMF feedback per phase
+    #   CSA_[ABC]_OUT_CH[1-4]    — 12 nets, INA output filter caps
+    #   CSA_MAX_CH[1-4]          —  4 nets, CSA diode-OR
+    #   SHUNT_[ABC]_TOP_CH[1-4]  — 12 nets, Kelvin sense (worker correction:
+    #                              actual names use _TOP, not _POS/_NEG)
+    #   GH[ABC]_CH[1-4]          — 12 nets, high-side gate-drive
+    #   GL[ABC]_CH[1-4]          — 12 nets, low-side gate-drive
+    #   BST[ABC]_CH[1-4]         — 12 nets, bootstrap-cap to HS gate
+    #   +VMOTOR / VMOTOR_CH*     — bulk caps per phase
+    # Components on ANY OTHER net inside motor-pad keep-out = G5 FAIL (drift).
 
   # ---- Tier 5: Signal highways ----
 
