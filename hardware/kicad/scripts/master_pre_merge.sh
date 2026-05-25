@@ -478,6 +478,36 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G_PP8: anchor pitch uniformity (Sai-caught 2026-05-26)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_anchor_pitch.py" ]]; then
+  run_gate "G_PP8_anchor_pitch" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_anchor_pitch.py'" true
+else
+  echo "[G_PP8_anchor_pitch] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_PP9: polarity-marker direction consistency
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_polarity_direction.py" ]]; then
+  run_gate "G_PP9_polarity_direction" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_polarity_direction.py' '$BOARD'" false
+else
+  echo "[G_PP9_polarity_direction] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_Z1: subsystem zone tile continuity (no overlaps)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_zone_tile_continuity.py" ]]; then
+  run_gate "G_Z1_zone_tile_continuity" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_zone_tile_continuity.py'" true
+else
+  echo "[G_Z1_zone_tile_continuity] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G_M5: assembly drawing completeness (CPL/BOM/rotation/value)
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_assembly_drawing.py" ]]; then

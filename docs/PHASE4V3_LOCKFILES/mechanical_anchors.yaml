@@ -150,18 +150,18 @@ motor_pads:
   #   2. Update schematic to reference new footprint for 12 motor pad refs (TP19-TP42 family)
   #   3. Old TestPoint_Pad_D3.0mm refs stay valid but footprint reference changes
   #   4. audit_anchor_positions.py G1 compares on BARE footprint name (lib prefix `pcbai:` stripped)
-  - {ref: TP19, pos: [15.13, 52.38], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH1, net: MOTOR_A_CH1}
-  - {ref: TP20, pos: [15.25, 64.09], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH1, net: MOTOR_B_CH1}
-  - {ref: TP21, pos: [15.25, 76.09], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH1, net: MOTOR_C_CH1}
-  - {ref: TP26, pos: [84.87, 52.38], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH2, net: MOTOR_A_CH2}
-  - {ref: TP27, pos: [84.75, 64.09], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH2, net: MOTOR_B_CH2}
-  - {ref: TP28, pos: [84.75, 76.09], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH2, net: MOTOR_C_CH2}
-  - {ref: TP33, pos: [84.87, 47.62], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH3, net: MOTOR_A_CH3}
-  - {ref: TP34, pos: [84.75, 35.91], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH3, net: MOTOR_B_CH3}
-  - {ref: TP35, pos: [84.75, 23.91], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH3, net: MOTOR_C_CH3}
-  - {ref: TP40, pos: [15.13, 47.62], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH4, net: MOTOR_A_CH4}
-  - {ref: TP41, pos: [15.25, 35.91], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH4, net: MOTOR_B_CH4}
-  - {ref: TP42, pos: [15.25, 23.91], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH4, net: MOTOR_C_CH4}
+  - {ref: TP19, pos: [15.00, 56.00], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH1, net: MOTOR_A_CH1}
+  - {ref: TP20, pos: [15.00, 68.00], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH1, net: MOTOR_B_CH1}
+  - {ref: TP21, pos: [15.00, 80.00], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH1, net: MOTOR_C_CH1}
+  - {ref: TP26, pos: [85.00, 56.00], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH2, net: MOTOR_A_CH2}
+  - {ref: TP27, pos: [85.00, 68.00], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH2, net: MOTOR_B_CH2}
+  - {ref: TP28, pos: [85.00, 80.00], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH2, net: MOTOR_C_CH2}
+  - {ref: TP33, pos: [85.00, 44.00], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH3, net: MOTOR_A_CH3}
+  - {ref: TP34, pos: [85.00, 32.00], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH3, net: MOTOR_B_CH3}
+  - {ref: TP35, pos: [85.00, 20.00], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH3, net: MOTOR_C_CH3}
+  - {ref: TP40, pos: [15.00, 44.00], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH4, net: MOTOR_A_CH4}
+  - {ref: TP41, pos: [15.00, 32.00], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH4, net: MOTOR_B_CH4}
+  - {ref: TP42, pos: [15.00, 20.00], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH4, net: MOTOR_C_CH4}
 
 test_points:
   # 22 test points (34 total minus 12 motor pads which moved to motor_pads:).
