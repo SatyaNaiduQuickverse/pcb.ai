@@ -248,7 +248,8 @@ def role_place(board, refs, zones, roles):
             errs.append(f"role_place: no slot for cluster-anchor {r}")
 
     # Phase B: passives, resolving parent first (iterate until stable).
-    pending = [x for x in refs if roles[x].get("role") in ("decoupling", "cluster-member")]
+    pending = [x for x in refs if roles[x].get("role") in
+               ("decoupling", "cluster-member", "cluster-aux")]
     progress = True
     while pending and progress:
         progress = False

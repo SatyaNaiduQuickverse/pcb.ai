@@ -154,10 +154,25 @@ def derive():
                     cands.append(rf)
         parent = min(cands, key=lambda rf: (len(rpn[rf]), rf.startswith("C"))) if cands else None
         is_cap = ref.startswith("C")
-        roles[ref] = {"tier": 3, "role": "decoupling" if is_cap else "cluster-member",
-                      "subsystem": "CH1", "parent": parent or MCU, "parent_pin": "1",
-                      "relation": "auto", "max_distance_mm": 4 if is_cap else 6,
-                      "same_layer_as_parent": True}
+        # A cap is TRUE decoupling only if it bypasses an IC on a power rail (R25:
+        # ≤3mm same-side). Caps on a divider/diode/filter node (parent is a passive)
+        # are cluster-aux — not in the switching loop, not IC-VDD — so they may
+        # overflow to B.Cu / zone-fill and anchor loosely (master 2026-05-26).
+        ICS = {DRV, MCU} | {r for r in ch1 if val[r] in
+               ("INA186A3IDCKR", "LM393", "74LVC1G08")}
+        on_power = any(rpn[ref].get(p) in POWER for p in rpn[ref])
+        if is_cap and parent in ICS and on_power:
+            roles[ref] = {"tier": 3, "role": "decoupling", "subsystem": "CH1",
+                          "parent": parent, "parent_pin": "1", "relation": "decoupling",
+                          "max_distance_mm": 3, "same_layer_as_parent": True}
+        elif is_cap:
+            roles[ref] = {"tier": 3, "role": "cluster-aux", "subsystem": "CH1",
+                          "parent": parent or MCU, "parent_pin": "1", "relation": "aux-cap",
+                          "max_distance_mm": 6, "same_layer_as_parent": True}
+        else:
+            roles[ref] = {"tier": 3, "role": "cluster-member", "subsystem": "CH1",
+                          "parent": parent or MCU, "parent_pin": "1", "relation": "auto",
+                          "max_distance_mm": 6, "same_layer_as_parent": True}
     return roles
 
 
