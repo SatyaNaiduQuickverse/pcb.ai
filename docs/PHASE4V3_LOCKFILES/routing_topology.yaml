@@ -118,6 +118,48 @@ nets:
   # BEMF_A_CHn / BEMF_B_CHn / BEMF_C_CHn (per CHn, per phase)
   # Worker to expand per-channel entries from netlist
 
+  # ---- Motor-pad-clear keep-out EXEMPT net list (Sai 2026-05-26 worker call) ----
+  # Components on these nets are TOPOLOGICALLY at the half-bridge node and
+  # MUST live within the motor-pad keep-out zone (R25 same-side decoupling +
+  # Erickson loop area + thermal proximity). Placer + audit both honor:
+  motor_pad_clear_exempt_nets:
+    # 2026-05-26 worker correction: literal SKiDL net names, no leading "+"
+    # and per-channel suffix varies. Worker will refine on full netlist scan.
+    - "VMOTOR_CH"                    # bulk caps for each phase (all 4 channels share)
+    - "MOTOR_A_CH1"
+    - "MOTOR_B_CH1"
+    - "MOTOR_C_CH1"
+    - "MOTOR_A_CH2"
+    - "MOTOR_B_CH2"
+    - "MOTOR_C_CH2"
+    - "MOTOR_A_CH3"
+    - "MOTOR_B_CH3"
+    - "MOTOR_C_CH3"
+    - "MOTOR_A_CH4"
+    - "MOTOR_B_CH4"
+    - "MOTOR_C_CH4"
+    - "SHUNT_SENSE_POS_CH1"
+    - "SHUNT_SENSE_NEG_CH1"
+    - "SHUNT_SENSE_POS_CH2"
+    - "SHUNT_SENSE_NEG_CH2"
+    - "SHUNT_SENSE_POS_CH3"
+    - "SHUNT_SENSE_NEG_CH3"
+    - "SHUNT_SENSE_POS_CH4"
+    - "SHUNT_SENSE_NEG_CH4"
+    - "BEMF_A_CH1"
+    - "BEMF_B_CH1"
+    - "BEMF_C_CH1"
+    - "BEMF_A_CH2"
+    - "BEMF_B_CH2"
+    - "BEMF_C_CH2"
+    - "BEMF_A_CH3"
+    - "BEMF_B_CH3"
+    - "BEMF_C_CH3"
+    - "BEMF_A_CH4"
+    - "BEMF_B_CH4"
+    - "BEMF_C_CH4"
+  # Components on ANY OTHER net inside motor-pad keep-out = G5 FAIL (drift).
+
   # ---- Tier 5: Signal highways ----
 
   # DShot_CHn (per CHn)
