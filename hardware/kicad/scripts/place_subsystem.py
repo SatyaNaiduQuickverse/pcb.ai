@@ -157,34 +157,47 @@ def role_place(board, refs, zones, roles):
     ICs in-zone (or near a foundation anchor), then passives ≤max_distance from
     their parent's pad, same layer, collision-free, in-zone. Deterministic; refs
     whose parent can't be resolved are returned as failures (no silent fallback)."""
-    placed = {}                       # ref -> pad_bbox of committed placement
-    occupied = []                     # (bbox, cx, cy) already on board (incl anchors)
+    placed = {}                       # ref -> (bbox, is_back) of committed placement
+    occupied = []                     # (bbox, cx, cy, is_back) already on board
     for fp in board.GetFootprints():
         r = fp.GetReference()
         if r not in refs:             # foundation + already-brought + parked
             x = fp.GetPosition().x / 1e6
             if -2 <= x <= 102:        # only on-board obstacles matter
                 bb = _pad_bbox(fp)
-                occupied.append((bb, (bb[0]+bb[2])/2, (bb[1]+bb[3])/2))
+                occupied.append((bb, (bb[0]+bb[2])/2, (bb[1]+bb[3])/2, fp.IsFlipped()))
 
-    def fits(bbox):
+    def fits(bbox, want_back):
+        # Layer-aware: F.Cu and B.Cu components share the board outline but not
+        # copper — collisions only matter between SAME-side parts (Sai opt-(a):
+        # LS FETs on B.Cu sit under HS FETs on F.Cu, halving top-side density).
         cx, cy = (bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2
         if not any(z[0] <= cx <= z[2] and z[1] <= cy <= z[3] for z in zones):
             return False
-        for ob, ocx, ocy in occupied:
+        for ob, ocx, ocy, ob_back in occupied:
+            if ob_back != want_back:
+                continue
             if _overlap(bbox, ob) or math.hypot(cx-ocx, cy-ocy) < MIN_CENTER_MM:
                 return False
-        for pb in placed.values():
+        for pb, pb_back in placed.values():
+            if pb_back != want_back:
+                continue
             pcx, pcy = (pb[0]+pb[2])/2, (pb[1]+pb[3])/2
             if _overlap(bbox, pb) or math.hypot(cx-pcx, cy-pcy) < MIN_CENTER_MM:
                 return False
         return True
 
-    def place_fp_at(fp, x, y, layer_ref=None):
-        if layer_ref is not None:
-            want_back = layer_ref.IsFlipped()
-            if fp.IsFlipped() != want_back:
-                fp.Flip(fp.GetPosition(), False)
+    def want_back_of(rec, pfp):
+        lyr = rec.get("layer")
+        if lyr == "B.Cu":
+            return True
+        if lyr == "F.Cu":
+            return False
+        return pfp.IsFlipped() if (rec.get("same_layer_as_parent") and pfp) else False
+
+    def place_fp_at(fp, x, y, want_back=False):
+        if fp.IsFlipped() != want_back:
+            fp.Flip(fp.GetPosition(), False)
         fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
         reset_text_to_body(fp)
         # reset_text_to_body hides refs on R/C/D/TP; small inductors/others (e.g.
@@ -209,12 +222,15 @@ def role_place(board, refs, zones, roles):
         else:
             base = tuple(rec.get("zone_hint", [(zones[0][0]+zones[0][2])/2,
                                                (zones[0][1]+zones[0][3])/2]))
+        wb = want_back_of(rec, None)
+        if fp.IsFlipped() != wb:
+            fp.Flip(fp.GetPosition(), False)
         for dx, dy in _spiral_offsets(8.0):
             fp.SetPosition(pcbnew.VECTOR2I(int((base[0]+dx)*1e6), int((base[1]+dy)*1e6)))
             bb = _pad_bbox(fp)
-            if fits(bb):
-                place_fp_at(fp, base[0]+dx, base[1]+dy)
-                placed[r] = _pad_bbox(fp)
+            if fits(bb, wb):
+                place_fp_at(fp, base[0]+dx, base[1]+dy, wb)
+                placed[r] = (_pad_bbox(fp), wb)
                 break
         else:
             errs.append(f"role_place: no slot for cluster-anchor {r}")
@@ -244,17 +260,17 @@ def role_place(board, refs, zones, roles):
             pcx, pcy = (pbb[0] + pbb[2]) / 2, (pbb[1] + pbb[3]) / 2
             half_diag = 0.5 * math.hypot(pbb[2] - pbb[0], pbb[3] - pbb[1])
             search_r = maxd + half_diag
+            wb = want_back_of(rec, pfp)
+            if fp.IsFlipped() != wb:
+                fp.Flip(fp.GetPosition(), False)
             done = False
             for dx, dy in _spiral_offsets(search_r):
                 cx, cy = pcx + dx, pcy + dy
                 fp.SetPosition(pcbnew.VECTOR2I(int(cx * 1e6), int(cy * 1e6)))
-                if rec.get("same_layer_as_parent") and pfp is not None:
-                    if fp.IsFlipped() != pfp.IsFlipped():
-                        fp.Flip(fp.GetPosition(), False)
                 bb = _pad_bbox(fp)
-                if fits(bb):
-                    place_fp_at(fp, cx, cy, pfp if rec.get("same_layer_as_parent") else None)
-                    placed[r] = _pad_bbox(fp)
+                if fits(bb, wb):
+                    place_fp_at(fp, cx, cy, wb)
+                    placed[r] = (_pad_bbox(fp), wb)
                     done = True
                     break
             pending.remove(r)

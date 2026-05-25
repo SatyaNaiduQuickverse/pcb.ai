@@ -59,25 +59,36 @@ def derive():
 
     DRV, MCU = "J19", "J18"
     motor_of = {"MOTOR_A_CH1": "TP19", "MOTOR_B_CH1": "TP20", "MOTOR_C_CH1": "TP21"}
-    # FETs: HS has S on a MOTOR net; LS has D on a MOTOR net.
-    for q in [r for r in ch1 if val[r] == "BSC014N06NS"]:
+    # FETs: HS has S on a MOTOR net (F.Cu, anchored to motor pad); LS has D on a
+    # MOTOR net (B.Cu, directly beneath its HS partner — Sai opt-(a) + methodology
+    # §Tier-2: same XY, opposite layer, SW-node stitched vias).
+    fets = [r for r in ch1 if val[r] == "BSC014N06NS"]
+    hs_of = {}  # MOTOR net -> HS FET ref
+    for q in fets:
+        if rpn[q].get("S") in motor_of:
+            hs_of[rpn[q]["S"]] = q
+    for q in fets:
         pins = rpn[q]
         mnet = next((pins[p] for p in pins if pins[p] in motor_of), None)
-        pad = motor_of.get(mnet)
         is_hs = pins.get("S") in motor_of
-        roles[q] = {"tier": 2, "role": "cluster-member", "subsystem": "CH1",
-                    "parent": pad, "parent_pin": "1",
-                    "relation": "hs-fet" if is_hs else "ls-fet",
-                    "max_distance_mm": 7, "same_layer_as_parent": True,  # 6×5mm SuperSO8
-                    "loop_member": True}
+        if is_hs:
+            roles[q] = {"tier": 2, "role": "cluster-member", "subsystem": "CH1",
+                        "parent": motor_of[mnet], "parent_pin": "1", "relation": "hs-fet",
+                        "max_distance_mm": 7, "layer": "F.Cu", "loop_member": True}
+        else:
+            roles[q] = {"tier": 2, "role": "cluster-member", "subsystem": "CH1",
+                        "parent": hs_of.get(mnet, motor_of[mnet]), "parent_pin": "D",
+                        "relation": "ls-fet", "max_distance_mm": 1.5,  # ~same XY beneath HS
+                        "layer": "B.Cu", "loop_member": True}
     # Shunts (0.2mR): SHUNT_x_TOP ↔ GND; parent = the LS FET whose S is that net.
     for s in [r for r in ch1 if val[r] == "0.2mR"]:
         topnet = next((rpn[s][p] for p in rpn[s] if "SHUNT" in (rpn[s][p] or "")), None)
         lsfet = next((rf for rf, pn in net_nodes.get(topnet, []) if rf.startswith("Q") and pn == "S"), None)
         roles[s] = {"tier": 2, "role": "cluster-member", "subsystem": "CH1",
                     "parent": lsfet or motor_of.get(topnet), "parent_pin": "S" if lsfet else "1",
-                    "relation": "source-shunt", "max_distance_mm": 2,
-                    "same_layer_as_parent": True, "loop_member": True, "kelvin_sense": True}
+                    "relation": "source-shunt", "max_distance_mm": 4,
+                    "layer": "F.Cu",  # methodology: shunt F.Cu after LS-source via cluster
+                    "loop_member": True, "kelvin_sense": True}
     # Gate resistors (15R): between driver out and a FET gate net. Parent = the FET
     # whose gate pin shares the resistor's gate-side net — spreads the 6 gate-R to
     # the 6 FETs (≤5mm from gate per R23) instead of piling on the driver.
@@ -153,7 +164,7 @@ def derive():
 def emit(roles):
     def fmt(d):
         keys = ["tier", "role", "subsystem", "parent", "parent_pin", "relation",
-                "max_distance_mm", "same_layer_as_parent", "loop_member", "kelvin_sense"]
+                "max_distance_mm", "layer", "same_layer_as_parent", "loop_member", "kelvin_sense"]
         parts = []
         for k in keys:
             if k in d:
