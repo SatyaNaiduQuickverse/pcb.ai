@@ -153,11 +153,27 @@ def bring_selected(board, subsystem):
     return refs, errs, stats
 
 
+def _render(board_path, subsystem):
+    """Invoke render_pr_visual.py for the vision-check set (G11). Best-effort:
+    render_pr_visual degrades gracefully if render tools are missing."""
+    import subprocess
+    out_dir = f"sims/phase4v3/{subsystem}/renders"
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    script = str(Path(__file__).parent / "render_pr_visual.py")
+    print(f"render: generating G11 vision set → {out_dir}")
+    r = subprocess.run([sys.executable, script, board_path, out_dir,
+                        "--subsystem", subsystem, "--diff-against", "origin/master"])
+    if r.returncode != 0:
+        print(f"  WARNING: render_pr_visual exit {r.returncode} (non-fatal)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("subsystem", help="CH1 CH2 CH3 CH4 S1 S2 S3 S5 S6")
     ap.add_argument("--board", default="hardware/kicad/pcbai_fpv4in1_parked.kicad_pcb")
     ap.add_argument("--out", default=None, help="defaults to in-place on --board")
+    ap.add_argument("--render", action="store_true",
+                    help="generate the G11 vision-check render set after bring")
     args = ap.parse_args()
     out = args.out or args.board
 
@@ -173,6 +189,8 @@ def main():
         return 1
     pcbnew.SaveBoard(out, board)
     print(f"saved {out}")
+    if args.render:
+        _render(out, args.subsystem)
     return 0
 
 

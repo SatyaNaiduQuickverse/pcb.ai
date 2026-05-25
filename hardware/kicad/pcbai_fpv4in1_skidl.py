@@ -901,11 +901,12 @@ for ch_num in range(1, 5):
     # Wire the per-channel HW fault LED cathode → kill_local_n of this channel.
     KILL_LOCAL_N_BUS[ch_num - 1] += kill_local_n_ch
 
-    # Motor solder pads — 3× per channel (12 total). 3.0 mm dia exposed pads
-    # on board edge per Phase 2.5 placement.
+    # Motor solder pads — 3× per channel (12 total). 4×4mm solder pad + 5
+    # stitching vias per phase (Sai-locked option (b) 2026-05-25): ~150A/phase
+    # capacity, 2.5× margin over 58A RMS burst. Vias carry the MOTOR phase net.
     for phase, motor_net in [('A', motor_a), ('B', motor_b), ('C', motor_c)]:
         pad = Part("Connector", "TestPoint", value=f"MOTOR_{phase}_CH{ch_num}",
-                   footprint="TestPoint:TestPoint_Pad_D3.0mm")
+                   footprint="pcbai:ESCMotorPad_4x4mm_5via")
         pad[1] += motor_net
 
     # SWD pads (per-MCU pattern) — 2 pads per channel (4 sets × 2 = 8 pads total).
