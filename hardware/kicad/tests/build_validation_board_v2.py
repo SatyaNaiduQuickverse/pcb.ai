@@ -157,11 +157,19 @@ def main():
     add_fp(board, "H_BOT", 20, 10, layer_name="B.Cu", rotation_deg=90)
     # H_DRIFT placed at (30.5,10) but lockfile says (30,10) → fail on x
     add_fp(board, "H_DRIFT", 30.5, 10, layer_name="F.Cu", rotation_deg=0)
+    # H_PARKED at (240, -35) — lockfile expects (40, 10) F.Cu but it's parked
+    # Validates G1 --staged mode: should report PARKED (not FAIL) for not-brought
+    # subsystem anchors at parking coords.
+    add_fp(board, "H_PARKED", 240, -35, layer_name="F.Cu", rotation_deg=0)
 
-    # Parked components
+    # Parked components — generic + a parked IC (for G4 --parked-exempt)
     add_fp(board, "PARKED_1", 200, 5, pad_net="GND")
     add_fp(board, "PARKED_2", 205, 5, pad_net="GND")
     add_fp(board, "PARKED_3", 210, 5, pad_net="GND")
+    # Parked IC on +3V3_OK net — without --parked-exempt G4 audits it +
+    # would find C_OK at 1.5mm (PASS or FAIL depending on distance to parked IC).
+    # With --parked-exempt G4 skips it.
+    add_fp(board, "U_PARKED_IC", 215, 5, pad_net="+3V3_OK", bbox_mm=(8, 8))
 
     pcbnew.SaveBoard(str(board_out), board)
     truth_out.write_text(json.dumps(GROUND_TRUTH_V2, indent=2))
@@ -181,6 +189,11 @@ mount_holes:
     pos: [30, 10]
     layer: F.Cu
     rotation: 0
+  - ref: H_PARKED
+    pos: [40, 10]
+    layer: F.Cu
+    rotation: 0
+    subsystem: CH3
 fiducials: []
 connectors: []
 motor_pads: []

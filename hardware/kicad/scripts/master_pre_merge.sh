@@ -18,15 +18,29 @@ set -uo pipefail
 
 BOARD="${1:-hardware/kicad/pcbai_fpv4in1.kicad_pcb}"
 
-# --staged: pass --parked-exempt to per-component-set audits so each per-stage
-# PR audits only its on-board subset (parked components excluded). Added
-# 2026-05-26 (worker-caught: G5 flagged 539 intentionally-parked components).
+# --staged <brought-csv>: per-stage PR mode. Propagates:
+#   G1 audit_anchor_positions  → --staged <brought>     (parked anchors → PARK)
+#   G2 audit_zone_contract     → --brought <brought>    (already supports)
+#   G4 audit_decoupling        → --parked-exempt        (skip parked ICs/caps)
+#   G5 audit_layout_compliance → --parked-exempt
+#   G6 master_audit_invariants → --parked-exempt
+# Example: master_pre_merge.sh <board.kicad_pcb> --staged S6
+# Added 2026-05-26 (worker-caught: gates need staged-awareness; synthetic test
+# boards have no parking concept so could not surface this class of bug).
 STAGED_MODE=""
+STAGED_BROUGHT=""
+i=1
 for arg in "$@"; do
   if [[ "$arg" == "--staged" ]]; then
     STAGED_MODE="--parked-exempt"
+    # Next arg is the brought-csv (e.g. "S6" or "S6,CH1")
+    next_idx=$((i + 1))
+    if [[ $next_idx -le $# ]]; then
+      STAGED_BROUGHT="${!next_idx}"
+    fi
     break
   fi
+  i=$((i + 1))
 done
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -81,8 +95,12 @@ run_gate() {
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_anchor_positions.py" ]] \
    && [[ -f "$REPO_ROOT/docs/PHASE4V3_LOCKFILES/mechanical_anchors.yaml" ]]; then
+  G1_STAGED_ARGS=""
+  if [[ -n "$STAGED_BROUGHT" ]]; then
+    G1_STAGED_ARGS="--staged $STAGED_BROUGHT"
+  fi
   run_gate "G1_anchor_positions" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_anchor_positions.py' '$BOARD'" true
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_anchor_positions.py' '$BOARD' $G1_STAGED_ARGS" true
 else
   echo "[G1_anchor_positions] ⏭  SKIP (script or lockfile missing — pre-methodology-PR)"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -93,8 +111,10 @@ fi
 # G2: Zone contract (park-then-bring) — worker building
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_zone_contract.py" ]]; then
+  # G2 takes --board <B> --brought <csv>; defaults brought="" (Stage 0 = foundation only)
+  G2_BROUGHT_ARG="--brought $STAGED_BROUGHT"
   run_gate "G2_zone_contract" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_zone_contract.py' '$BOARD'" true
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_zone_contract.py' --board '$BOARD' $G2_BROUGHT_ARG" true
 else
   echo "[G2_zone_contract] ⏭  SKIP (script not yet built by worker)"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -118,7 +138,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_decoupling.py" ]]; then
   run_gate "G4_decoupling" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_decoupling.py' '$BOARD'" true
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_decoupling.py' '$BOARD' $STAGED_MODE" true
 else
   echo "[G4_decoupling] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
