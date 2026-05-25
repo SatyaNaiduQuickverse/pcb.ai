@@ -53,7 +53,9 @@ def connectivity():
 
 def derive():
     val, fp, rpn, net_nodes = connectivity()
-    ro = roster_mod.derive_roster(roster_mod.parse_netlist())
+    _nl = roster_mod.parse_netlist()
+    ro = roster_mod.derive_roster(_nl)
+    line = {r: _nl[r].get("line", 0) for r in _nl}   # SKiDL creation order = intent
     ch1 = {k for k, v in ro.items() if v == "CH1"}
     roles = {}  # ref -> dict
 
@@ -130,6 +132,51 @@ def derive():
     # OTP dividers): parent = the in-CH1 IC/FET/shunt it shares a non-power net with,
     # nearest by net; fallback parent = MCU. Decoupling rule (≤3mm) for caps.
     POWER = {"GND", "+3V3", "+3V3A", "+5V", "+VMOTOR", "VMOTOR_CH", "+V5", "+V9", ""}
+
+    # Decoupling-by-rail (R25/G4): a cap on {power-rail, GND} only (no signal net)
+    # is decoupling — the flat netlist hides its IC, so trace it via the shared
+    # power rail. Round-robin each rail's caps across that rail's IC VDD pins so
+    # every VDD pin gets a cap ≤3mm same-side (master 2026-05-26 canonical fix).
+    RAILS = {"+3V3", "+3V3A", "+5V", "+9V", "+VMOTOR", "VMOTOR_CH"}
+    ic_set = [DRV, MCU] + [r for r in ch1 if val[r] in
+              ("INA186A3IDCKR", "LM393", "74LVC1G08")]
+    # Group each rail's VDD pins by IC, so a cap can be matched to the IC it was
+    # AUTHORED to decouple (not an arbitrary round-robin pin on the shared rail).
+    rail_ic_pins = defaultdict(lambda: defaultdict(list))  # rail -> ic -> [pins]
+    for ic in ic_set:
+        for pin, net in rpn[ic].items():
+            if net in RAILS:
+                rail_ic_pins[net][ic].append(pin)
+    used = defaultdict(set)  # ic -> {pins already given a decoupling cap}
+    for cap in sorted([r for r in ch1 if r.startswith("C") and r not in roles],
+                      key=lambda x: line.get(x, 0)):
+        nets = set(rpn[cap].values())
+        rail = next((n for n in nets if n in RAILS), None)
+        if not (rail and "GND" in nets and not (nets - {rail, "GND"})
+                and rail_ic_pins.get(rail)):
+            continue
+        # INTENT by SKiDL line: a bypass cap is created right AFTER its IC, so the
+        # owning IC is the rail-IC with the greatest line ≤ the cap's line. This
+        # routes "LM393 bypass" → the LM393, "DRV bypass" → the driver, etc., and
+        # crucially exposes ICs that have NO authored bypass cap (e.g. the INAs)
+        # as genuinely-uncovered VDD pins rather than masking them by round-robin.
+        ics = list(rail_ic_pins[rail].keys())
+        cl = line.get(cap, 1e9)
+        before = [ic for ic in ics if line.get(ic, 0) <= cl]
+        owner = (max(before, key=lambda ic: line[ic]) if before
+                 else min(ics, key=lambda ic: line.get(ic, 0)))
+        free = [p for p in rail_ic_pins[rail][owner] if p not in used[owner]]
+        if free:
+            pin = free[0]; used[owner].add(pin)
+            roles[cap] = {"tier": 3, "role": "decoupling", "subsystem": "CH1",
+                          "parent": owner, "parent_pin": pin, "relation": "decoupling",
+                          "max_distance_mm": 3, "same_layer_as_parent": True}
+        else:
+            # owner already fully decoupled — surplus cap is bulk/aux (no ≤3mm duty).
+            roles[cap] = {"tier": 3, "role": "cluster-aux", "subsystem": "CH1",
+                          "parent": owner, "relation": "bypass-bulk",
+                          "same_layer_as_parent": True}
+
     placed = set(roles)
     # Process fewest-pins-first (and devices before caps): a 2-pin BEMF/filter
     # divider R is roled before the 2-pin cap on its node, so the cap then finds
@@ -153,6 +200,20 @@ def derive():
                 if rf in roles and rf != ref:
                     cands.append(rf)
         parent = min(cands, key=lambda rf: (len(rpn[rf]), rf.startswith("C"))) if cands else None
+        if parent is None:
+            # Pure-power cap (bulk/bypass on a power rail, no signal net): anchor to
+            # a roled component sharing its NON-GND power net, preferring a FET on
+            # that rail — VMOTOR bulk caps belong at the half-bridge, NOT dumped on
+            # the MCU's belly pad (was causing J18 EP-pad overlaps).
+            pc = []
+            for p, net in rpn[ref].items():
+                if net in ("GND", "GNDA") or net not in POWER:
+                    continue
+                for rf, pn in net_nodes.get(net, []):
+                    if rf in roles and rf != ref:
+                        pc.append(rf)
+            if pc:
+                parent = min(pc, key=lambda rf: (not rf.startswith("Q"), len(rpn[rf])))
         is_cap = ref.startswith("C")
         # A cap is TRUE decoupling only if it bypasses an IC on a power rail (R25:
         # ≤3mm same-side). Caps on a divider/diode/filter node (parent is a passive)

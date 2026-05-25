@@ -123,6 +123,61 @@ def _pad_bbox(fp):
     return (min(xs), min(ys), max(xs), max(ys))
 
 
+def _layers(fp):
+    """Which copper sides a footprint actually occupies, from its pad layer sets.
+    A part with a thru-hole / thermal-via pad (e.g. the MCU's exposed-pad thermal
+    field) occupies BOTH sides, so it must block placement on the back even though
+    the body sits on the front. Returns (has_F, has_B)."""
+    hf = hb = False
+    for p in fp.Pads():
+        ls = p.GetLayerSet()
+        if ls.Contains(pcbnew.F_Cu):
+            hf = True
+        if ls.Contains(pcbnew.B_Cu):
+            hb = True
+        if hf and hb:
+            break
+    if not (hf or hb):                # no copper pads (fiducial/mech) → mounted side
+        return (not fp.IsFlipped(), fp.IsFlipped())
+    return (hf, hb)
+
+
+# ----- motor-pad clear-zone (mirrors G5 audit so placer + audit agree) -----
+# High-current motor terminal pads need 14-16AWG solder clearance: no component
+# within pad bbox + 2mm, EXCEPT topologically-required motor-adjacent-net parts
+# (master path D 2026-05-24 + 2026-05-26 VMOTOR addition). See
+# feedback-motor-pad-clear-zone.
+MOTOR_TP_REFS = ('TP19', 'TP20', 'TP21', 'TP26', 'TP27', 'TP28',
+                 'TP33', 'TP34', 'TP35', 'TP40', 'TP41', 'TP42')
+MOTOR_PAD_KEEPOUT_MM = 2.0
+_MOTOR_ADJ_NET_RE = re.compile(
+    r'^(MOTOR_[ABC]_CH\d+'
+    r'|BEMF_[ABC]_CH\d+'
+    r'|CSA_[ABC]_OUT_CH\d+'
+    r'|CSA_MAX_CH\d+'
+    r'|SHUNT_[ABC]_TOP_CH\d+'
+    r'|GH[ABC]_CH\d+|GL[ABC]_CH\d+'
+    r'|BST[ABC]_CH\d+'
+    r'|\+?VMOTOR(_CH\d*)?'              # motor power rail bulk (master 2026-05-26)
+    r')$'
+)
+
+
+def _is_motor_adjacent(fp):
+    """True if any pad sits on a motor-adjacent net → exempt from motor keep-out."""
+    for pad in fp.Pads():
+        no = pad.GetNet()
+        if no is None:
+            continue
+        try:
+            n = no.GetNetname()
+        except Exception:
+            continue
+        if _MOTOR_ADJ_NET_RE.match(n):
+            return True
+    return False
+
+
 def _overlap(a, b, clr=CLEARANCE_MM):
     return not (a[2] + clr <= b[0] or b[2] + clr <= a[0]
                 or a[3] + clr <= b[1] or b[3] + clr <= a[1])
@@ -163,15 +218,29 @@ def role_place(board, refs, zones, roles):
     EDGE_MARGIN = 3.0                  # G17: non-connector comps ≥3mm from board edge
     placed = {}                       # ref -> (bbox, is_back) of committed placement
     occupied = []                     # (bbox, cx, cy, is_back) already on board
+    motor_keepouts = []               # (x0,y0,x1,y1) = motor TP pad bbox + 2mm
+    K = MOTOR_PAD_KEEPOUT_MM
     for fp in board.GetFootprints():
         r = fp.GetReference()
+        if r in MOTOR_TP_REFS:
+            x = fp.GetPosition().x / 1e6
+            if -2 <= x <= 102:
+                b = _pad_bbox(fp)
+                motor_keepouts.append((b[0]-K, b[1]-K, b[2]+K, b[3]+K))
         if r not in refs:             # foundation + already-brought + parked
             x = fp.GetPosition().x / 1e6
             if -2 <= x <= 102:        # only on-board obstacles matter
                 bb = _pad_bbox(fp)
-                occupied.append((bb, (bb[0]+bb[2])/2, (bb[1]+bb[3])/2, fp.IsFlipped()))
+                hf, hb = _layers(fp)
+                occupied.append((bb, (bb[0]+bb[2])/2, (bb[1]+bb[3])/2, hf, hb))
+    # G5 motor keep-out: a component must clear motor-terminal pads unless it sits
+    # on a motor-adjacent net (topologically required at the node). Precompute the
+    # exempt set from the board's pad nets so placer ↔ audit agree.
+    motor_exempt = {r for r in refs
+                    if (fpx := board.FindFootprintByReference(r)) is not None
+                    and _is_motor_adjacent(fpx)}
 
-    def fits(bbox, want_back):
+    def fits(bbox, want_back, motor_ok=True):
         # Layer-aware: F.Cu and B.Cu components share the board outline but not
         # copper — collisions only matter between SAME-side parts (Sai opt-(a):
         # LS FETs on B.Cu sit under HS FETs on F.Cu, halving top-side density).
@@ -186,13 +255,23 @@ def role_place(board, refs, zones, roles):
         for hx0, hy0, hx1, hy1 in highways:
             if not (bbox[2] <= hx0 or hx1 <= bbox[0] or bbox[3] <= hy0 or hy1 <= bbox[1]):
                 return False
-        for ob, ocx, ocy, ob_back in occupied:
-            if ob_back != want_back:
+        # G5 motor-pad clear-zone: non-motor-adjacent parts must clear motor TP
+        # pads + 2mm (high-current solder clearance). Exempt parts skip this.
+        if not motor_ok:
+            for mx0, my0, mx1, my1 in motor_keepouts:
+                if not (bbox[2] <= mx0 or mx1 <= bbox[0] or bbox[3] <= my0 or my1 <= bbox[1]):
+                    return False
+        # A candidate on side `want_back` collides with an obstacle only if the
+        # obstacle has copper on THAT side. Both-layer parts (MCU thermal pad,
+        # thru-hole) block whichever side is being placed.
+        side_has = (lambda hf, hb: hb if want_back else hf)
+        for ob, ocx, ocy, ob_f, ob_b in occupied:
+            if not side_has(ob_f, ob_b):
                 continue
             if _overlap(bbox, ob) or math.hypot(cx-ocx, cy-ocy) < MIN_CENTER_MM:
                 return False
-        for pb, pb_back in placed.values():
-            if pb_back != want_back:
+        for pb, pf, pbk in placed.values():
+            if not side_has(pf, pbk):
                 continue
             pcx, pcy = (pb[0]+pb[2])/2, (pb[1]+pb[3])/2
             if _overlap(bbox, pb) or math.hypot(cx-pcx, cy-pcy) < MIN_CENTER_MM:
@@ -240,16 +319,21 @@ def role_place(board, refs, zones, roles):
         for dx, dy in _spiral_offsets(8.0):
             fp.SetPosition(pcbnew.VECTOR2I(int((base[0]+dx)*1e6), int((base[1]+dy)*1e6)))
             bb = _pad_bbox(fp)
-            if fits(bb, wb):
+            if fits(bb, wb, motor_ok=(r in motor_exempt)):
                 place_fp_at(fp, base[0]+dx, base[1]+dy, wb)
-                placed[r] = (_pad_bbox(fp), wb)
+                _hf, _hb = _layers(fp)
+                placed[r] = (_pad_bbox(fp), _hf, _hb)
                 break
         else:
             errs.append(f"role_place: no slot for cluster-anchor {r}")
 
     # Phase B: passives, resolving parent first (iterate until stable).
-    pending = [x for x in refs if roles[x].get("role") in
-               ("decoupling", "cluster-member", "cluster-aux")]
+    # Tightest constraint first: decoupling (≤3mm of a VDD pin) must claim the
+    # pin-adjacent slots before looser cluster-aux/bulk caps crowd them out.
+    _bprio = {"decoupling": 0, "cluster-member": 1, "cluster-aux": 2}
+    pending = sorted(
+        [x for x in refs if roles[x].get("role") in _bprio],
+        key=lambda x: (_bprio[roles[x]["role"]], _ref_sort_key(x)))
     progress = True
     while pending and progress:
         progress = False
@@ -270,9 +354,24 @@ def role_place(board, refs, zones, roles):
             # parent's half-diagonal — a big IC's decoupling caps distribute around
             # its perimeter (near its VDD pins) instead of piling on one pad.
             pbb = _pad_bbox(pfp) if pfp is not None else (ppos[0], ppos[1], ppos[0], ppos[1])
-            pcx, pcy = (pbb[0] + pbb[2]) / 2, (pbb[1] + pbb[3]) / 2
             half_diag = 0.5 * math.hypot(pbb[2] - pbb[0], pbb[3] - pbb[1])
-            search_r = maxd + half_diag
+            if rec.get("role") == "decoupling":
+                # R25/G4: prefer ≤maxd of the specific VDD PIN — ring FROM the pin
+                # (nearest-first spiral seats the cap ≤maxd when there's room, so
+                # G4 passes). Radius is widened to cover the same reachable area a
+                # body-centre ring would (maxd + half_diag past the parent body),
+                # so an over-subscribed pin still finds a farther slot rather than
+                # failing and dropping the whole subsystem's save.
+                bcx = (pbb[0] + pbb[2]) / 2
+                bcy = (pbb[1] + pbb[3]) / 2
+                pcx, pcy = ppos[0], ppos[1]
+                search_r = maxd + half_diag + math.hypot(pcx - bcx, pcy - bcy)
+            else:
+                # aux/cluster: ring around the IC BODY centre so they distribute
+                # around the perimeter (reach maxd past the body).
+                pcx = (pbb[0] + pbb[2]) / 2
+                pcy = (pbb[1] + pbb[3]) / 2
+                search_r = maxd + half_diag
             wb = want_back_of(rec, pfp)
             if fp.IsFlipped() != wb:
                 fp.Flip(fp.GetPosition(), False)
@@ -292,9 +391,9 @@ def role_place(board, refs, zones, roles):
                     cx, cy = pcx + dx, pcy + dy
                     fp.SetPosition(pcbnew.VECTOR2I(int(cx * 1e6), int(cy * 1e6)))
                     bb = _pad_bbox(fp)
-                    if fits(bb, side):
+                    if fits(bb, side, motor_ok=(r in motor_exempt)):
                         place_fp_at(fp, cx, cy, side)
-                        placed[r] = (_pad_bbox(fp), side)
+                        _hf, _hb = _layers(fp); placed[r] = (_pad_bbox(fp), _hf, _hb)
                         done = True
                         break
                 if done:
@@ -304,9 +403,13 @@ def role_place(board, refs, zones, roles):
             # valid in the zone (B.Cu first — it's roomy and these are not
             # distance-critical). Keeps the cluster's critical parts tight while
             # guaranteeing 0-unplaced. Decoupling/loop parts never use this.
-            if not done and can_flip:
+            # Shunts (loop-member) may also zone-fill, but on their OWN side only
+            # (F.Cu) — keep them near the phase without flipping off the loop.
+            is_shunt = rec.get("relation") == "source-shunt"
+            if not done and (can_flip or is_shunt):
                 z = zones[0]
-                for side in (True, False):  # B.Cu first
+                zf_sides = (True, False) if can_flip else (wb,)
+                for side in zf_sides:
                     if fp.IsFlipped() != side:
                         fp.Flip(fp.GetPosition(), False)
                     step = 0.5  # finer than MIN_CENTER so spread placement's gaps are found
@@ -316,9 +419,9 @@ def role_place(board, refs, zones, roles):
                         while xx <= z[2] - 1:
                             fp.SetPosition(pcbnew.VECTOR2I(int(xx*1e6), int(yy*1e6)))
                             bb = _pad_bbox(fp)
-                            if fits(bb, side):
+                            if fits(bb, side, motor_ok=(r in motor_exempt)):
                                 place_fp_at(fp, xx, yy, side)
-                                placed[r] = (_pad_bbox(fp), side)
+                                _hf, _hb = _layers(fp); placed[r] = (_pad_bbox(fp), _hf, _hb)
                                 done = True
                                 break
                             xx += step
