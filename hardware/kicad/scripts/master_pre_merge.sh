@@ -380,6 +380,56 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G_R1: diff-pair Z0 impedance (trace width vs spec)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_diff_pair_z0.py" ]]; then
+  run_gate "G_R1_diff_pair_z0" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_diff_pair_z0.py' '$BOARD'" true
+else
+  echo "[G_R1_diff_pair_z0] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_R3: return-path continuity (signal-layer ↔ ref-plane pour)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_return_path.py" ]]; then
+  run_gate "G_R3_return_path" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_return_path.py' '$BOARD'" true
+else
+  echo "[G_R3_return_path] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_R6: antenna-structure prevention (aggressor net length ≤ λ/4 threshold)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_antenna_structure.py" ]]; then
+  run_gate "G_R6_antenna_structure" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_antenna_structure.py' '$BOARD'" true
+else
+  echo "[G_R6_antenna_structure] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_FoS4: cap ripple-current FoS (BOM + sim)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_fos_cap_ripple.py" ]]; then
+  run_gate "G_FoS4_cap_ripple" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_fos_cap_ripple.py'" true
+else
+  echo "[G_FoS4_cap_ripple] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_M4: BOM LCSC stock + part-number presence (pre-fab)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_bom_lcsc.py" ]]; then
+  run_gate "G_M4_bom_lcsc" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_bom_lcsc.py'" true
+else
+  echo "[G_M4_bom_lcsc] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G_R2: transmission-line stub length (post-routing)
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_stub_length.py" ]]; then
