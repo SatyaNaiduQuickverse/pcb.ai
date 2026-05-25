@@ -68,6 +68,54 @@ Around the locked Tier 2 cluster, all on F.Cu (top side) unless noted:
 
 **Audit**: `audit_decoupling.py` per IC — cap count ≥1 per VDD pin, distance ≤3mm, layer match.
 
+### Tier-2 HIGH-POWER cluster: B.Cu backside LS-FETs (2026-05-26)
+
+**Industry-standard layered placement for compact 4-in-1 ESCs.** Adopted at
+worker escalation 2026-05-26 (Sai-anticipated call) when CH1 west-strip
+density (3 phases × 2× 6×5mm SuperSO8 = ~14×12mm per phase, only 30mm of
+y-span available) made single-side placement infeasible.
+
+Per-phase layered topology:
+
+| Component | Layer | Position relative to motor pad TPn |
+|---|---|---|
+| HS-FET Q_HS_PHASE_CHn | **F.Cu** | Adjacent (≤7mm) to motor pad — drain pad close, gate-driver side accessible |
+| LS-FET Q_LS_PHASE_CHn | **B.Cu** | DIRECTLY BENEATH HS-FET (same XY, opposite layer) — SW node through-board via cluster between drain (HS source) and source (LS drain) |
+| R_SHUNT_CHn (per phase) | **F.Cu** | LS-FET source via cluster → shunt → GND_HIGH_CURRENT |
+| Gate-R (HS + LS) | **F.Cu** | Beside driver output (≤5mm) — single layer for gate-trace integrity |
+| Bypass cap C_VMOTOR_CHn | F.Cu near HS drain OR B.Cu near LS source — whichever shortens the switching loop |
+| Thermal vias | **F.Cu↔B.Cu cluster** | 4-9 vias under each FET package for heat transfer + low-impedance SW-node connection (1.0A continuous, 3.0A burst per via × 4-9 = 4-27A FoS for 100A peak phase) |
+
+**Why B.Cu LS-FETs (justification per R32 sureshot):**
+
+1. **Loop area minimized** — HS drain (F.Cu) → SW node (vias) → LS drain (B.Cu)
+   = vertical loop area ~ 2 × stackup_thickness × via_spacing ≈ 1mm² vs
+   ~30-50mm² single-layer (G3 Erickson target met by orders of magnitude)
+2. **Density resolved** — west strip now fits all 3 phases × 6 FETs in 30mm × 30mm
+3. **Industry-validated** — Hobbywing Skywalker / Tekko32 / T-Motor F60 all
+   use this topology for 4-in-1 ESCs
+4. **Thermal balance** — heat spreads to both copper layers via stitching vias
+   (instead of single-layer hot spot)
+5. **Symmetric mirrors clean** — CH2 = mirror_X(CH1) keeps HS-top/LS-bottom
+   pairing intact; same for CH3/CH4
+
+**Impacts to other gates / methodology:**
+
+- **G3 audit_loop_area** must trace multi-layer polygon (HS-F → via → LS-B → shunt-F → cap → HS-F). Updated this PR.
+- **G_PP6 HV creepage** now exercises B.Cu pads with HV nets too — should pass since loop is via-stitched, no edge-coplanar HV
+- **Thermal sim** (Phase 4-v2 baseline T_J=62.76°C cont, 82.99°C burst) was
+  single-side. May change with B.Cu LS placement — expected MODEST improvement
+  (better heat spreading), but baseline regression check should re-run at
+  Stage 10 with multi-layer model. Tracked as new OQ-007.
+- **3D render G11** — must show iso view from both sides to verify HS/LS
+  alignment + thermal via clusters
+- **Symmetry partner** — CH2 mirror_X(CH1) must mirror LAYER too (HS on
+  same layer as CH1 = F.Cu, LS on B.Cu) — pure mirror_X preserves layers
+- **HV via stitching** — SW-node via cluster carries 100A burst. Per
+  G_R5 audit_via_current_capacity: 100A × 1.5 FoS = 150A required, at
+  3.0A/via burst = 50 vias per FET pair. Aggressive but doable with 0.6mm
+  cu / 0.3mm drill at 1mm pitch in a 6×5mm footprint.
+
 ### MCU≤10mm relaxation note (2026-05-26)
 
 Original spec was MCU ≤5mm from DRV (SPI/clock cleanliness). Worker found at

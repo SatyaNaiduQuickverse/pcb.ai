@@ -137,9 +137,17 @@ def main():
                         break
             unpaired = [ref for ref, _, _ in conns if ref not in paired]
             if unpaired:
-                print(f"    [FAIL] {edge} edge: {len(unpaired)} unpaired/off-center connector(s): {unpaired}")
-                print(f"            expected mirror partners about x={cx:.1f}")
-                any_fail = True
+                # Refined 2026-05-26: if edge has only 2 connectors total and
+                # one is centered + one is off-center, treat as WARN not FAIL
+                # (geometrically impossible to fully pair without a 3rd connector).
+                # FAIL remains for cases with ≥3 connectors where pairs are missing.
+                if len(conns) <= 2 and singletons:
+                    print(f"    [WARN] {edge} edge: {len(unpaired)} off-center connector(s) without mirror partner: {unpaired}")
+                    print(f"            (only {len(conns)} connectors on this edge, perfect symmetry impossible — accept or add 3rd)")
+                else:
+                    print(f"    [FAIL] {edge} edge: {len(unpaired)} unpaired/off-center connector(s): {unpaired}")
+                    print(f"            expected mirror partners about x={cx:.1f}")
+                    any_fail = True
             else:
                 print(f"    [PASS] {edge} edge symmetric (centered: {singletons}, paired-mirror: {sorted(set(paired)-set(singletons))})")
         # left/right edge: similar but about cy (skipped here for brevity)

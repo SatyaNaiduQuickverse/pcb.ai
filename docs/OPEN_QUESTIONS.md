@@ -177,3 +177,53 @@ Cross-reference: locked specs live in `docs/REQUIREMENTS.md`; this file logs
   - Re-derive at Stage 9 PR with new BOM
 - **Blocker for**: fab freeze (Phase 9). NOT a blocker for Stage 0-8 PRs.
 - **Owner**: master (ngspice cross-check) + worker (BOM swap if FAIL)
+
+### OQ-007 — Multi-layer thermal sim re-validation post B.Cu LS-FETs
+
+- **Raised**: 2026-05-26
+- **Trigger**: Stage 2 CH1 adopted B.Cu backside LS-FET placement (Sai-anticipated call)
+- **Question**: Does the Phase 4-v2 single-side thermal baseline (T_J cont=62.76°C, burst=82.99°C, recorded in `docs/THERMAL_BASELINE.md`) still apply to the multi-layer placement, or do we need a fresh Elmer sim with HS-top + LS-bottom geometry?
+- **Expected impact**: MODEST improvement (heat spreads to both copper layers via thermal-via clusters under each FET) — directionally favourable, may relax burst-FoS pressure (currently 17.0% margin, exceeds 25% continuous standard but justified at 10% transient)
+- **Resolution**: re-run Elmer FEM at Stage 10 (full board placed + routed) with multi-layer mesh. Compare against single-side baseline. If new T_J ≤ old T_J, baseline stands as conservative bound. If new T_J ≤ 65.5°C cont / ≤87°C burst (FoS limits), board passes.
+- **Blocks**: fab freeze only
+
+### OQ-008 — XT30 vs XT60/XT90 for 70A continuous battery input
+
+- **Raised**: 2026-05-26 (caught by proactive gate G_FoS5 audit_fos_pin_current)
+- **Trigger**: G_FoS5 FAIL on J1: XT30 30A continuous (AMASS datasheet) vs our 70A continuous load × 1.5 FoS = 105A required → XT30 undersized by ~3×.
+- **Options**:
+  - **(a) Upgrade J1 to XT60**: 60A cont, 130A burst — still ~70% short of 105A FoS but covers our continuous spec at 1× (industry-typical for FPV race ESCs)
+  - **(b) Upgrade J1 to XT90**: 90A cont, 240A burst — meets FoS at 90A vs 105A required (87%), comfortable for spec headroom
+  - **(c) Keep XT30 + reduce spec to 30A continuous**: makes FPV "60A class" not "70A+ class" — competitive setback
+  - **(d) Dual XT30 input (paralleled)**: 60A combined — adds mech complexity (two cables), unusual
+- **Recommendation**: option (b) XT90 — sureshot, comfortable FoS, no spec compromise. Phase-2 era XT30 selection was a too-conservative starter; production rev should go XT90.
+- **Impact**: footprint change ([invariant-change] PR), BOM change (XT90 + corresponding battery lead), mech (XT90 body ~25×15×17mm vs XT30 ~12×8×8mm — larger footprint at edge but acceptable for our 100mm board)
+- **Blocks**: fab freeze (must resolve before final BOM lock)
+
+### OQ-008 — RESOLVED 2026-05-26 (Sai call: skip connector entirely, solder pads for wire)
+
+Sai decision (verbatim): "you need to only give solder pad i will solder a wire to it.. which will be connected to a xt90"
+
+Resolution: J1 XT30 connector REMOVED. Replaced with BAT_P + BAT_N solder pads
+(custom footprint BatterySolderPad_5x5_THT2.0_HC: 5×5mm Cu both sides + 2mm THT
+plated hole + 16-via grid, ~150A burst capacity per IPC-2152). External XT90
+wire (10-12 AWG silicone) hand-soldered to pads at integration. Connector
+spec problem dissolves: wire is the rated element (XT90 90A cont), not the
+pad. G_FoS5 connector pin-current rule no longer applies to BAT_P/BAT_N.
+
+Massive simplification:
+  - BOM: one less line (no XT30 part)
+  - Cable swing audit: no connector cable bend zone to clear
+  - Pin-current FoS: N/A (wire-rated)
+  - Mech: simpler enclosure (no connector cutout needed)
+
+Lockfile updated [invariant-change]. Worker re-runs Stage 0 to land BAT pads.
+
+### OQ-009 — INA186 (J20/J21/J22) V+ bypass cap gap (latent, future schem rev)
+
+- **Raised**: 2026-05-26 (worker latent-finding during CH1 G4 debug)
+- **Issue**: The 3 INA186 current-sense op-amps (J20/J21/J22 per channel) have NO V+ bypass cap on pin 4 / +3V3 input. Their only cap (c_csa) sits on the output net, not the supply pin. Per R25, every IC with V+ needs ≥1 decoupling cap ≤3mm same-layer.
+- **Why G4 doesn't catch it**: INA footprints use Connector_Generic with unnamed pins (legacy SKiDL); G4 audit_decoupling scopes IC.VDD by pin NAME (matches "VDD", "VCC", "AVDD" patterns). Unnamed pins escape detection.
+- **Impact**: at worst, slight INA noise / settling-time degradation. Not power-supply-rejection-ratio sensitive enough to be a CH1 PR blocker. Sai-acceptable for first fab; tighten in commercial rev.
+- **Resolution**: NEXT schematic rev — add 3× 100nF X7R caps to J20.4 / J21.4 / J22.4 → GND, ≤3mm same-layer. Also extend G4 to handle Connector_Generic with pin-NUMBER convention (pin 4 = V+ on INA186).
+- **Blocks**: nothing immediate (CH1 PR can proceed). Future commercial fab freeze should address.

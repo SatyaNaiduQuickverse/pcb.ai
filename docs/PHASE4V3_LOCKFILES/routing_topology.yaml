@@ -118,6 +118,30 @@ nets:
   # BEMF_A_CHn / BEMF_B_CHn / BEMF_C_CHn (per CHn, per phase)
   # Worker to expand per-channel entries from netlist
 
+  # ---- Motor-pad-clear keep-out EXEMPT net list (Sai 2026-05-26 worker call) ----
+  # Components on these nets are TOPOLOGICALLY at the half-bridge node and
+  # MUST live within the motor-pad keep-out zone (R25 same-side decoupling +
+  # Erickson loop area + thermal proximity). Placer + audit both honor:
+  motor_pad_clear_exempt_nets:
+    # 2026-05-26 worker netlist-verified regex (matches pcbai_fpv4in1.net actuals).
+    # SHUNT, CSA, gate-drive (GH/GL), BST bootstrap, BEMF, MOTOR phases, VMOTOR
+    # bulk — all topologically at the half-bridge node (R23/R25/Erickson loop).
+    # This is the SAME regex as place_subsystem.py _MOTOR_ADJ_NET_RE so placer
+    # and G5 audit agree (worker confirmed).
+    regex: "^(MOTOR_[ABC]_CH\\d+|BEMF_[ABC]_CH\\d+|CSA_[ABC]_OUT_CH\\d+|CSA_MAX_CH\\d+|SHUNT_[ABC]_TOP_CH\\d+|GH[ABC]_CH\\d+|GL[ABC]_CH\\d+|BST[ABC]_CH\\d+|\\+?VMOTOR(_CH\\d*)?)$"
+    # Exempt categories (each verified against pcbai_fpv4in1.net):
+    #   MOTOR_[ABC]_CH[1-4]      — 12 nets, phase outputs at motor pad
+    #   BEMF_[ABC]_CH[1-4]       — 12 nets, back-EMF feedback per phase
+    #   CSA_[ABC]_OUT_CH[1-4]    — 12 nets, INA output filter caps
+    #   CSA_MAX_CH[1-4]          —  4 nets, CSA diode-OR
+    #   SHUNT_[ABC]_TOP_CH[1-4]  — 12 nets, Kelvin sense (worker correction:
+    #                              actual names use _TOP, not _POS/_NEG)
+    #   GH[ABC]_CH[1-4]          — 12 nets, high-side gate-drive
+    #   GL[ABC]_CH[1-4]          — 12 nets, low-side gate-drive
+    #   BST[ABC]_CH[1-4]         — 12 nets, bootstrap-cap to HS gate
+    #   +VMOTOR / VMOTOR_CH*     — bulk caps per phase
+    # Components on ANY OTHER net inside motor-pad keep-out = G5 FAIL (drift).
+
   # ---- Tier 5: Signal highways ----
 
   # DShot_CHn (per CHn)
@@ -138,6 +162,31 @@ nets:
 # ============================================================
 # Component role classification (per-component)
 # ============================================================
+#
+# Role taxonomy (used by role_place + audits):
+#
+#   cluster-anchor    : positioned by zone_hint or near_anchor offset;
+#                        starts a cluster. Examples: ICs, gate drivers, MCU.
+#   cluster-member    : near a parent_pin within max_distance_mm. Tight.
+#                        Examples: gate-R, BST cap, ferrite, op-amp filter cap.
+#   cluster-aux       : in subsystem zone + same layer as parent;
+#                        NOT distance-constrained to a specific pin.
+#                        Examples: OR-gate diode caps (D34/D36 BAT54), BEMF
+#                        divider auxiliary caps, status-LED bypass caps,
+#                        comparator hysteresis caps — NOT decoupling (R25),
+#                        NOT switching-loop (G3). They serve nearby nodes
+#                        but routing flexibility lets them sit anywhere
+#                        in-zone same-side without electrical penalty.
+#                        Added 2026-05-26 (worker fits() debug — relaxes
+#                        over-constrained density on dense channels).
+#   decoupling        : ≤3mm same-layer to parent_pin (R25 enforced via G4).
+#   loop-member       : in switching loop (HS/LS/shunt/cap) — G3 audits.
+#
+# fits() over-rejection note (2026-05-26 worker catch):
+#   When max_distance_mm is too tight AND the zone has highway/edge keepouts
+#   AND MIN_CENTER 1.6mm, the free-space tessellation fragments such that
+#   even 14% area-dense zones can have 0 fittable slots for a small (1.6mm)
+#   cap. cluster-aux role bypasses this by allowing zone-wide search.
 
 components:
 

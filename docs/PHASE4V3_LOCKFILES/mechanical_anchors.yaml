@@ -33,6 +33,14 @@ mount_holes:
   - {ref: H2, pos: [95.00, 95.00], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
   - {ref: H3, pos: [5.00,  5.00],  layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
   - {ref: H4, pos: [95.00, 5.00],  layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
+  # 75x75mm cinematic mount pattern added 2026-05-26 (Sai-anticipated): our
+  # 100x100mm board is cinematic/heavy class (1-3kg AUW). 75mm = iFlight
+  # TitanH7 / HGLRC Sector / GEPRC MOZ7 cinematic standard (2024+ most-shipped).
+  # Race 30.5mm + micro 20mm NOT included — wrong frame class for this board size.
+  - {ref: H5, pos: [12.50, 12.50], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
+  - {ref: H6, pos: [87.50, 12.50], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
+  - {ref: H7, pos: [12.50, 87.50], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
+  - {ref: H8, pos: [87.50, 87.50], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
 
 fiducials:
   # 6× fiducials (3 top + 3 bottom), 1mm diameter, 2mm solder mask opening
@@ -59,15 +67,33 @@ connectors:
   # (acceptable: J14 centered, J12 right). Math: J12 distance to J14 same
   # 25mm, edge clearance unchanged, J12-to-east-motor-pad clearance 9.87mm.
   #
-  # J1 = XT30 battery input (top edge) — already centered, symmetric on its own
-  - ref: J1
-    pos: [50.00, 5.00]
+  # [invariant-change] 2026-05-26: J1 XT30 REMOVED per Sai call — replaced
+  # with BAT_P / BAT_N solder pads at top edge for hand-soldered external-XT90
+  # wire. Closes OQ-008 (XT30 was 3× undersized for 70A cont). Solder pads +
+  # external XT90 wire = sureshot: no connector pin-current FoS limit (wire
+  # handles full current), 2mm THT plated hole gives mechanical strain relief,
+  # massive BOM + cable-swing audit simplification.
+  # Footprint: BatterySolderPad_5x5_THT2.0_HC (5×5mm Cu both sides + 16-via
+  # grid + 2mm THT, ~150A burst capacity per IPC-2152).
+  # Positions: pair-centered around old J1@(50,5), 10mm pad-pad spacing.
+  - ref: BAT_P
+    pos: [45.00, 95.00]  # bottom-middle (Sai-anticipated 2026-05-26: thick batt wire bottom = isolated from FC ribbon top; FPV stack convention)
     layer: F.Cu
     rotation: 0
-    footprint: AMASS_XT30U-M_1x02_P5.0mm_Vertical  # worker 2026-05-26: real KiCad Connector_AMASS fp (male board-mount, Sai-confirmed); board swapped via migrate_footprints
-    role: battery_input
+    footprint: BatterySolderPad_5x5_THT2.0_HC
+    role: battery_pos_solder_pad
     subsystem: S1
     edge_distance_mm: 5.0
+    notes: "Hand-solder 10-12 AWG silicone wire here; external connector = user-supplied XT90"
+  - ref: BAT_N
+    pos: [55.00, 95.00]  # paired with BAT_P bottom
+    layer: F.Cu
+    rotation: 0
+    footprint: BatterySolderPad_5x5_THT2.0_HC
+    role: battery_neg_solder_pad
+    subsystem: S1
+    edge_distance_mm: 5.0
+    notes: "Hand-solder 10-12 AWG silicone wire (paired with BAT_P); external = XT90"
   # ============================================================
   # CORRECTED 2026-05-25 per worker R21 catch from netlist verification:
   # Prior J11 entry was WRONG — J11 in netlist is TPS3700_VMOTOR_27V_18V
@@ -75,21 +101,23 @@ connectors:
   # The real FC header is J14 (SM08B-SRSS-TB, 8-pin JST). Foundation set is
   # now {J1, J12, J14} — drop J11 from foundation (S3 parks+brings it).
   # ============================================================
-  # J12 = AUX/DShot 6-pin JST header — moved 2026-05-26 (25→75) for bottom-edge
-  # symmetry per Sai-eye-catch on Stage 1 render. See header comment above.
+  # J12 = AUX/DShot 6-pin JST header — moved 2026-05-26 bottom→top-right per
+  # mechanical revamp (battery bottom-middle takes that edge; J12 groups with
+  # J14 on top signal-cable edge for clean stack routing).
   - ref: J12
-    pos: [75.00, 95.00]
+    pos: [75.00, 5.00]
     layer: F.Cu
     rotation: 0
     footprint: JST_SH_SM06B-SRSS-TB_1x06-1MP_P1.00mm_Horizontal
     role: aux_dshot_header
     subsystem: S6
+    max_load_A: 0.5  # JST SH 6-pin, signal-only (DShot + 5V telemetry)
     edge_distance_mm: 5.0
   # J14 = Flight controller 8-pin JST header (bottom edge, S6 roster)
   # worker 2026-05-26: moved (50,90)→(50,96). At y=90 it was 10mm from the y=100
   # edge, violating EXTERNAL-CONNECTOR-EDGE (Sai catch #5, ≤5mm). y=96 → 4mm.
   - ref: J14
-    pos: [50.00, 96.00]
+    pos: [50.00, 5.00]  # top-center (Sai-anticipated 2026-05-26: pair-swap with battery → FC ribbon top, batt wire bottom)
     layer: F.Cu
     rotation: 0
     footprint: JST_SH_SM08B-SRSS-TB_1x08-1MP_P1.00mm_Horizontal

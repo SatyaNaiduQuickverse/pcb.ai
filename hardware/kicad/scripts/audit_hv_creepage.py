@@ -108,10 +108,17 @@ def main():
 
     fails = []
     seen = set()
-    # HV-vs-other (same layer)
+    # Refinement 2026-05-26 (worker catch on CH1 Q5.3↔Q7.8 0.41mm):
+    # Same-NET pads are electrically the same node — creepage rule does NOT
+    # apply (they're shorted by design via copper). Only DIFFERENT-net pads
+    # need the 0.6mm clearance. Was already filtered for HV-vs-HV; extending
+    # to HV-vs-other too for consistency.
+
+    # HV-vs-other (same layer, different net only)
     for hv in hv_pads:
         for o in other_pads:
-            # same-layer check
+            if hv[5] == o[5] and hv[5]:  # same non-empty net = same node
+                continue
             try:
                 if not (hv[4] & o[4]).any():
                     continue
@@ -126,11 +133,11 @@ def main():
                 fails.append(f"  [FAIL] {hv[6]}.{hv[7]} (net={hv[5]}) ↔ {o[6]}.{o[7]} (net={o[5]}): "
                              f"edge gap {d:.3f}mm < {HV_MIN_CLEARANCE_MM}mm")
 
-    # HV-vs-HV different-net same-layer (e.g. +VMOTOR vs MOTOR_A_CH1)
+    # HV-vs-HV different-net same-layer
     for i, a in enumerate(hv_pads):
         for b in hv_pads[i+1:]:
             if a[5] == b[5]:
-                continue  # same net allowed touching
+                continue  # same net = same node, no creepage rule
             try:
                 if not (a[4] & b[4]).any():
                     continue
