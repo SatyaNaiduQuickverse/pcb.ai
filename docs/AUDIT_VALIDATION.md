@@ -175,3 +175,32 @@ Board: `/tmp/audit_xchecks/vesc_bldc/design/BLDC_4.kicad_pcb` — 127 footprints
 have a ground-truth test case in `tests/build_validation_board*.py` + a row in
 the results table above. Audits without validation entries are blockers for
 Phase 4-v3 Stage dispatches.
+
+## Batch-3 audits (no synthetic test fixture yet — covered by real-board smoke-test only)
+
+The following audits were added 2026-05-26 with smoke-test on Stage 1 real
+master board (not synthetic ground truth — pending). Marked as VALIDATION-
+TODO; build synthetic test before relying on them as hard gates:
+
+- audit_doc_sync.py (G_D1/G_D2/G_D3) — sync between code, doc, memory
+- audit_rotation_alignment.py (G_PP4) — same-class footprint rotation uniformity
+- audit_test_point_access.py (G_PP5) — TP probe-clip clearance
+- audit_cable_swing.py (G_PP7) — cable bend-radius vs same-side tall component
+- audit_pickplace_reach.py (G_PP2) — small SMD vs tall same-side neighbour
+- audit_fos_pin_current.py (G_FoS5) — connector pin-current FoS
+- audit_lockfile_completeness.py (G_L1) — netlist↔lockfile↔board consistency
+- audit_connector_symmetry.py (G16) — connector mirror-symmetry per lockfile
+- audit_edge_keepout.py (G17) — JLC edge clearance + Sai-#5 connector-near-edge
+- audit_fos_thermal.py (G_FoS1) — T_J ≤ 75°C / 90°C thermal FoS
+- audit_silk_size.py (G_PP3) — JLC silk text height
+- audit_polarity_marker.py (G_PP1) — D/CP/U polarity silk presence
+- audit_hv_creepage.py (G_PP6) — IPC-2221 B-grade HV clearance
+- audit_jlc_dfm.py (G_M1/M2/M3) — JLC trace/via/annular floors
+- audit_fos_current.py (G_FoS2) — trace ampacity FoS
+- audit_via_current_capacity.py (G_R5) — via array vs net current
+
+## Pre-existing audits (Phase 4-v2 era, no synthetic test):
+
+- audit_3d_model_coverage.py — verifies 3D model attached to every fp (assembly visualization)
+- audit_meta.py — RULES_MANIFEST.md ↔ scripts consistency
+- audit_routing_system.py — methodology hash drift detection

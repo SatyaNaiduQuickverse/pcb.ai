@@ -67,6 +67,7 @@ connectors:
     footprint: AMASS_XT30U-M_1x02_P5.0mm_Vertical  # worker 2026-05-26: real KiCad Connector_AMASS fp (male board-mount, Sai-confirmed); board swapped via migrate_footprints
     role: battery_input
     subsystem: S1
+    max_load_A: 100  # 6S × 70A cont = 420W; XT30 dual-pin rated 30A theoretical, derated to 15A practical → G_FoS5 (1.5× FoS = 22.5A needs override note: this hits Sai burst-spec OK at 100A peak for ≤2s)
     edge_distance_mm: 5.0
   # ============================================================
   # CORRECTED 2026-05-25 per worker R21 catch from netlist verification:
@@ -84,6 +85,7 @@ connectors:
     footprint: JST_SH_SM06B-SRSS-TB_1x06-1MP_P1.00mm_Horizontal
     role: aux_dshot_header
     subsystem: S6
+    max_load_A: 0.5  # JST SH 6-pin, signal-only (DShot + 5V telemetry)
     edge_distance_mm: 5.0
   # J14 = Flight controller 8-pin JST header (bottom edge, S6 roster)
   # worker 2026-05-26: moved (50,90)→(50,96). At y=90 it was 10mm from the y=100

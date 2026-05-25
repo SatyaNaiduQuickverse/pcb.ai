@@ -320,6 +320,78 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G_PP2: pick-and-place head reach (small SMD near tall component)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_pickplace_reach.py" ]]; then
+  run_gate "G_PP2_pickplace_reach" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_pickplace_reach.py' '$BOARD'" false
+else
+  echo "[G_PP2_pickplace_reach] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_PP4: component rotation alignment within subsystem (DFM uniformity)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_rotation_alignment.py" ]]; then
+  run_gate "G_PP4_rotation_alignment" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_rotation_alignment.py' '$BOARD'" false
+else
+  echo "[G_PP4_rotation_alignment] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_PP5: TP probe-access clearance
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_test_point_access.py" ]]; then
+  run_gate "G_PP5_tp_probe_access" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_test_point_access.py' '$BOARD'" true
+else
+  echo "[G_PP5_tp_probe_access] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_PP7: cable connector swing/bend-radius clearance
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_cable_swing.py" ]]; then
+  run_gate "G_PP7_cable_swing" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_cable_swing.py' '$BOARD'" false
+else
+  echo "[G_PP7_cable_swing] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_FoS5: connector pin-current FoS
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_fos_pin_current.py" ]]; then
+  run_gate "G_FoS5_pin_current" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_fos_pin_current.py' '$BOARD'" true
+else
+  echo "[G_FoS5_pin_current] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_D1/G_D2/G_D3: doc-sync combined gate
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_doc_sync.py" ]]; then
+  run_gate "G_D_doc_sync" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_doc_sync.py'" false
+else
+  echo "[G_D_doc_sync] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G12: Tier 4 differential pair length match
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_diff_pair_match.py" ]]; then
