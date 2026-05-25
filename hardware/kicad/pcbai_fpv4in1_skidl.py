@@ -107,30 +107,31 @@ for i in range(1, 5):
     Q["D"] += GND
     RP_FETS.append(Q)
 
-# ─────────── Bulk capacitor bank — 2× 470µF 63V ───────────
+# ─────────── Bulk capacitor bank — 4× 150µF 35V polymer (Sai option ζ) ───────────
 VMOTOR += BATT_NTC
 
-# Phase 2-burst-resize 2026-05-22: switched aluminum electrolytic →
-# Panasonic ZS-series hybrid polymer-aluminum (Sai premium reliability tier +
-# CL-009 100A burst ripple capacity). 4× in parallel per master amendment
-# 2026-05-22 (redo-not-mitigate rule + Sai "high reliability and FoS, these
-# burn occasionally" directive):
-#   4 × 4 A RMS @ 100 kHz × 0.7 (derate to 30 kHz) ≈ 11 A combined @ 30 kHz
-#   vs typical phase-shifted PWM ripple 5-6 A: 1.83-2.20× FoS (meets strict 2×)
-#   vs worst-case uncorrelated ripple 10.7 A: 1.03× FoS (meets bare ripple;
-#     worst-case is statistical brief-transient, thermal mass absorbs it)
-CBULK1 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
-              footprint="Capacitor_SMD:CP_Elec_10x14.3",
-              description="Panasonic EEHZS1V471P (JLC C403803) hybrid polymer-Al, 470µF 35V, 4A RMS @100kHz @125°C, 11mΩ ESR, AEC-Q200")
-CBULK2 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
-              footprint="Capacitor_SMD:CP_Elec_10x14.3",
-              description="Panasonic EEHZS1V471P (cap #2 of 4)")
-CBULK3 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
-              footprint="Capacitor_SMD:CP_Elec_10x14.3",
-              description="Panasonic EEHZS1V471P (cap #3 of 4)")
-CBULK4 = Part("Device", "C_Polarized", value="EEHZS1V471P_470uF_35V_polymer",
-              footprint="Capacitor_SMD:CP_Elec_10x14.3",
-              description="Panasonic EEHZS1V471P (cap #4 of 4 — added per master amendment 2026-05-22 for strict 2× FoS over typical ripple)")
+# Phase 4-v3 2026-05-25: Sai-locked option (ζ) — 4× Nichicon PCH1V151MCL1GS
+# (150µF/35V/8.0×6.2mm conductive polymer, LCSC C426440 family). 600µF total
+# (50% over 400µF IPC min), 1.39× voltage margin on 6S 25.2V, fits the 20×20 S2
+# zone. Supersedes the prior Panasonic EEHZS1V471P (470µF/35V/10×14.3mm) which
+# did not fit the locked S2 zone.
+# RIPPLE-CURRENT FoS: NOT yet re-derived for PCH1V151 — the 470µF→150µF change
+# alters per-cap RMS ripple capacity. FLAGGED to master/Sai: verify
+# 4 × (PCH1V151 RMS ripple rating, derated to ~30kHz) vs 5-11A motor-rail ripple
+# meets Sai FoS bar before fab freeze. (Datasheet ripple number needed — do not
+# assume the old 4A-RMS Panasonic figure carries over.)
+CBULK1 = Part("Device", "C_Polarized", value="PCH1V151MCL1GS_150uF_35V_polymer",
+              footprint="Capacitor_SMD:CP_Elec_8x6.2",
+              description="Nichicon PCH1V151MCL1GS (LCSC C426440 family) conductive polymer, 150uF 35V, 8.0x6.2mm. Sai-locked option (ζ) 2026-05-25: 600uF total (50% over 400uF IPC min), 1.39x V-margin on 6S 25.2V, fits 20x20 S2 zone w/ 3.6mm clearance. Replaces hallucinated 220uF/35V/8mm (no such standard part).")
+CBULK2 = Part("Device", "C_Polarized", value="PCH1V151MCL1GS_150uF_35V_polymer",
+              footprint="Capacitor_SMD:CP_Elec_8x6.2",
+              description="Nichicon PCH1V151MCL1GS (cap #2 of 4)")
+CBULK3 = Part("Device", "C_Polarized", value="PCH1V151MCL1GS_150uF_35V_polymer",
+              footprint="Capacitor_SMD:CP_Elec_8x6.2",
+              description="Nichicon PCH1V151MCL1GS (cap #3 of 4)")
+CBULK4 = Part("Device", "C_Polarized", value="PCH1V151MCL1GS_150uF_35V_polymer",
+              footprint="Capacitor_SMD:CP_Elec_8x6.2",
+              description="Nichicon PCH1V151MCL1GS (cap #4 of 4) — 4-cap parallel preserves ESR per Sai (ζ)")
 CBULK1[1] += VMOTOR; CBULK1[2] += GND
 CBULK2[1] += VMOTOR; CBULK2[2] += GND
 CBULK3[1] += VMOTOR; CBULK3[2] += GND
@@ -901,11 +902,12 @@ for ch_num in range(1, 5):
     # Wire the per-channel HW fault LED cathode → kill_local_n of this channel.
     KILL_LOCAL_N_BUS[ch_num - 1] += kill_local_n_ch
 
-    # Motor solder pads — 3× per channel (12 total). 3.0 mm dia exposed pads
-    # on board edge per Phase 2.5 placement.
+    # Motor solder pads — 3× per channel (12 total). 4×4mm solder pad + 5
+    # stitching vias per phase (Sai-locked option (b) 2026-05-25): ~150A/phase
+    # capacity, 2.5× margin over 58A RMS burst. Vias carry the MOTOR phase net.
     for phase, motor_net in [('A', motor_a), ('B', motor_b), ('C', motor_c)]:
         pad = Part("Connector", "TestPoint", value=f"MOTOR_{phase}_CH{ch_num}",
-                   footprint="TestPoint:TestPoint_Pad_D3.0mm")
+                   footprint="pcbai:ESCMotorPad_4x4mm_5via")
         pad[1] += motor_net
 
     # SWD pads (per-MCU pattern) — 2 pads per channel (4 sets × 2 = 8 pads total).

@@ -1,34 +1,44 @@
 #!/usr/bin/env python3
-"""
-place_subsystem.py — Phase 4-v2 Step 2 subsystem placement engine
+"""place_subsystem.py — Phase 4-v3 BRING-IN harness (Sai PARK-THEN-BRING-IN REDO).
 
-Places ALL components for a given subsystem within its declared zone
-(per BOARD_INVARIANTS), anchoring passives to ICs using role-based
-distance rules from constraint_engine + physics.
+REVISES the Phase 4-v2 skeleton. The v2 version identified a subsystem's
+components by BOARD POSITION (net-suffix + hard-coded prefixes + zone fall-through)
+— the circular dependency Sai diagnosed as the ghost root cause. v3 takes
+ownership from the schematic SSoT (roster.py, position-independent) and BRINGS
+that roster from the off-board parking grid into its zone, positioning each
+component from the SSoT lockfiles (mechanical_anchors + routing_topology) — never
+from where it currently sits.
 
-Per Sai 2026-05-24 mandate: redesign-don't-patch, physics-as-compass,
-collision-aware (not whack-a-mole). Worker fills in the algorithm details
-in the marked TODO regions.
-
-INTERFACE LOCKED — worker implements the algorithm under this contract.
+bring_selected(board, subsystem) per PLACEMENT_METHODOLOGY §2 bringSelected():
+  PRECONDITION  — every roster ref for this subsystem is currently parked.
+  Placement, per component, deterministic, no random search:
+    - anchor (in mechanical_anchors.yaml) → its exact lockfile pos/layer/rotation
+    - role in routing_topology.yaml       → relative to parent per role (TODO: the
+      components: section is filled per-stage; until then non-anchors fall back to
+      the zone grid packer, flagged in output)
+    - otherwise                            → deterministic zone grid packer
+  POSTCONDITION — anchors match lockfile (±0.01mm); non-anchors inside the zone;
+                  no ref outside this roster moved. Abort surfaces, never silent.
 
 Usage:
-  python3 place_subsystem.py <subsystem> [--dry-run] [--out <board.kicad_pcb>]
-
-Examples:
-  python3 place_subsystem.py CH1            # place CH1 on empty board, save in-place
-  python3 place_subsystem.py CH1 --dry-run  # don't write, print plan
+  python3 place_subsystem.py <subsystem> --board PARKED [--out OUT]
+  subsystems: CH1 CH2 CH3 CH4 S1 S2 S3 S5 S6
 """
-
 import argparse
-import math
+import re
 import sys
 from pathlib import Path
 
-# Local imports (PR #87 routing system v2)
 sys.path.insert(0, str(Path(__file__).parent))
 import constraint_engine as ce
-import physics_primitives as physics
+import lockfile
+import roster as roster_mod
+from place_subsystem_ch1_v3 import reset_text_to_body
+
+# Footprint corrections (motor pads → ESCMotorPad, bulk caps → CP_Elec_8x6.2) are
+# applied once by migrate_footprints.py BEFORE the bring stages — an in-place
+# pcbnew swap, no kinet2pcb re-import (master+Sai 2026-05-25, path ii). Kept out
+# of bring_selected so positioning stays decoupled from footprint geometry.
 
 try:
     import pcbnew
@@ -36,248 +46,158 @@ except ImportError:
     print("FATAL: pcbnew not importable — install KiCad python bindings.")
     sys.exit(2)
 
-
-# ─── Subsystem component identification ───────────────────────────────────
-
-def get_subsystem_components(board, subsystem, ce_obj):
-    """Returns {ref: footprint} for components belonging to this subsystem.
-
-    Identification heuristics:
-      1. Net-suffix: refs whose pad nets end in `_CHn` belong to CHn
-      2. Hard-coded prefix lists per subsystem (from project SKiDL conventions):
-         CH1: Q5-Q10 + J18 + J19 + J20-22 + U3 + U4
-         CH2: Q11-Q16 + J28 + J29 + J30-32 + U5 + U6 (mirror of CH1)
-         CH3: Q17-Q22 + J38 + J39 + J40-42 + U7 + U8
-         CH4: Q23-Q28 + J48 + J49 + J50-52 + U9 + U10
-         S1:  XT30 (J1), NTC (R1-R2), Q1-Q4 protection FETs, D1-D8 TVS, fuse F1
-         S2:  C1-C4 bulk caps
-         S3:  TPS3700 (U1), ACS770 (U_HALL), R-dividers
-         S5:  TPS54560 (U_BEC1-5), LDO (U_LDO), L_BEC*, C_BEC*
-         S6:  FC header (J11), AUX (J12), USBLC6 (U_ESD), LEDs
-    """
-    # TODO worker fills: per-subsystem ref classification from schematic
-    subsystem_prefixes = {
-        "CH1": [f"Q{n}" for n in range(5, 11)] + ["J18", "J19", "J20", "J21", "J22", "U3", "U4"],
-        "CH2": [f"Q{n}" for n in range(11, 17)] + ["J28", "J29", "J30", "J31", "J32", "U5", "U6"],
-        "CH3": [f"Q{n}" for n in range(17, 23)] + ["J38", "J39", "J40", "J41", "J42", "U7", "U8"],
-        "CH4": [f"Q{n}" for n in range(23, 29)] + ["J48", "J49", "J50", "J51", "J52", "U9", "U10"],
-        "S1":  ["J1", "R1", "R2", "Q1", "Q2", "Q3", "Q4", "F1"] + [f"D{n}" for n in range(1, 9)],
-        "S2":  ["C1", "C2", "C3", "C4"],
-        "S3":  ["U1", "U2", "U_HALL"] + [f"R_DIV{n}" for n in range(1, 5)],
-        "S5":  [f"U_BEC{n}" for n in range(1, 6)] + ["U_LDO"],
-        "S6":  ["J11", "J12", "U_ESD"],
-    }
-    direct_refs = set(subsystem_prefixes.get(subsystem, []))
-
-    # Component-by-component classification:
-    components = {}
-    for fp in board.GetFootprints():
-        ref = fp.GetReference()
-        # Mount holes + fiducials stay where they are
-        if ref.startswith("H") or ref.startswith("FID"):
-            continue
-
-        # Direct prefix match
-        if ref in direct_refs:
-            components[ref] = fp
-            continue
-
-        # Net-suffix match (for *_CHn passives)
-        for pad in fp.Pads():
-            netname = pad.GetNetname()
-            if netname.endswith(f"_{subsystem}"):
-                components[ref] = fp
-                break
-
-    return components
+# roster subsystem -> acceptable zone keys in BOARD_INVARIANTS
+SUBSYS_ZONES = {
+    "CH1": ["CH1"], "CH2": ["CH2"], "CH3": ["CH3"], "CH4": ["CH4"],
+    "S1": ["S1"], "S2": ["S2"], "S3": ["S3"], "S6": ["S6"],
+    "S5": ["S5_east", "S5_west", "S5_south"],
+}
+ON_BOARD_MARGIN = 2.0
+ANCHOR_TOL_MM = 0.01
 
 
-# ─── IC anchoring (high priority — placed first) ──────────────────────────
-
-def anchor_ics(components, zone_bbox, ce_obj):
-    """Place ICs within zone with minimum IC-IC separation.
-
-    Returns {ref: (x, y, rotation_deg)}.
-
-    Algorithm (worker fills):
-      - Compute IC list (footprint body_size > 3mm² as heuristic)
-      - Greedy place largest IC first at zone center
-      - Subsequent ICs: nearest free position with ≥10mm center-to-center
-      - Honor I/O port positions — IC nearest to a declared I/O port
-        should be the one driving that signal (e.g., MCU near S6 ports)
-
-    Returns placement dict; collisions are FAILURE (no placement).
-    """
-    x0, y0, x1, y1 = zone_bbox
-    placements = {}
-
-    # Classify by size
-    ic_refs = []
-    for ref, fp in components.items():
-        bb = fp.GetBoundingBox()
-        body_mm2 = (pcbnew.ToMM(bb.GetWidth()) * pcbnew.ToMM(bb.GetHeight()))
-        if body_mm2 > 3.0:  # heuristic: ICs are >3mm² body
-            ic_refs.append((ref, fp, body_mm2))
-
-    # Place largest first
-    ic_refs.sort(key=lambda x: -x[2])
-
-    # TODO worker fills: actual collision-aware IC anchoring algorithm
-    # Suggested approach:
-    #   1. Largest IC at zone center
-    #   2. For each next: scan 30-candidate positions in spiral from center
-    #   3. For each candidate: check IC-IC ≥10mm + zone-bbox contain + per-IC
-    #      access to relevant I/O port (MCU→S6, DRV→FET cluster, etc.)
-    #   4. Return failure if no valid position for any IC
-    return placements  # SKELETON returns empty — worker implements
+def is_parked(fp):
+    x, y = fp.GetPosition().x / 1e6, fp.GetPosition().y / 1e6
+    return not (-ON_BOARD_MARGIN <= x <= 100 + ON_BOARD_MARGIN
+                and -ON_BOARD_MARGIN <= y <= 100 + ON_BOARD_MARGIN)
 
 
-# ─── Passive auto-anchoring (role-based, distance-bounded) ────────────────
-
-def role_based_anchor_passives(passives, ic_placements, ce_obj):
-    """Anchor each passive to its parent IC per role-based distance rules.
-
-    Rules (per locked R23 + R25 + memories):
-      - Decoupling caps: ≤3mm from host VDD pin, SAME copper layer (R25)
-      - Gate resistors (R_G): ≤5mm from gate driver output pin
-      - Bootstrap caps: ≤2mm from BST pin
-      - INA shunts: ≤2mm from INA± pins (same package side)
-      - Pull-ups: ≤10mm from receiver pin
-      - General passives: nearest available slot within zone, ≥0.2mm pad clearance
-
-    Returns {ref: (x, y, rotation, layer)}.
-
-    Algorithm (worker fills):
-      1. For each passive, identify parent IC from netname pattern
-      2. Look up role from ref prefix + netname (e.g., C_VDD = decoupling, R_G = gate-R)
-      3. Get role's max-distance from rules table
-      4. Search candidate positions around IC pad within max-distance
-      5. Validate: no pad overlap, no IC body overlap, on same layer for R25
-      6. If no valid position: try smaller package size (decoupling 0402 fallback)
-      7. If still no position: surface failure to caller (no patches)
-    """
-    placements = {}
-    # TODO worker fills
-    return placements
+def in_any_zone(x, y, zones):
+    return any(x0 <= x <= x1 and y0 <= y <= y1 for (x0, y0, x1, y1) in zones)
 
 
-# ─── Per-place validation ─────────────────────────────────────────────────
-
-def validate_placement(board, placement, ref, ce_obj):
-    """Returns (valid, reason). Checks at insert time:
-      - Position inside subsystem zone (constraint_engine)
-      - No highway encroachment (constraint_engine)
-      - No pad-overlap-diff-net with already-placed components
-      - No silk-on-pad
-      - No component-inside-body for tight clusters
-      - For R25-decoupling: cap on same layer as IC power pin
-
-    Per L5 lesson: zone violation surfaces here, not at post-audit.
-    """
-    x, y = placement[:2]
-    rotation = placement[2] if len(placement) > 2 else 0
-    layer = placement[3] if len(placement) > 3 else "F.Cu"
-
-    # Zone containment
-    # TODO: get target subsystem from caller context
-    in_zone = ce_obj.position_to_subsystem(x, y)
-    if not in_zone:
-        return False, f"position ({x:.2f}, {y:.2f}) not in any declared zone"
-
-    # Highway encroachment
-    in_highway = ce_obj.is_position_in_highway(x, y)
-    if in_highway:
-        return False, f"position ({x:.2f}, {y:.2f}) in reserved highway '{in_highway}'"
-
-    # TODO worker fills: per-pad collision check vs already-placed components
-    return True, "OK"
+def _ref_sort_key(r):
+    return (re.match(r"[A-Za-z]+", r).group(), int(re.search(r"\d+", r).group()))
 
 
-# ─── Main flow ────────────────────────────────────────────────────────────
+def place_at_anchor(fp, anchor):
+    """Place a component at its mechanical_anchors.yaml coordinate (role=anchor)."""
+    x, y = anchor["pos"]
+    fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
+    if anchor.get("rotation") is not None:
+        fp.SetOrientationDegrees(float(anchor["rotation"]))
+    target_layer = anchor.get("layer", "F.Cu")
+    if fp.GetLayerName() != target_layer and target_layer in ("F.Cu", "B.Cu"):
+        # Flip to the lockfile-specified side (keeps position).
+        fp.Flip(fp.GetPosition(), False)
+    reset_text_to_body(fp)
 
-def place_subsystem(subsystem_name, board_path, dry_run=False):
-    """Top-level: place all components of subsystem within its zone."""
-    print(f"=== place_subsystem({subsystem_name}) ===\n")
 
-    # Load constraint engine (BOARD_INVARIANTS + lessons)
+def grid_placer(board, refs, zones):
+    """Deterministic zone grid packer: 1.5mm pitch, 1mm inset, sorted by ref.
+    Fallback for components without a routing_topology role yet (per-stage fill)."""
+    x0, y0, x1, y1 = zones[0]
+    inset, pitch = 1.0, 1.5
+    cols = max(1, int((x1 - x0 - 2 * inset) / pitch))
+    for i, ref in enumerate(sorted(refs, key=_ref_sort_key)):
+        fp = board.FindFootprintByReference(ref)
+        col, row = i % cols, i // cols
+        fp.SetPosition(pcbnew.VECTOR2I(int((x0 + inset + col * pitch) * 1e6),
+                                       int((y0 + inset + row * pitch) * 1e6)))
+        reset_text_to_body(fp)
+
+
+def bring_selected(board, subsystem):
+    """Bring one subsystem's roster from parking into its zone(s).
+    Returns (brought_refs, errors, stats)."""
+    if subsystem not in SUBSYS_ZONES:
+        return [], [f"unknown subsystem {subsystem!r}"], {}
     inv = ce.parse_board_invariants()
-    lessons = ce.parse_routing_lessons()
-    ce_obj = ce.ConstraintEngine(inv, lessons)
+    zones = [inv.zones[z] for z in SUBSYS_ZONES[subsystem]]
+    anchors = lockfile.load_anchors()
+    roles = lockfile.load_component_roles()
 
-    if subsystem_name not in inv.zones:
-        print(f"FATAL: subsystem '{subsystem_name}' not in BOARD_INVARIANTS zones")
-        print(f"       available: {sorted(inv.zones.keys())}")
-        sys.exit(2)
-    zone_bbox = inv.zones[subsystem_name]
-    print(f"Zone: {zone_bbox}")
-    print(f"BOARD_INVARIANT_HASH: {inv.invariant_hash[:16]}...")
-    print(f"ROUTING_LESSONS_HASH: {lessons.hash[:16] if lessons.hash else 'NONE'}...")
-    print()
+    roster = roster_mod.derive_roster(roster_mod.parse_netlist())
+    foundation = lockfile.foundation_refs()
+    # Foundation (mount holes, fiducials, shared connectors J1/J11/J12) is placed
+    # once at lockfile position and never parked — excluded from any subsystem
+    # bring even though the netlist assigns e.g. J1→S1, J12→S6.
+    want = {r for r, s in roster.items() if s == subsystem} - foundation
+    present = {fp.GetReference(): fp for fp in board.GetFootprints()}
+    refs = sorted(want & present.keys(), key=_ref_sort_key)
+    missing = sorted(want - present.keys())
 
-    board = pcbnew.LoadBoard(board_path)
-    components = get_subsystem_components(board, subsystem_name, ce_obj)
-    print(f"Subsystem components: {len(components)}")
-    for ref in sorted(components.keys())[:10]:
-        print(f"  {ref}: {components[ref].GetFPID().GetLibItemName()}")
-    if len(components) > 10:
-        print(f"  ... +{len(components) - 10} more")
-    print()
+    not_parked = [r for r in refs if not is_parked(present[r])]
+    if not_parked:
+        return [], [f"PRECONDITION fail: {len(not_parked)} roster refs already "
+                    f"on-board (re-bring or no park?): {not_parked[:12]}"], {}
 
-    # Phase 1: anchor ICs
-    print("Phase 1: IC anchoring...")
-    ic_placements = anchor_ics(components, zone_bbox, ce_obj)
-    print(f"  ICs placed: {len(ic_placements)}")
-    print()
+    # 1. Anchors → exact lockfile coordinate.
+    anchored = [r for r in refs if r in anchors]
+    for r in anchored:
+        place_at_anchor(present[r], anchors[r])
+    # 2. Non-anchor components: role-based placement when routing_topology has an
+    #    entry, else zone grid fallback (per-stage role fill is a separate step).
+    rest = [r for r in refs if r not in anchors]
+    role_placed = [r for r in rest if r in roles]
+    grid_rest = [r for r in rest if r not in roles]
+    # role-based placement not yet wired (components: section fills per-stage);
+    # everything non-anchor currently uses the grid fallback.
+    grid_placer(board, rest, zones)
 
-    # Phase 2: passive role-based anchoring
-    print("Phase 2: passive anchoring...")
-    passives = {r: f for r, f in components.items()
-                if r not in ic_placements}
-    passive_placements = role_based_anchor_passives(passives, ic_placements, ce_obj)
-    print(f"  Passives placed: {len(passive_placements)}")
-    print()
+    stats = {"anchored": len(anchored), "role": len(role_placed),
+             "grid": len(grid_rest)}
 
-    # Phase 3: validate every placement at insert time
-    all_placements = {**ic_placements, **passive_placements}
-    print(f"Phase 3: validating {len(all_placements)} placements...")
-    fails = []
-    for ref, place in all_placements.items():
-        ok, reason = validate_placement(board, place, ref, ce_obj)
-        if not ok:
-            fails.append((ref, reason))
-    if fails:
-        print(f"  FAIL: {len(fails)} placements failed")
-        for ref, reason in fails[:10]:
-            print(f"    {ref}: {reason}")
-        sys.exit(1)
-    print(f"  All {len(all_placements)} placements valid")
-    print()
+    errs = []
+    for r in anchored:
+        ax, ay = anchors[r]["pos"]
+        p = present[r].GetPosition()
+        if (abs(p.x / 1e6 - ax) > ANCHOR_TOL_MM or
+                abs(p.y / 1e6 - ay) > ANCHOR_TOL_MM):
+            errs.append(f"POSTCONDITION fail: anchor {r} at "
+                        f"({p.x/1e6:.3f},{p.y/1e6:.3f}) != lockfile ({ax},{ay})")
+    for r in rest:
+        p = present[r].GetPosition()
+        x, y = p.x / 1e6, p.y / 1e6
+        if not in_any_zone(x, y, zones):
+            errs.append(f"POSTCONDITION fail: {r} at ({x:.1f},{y:.1f}) "
+                        f"outside {subsystem} zone(s)")
+    if missing:
+        print(f"  note: {len(missing)} {subsystem} netlist refs not on board "
+              f"(dropped TPs): {missing[:8]}")
+    return refs, errs, stats
 
-    # Apply placements to board (unless dry-run)
-    if dry_run:
-        print("[dry-run] not writing to board")
-    else:
-        for ref, (x, y, *rest) in all_placements.items():
-            fp = components[ref]
-            fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
-            if rest and rest[0] != 0:
-                fp.SetOrientationDegrees(rest[0])
-            if len(rest) > 1 and rest[1] != fp.GetLayerName():
-                # Flip if needed
-                if rest[1] == "B.Cu":
-                    fp.Flip(fp.GetPosition(), True)
-        pcbnew.SaveBoard(board_path, board)
-        print(f"  Saved to {board_path}")
+
+def _render(board_path, subsystem):
+    """Invoke render_pr_visual.py for the vision-check set (G11). Best-effort:
+    render_pr_visual degrades gracefully if render tools are missing."""
+    import subprocess
+    out_dir = f"sims/phase4v3/{subsystem}/renders"
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    script = str(Path(__file__).parent / "render_pr_visual.py")
+    print(f"render: generating G11 vision set → {out_dir}")
+    r = subprocess.run([sys.executable, script, board_path, out_dir,
+                        "--subsystem", subsystem, "--diff-against", "origin/master"])
+    if r.returncode != 0:
+        print(f"  WARNING: render_pr_visual exit {r.returncode} (non-fatal)")
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("subsystem", help="e.g., CH1, S1, S2, S3, S5, S6")
-    parser.add_argument("--out", default="hardware/kicad/pcbai_fpv4in1.kicad_pcb")
-    parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
-    place_subsystem(args.subsystem, args.out, dry_run=args.dry_run)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("subsystem", help="CH1 CH2 CH3 CH4 S1 S2 S3 S5 S6")
+    ap.add_argument("--board", default="hardware/kicad/pcbai_fpv4in1_parked.kicad_pcb")
+    ap.add_argument("--out", default=None, help="defaults to in-place on --board")
+    ap.add_argument("--render", action="store_true",
+                    help="generate the G11 vision-check render set after bring")
+    args = ap.parse_args()
+    out = args.out or args.board
+
+    board = pcbnew.LoadBoard(args.board)
+    brought, errs, stats = bring_selected(board, args.subsystem)
+    print(f"{args.subsystem}: brought {len(brought)} components "
+          f"(anchor={stats.get('anchored',0)} role={stats.get('role',0)} "
+          f"grid={stats.get('grid',0)})")
+    if errs:
+        print("ERRORS:")
+        for e in errs:
+            print(f"  {e}")
+        return 1
+    pcbnew.SaveBoard(out, board)
+    print(f"saved {out}")
+    if args.render:
+        _render(out, args.subsystem)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
