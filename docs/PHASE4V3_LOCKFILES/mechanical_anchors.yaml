@@ -1,0 +1,179 @@
+# Tier 1 mechanical anchors — immovable positions per Phase 4-v3 placement methodology
+#
+# These components have constraints from PHYSICS OUTSIDE the PCB (enclosure,
+# mating connectors, mounting fixtures, current pads). Their position is set
+# here as SSoT. Audit `audit_anchor_positions.py` enforces match to ±0.01mm.
+#
+# Changes require PR title tag `[invariant-change]` and `audit_routing_system.py --write`
+# to recompute MECHANICAL_ANCHORS_HASH.
+#
+# Coords extracted 2026-05-25 from master HEAD. Roles cross-checked against
+# SKiDL netlist (worker-verified 2026-05-25):
+#  - 4 mount holes, 6 fiducials per enclosure + IPC-7351
+#  - 3 board connectors (J1 XT30, J11 FC, J12 AUX) at enclosure interface
+#  - 12 motor phase pads (3 phases/CH × 4 CH) — BLDC physics reality
+#  - 8 SWD test pads (DIO+CLK per CH × 4 CH)
+#  - 4 BOOT jumper pads (per CH)
+#  - 10 supply test pads (V5/V9/V3V3 inputs + GND distribution)
+#  - 15 LEDs (5 global + 10 per-channel status)
+#
+# Tier 1 components MUST be placed BEFORE any Tier 2-5 components.
+# park_all_components.py skips these (they stay at their lockfile positions).
+
+version: 2
+extracted_from_commit: 428bc3d
+extracted_date: 2026-05-25
+worker_verified_against_netlist: 2026-05-25
+
+mount_holes:
+  # 4× M3 standoff mounting holes at board corners (3.2mm drill)
+  # Footprint: MountingHole_3.2mm_M3
+  # Keep-out: 3mm radius copper-clear per IPC-7351 + Sai-catch #1
+  - {ref: H1, pos: [5.00,  95.00], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
+  - {ref: H2, pos: [95.00, 95.00], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
+  - {ref: H3, pos: [5.00,  5.00],  layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
+  - {ref: H4, pos: [95.00, 5.00],  layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
+
+fiducials:
+  # 6× fiducials (3 top + 3 bottom), 1mm diameter, 2mm solder mask opening
+  # Spacing ≥40mm per IPC-7351 (Sai-catch #8)
+  - {ref: FID1, pos: [15.00, 50.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}
+  - {ref: FID2, pos: [90.00, 50.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}
+  - {ref: FID3, pos: [50.00, 85.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}
+  - {ref: FID4, pos: [15.00, 50.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}
+  - {ref: FID5, pos: [85.00, 50.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}
+  - {ref: FID6, pos: [50.00, 15.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}
+
+connectors:
+  # J1 = XT30 battery input (top edge)
+  - ref: J1
+    pos: [50.00, 5.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: Connector_XT30  # current master has PinHeader placeholder; needs proper XT30 footprint
+    role: battery_input
+    edge_distance_mm: 5.0
+  # J11 = Flight controller header
+  - ref: J11
+    pos: [50.00, 38.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: SOT-23-8  # placeholder in current master; needs proper FC header footprint
+    role: flight_controller_header
+    edge_distance_mm: null
+    note: "Position TBD by FC mech spec — current x=50,y=38 is central; may move to edge if FC pin pitch demands"
+  # J12 = AUX/DShot 6-pin header
+  - ref: J12
+    pos: [25.00, 95.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: JST_SH_SM06B-SRSS-TB_1x06-1MP_P1.00mm_Horizontal
+    role: aux_dshot_header
+    edge_distance_mm: 5.0
+
+motor_pads:
+  # 12 motor phase pads — 3 phases (A,B,C) × 4 channels.
+  # Netlist-verified roles (worker 2026-05-25): MOTOR_<phase>_CH<n>.
+  # CH1 phases on west edge (x≈15), CH2 east (x≈85), CH3 east (x≈85), CH4 west (x≈15).
+  #
+  # FOOTPRINT: ESCMotorPad_4x4mm_5via — 4×4mm SMD pad on F.Cu + 5 through-hole vias
+  # LOCKED 2026-05-25 PER SAI DECISION: option (b) — "safest sureshot, standard practice"
+  #
+  # IMPORTANT — VIA ELECTRICAL DESTINATION (corrected per worker 2026-05-25):
+  # Vias carry the PHASE net (MOTOR_<A/B/C>_CH<n>), NOT +VMOTOR. Phase pads ARE the
+  # switching node (HS-FET source / LS-FET drain), connecting them to +VMOTOR plane
+  # would short HS-FET drain-source. Vias go F.Cu ↔ B.Cu phase copper. The +VMOTOR
+  # plane on In3.Cu is isolated by antipad. Net effect = thermal+current spreading
+  # onto B.Cu phase pour + any inner phase copper, NOT into +VMOTOR plane.
+  #
+  # PHYSICS: 100A burst per CH ÷ √3 ≈ 58A RMS per phase
+  # PER IPC-2152: 4×4mm SMD pad (16mm²) + 5× 0.3mm drill / 0.6mm pad vias spread
+  # current onto top + bottom copper on phase net → ~150A capacity per phase.
+  # → 2.5× margin over 58A burst. STANDARD FPV ESC PRACTICE.
+  #
+  # Worker action in REDO infra PR:
+  #   1. ✅ Created KiCad footprint `pcbai:ESCMotorPad_4x4mm_5via` (worker pre-built 2026-05-25)
+  #   2. Update schematic to reference new footprint for 12 motor pad refs (TP19-TP42 family)
+  #   3. Old TestPoint_Pad_D3.0mm refs stay valid but footprint reference changes
+  #   4. audit_anchor_positions.py G1 compares on BARE footprint name (lib prefix `pcbai:` stripped)
+  - {ref: TP19, pos: [15.13, 52.38], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH1, net: MOTOR_A_CH1}
+  - {ref: TP20, pos: [15.25, 64.09], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH1, net: MOTOR_B_CH1}
+  - {ref: TP21, pos: [15.25, 76.09], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH1, net: MOTOR_C_CH1}
+  - {ref: TP26, pos: [84.87, 52.38], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH2, net: MOTOR_A_CH2}
+  - {ref: TP27, pos: [84.75, 64.09], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH2, net: MOTOR_B_CH2}
+  - {ref: TP28, pos: [84.75, 76.09], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH2, net: MOTOR_C_CH2}
+  - {ref: TP33, pos: [84.87, 47.62], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH3, net: MOTOR_A_CH3}
+  - {ref: TP34, pos: [84.75, 35.91], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH3, net: MOTOR_B_CH3}
+  - {ref: TP35, pos: [84.75, 23.91], layer: F.Cu, rotation: 180, footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH3, net: MOTOR_C_CH3}
+  - {ref: TP40, pos: [15.13, 47.62], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH4, net: MOTOR_A_CH4}
+  - {ref: TP41, pos: [15.25, 35.91], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH4, net: MOTOR_B_CH4}
+  - {ref: TP42, pos: [15.25, 23.91], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH4, net: MOTOR_C_CH4}
+
+test_points:
+  # 22 test points (34 total minus 12 motor pads which moved to motor_pads:).
+  # Netlist-verified roles 2026-05-25.
+  # ≥4mm c-to-c per IPC-A-610.
+  #
+  # SWD (8): DIO+CLK per channel
+  - {ref: TP22, pos: [29.24, 70.75], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.0mm, role: swd_dio,    channel: CH1}
+  - {ref: TP23, pos: [27.81, 74.61], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.0mm, role: swd_clk,    channel: CH1}
+  - {ref: TP29, pos: [70.76, 70.75], layer: B.Cu, rotation: 0,   footprint: TestPoint_Pad_D1.0mm, role: swd_dio,    channel: CH2}
+  - {ref: TP30, pos: [72.19, 74.61], layer: B.Cu, rotation: 0,   footprint: TestPoint_Pad_D1.0mm, role: swd_clk,    channel: CH2}
+  - {ref: TP36, pos: [70.76, 29.25], layer: B.Cu, rotation: 0,   footprint: TestPoint_Pad_D1.0mm, role: swd_dio,    channel: CH3}
+  - {ref: TP37, pos: [72.19, 25.39], layer: B.Cu, rotation: 0,   footprint: TestPoint_Pad_D1.0mm, role: swd_clk,    channel: CH3}
+  - {ref: TP43, pos: [29.24, 29.25], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.0mm, role: swd_dio,    channel: CH4}
+  - {ref: TP44, pos: [27.81, 25.39], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.0mm, role: swd_clk,    channel: CH4}
+  # BOOT jumper (4): per-channel boot-mode select
+  - {ref: TP17, pos: [25.15, 69.56], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.5mm, role: boot_jumper, channel: CH1}
+  - {ref: TP24, pos: [74.85, 69.56], layer: B.Cu, rotation: 0,   footprint: TestPoint_Pad_D1.5mm, role: boot_jumper, channel: CH2}
+  - {ref: TP31, pos: [74.85, 30.44], layer: B.Cu, rotation: 0,   footprint: TestPoint_Pad_D1.5mm, role: boot_jumper, channel: CH3}
+  - {ref: TP38, pos: [25.15, 30.44], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.5mm, role: boot_jumper, channel: CH4}
+  # Supply test pads (10): power-rail bring-up probes (FC PI5/AI/V5, VTX1/VTX2 V9, V3V3, GND distribution)
+  - {ref: TP1,  pos: [38.00, 53.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_fc_plus}
+  - {ref: TP2,  pos: [5.00,  86.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_fc_gnd}
+  - {ref: TP3,  pos: [47.00, 74.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_pi5_plus}
+  - {ref: TP5,  pos: [72.00, 87.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_ai_plus}
+  - {ref: TP7,  pos: [15.23, 87.48], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: pad_v9_vtx1_plus}
+  - {ref: TP9,  pos: [25.00, 86.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: pad_v9_vtx2_plus}
+  - {ref: TP10, pos: [63.80, 45.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: pad_v9_vtx2_gnd}
+  - {ref: TP11, pos: [35.50, 47.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D2.5mm, role: pad_v3v3_plus}
+  - {ref: TP12, pos: [41.00, 47.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D2.5mm, role: pad_v3v3_gnd}
+  - {ref: TP16, pos: [44.50, 53.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: pad_gnd_dist_4}
+
+leds:
+  # 15 status LEDs (5 global + 10 per-channel).
+  # Netlist-verified roles 2026-05-25.
+  # Position TBD per visibility-from-top rule; worker places during per-subsystem PRs.
+  # Tier 1 lockfile records role + parent subsystem assignment only;
+  # bringSelected() places each LED near its parent IC (per role).
+  #
+  # Global LEDs (placed by S1 + S6 PRs):
+  - {ref: D3,  role: power_good_global,        parent_subsystem: S1, footprint: LED_0603}
+  - {ref: D4,  role: reverse_polarity_warn,    parent_subsystem: S1, footprint: LED_0603}
+  - {ref: D23, role: aux_status_global,        parent_subsystem: S6, footprint: LED_0603}
+  # Per-channel KILL status (FW-controlled, placed by CHn PR):
+  - {ref: D15, role: kill_status_fw, channel: CH1, footprint: LED_0603}
+  - {ref: D16, role: kill_status_fw, channel: CH2, footprint: LED_0603}
+  - {ref: D17, role: kill_status_fw, channel: CH3, footprint: LED_0603}
+  - {ref: D18, role: kill_status_fw, channel: CH4, footprint: LED_0603}
+  # Per-channel FAULT status (HW-monitored, placed by CHn PR):
+  - {ref: D19, role: fault_status_hw, channel: CH1, footprint: LED_0603}
+  - {ref: D20, role: fault_status_hw, channel: CH2, footprint: LED_0603}
+  - {ref: D21, role: fault_status_hw, channel: CH3, footprint: LED_0603}
+  - {ref: D22, role: fault_status_hw, channel: CH4, footprint: LED_0603}
+  # Per-channel RED (general channel status, placed by CHn PR):
+  - {ref: D33, role: channel_status_red, channel: CH1, footprint: LED_0603}
+  - {ref: D48, role: channel_status_red, channel: CH2, footprint: LED_0603}
+  - {ref: D63, role: channel_status_red, channel: CH3, footprint: LED_0603}
+  - {ref: D78, role: channel_status_red, channel: CH4, footprint: LED_0603}
+
+parking_grid:
+  # Off-board parking coordinates for park_all_components.py
+  # All non-Tier-1 components start here, brought onto board by per-subsystem PRs
+  origin: [200.0, -50.0]
+  spacing_mm: 5.0
+  layer: F.Cu
+  rotation: 0
+  # Grid format: x = origin_x + (i % cols) * spacing, y = origin_y + (i // cols) * spacing
+  # cols = 30 (covers ~150mm wide off-board area)
+  cols: 30
