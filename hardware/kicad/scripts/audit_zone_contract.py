@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
-"""audit_zone_contract.py — Phase 4-v3 PARK-THEN-BRING-IN contract gate.
+"""audit_zone_contract.py — Phase 4-v3 PARK-THEN-BRING-IN contract gate (G2).
 
 The single gate that makes "ghost" components structurally impossible. Given the
 set of subsystems brought so far (the PRs merged up to this point), it asserts
 that EVERY component on the board is exactly where the process says it must be:
 
-  fixed (FID*, H*)                  → ignored (mechanical, never parked)
-  roster subsystem ∈ brought        → MUST be on-board AND inside that zone
-  roster subsystem ∉ brought        → MUST still be parked (off-board)
-  on-board but ∉ any brought zone   → GHOST — the exact failure this prevents
+  foundation (mounts/fiducials/J1/J11/J12)  → placed once at lockfile pos (G1 owns
+                                               position; here just not-parked)
+  roster subsystem ∈ brought, anchored      → on-board (its coord is G1's job)
+  roster subsystem ∈ brought, non-anchor    → inside that subsystem's zone
+  roster subsystem ∉ brought                → still parked (off-board)
+  on-board but its subsystem not brought     → GHOST — the exact failure prevented
 
 Because the gate covers the FULL board (not just the PR's new components), a
-per-PR pass here means no stale inherited component is hiding in an old position.
-That is the property the 9 v2 PRs lacked: each audited only its own additions and
-was blind to the 490 inherited footprints left in place ([[ghost-components]]).
+per-PR pass means no stale inherited component is hiding in an old position — the
+property the 9 v2 PRs lacked ([[ghost-components]]).
 
-Run after every bring-in PR with the cumulative brought-subsystem list:
   python3 audit_zone_contract.py --board B --brought CH1,CH2,S1
-  python3 audit_zone_contract.py --board B --brought CH1 --parked-only   # pre-bring
 """
 import argparse
 import sys
@@ -25,9 +24,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 import constraint_engine as ce
+import lockfile
 import roster as roster_mod
 from place_subsystem import SUBSYS_ZONES, is_parked, in_any_zone
-from park_all_components import is_fixed
 
 try:
     import pcbnew
@@ -40,13 +39,17 @@ def audit(board, brought):
     inv = ce.parse_board_invariants()
     zone_of = {s: [inv.zones[z] for z in zs] for s, zs in SUBSYS_ZONES.items()}
     roster = roster_mod.derive_roster(roster_mod.parse_netlist())
+    foundation = lockfile.foundation_refs()
+    anchors = lockfile.load_anchors()
 
     fails = []
-    stats = {"fixed": 0, "in_zone": 0, "parked": 0, "checked": 0}
+    stats = {"foundation": 0, "in_zone": 0, "anchored": 0, "parked": 0, "checked": 0}
     for fp in board.GetFootprints():
         ref = fp.GetReference()
-        if is_fixed(ref):
-            stats["fixed"] += 1
+        if ref in foundation:
+            stats["foundation"] += 1
+            if is_parked(fp):
+                fails.append(f"FOUNDATION-PARKED: {ref} should be at lockfile pos")
             continue
         stats["checked"] += 1
         p = fp.GetPosition()
@@ -59,6 +62,8 @@ def audit(board, brought):
             if is_parked(fp):
                 fails.append(f"NOT-BROUGHT: {ref} ({sub}) still parked though "
                              f"{sub} was brought")
+            elif ref in anchors:
+                stats["anchored"] += 1  # exact coord verified by audit_anchor_positions (G1)
             elif not in_any_zone(x, y, zone_of[sub]):
                 fails.append(f"OUT-OF-ZONE: {ref} ({sub}) at ({x:.1f},{y:.1f}) "
                              f"not in {sub} zone")
@@ -90,8 +95,8 @@ def main():
 
     print(f"board: {args.board}")
     print(f"brought: {sorted(brought) or '(none — fully parked)'}")
-    print(f"fixed={stats['fixed']} checked={stats['checked']} "
-          f"in_zone={stats['in_zone']} parked={stats['parked']}")
+    print(f"foundation={stats['foundation']} checked={stats['checked']} "
+          f"in_zone={stats['in_zone']} anchored={stats['anchored']} parked={stats['parked']}")
     if fails:
         print(f"\nCONTRACT FAIL: {len(fails)} violations")
         for f in fails[:25]:
@@ -99,7 +104,7 @@ def main():
         if len(fails) > 25:
             print(f"  ... +{len(fails) - 25} more")
         return 1
-    print("\nCONTRACT OK — every component fixed, in a brought zone, or parked.")
+    print("\nCONTRACT OK — every component foundation, brought (in-zone/anchored), or parked.")
     return 0
 
 

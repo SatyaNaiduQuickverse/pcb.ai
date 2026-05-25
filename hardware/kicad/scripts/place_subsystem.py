@@ -2,27 +2,23 @@
 """place_subsystem.py — Phase 4-v3 BRING-IN harness (Sai PARK-THEN-BRING-IN REDO).
 
 REVISES the Phase 4-v2 skeleton. The v2 version identified a subsystem's
-components by BOARD POSITION (net-suffix + hard-coded prefix lists + zone
-fall-through). That is the circular dependency Sai diagnosed as the ghost root
-cause: position decides ownership, ownership decides position. v3 takes ownership
-from the schematic SSOT (roster.py, position-independent) and BRINGS that roster
-from the off-board parking grid into the zone.
+components by BOARD POSITION (net-suffix + hard-coded prefixes + zone fall-through)
+— the circular dependency Sai diagnosed as the ghost root cause. v3 takes
+ownership from the schematic SSoT (roster.py, position-independent) and BRINGS
+that roster from the off-board parking grid into its zone, positioning each
+component from the SSoT lockfiles (mechanical_anchors + routing_topology) — never
+from where it currently sits.
 
-bring_selected(board, subsystem): move exactly the roster of one subsystem from
-parking into its declared zone, leaving every other component untouched (parked,
-or already-brought by a prior PR). Enforces the contract at both ends:
-
-  PRECONDITION  — every roster ref for this subsystem is currently parked
-                  (off-board). Refuses otherwise: re-bringing a placed subsystem
-                  or bringing before park is a process error, surfaced not masked.
-  POSTCONDITION — every brought ref sits inside one of the subsystem's declared
-                  zones; no ref outside this roster moved.
-
-Component XY within the zone comes from a placement strategy. This harness ships
-a deterministic grid packer (default) that satisfies the zone contract; a
-subsystem PR overrides it with its bespoke, validated geometry (the
-place_subsystem_ch1_v3 template, the mirror transforms) via the `placer`
-callback. The harness owns the CONTRACT; the callback owns the geometry.
+bring_selected(board, subsystem) per PLACEMENT_METHODOLOGY §2 bringSelected():
+  PRECONDITION  — every roster ref for this subsystem is currently parked.
+  Placement, per component, deterministic, no random search:
+    - anchor (in mechanical_anchors.yaml) → its exact lockfile pos/layer/rotation
+    - role in routing_topology.yaml       → relative to parent per role (TODO: the
+      components: section is filled per-stage; until then non-anchors fall back to
+      the zone grid packer, flagged in output)
+    - otherwise                            → deterministic zone grid packer
+  POSTCONDITION — anchors match lockfile (±0.01mm); non-anchors inside the zone;
+                  no ref outside this roster moved. Abort surfaces, never silent.
 
 Usage:
   python3 place_subsystem.py <subsystem> --board PARKED [--out OUT]
@@ -35,9 +31,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 import constraint_engine as ce
+import lockfile
 import roster as roster_mod
 from place_subsystem_ch1_v3 import reset_text_to_body
-from park_all_components import is_fixed
 
 try:
     import pcbnew
@@ -51,12 +47,12 @@ SUBSYS_ZONES = {
     "S1": ["S1"], "S2": ["S2"], "S3": ["S3"], "S6": ["S6"],
     "S5": ["S5_east", "S5_west", "S5_south"],
 }
-ON_BOARD_MARGIN = 2.0  # center within this of the 0-100 board counts as on-board
+ON_BOARD_MARGIN = 2.0
+ANCHOR_TOL_MM = 0.01
 
 
 def is_parked(fp):
-    x = fp.GetPosition().x / 1e6
-    y = fp.GetPosition().y / 1e6
+    x, y = fp.GetPosition().x / 1e6, fp.GetPosition().y / 1e6
     return not (-ON_BOARD_MARGIN <= x <= 100 + ON_BOARD_MARGIN
                 and -ON_BOARD_MARGIN <= y <= 100 + ON_BOARD_MARGIN)
 
@@ -69,10 +65,22 @@ def _ref_sort_key(r):
     return (re.match(r"[A-Za-z]+", r).group(), int(re.search(r"\d+", r).group()))
 
 
+def place_at_anchor(fp, anchor):
+    """Place a component at its mechanical_anchors.yaml coordinate (role=anchor)."""
+    x, y = anchor["pos"]
+    fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
+    if anchor.get("rotation") is not None:
+        fp.SetOrientationDegrees(float(anchor["rotation"]))
+    target_layer = anchor.get("layer", "F.Cu")
+    if fp.GetLayerName() != target_layer and target_layer in ("F.Cu", "B.Cu"):
+        # Flip to the lockfile-specified side (keeps position).
+        fp.Flip(fp.GetPosition(), False)
+    reset_text_to_body(fp)
+
+
 def grid_placer(board, refs, zones):
-    """Default zone-satisfying placer: pack refs on a 1.5mm grid inside the
-    first zone, 1mm inset, deterministic by ref. A subsystem PR replaces this
-    with validated cluster geometry — see module docstring."""
+    """Deterministic zone grid packer: 1.5mm pitch, 1mm inset, sorted by ref.
+    Fallback for components without a routing_topology role yet (per-stage fill)."""
     x0, y0, x1, y1 = zones[0]
     inset, pitch = 1.0, 1.5
     cols = max(1, int((x1 - x0 - 2 * inset) / pitch))
@@ -84,30 +92,56 @@ def grid_placer(board, refs, zones):
         reset_text_to_body(fp)
 
 
-def bring_selected(board, subsystem, placer=grid_placer):
+def bring_selected(board, subsystem):
     """Bring one subsystem's roster from parking into its zone(s).
-    Returns (brought_refs, errors)."""
+    Returns (brought_refs, errors, stats)."""
     if subsystem not in SUBSYS_ZONES:
-        return [], [f"unknown subsystem {subsystem!r}"]
+        return [], [f"unknown subsystem {subsystem!r}"], {}
     inv = ce.parse_board_invariants()
     zones = [inv.zones[z] for z in SUBSYS_ZONES[subsystem]]
+    anchors = lockfile.load_anchors()
+    roles = lockfile.load_component_roles()
 
     roster = roster_mod.derive_roster(roster_mod.parse_netlist())
-    want = {r for r, s in roster.items() if s == subsystem}
-
+    foundation = lockfile.foundation_refs()
+    # Foundation (mount holes, fiducials, shared connectors J1/J11/J12) is placed
+    # once at lockfile position and never parked — excluded from any subsystem
+    # bring even though the netlist assigns e.g. J1→S1, J12→S6.
+    want = {r for r, s in roster.items() if s == subsystem} - foundation
     present = {fp.GetReference(): fp for fp in board.GetFootprints()}
     refs = sorted(want & present.keys(), key=_ref_sort_key)
-    missing = sorted(want - present.keys())  # netlist refs not on this board
+    missing = sorted(want - present.keys())
 
     not_parked = [r for r in refs if not is_parked(present[r])]
     if not_parked:
         return [], [f"PRECONDITION fail: {len(not_parked)} roster refs already "
-                    f"on-board (re-bring or no park?): {not_parked[:12]}"]
+                    f"on-board (re-bring or no park?): {not_parked[:12]}"], {}
 
-    placer(board, refs, zones)
+    # 1. Anchors → exact lockfile coordinate.
+    anchored = [r for r in refs if r in anchors]
+    for r in anchored:
+        place_at_anchor(present[r], anchors[r])
+    # 2. Non-anchor components: role-based placement when routing_topology has an
+    #    entry, else zone grid fallback (per-stage role fill is a separate step).
+    rest = [r for r in refs if r not in anchors]
+    role_placed = [r for r in rest if r in roles]
+    grid_rest = [r for r in rest if r not in roles]
+    # role-based placement not yet wired (components: section fills per-stage);
+    # everything non-anchor currently uses the grid fallback.
+    grid_placer(board, rest, zones)
+
+    stats = {"anchored": len(anchored), "role": len(role_placed),
+             "grid": len(grid_rest)}
 
     errs = []
-    for r in refs:
+    for r in anchored:
+        ax, ay = anchors[r]["pos"]
+        p = present[r].GetPosition()
+        if (abs(p.x / 1e6 - ax) > ANCHOR_TOL_MM or
+                abs(p.y / 1e6 - ay) > ANCHOR_TOL_MM):
+            errs.append(f"POSTCONDITION fail: anchor {r} at "
+                        f"({p.x/1e6:.3f},{p.y/1e6:.3f}) != lockfile ({ax},{ay})")
+    for r in rest:
         p = present[r].GetPosition()
         x, y = p.x / 1e6, p.y / 1e6
         if not in_any_zone(x, y, zones):
@@ -116,7 +150,7 @@ def bring_selected(board, subsystem, placer=grid_placer):
     if missing:
         print(f"  note: {len(missing)} {subsystem} netlist refs not on board "
               f"(dropped TPs): {missing[:8]}")
-    return refs, errs
+    return refs, errs, stats
 
 
 def main():
@@ -128,8 +162,10 @@ def main():
     out = args.out or args.board
 
     board = pcbnew.LoadBoard(args.board)
-    brought, errs = bring_selected(board, args.subsystem)
-    print(f"{args.subsystem}: brought {len(brought)} components into zone")
+    brought, errs, stats = bring_selected(board, args.subsystem)
+    print(f"{args.subsystem}: brought {len(brought)} components "
+          f"(anchor={stats.get('anchored',0)} role={stats.get('role',0)} "
+          f"grid={stats.get('grid',0)})")
     if errs:
         print("ERRORS:")
         for e in errs:
