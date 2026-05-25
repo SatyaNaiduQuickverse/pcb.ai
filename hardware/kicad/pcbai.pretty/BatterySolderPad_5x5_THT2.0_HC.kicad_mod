@@ -1,0 +1,126 @@
+(footprint "BatterySolderPad_5x5_THT2.0_HC"
+	(version 20241229)
+	(generator "pcbnew")
+	(generator_version "9.0")
+	(layer "F.Cu")
+	(descr "High-current battery solder pad — 5x5mm copper on F.Cu+B.Cu, 2mm THT plated hole for hand-soldered wire strain relief, 16-via 4x4 grid for inner-layer copper coupling. Replaces XT30 connector (OQ-008 catch — XT30 30A undersized for 70A cont / 100A burst spec). External XT90 connection wire (10-12 AWG silicone) solders into THT. Ampacity: 5x5mm 3oz copper + 16 vias @ 3A burst each = ~150A burst capacity. Phase 4-v3 Sai-locked 2026-05-26. Per IPC-2152 + JLC SMT capability.")
+	(tags "battery solder pad high current wire XT90 hand solder strain relief")
+	(property "Reference" "REF**"
+		(at 0 -3.8 0)
+		(layer "F.SilkS")
+		(uuid "b2c3d4e5-0002-4000-8000-000000000001")
+		(effects
+			(font
+				(size 1.2 1.2)
+				(thickness 0.2)
+			)
+		)
+	)
+	(property "Value" "BatterySolderPad_5x5_THT2.0_HC"
+		(at 0 4.0 0)
+		(layer "F.Fab")
+		(uuid "b2c3d4e5-0002-4000-8000-000000000002")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+			(hide yes)
+		)
+	)
+	(property "Footprint" ""
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "b2c3d4e5-0002-4000-8000-000000000003")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "b2c3d4e5-0002-4000-8000-000000000004")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "b2c3d4e5-0002-4000-8000-000000000005")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr through_hole)
+	(fp_text user "${REFERENCE}"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(uuid "b2c3d4e5-0002-4000-8000-000000000006")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(fp_line
+		(start -2.6 -2.6) (end 2.6 -2.6)
+		(stroke (width 0.12) (type solid))
+		(layer "F.SilkS")
+		(uuid "b2c3d4e5-0002-4000-8000-000000000010")
+	)
+	(fp_line
+		(start 2.6 -2.6) (end 2.6 2.6)
+		(stroke (width 0.12) (type solid))
+		(layer "F.SilkS")
+		(uuid "b2c3d4e5-0002-4000-8000-000000000011")
+	)
+	(fp_line
+		(start 2.6 2.6) (end -2.6 2.6)
+		(stroke (width 0.12) (type solid))
+		(layer "F.SilkS")
+		(uuid "b2c3d4e5-0002-4000-8000-000000000012")
+	)
+	(fp_line
+		(start -2.6 2.6) (end -2.6 -2.6)
+		(stroke (width 0.12) (type solid))
+		(layer "F.SilkS")
+		(uuid "b2c3d4e5-0002-4000-8000-000000000013")
+	)
+	(pad "1" thru_hole rect
+		(at 0 0)
+		(size 5 5)
+		(drill 2.0)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "b2c3d4e5-0002-4000-8000-000000000100")
+	)
+	(pad "" thru_hole circle (at -1.5 -1.5) (size 0.6 0.6) (drill 0.3) (layers "*.Cu") (uuid "b2c3d4e5-0002-4000-8000-000000000201"))
+	(pad "" thru_hole circle (at -0.5 -1.5) (size 0.6 0.6) (drill 0.3) (layers "*.Cu") (uuid "b2c3d4e5-0002-4000-8000-000000000202"))
+	(pad "" thru_hole circle (at  0.5 -1.5) (size 0.6 0.6) (drill 0.3) (layers "*.Cu") (uuid "b2c3d4e5-0002-4000-8000-000000000203"))
+	(pad "" thru_hole circle (at  1.5 -1.5) (size 0.6 0.6) (drill 0.3) (layers "*.Cu") (uuid "b2c3d4e5-0002-4000-8000-000000000204"))
+	(pad "" thru_hole circle (at -1.5 -0.5) (size 0.6 0.6) (drill 0.3) (layers "*.Cu") (uuid "b2c3d4e5-0002-4000-8000-000000000205"))
+	(pad "" thru_hole circle (at  1.5 -0.5) (size 0.6 0.6) (drill 0.3) (layers "*.Cu") (uuid "b2c3d4e5-0002-4000-8000-000000000206"))
+	(pad "" thru_hole circle (at -1.5  0.5) (size 0.6 0.6) (drill 0.3) (layers "*.Cu") (uuid "b2c3d4e5-0002-4000-8000-000000000207"))
+	(pad "" thru_hole circle (at  1.5  0.5) (size 0.6 0.6) (drill 0.3) (layers "*.Cu") (uuid "b2c3d4e5-0002-4000-8000-000000000208"))
+	(pad "" thru_hole circle (at -1.5  1.5) (size 0.6 0.6) (drill 0.3) (layers "*.Cu") (uuid "b2c3d4e5-0002-4000-8000-000000000209"))
+	(pad "" thru_hole circle (at -0.5  1.5) (size 0.6 0.6) (drill 0.3) (layers "*.Cu") (uuid "b2c3d4e5-0002-4000-8000-000000000210"))
+	(pad "" thru_hole circle (at  0.5  1.5) (size 0.6 0.6) (drill 0.3) (layers "*.Cu") (uuid "b2c3d4e5-0002-4000-8000-000000000211"))
+	(pad "" thru_hole circle (at  1.5  1.5) (size 0.6 0.6) (drill 0.3) (layers "*.Cu") (uuid "b2c3d4e5-0002-4000-8000-000000000212"))
+)

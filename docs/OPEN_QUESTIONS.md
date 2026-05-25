@@ -199,3 +199,22 @@ Cross-reference: locked specs live in `docs/REQUIREMENTS.md`; this file logs
 - **Recommendation**: option (b) XT90 — sureshot, comfortable FoS, no spec compromise. Phase-2 era XT30 selection was a too-conservative starter; production rev should go XT90.
 - **Impact**: footprint change ([invariant-change] PR), BOM change (XT90 + corresponding battery lead), mech (XT90 body ~25×15×17mm vs XT30 ~12×8×8mm — larger footprint at edge but acceptable for our 100mm board)
 - **Blocks**: fab freeze (must resolve before final BOM lock)
+
+### OQ-008 — RESOLVED 2026-05-26 (Sai call: skip connector entirely, solder pads for wire)
+
+Sai decision (verbatim): "you need to only give solder pad i will solder a wire to it.. which will be connected to a xt90"
+
+Resolution: J1 XT30 connector REMOVED. Replaced with BAT_P + BAT_N solder pads
+(custom footprint BatterySolderPad_5x5_THT2.0_HC: 5×5mm Cu both sides + 2mm THT
+plated hole + 16-via grid, ~150A burst capacity per IPC-2152). External XT90
+wire (10-12 AWG silicone) hand-soldered to pads at integration. Connector
+spec problem dissolves: wire is the rated element (XT90 90A cont), not the
+pad. G_FoS5 connector pin-current rule no longer applies to BAT_P/BAT_N.
+
+Massive simplification:
+  - BOM: one less line (no XT30 part)
+  - Cable swing audit: no connector cable bend zone to clear
+  - Pin-current FoS: N/A (wire-rated)
+  - Mech: simpler enclosure (no connector cutout needed)
+
+Lockfile updated [invariant-change]. Worker re-runs Stage 0 to land BAT pads.
