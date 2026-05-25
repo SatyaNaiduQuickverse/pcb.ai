@@ -141,6 +141,24 @@ nets:
 
 components:
 
+  # ==== S6 connectors / BEC-LDO / ESD (Stage 0) — worker-filled from netlist 2026-05-26 ====
+  # ICs are cluster-anchors placed in the S6 zone; ESD arrays cluster near the FC
+  # header (J14, foundation @50,90) since they sit on the M*_RAW data lines. Passives
+  # anchor to their parent IC pin per R23/R25. Refs map: J13=TLV76733 LDO,
+  # J15-17=USBLC6 ESD, C45=LDO Vin, C46=LDO Vout, L11=VDDA ferrite, C47/C48=VDDA
+  # bypass, D23=power-good LED, R35=LED limit-R.
+  J13: {tier: 5, role: cluster-anchor, subsystem: S6, zone_hint: [70.0, 90.0]}
+  J15: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [-10.0, -4.0]}
+  J16: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [0.0, -4.0]}
+  J17: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [10.0, -4.0]}
+  C45: {tier: 5, role: decoupling, subsystem: S6, parent: J13, parent_pin: "3", max_distance_mm: 3, same_layer_as_parent: true}
+  C46: {tier: 5, role: decoupling, subsystem: S6, parent: J13, parent_pin: "5", max_distance_mm: 3, same_layer_as_parent: true}
+  L11: {tier: 5, role: cluster-member, subsystem: S6, parent: J13, parent_pin: "5", max_distance_mm: 5, same_layer_as_parent: true}
+  C47: {tier: 5, role: decoupling, subsystem: S6, parent: L11, parent_pin: "2", max_distance_mm: 3, same_layer_as_parent: true}
+  C48: {tier: 5, role: decoupling, subsystem: S6, parent: L11, parent_pin: "2", max_distance_mm: 3, same_layer_as_parent: true}
+  R35: {tier: 5, role: cluster-member, subsystem: S6, parent: J13, parent_pin: "5", max_distance_mm: 8, same_layer_as_parent: true}
+  D23: {tier: 5, role: cluster-member, subsystem: S6, parent: R35, parent_pin: "2", max_distance_mm: 3, same_layer_as_parent: true}
+
   # ---- Schema example (worker fills concrete entries from netlist) ----
 
   # Tier 1: Already in mechanical_anchors.yaml (mount holes, fiducials, J1, J11, J12, motor pads, test points, LEDs)

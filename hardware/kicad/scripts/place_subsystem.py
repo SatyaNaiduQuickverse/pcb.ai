@@ -25,6 +25,7 @@ Usage:
   subsystems: CH1 CH2 CH3 CH4 S1 S2 S3 S5 S6
 """
 import argparse
+import math
 import re
 import sys
 from pathlib import Path
@@ -87,7 +88,8 @@ def place_at_anchor(fp, anchor):
 
 def grid_placer(board, refs, zones):
     """Deterministic zone grid packer: 1.5mm pitch, 1mm inset, sorted by ref.
-    Fallback for components without a routing_topology role yet (per-stage fill)."""
+    LAST-RESORT only (R32: grid is banned as primary — fab-blocking pad overlaps +
+    zero decoupling-anchoring). Used for refs without a routing_topology role."""
     x0, y0, x1, y1 = zones[0]
     inset, pitch = 1.0, 1.5
     cols = max(1, int((x1 - x0 - 2 * inset) / pitch))
@@ -97,6 +99,155 @@ def grid_placer(board, refs, zones):
         fp.SetPosition(pcbnew.VECTOR2I(int((x0 + inset + col * pitch) * 1e6),
                                        int((y0 + inset + row * pitch) * 1e6)))
         reset_text_to_body(fp)
+
+
+# ─── Real role-based placement engine (PLACEMENT_METHODOLOGY §2 bringSelected) ──
+
+CLEARANCE_MM = 0.3   # IPC-7351 body-to-body minimum (edge-to-edge)
+MIN_CENTER_MM = 1.6  # > audit COINCIDENT-PLACEMENT 1.5mm same-layer threshold
+
+
+def _pad_bbox(fp):
+    """Footprint copper extent from pads only (avoids the GetBoundingBox text trap).
+    Returns (x0, y0, x1, y1) in mm."""
+    xs, ys = [], []
+    for p in fp.Pads():
+        c = p.GetPosition()
+        sz = p.GetSize()
+        hx, hy = sz.x / 2e6, sz.y / 2e6
+        xs += [c.x / 1e6 - hx, c.x / 1e6 + hx]
+        ys += [c.y / 1e6 - hy, c.y / 1e6 + hy]
+    if not xs:
+        c = fp.GetPosition()
+        return (c.x / 1e6, c.y / 1e6, c.x / 1e6, c.y / 1e6)
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _overlap(a, b, clr=CLEARANCE_MM):
+    return not (a[2] + clr <= b[0] or b[2] + clr <= a[0]
+                or a[3] + clr <= b[1] or b[3] + clr <= a[1])
+
+
+def _parent_pad_pos(board, parent_ref, pin):
+    fp = board.FindFootprintByReference(parent_ref)
+    if fp is None:
+        return None, None
+    for p in fp.Pads():
+        if p.GetPadName() == str(pin):
+            c = p.GetPosition()
+            return (c.x / 1e6, c.y / 1e6), fp
+    c = fp.GetPosition()
+    return (c.x / 1e6, c.y / 1e6), fp
+
+
+def _spiral_offsets(max_r, step=0.6):
+    """Candidate offsets (dx,dy) outward from a parent pad, nearest first."""
+    out = [(0.0, 0.0)]
+    r = step
+    while r <= max_r + 1e-9:
+        for ang in range(0, 360, 30):
+            out.append((r * math.cos(math.radians(ang)),
+                        r * math.sin(math.radians(ang))))
+        r += step
+    return out
+
+
+def role_place(board, refs, zones, roles):
+    """Place role-classified components per PLACEMENT_METHODOLOGY: cluster-anchor
+    ICs in-zone (or near a foundation anchor), then passives ≤max_distance from
+    their parent's pad, same layer, collision-free, in-zone. Deterministic; refs
+    whose parent can't be resolved are returned as failures (no silent fallback)."""
+    placed = {}                       # ref -> pad_bbox of committed placement
+    occupied = []                     # (bbox, cx, cy) already on board (incl anchors)
+    for fp in board.GetFootprints():
+        r = fp.GetReference()
+        if r not in refs:             # foundation + already-brought + parked
+            x = fp.GetPosition().x / 1e6
+            if -2 <= x <= 102:        # only on-board obstacles matter
+                bb = _pad_bbox(fp)
+                occupied.append((bb, (bb[0]+bb[2])/2, (bb[1]+bb[3])/2))
+
+    def fits(bbox):
+        cx, cy = (bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2
+        if not any(z[0] <= cx <= z[2] and z[1] <= cy <= z[3] for z in zones):
+            return False
+        for ob, ocx, ocy in occupied:
+            if _overlap(bbox, ob) or math.hypot(cx-ocx, cy-ocy) < MIN_CENTER_MM:
+                return False
+        for pb in placed.values():
+            pcx, pcy = (pb[0]+pb[2])/2, (pb[1]+pb[3])/2
+            if _overlap(bbox, pb) or math.hypot(cx-pcx, cy-pcy) < MIN_CENTER_MM:
+                return False
+        return True
+
+    def place_fp_at(fp, x, y, layer_ref=None):
+        if layer_ref is not None:
+            want_back = layer_ref.IsFlipped()
+            if fp.IsFlipped() != want_back:
+                fp.Flip(fp.GetPosition(), False)
+        fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
+        reset_text_to_body(fp)
+
+    errs = []
+    # Phase A: cluster-anchor ICs.
+    anchors_lf = lockfile.load_anchors()
+    for r in [x for x in refs if roles[x].get("role") == "cluster-anchor"]:
+        rec = roles[r]
+        fp = board.FindFootprintByReference(r)
+        if rec.get("near_anchor") and rec["near_anchor"] in anchors_lf:
+            ax, ay = anchors_lf[rec["near_anchor"]]["pos"]
+            ox, oy = rec.get("near_offset", [0.0, 0.0])
+            base = (ax + ox, ay + oy)
+        else:
+            base = tuple(rec.get("zone_hint", [(zones[0][0]+zones[0][2])/2,
+                                               (zones[0][1]+zones[0][3])/2]))
+        for dx, dy in _spiral_offsets(8.0):
+            fp.SetPosition(pcbnew.VECTOR2I(int((base[0]+dx)*1e6), int((base[1]+dy)*1e6)))
+            bb = _pad_bbox(fp)
+            if fits(bb):
+                place_fp_at(fp, base[0]+dx, base[1]+dy)
+                placed[r] = _pad_bbox(fp)
+                break
+        else:
+            errs.append(f"role_place: no slot for cluster-anchor {r}")
+
+    # Phase B: passives, resolving parent first (iterate until stable).
+    pending = [x for x in refs if roles[x].get("role") in ("decoupling", "cluster-member")]
+    progress = True
+    while pending and progress:
+        progress = False
+        for r in list(pending):
+            rec = roles[r]
+            parent = rec.get("parent")
+            if parent in refs and parent not in placed and parent in [
+                    x for x in refs if roles[x].get("role") in
+                    ("decoupling", "cluster-member")]:
+                continue  # parent is a passive not yet placed → defer
+            ppos, pfp = _parent_pad_pos(board, parent, rec.get("parent_pin", "1"))
+            if ppos is None:
+                errs.append(f"role_place: {r} parent {parent} not found")
+                pending.remove(r); progress = True; continue
+            fp = board.FindFootprintByReference(r)
+            maxd = float(rec.get("max_distance_mm", 3))
+            done = False
+            for dx, dy in _spiral_offsets(maxd):
+                fp.SetPosition(pcbnew.VECTOR2I(int((ppos[0]+dx)*1e6), int((ppos[1]+dy)*1e6)))
+                if rec.get("same_layer_as_parent") and pfp is not None:
+                    if fp.IsFlipped() != pfp.IsFlipped():
+                        fp.Flip(fp.GetPosition(), False)
+                bb = _pad_bbox(fp)
+                if fits(bb):
+                    place_fp_at(fp, ppos[0]+dx, ppos[1]+dy, pfp if rec.get("same_layer_as_parent") else None)
+                    placed[r] = _pad_bbox(fp)
+                    done = True
+                    break
+            pending.remove(r)
+            progress = True
+            if not done:
+                errs.append(f"role_place: no slot ≤{maxd}mm for {r} near {parent}.{rec.get('parent_pin')}")
+    for r in pending:
+        errs.append(f"role_place: unresolved parent chain for {r}")
+    return errs
 
 
 def bring_selected(board, subsystem):
@@ -128,19 +279,21 @@ def bring_selected(board, subsystem):
     anchored = [r for r in refs if r in anchors]
     for r in anchored:
         place_at_anchor(present[r], anchors[r])
-    # 2. Non-anchor components: role-based placement when routing_topology has an
-    #    entry, else zone grid fallback (per-stage role fill is a separate step).
+    # 2. Non-anchor components: real role-based placement (routing_topology), else
+    #    last-resort grid for refs with no role yet.
     rest = [r for r in refs if r not in anchors]
     role_placed = [r for r in rest if r in roles]
     grid_rest = [r for r in rest if r not in roles]
-    # role-based placement not yet wired (components: section fills per-stage);
-    # everything non-anchor currently uses the grid fallback.
-    grid_placer(board, rest, zones)
+    errs = []
+    if role_placed:
+        errs += role_place(board, role_placed, zones,
+                           {r: roles[r] for r in role_placed})
+    if grid_rest:
+        grid_placer(board, grid_rest, zones)
 
     stats = {"anchored": len(anchored), "role": len(role_placed),
              "grid": len(grid_rest)}
 
-    errs = []
     for r in anchored:
         ax, ay = anchors[r]["pos"]
         p = present[r].GetPosition()
