@@ -54,8 +54,13 @@ def parse_board_invariants(path="docs/BOARD_INVARIANTS.md"):
         inv.invariant_hash = m.group(1)
 
     # Zones table — flexible name (allow parens, words, spaces)
+    # Anchor on the coordinate table's HEADER (the row with x_min/y_min), not the
+    # "## Subsystem zones" section header — a sub-section (e.g. "## Bilateral layer
+    # assignment", PR #126) can sit between them and a section-bounded capture would
+    # then stop before the coordinate table → 0 zones (breaks all placement + G2/G6).
     zone_section = re.search(
-        r"## Subsystem zones.*?\n\n([\s\S]+?)(?=\n##|\Z)", text)
+        r"\|[^\n]*\bx_min\b[^\n]*\bx_max\b[^\n]*\|\s*\n([\s\S]+?)(?=\n##|\n\n|\Z)",
+        text)
     if zone_section:
         for line in zone_section.group(1).split("\n"):
             row = re.match(
