@@ -230,13 +230,24 @@ def check_io_port_compliance(inv, board, tolerance_mm=0.5):
 # ─── Gate 4: highway reservation ───────────────────────────────────────────
 
 def check_highway_reservation(inv, board, exclusion_margin_mm=0.5):
-    """No component pad inside reserved highway corridor."""
+    """No component pad inside reserved highway corridor.
+
+    Lockfile-anchored refs EXEMPT (worker-caught 2026-05-26 batch 1.6): J1
+    battery connector lives AT the +BATT spine source by design; FID6 +
+    supply test pads (TP3, TP11) are lockfile-positioned along power
+    centerlines. Their position is G1's job, not highway-reservation. Real
+    subsystem components (caps/ICs, non-anchored) STILL get highway-checked,
+    so the exemption is safe — it won't hide a real component in a corridor."""
     if not inv.highways:
         return "WARN", "no highways declared"
+
+    anchor_refs = _load_lockfile_anchor_refs()
 
     fails = []
     for fp in _onboard_footprints(board):
         ref = fp.GetReference()
+        if ref in anchor_refs:
+            continue  # lockfile-anchored — G1 owns the position
         for pad in fp.Pads():
             pp = pad.GetPosition()
             x, y = pcbnew.ToMM(pp.x), pcbnew.ToMM(pp.y)

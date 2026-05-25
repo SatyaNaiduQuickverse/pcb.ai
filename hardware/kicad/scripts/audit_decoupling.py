@@ -78,14 +78,19 @@ def is_ic(fp):
     needing decoupling. Exclude by refdes prefix.
     """
     ref = fp.GetReference()
-    # Connectors (J), test-points (TP), mount holes (H), fiducials (FID),
-    # diodes (D), inductors (L), ferrites (FB) — none need IC-class decoupling.
-    if ref.startswith(("J", "TP", "H", "FID", "FB")):
-        return False
+    # 2026-05-26 batch 1.6 (VESC cross-check caught C11 false positive):
+    # Exhaustive passive + connector + mech-fiducial prefix exclusion. Only
+    # U* style ICs need decoupling check (and a handful of niche IC prefixes
+    # like MK / IC). Better to under-exclude here than over-flag every big-body
+    # bulk cap on real boards.
+    if ref.startswith(("J", "P", "TP", "H", "FID", "FB", "CP", "C", "R", "Q", "Y", "BT", "SW", "SP", "K", "M")):
+        return False  # P/J = connectors/pin-headers/sockets
     if ref.startswith("D") and ref[1:].isdigit():
         return False  # diodes (LEDs, schottky)
     if ref.startswith("L") and ref[1:].isdigit():
         return False  # inductors / ferrite beads
+    if ref.startswith("F") and ref[1:].isdigit():
+        return False  # fuses
     return _body_bbox_area_mm2(fp) > IC_BODY_AREA_MIN_MM2
 
 

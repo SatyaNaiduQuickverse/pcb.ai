@@ -111,20 +111,63 @@ python3 hardware/kicad/scripts/audit_layout_compliance.py \
     /tmp/audit_validation_board_v2.kicad_pcb --parked-exempt
 ```
 
-## TODO — pending validation
+## Results — 2026-05-26 G10-G15 additions
 
-The following audits ship in PR #103 but are NOT YET validated against ground
-truth. Each needs a test fixture + truth-comparison run before being trusted:
+### G10 — `verify_spec_diff.py` (R20 mirror geometry)
 
-- `audit_via_stitching_density.py` — Tier 1 PDN gate
-- `audit_length_match.py` — Tier 5 signal highway gate
-- `audit_zone_contract.py` (worker's G2) — partial — passes real-board E2E but
-  no synthetic ground-truth comparison yet
+Wired into `master_pre_merge.sh` (was standalone). Accepts board arg. SKIP in
+`--staged` mode (mirror partners not all brought yet).
 
-Phase 2 (post-PR):
+### G12 — `audit_diff_pair_match.py` (Tier 4)
 
-- Fetch reputed external KiCad PCB (e.g. VESC 6.x by Benjamin Vedder) as
-  real-world cross-check. Run all audits, compare against published spec.
+| Case | Spread (mm) | Tolerance (mm) | Expected | Result |
+|---|---|---|---|---|
+| `dp_ok` (DP_OK_POS=30.0, DP_OK_NEG=30.3) | 0.30 | 0.5 | PASS | ✅ |
+| `dp_fail` (DP_FAIL_POS=30.0, DP_FAIL_NEG=35.0) | 5.00 | 0.5 | FAIL | ✅ |
+
+### G13 — `audit_kelvin_shunt_routing.py` (Tier 4)
+
+| Sub-check | Result |
+|---|---|
+| Shunt pad has Kelvin tap | ✅ PASS |
+| Sense tracks start at pad centroid (±0.2mm) | ✅ PASS |
+| Pos/neg length match (|0-0|=0mm ≤ 0.5) | ✅ PASS |
+| Max transverse separation (3.0mm ≤ 5.0) | ✅ PASS |
+
+### G14 — `audit_via_stitching_density.py` (Tier 1 PDN)
+
+| Net | Vias | Area | Density | Spec | Result |
+|---|---|---|---|---|---|
+| +VMOTOR_TEST_PASS | 16 | 100.2 cm² | 0.16/cm² | ≥ 0.1 | ✅ PASS |
+| +VMOTOR_TEST_FAIL | 4 | 100.2 cm² | 0.04/cm² | ≥ 0.1 | ✅ FAIL |
+| (board with 0 tracks) | — | — | — | — | ✅ SKIP (routing gate) |
+
+### G15 — `audit_length_match.py` (Tier 5 highways)
+
+| Group | Lengths (mm) | Spread (mm) | Tolerance (mm) | Result |
+|---|---|---|---|---|
+| `hw_ok` | 50, 51, 49 | 2.00 | 2.5 | ✅ PASS |
+| `hw_fail` | 50, 60, 49 | 11.00 | 2.5 | ✅ FAIL |
+
+## Phase 2 — real-world cross-check on VESC BLDC_4 (Benjamin Vedder, BSD)
+
+Board: `/tmp/audit_xchecks/vesc_bldc/design/BLDC_4.kicad_pcb` — 127 footprints, 1858 tracks, 187 vias, 38.6×65.2 mm. Reputed: Benjamin Vedder VESC reference, widely deployed across the FOC motor-control industry.
+
+**Cross-checks ran (audits that universalize):**
+
+| Audit | VESC behavior | Interpretation |
+|---|---|---|
+| G3 audit_loop_area | SKIP all 4 channels (CH1-CH4 refs not in VESC convention) | Audit correctly skips when our channel naming absent — won't false-FAIL foreign boards |
+| G4 audit_decoupling | Detects U1/U2/U3 VDD pins with caps 3-12mm away → FAIL R25 | R25 (≤3mm) is STRICTER than VESC's design choice; gate works correctly. VESC isn't wrong, it's just on a different spec |
+| G7 audit_routing | 1252 SUBSYSTEM-ZONE crossings (VESC has no zone structure) | Expected — gate keyed to our zone yaml; correctly inert against foreign boards lacking our metadata |
+| G14 audit_via_stitching | Audits any net with via_stitching_density_per_cm2 spec; VESC has none → no false FAIL | Correct opt-in gate |
+
+**Bug caught + fixed during cross-check:**
+- `is_ic()` was flagging C11 (cap, body >4mm²) as IC needing decoupling. Refined prefix exclusion (now: J/P/TP/H/FID/FB/CP/C/R/Q/Y/BT/SW/SP/K/M + digit-suffix D/L/F). VESC re-run: only true U* refs flagged.
+
+## Pending
+
+- Synthetic test for `audit_zone_contract.py` (worker's G2) — currently validated only via real-board E2E by worker.
 
 ## Rule
 
