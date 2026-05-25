@@ -200,6 +200,54 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G16: connector symmetry (proactive 2026-05-26 per Sai)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_connector_symmetry.py" ]]; then
+  run_gate "G16_connector_symmetry" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_connector_symmetry.py' '$BOARD'" true
+else
+  echo "[G16_connector_symmetry] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G17: board edge keepout (proactive — codifies Sai-#5 J14 catch)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_edge_keepout.py" ]]; then
+  run_gate "G17_edge_keepout" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_edge_keepout.py' '$BOARD'" true
+else
+  echo "[G17_edge_keepout] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_FoS1: thermal Factor of Safety (Sai 2026-05-26 directive)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_fos_thermal.py" ]]; then
+  run_gate "G_FoS1_thermal" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_fos_thermal.py'" true
+else
+  echo "[G_FoS1_thermal] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_L1: lockfile completeness (proactive catch-class)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_lockfile_completeness.py" ]]; then
+  run_gate "G_L1_lockfile_completeness" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_lockfile_completeness.py' '$BOARD'" false
+else
+  echo "[G_L1_lockfile_completeness] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G12: Tier 4 differential pair length match
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_diff_pair_match.py" ]]; then
