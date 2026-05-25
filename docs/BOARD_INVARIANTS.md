@@ -103,7 +103,7 @@ Run `python3 hardware/kicad/scripts/compute_board_invariant_hash.py --write`
 to compute and write.
 
 ```
-BOARD_INVARIANT_HASH = b6766bd3223baef22f56dbc8f10003fb366d46162a044326bd61b2e6ec84c03e
+BOARD_INVARIANT_HASH = ed1cdaebe30a73d54dd0e4047496a862a1a136798cc8eacaffa809233617ddba
 ```
 
 ## Audit gate
