@@ -165,12 +165,12 @@ components:
   C53: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   C54: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   C55: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
-  C56: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
+  C56: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "R42", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   C57: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J19", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   C58: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "C57", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
-  C59: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J19", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
-  C60: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J19", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
-  C61: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J19", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
+  C59: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "D24", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
+  C60: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "D27", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
+  C61: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "D30", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   C62: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   C63: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   C64: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
@@ -180,31 +180,31 @@ components:
   C68: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   C69: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   C70: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
-  C71: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
-  C72: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J21", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
-  C73: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J22", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
-  C74: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
-  C75: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
-  C76: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
+  C71: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "D34", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
+  C72: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "D35", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
+  C73: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "D36", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
+  C74: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "R60", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
+  C75: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "R62", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
+  C76: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "R64", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   C77: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "C57", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
-  C78: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
+  C78: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "R68", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   C79: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   C80: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 3, same_layer_as_parent: true}
   D15: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   D19: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U4", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  D24: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C59", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  D25: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "Q6", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  D26: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C59", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  D27: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C60", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  D28: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "Q8", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  D29: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C60", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  D30: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C61", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  D31: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "Q10", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  D32: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C61", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  D24: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R45", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  D25: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R46", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  D26: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D24", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  D27: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R49", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  D28: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R50", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  D29: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D27", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  D30: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R53", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  D31: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R54", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  D32: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D30", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   D33: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  D34: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C71", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  D35: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C72", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  D36: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C73", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  D34: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J20", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  D35: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D34", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  D36: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D34", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   D37: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J19", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   D38: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D19", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   J18: {tier: 3, role: "cluster-anchor", subsystem: "CH1"}
@@ -221,42 +221,42 @@ components:
   R22: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D15", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R26: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D19", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R41: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  R42: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C56", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  R43: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R42: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R43: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R41", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R44: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J19", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R45: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q5", parent_pin: "G", relation: "gate-r", max_distance_mm: 5, same_layer_as_parent: true}
   R46: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q6", parent_pin: "G", relation: "gate-r", max_distance_mm: 5, same_layer_as_parent: true}
-  R47: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C59", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R47: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D24", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R48: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D25", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R49: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q7", parent_pin: "G", relation: "gate-r", max_distance_mm: 5, same_layer_as_parent: true}
   R50: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q8", parent_pin: "G", relation: "gate-r", max_distance_mm: 5, same_layer_as_parent: true}
-  R51: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C60", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R51: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D27", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R52: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D28", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R53: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q9", parent_pin: "G", relation: "gate-r", max_distance_mm: 5, same_layer_as_parent: true}
   R54: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q10", parent_pin: "G", relation: "gate-r", max_distance_mm: 5, same_layer_as_parent: true}
-  R55: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C61", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R55: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D30", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R56: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D31", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R57: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q6", parent_pin: "S", relation: "source-shunt", max_distance_mm: 2, same_layer_as_parent: true, loop_member: true, kelvin_sense: true}
   R58: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q8", parent_pin: "S", relation: "source-shunt", max_distance_mm: 2, same_layer_as_parent: true, loop_member: true, kelvin_sense: true}
   R59: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q10", parent_pin: "S", relation: "source-shunt", max_distance_mm: 2, same_layer_as_parent: true, loop_member: true, kelvin_sense: true}
-  R60: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C74", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  R61: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C74", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  R62: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C75", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  R63: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C75", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  R64: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C76", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  R65: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C76", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R60: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D24", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R61: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R60", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R62: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D27", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R63: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R62", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R64: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D30", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R65: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R64", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R66: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D33", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  R67: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U3", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  R68: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C78", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R67: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "TH1", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R68: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U3", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R69: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R68", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  R70: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "C78", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R70: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R68", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R71: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R70", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R72: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D34", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  R73: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U3", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  R74: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U3", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R73: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U4", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  R74: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U4", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R75: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R73", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   R76: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D37", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
-  TH1: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R67", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
+  TH1: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U3", parent_pin: "1", relation: "auto", max_distance_mm: 5, same_layer_as_parent: true}
   U3: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "logic-near-mcu", max_distance_mm: 8, same_layer_as_parent: true}
   U4: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "logic-near-mcu", max_distance_mm: 8, same_layer_as_parent: true}
   # ---- Schema example (worker fills concrete entries from netlist) ----

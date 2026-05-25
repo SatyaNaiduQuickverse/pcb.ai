@@ -120,20 +120,28 @@ def derive():
     # nearest by net; fallback parent = MCU. Decoupling rule (≤3mm) for caps.
     POWER = {"GND", "+3V3", "+3V3A", "+5V", "+VMOTOR", "VMOTOR_CH", "+V5", "+V9", ""}
     placed = set(roles)
-    for ref in sorted(ch1 - placed, key=lambda x: (x[0], int(re.search(r"\d+", x).group()))):
+    # Process fewest-pins-first (and devices before caps): a 2-pin BEMF/filter
+    # divider R is roled before the 2-pin cap on its node, so the cap then finds
+    # the divider (most-specific parent) instead of falling back to the MCU.
+    auto_order = sorted(ch1 - placed,
+                        key=lambda x: (len(rpn[x]), x.startswith("C"),
+                                       int(re.search(r"\d+", x).group())))
+    for ref in auto_order:
         if ref.startswith(("TP",)):  # SWD/BOOT/motor TPs are Tier-1 anchors
             continue
-        # find a signal net shared with an already-roled IC/FET/shunt
-        parent = None
+        # Parent = the most-SPECIFIC already-roled component on a shared signal
+        # (non-power) net: fewest pins wins, so a 2-pin BEMF/filter divider R beats
+        # the 32-pin MCU that touches every signal. Tie-break prefers a device
+        # (R/Q/U) over another cap. This routes BEMF caps to R60-65, filter caps to
+        # their local node, instead of all piling on J18.
+        cands = []
         for p, net in rpn[ref].items():
             if net in POWER:
                 continue
             for rf, pn in net_nodes.get(net, []):
                 if rf in roles and rf != ref:
-                    parent = rf
-                    break
-            if parent:
-                break
+                    cands.append(rf)
+        parent = min(cands, key=lambda rf: (len(rpn[rf]), rf.startswith("C"))) if cands else None
         is_cap = ref.startswith("C")
         roles[ref] = {"tier": 3, "role": "decoupling" if is_cap else "cluster-member",
                       "subsystem": "CH1", "parent": parent or MCU, "parent_pin": "1",
