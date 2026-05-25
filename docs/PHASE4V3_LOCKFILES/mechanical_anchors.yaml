@@ -52,7 +52,14 @@ fiducials:
   - {ref: FID6, pos: [50.00, 15.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}
 
 connectors:
-  # J1 = XT30 battery input (top edge)
+  # [invariant-change] 2026-05-26: J12 symmetry fix per Sai-eye-catch on Stage 1
+  # render. Bottom edge needs left-right symmetry about x=50 board center.
+  # Was: J12@(25,95) left-skewed; J14@(50,96) center. No mirror partner.
+  # Now: J12@(75,95) — mirror-paired with empty-left = clean L-C-R-empty
+  # (acceptable: J14 centered, J12 right). Math: J12 distance to J14 same
+  # 25mm, edge clearance unchanged, J12-to-east-motor-pad clearance 9.87mm.
+  #
+  # J1 = XT30 battery input (top edge) — already centered, symmetric on its own
   - ref: J1
     pos: [50.00, 5.00]
     layer: F.Cu
@@ -68,9 +75,10 @@ connectors:
   # The real FC header is J14 (SM08B-SRSS-TB, 8-pin JST). Foundation set is
   # now {J1, J12, J14} — drop J11 from foundation (S3 parks+brings it).
   # ============================================================
-  # J12 = AUX/DShot 6-pin JST header (bottom area, S6 roster)
+  # J12 = AUX/DShot 6-pin JST header — moved 2026-05-26 (25→75) for bottom-edge
+  # symmetry per Sai-eye-catch on Stage 1 render. See header comment above.
   - ref: J12
-    pos: [25.00, 95.00]
+    pos: [75.00, 95.00]
     layer: F.Cu
     rotation: 0
     footprint: JST_SH_SM06B-SRSS-TB_1x06-1MP_P1.00mm_Horizontal
