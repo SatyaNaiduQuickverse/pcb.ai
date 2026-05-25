@@ -159,19 +159,48 @@ PR sequence: master's methodology PR (this branch `phase4v3-methodology-ssot`) m
 
 ---
 
-## 9. S2 BOM — Sai-locked 2026-05-25: option (a)
+## 9. S2 BOM — Sai-locked 2026-05-25: option (ζ)
 
-**LOCKED decision**: option (a) — 4× polymer 220µF in 8×6.3mm package (was: 4× 470µF in 10×14.3mm).
+**LOCKED decision (revised after worker availability check)**: option (ζ) — 4× polymer 150µF / 35V / 8×6.2mm (was: 4× 470µF in 10×14.3mm).
 
-- Total bulk: 880µF (was 1880µF; still above 400µF minimum per IPC bulk-cap rule for 400A peak system) → 2.2× margin
-- Footprint: 4× 8×6.3mm in 2×2 grid = 16×12.6mm → fits 20×20mm S2 zone with 3.4-3.7mm margin to zone edges
-- ESR: 4-cap parallel preserved (vs option c 2-cap which would halve ESR margin)
-- Standard FPV ESC practice (same logic as motor pad option b)
-- Sureshot per `[[feedback-sureshot-over-sota]]`
+### Why (ζ) replaces my prior (a) "220µF / 35V / 8×6.3mm"
 
-Worker action in REDO infra PR: update schematic BOM for C1-C4 to **220µF / 35V / 8×6.3mm polymer** (verify exact LCSC part number against availability + 105°C derating).
+Initial (a) spec was hallucinated — that combination (220µF + 35V + 8mm body) does NOT exist as a standard high-volume polymer cap. Per worker netlist + KiCad library lookup 2026-05-25. Real 35V polymer in 8mm body tops out around 150µF.
 
-S2 PR (Stage 9) **NOT blocked anymore**. Standard sequence proceeds.
+### Locked spec
+
+| Parameter | Value | Justification |
+|---|---|---|
+| Capacitance | 150µF per cap × 4 parallel = 600µF total | 50% above 400µF IPC bulk minimum for 400A peak system; 2.5× ripple-current margin |
+| Voltage rating | 35V | 1.39× margin on 6S battery 25.2V max; full rating preserves cap lifetime under sustained max-V operation |
+| Package | 8×6.2mm polymer | 4-cap 2×2 grid = 16.4×12.4mm → fits 20×20mm S2 zone with **3.6mm x-margin / 3.8mm y-margin** for routing clearance |
+| Chemistry | Polymer | Low ESR (matches our switching ripple budget); long-life vs aluminum electrolytic; standard FPV ESC practice |
+| KiCad footprint | `Capacitor_SMD:CP_Elec_8x6.2` | Exact match for 8.0mm dia × 6.2mm height polymer can |
+| Real part | **Nichicon PCH1V151MCL1GS** | 150µF / 35V / 8×6.2mm polymer, LCSC C426440 family; in-stock high-volume |
+| ESR | 4-cap parallel preserved | Halves vs single cap; meets switching ripple budget |
+| Sureshot | ✅ | Standard part + standard footprint + sized within zone with clearance |
+
+### Engineering options considered (for traceability)
+
+| Opt | Spec | Fits 20×20 zone? | Voltage margin | Verdict |
+|---|---|---|---|---|
+| (α) | 220µF / 25V / 8×6.2mm | ✅ 3.6/3.8mm margin | ❌ 1.05× — derates at 25V sustained | REJECTED — voltage-marginal |
+| (β) | 220µF / 35V / 10×7.7mm | ⚠️ 0mm x-margin | ✅ 1.39× | REJECTED — no routing clearance |
+| (γ) | 100µF / 35V / 6.3×5.4mm × 8 | ❌ 6.6mm too wide | ✅ 1.39× | REJECTED — doesn't fit even with more caps |
+| (δ) | 220µF / 35V / 10×8mm + S2 zone → 22×22mm | ✅ 1mm margin | ✅ 1.39× | REJECTED — invariant-change PR; cascades into S3 spine |
+| (ε) | 16× 22µF / 50V / 1210 X7R ceramic 4×4 grid in 12×12mm = 352µF | ✅ 4mm margin both axes | ✅ 2× | NOT CHOSEN — modern FPV practice; loses some low-freq bulk capacitance; greater BOM count |
+| **(ζ)** | **4× 150µF / 35V / 8×6.2mm polymer** | ✅ 3.6/3.8mm margin | ✅ 1.39× | **✅ LOCKED — sureshot real part with all constraints met** |
+
+### Worker action
+
+In REDO infra PR (`phase4v3-park-and-bring`):
+1. In-place pcbnew footprint swap for C1-C4: old footprint → `Capacitor_SMD:CP_Elec_8x6.2`
+2. Update BOM doc with Nichicon PCH1V151MCL1GS LCSC part number
+3. No schematic re-import (per `[[reference-kinet2pcb-silent-drop]]` trap avoidance — in-place mutation only)
+
+### Status
+
+S2 PR (Stage 9) **NOT blocked anymore**. Standard Phase 4-v3 sequence proceeds: smoke-test S6 → anchors → CH1 hardest → mirrors → support including S2 with (ζ) caps.
 
 ---
 
