@@ -50,6 +50,12 @@ try:
 except ImportError:
     yaml = None  # zone_zoom will fall back to full-board
 
+try:
+    from PIL import Image, ImageDraw, ImageChops, ImageFont
+    _PIL_OK = True
+except ImportError:
+    _PIL_OK = False  # placeholders + zone_zoom + diff fall back to empty PNG / convert if available
+
 
 def run_or_warn(cmd, error_msg):
     """Run subprocess. Return (rc, stdout). Print error_msg if non-zero."""
@@ -68,7 +74,38 @@ def run_or_warn(cmd, error_msg):
 
 
 def placeholder_png(out_path, text):
-    """Generate a simple placeholder PNG with the given text when render tool unavailable."""
+    """Generate a simple placeholder PNG with the given text when render tool unavailable.
+    Uses PIL (preferred — no external dep), falls back to ImageMagick convert, then empty file."""
+    if _PIL_OK:
+        try:
+            img = Image.new("RGB", (800, 600), color=(220, 220, 220))
+            draw = ImageDraw.Draw(img)
+            # Try TrueType for crispness; fall back to default
+            try:
+                font = ImageFont.truetype(
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22
+                )
+            except (OSError, IOError):
+                font = ImageFont.load_default()
+            lines = ["PLACEHOLDER"] + text.split("\n")
+            # Center each line vertically as a block
+            line_h = 28
+            total_h = line_h * len(lines)
+            y_start = (600 - total_h) // 2
+            for i, line in enumerate(lines):
+                bbox = draw.textbbox((0, 0), line, font=font)
+                w = bbox[2] - bbox[0]
+                draw.text(
+                    ((800 - w) // 2, y_start + i * line_h),
+                    line,
+                    fill=(40, 40, 40),
+                    font=font,
+                )
+            img.save(out_path, "PNG")
+            return
+        except Exception as e:
+            print(f"  ⚠️ PIL placeholder failed for {out_path.name}: {e}; trying convert")
+    # ImageMagick fallback
     cmd = [
         "convert",
         "-size",
@@ -180,22 +217,53 @@ def render_zone_zoom(board_path, out_path, subsystem):
     if bbox is None:
         placeholder_png(out_path, f"Zone for {subsystem} not found in BOARD_INVARIANTS")
         return
-    # Render full top first, then crop with ImageMagick
+    # Render full top first, then crop. PIL preferred, ImageMagick convert as fallback.
     full_render = out_path.parent / "_temp_full_top.png"
     render_2d_top(board_path, full_render)
     if not full_render.exists():
         placeholder_png(out_path, f"Cannot generate zone zoom (full render failed)")
         return
-    # Crude crop assuming 100x100mm board fills the image
-    # ImageMagick crop: <width>x<height>+<x>+<y>
-    cmd = [
-        "convert",
-        str(full_render),
-        "-crop",
-        f"{int((bbox[2]-bbox[0])*10)}x{int((bbox[3]-bbox[1])*10)}+{int(bbox[0]*10)}+{int(bbox[1]*10)}",
-        str(out_path),
-    ]
-    run_or_warn(cmd, f"zone zoom crop for {subsystem}")
+    # Crop: bbox is in mm; assume rendered image dimensions correspond to a known
+    # board size (here BOARD_INVARIANTS-implied 100x100mm). Scale = imageDim_px / boardDim_mm.
+    if _PIL_OK:
+        try:
+            img = Image.open(full_render)
+            iw, ih = img.size
+            # Heuristic: board is the dominant content; assume image px-per-mm scale
+            # using img height = board height assumption (works for kicad-cli renders
+            # which fit board edge-to-edge).
+            scale_x = iw / 100.0
+            scale_y = ih / 100.0
+            left = int(bbox[0] * scale_x)
+            upper = int(bbox[1] * scale_y)
+            right = int(bbox[2] * scale_x)
+            lower = int(bbox[3] * scale_y)
+            # PIL clamps automatically but clip to be safe
+            left = max(0, min(iw, left))
+            upper = max(0, min(ih, upper))
+            right = max(left + 1, min(iw, right))
+            lower = max(upper + 1, min(ih, lower))
+            img.crop((left, upper, right, lower)).save(out_path, "PNG")
+        except Exception as e:
+            print(f"  ⚠️ PIL crop failed for {subsystem}: {e}; trying convert")
+            cmd = [
+                "convert", str(full_render),
+                "-crop",
+                f"{int((bbox[2]-bbox[0])*10)}x{int((bbox[3]-bbox[1])*10)}+{int(bbox[0]*10)}+{int(bbox[1]*10)}",
+                str(out_path),
+            ]
+            run_or_warn(cmd, f"zone zoom crop (fallback convert)")
+    else:
+        # No PIL — use ImageMagick if available
+        cmd = [
+            "convert", str(full_render),
+            "-crop",
+            f"{int((bbox[2]-bbox[0])*10)}x{int((bbox[3]-bbox[1])*10)}+{int(bbox[0]*10)}+{int(bbox[1]*10)}",
+            str(out_path),
+        ]
+        run_or_warn(cmd, f"zone zoom crop for {subsystem}")
+    if not out_path.exists():
+        placeholder_png(out_path, f"Zone zoom crop tool unavailable for {subsystem}")
     try:
         full_render.unlink()
     except OSError:
@@ -226,20 +294,39 @@ def render_diff(board_path, out_path, diff_against):
     current_png = tmpdir / "current.png"
     render_2d_top(prior_board, prior_png)
     render_2d_top(Path(board_path), current_png)
-    # Diff: ImageMagick compare with red-overlay
-    cmd_compare = [
-        "compare",
-        "-metric",
-        "AE",
-        "-highlight-color",
-        "red",
-        str(prior_png),
-        str(current_png),
-        str(out_path),
-    ]
-    run_or_warn(cmd_compare, "compare diff overlay")
+    # Diff overlay: PIL preferred (PIL.ImageChops.difference + red tint on changes,
+    # composited over current render at 50% alpha). ImageMagick `compare` fallback.
+    if _PIL_OK and prior_png.exists() and current_png.exists():
+        try:
+            prior_img = Image.open(prior_png).convert("RGB")
+            current_img = Image.open(current_png).convert("RGB")
+            # Resize prior to current's dims if mismatched (kicad-cli may render different sizes)
+            if prior_img.size != current_img.size:
+                prior_img = prior_img.resize(current_img.size)
+            diff = ImageChops.difference(prior_img, current_img).convert("L")
+            # Threshold: any pixel with diff > 20 = changed; mask it red
+            mask = diff.point(lambda v: 255 if v > 20 else 0)
+            red_layer = Image.new("RGB", current_img.size, color=(255, 0, 0))
+            overlay = current_img.copy()
+            overlay.paste(red_layer, mask=mask)
+            # Blend with original at 60% to keep board context visible
+            blended = Image.blend(current_img, overlay, 0.6)
+            blended.save(out_path, "PNG")
+        except Exception as e:
+            print(f"  ⚠️ PIL diff failed: {e}; trying ImageMagick compare")
+            cmd_compare = [
+                "compare", "-metric", "AE", "-highlight-color", "red",
+                str(prior_png), str(current_png), str(out_path),
+            ]
+            run_or_warn(cmd_compare, "compare diff overlay")
+    else:
+        cmd_compare = [
+            "compare", "-metric", "AE", "-highlight-color", "red",
+            str(prior_png), str(current_png), str(out_path),
+        ]
+        run_or_warn(cmd_compare, "compare diff overlay")
     if not out_path.exists():
-        placeholder_png(out_path, f"Compare tool unavailable")
+        placeholder_png(out_path, f"Diff tool unavailable (no PIL, no ImageMagick)")
     shutil.rmtree(tmpdir, ignore_errors=True)
 
 

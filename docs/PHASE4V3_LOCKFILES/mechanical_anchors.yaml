@@ -52,23 +52,33 @@ connectors:
     rotation: 0
     footprint: Connector_XT30  # current master has PinHeader placeholder; needs proper XT30 footprint
     role: battery_input
+    subsystem: S1
     edge_distance_mm: 5.0
-  # J11 = Flight controller header
-  - ref: J11
-    pos: [50.00, 38.00]
-    layer: F.Cu
-    rotation: 0
-    footprint: SOT-23-8  # placeholder in current master; needs proper FC header footprint
-    role: flight_controller_header
-    edge_distance_mm: null
-    note: "Position TBD by FC mech spec — current x=50,y=38 is central; may move to edge if FC pin pitch demands"
-  # J12 = AUX/DShot 6-pin header
+  # ============================================================
+  # CORRECTED 2026-05-25 per worker R21 catch from netlist verification:
+  # Prior J11 entry was WRONG — J11 in netlist is TPS3700_VMOTOR_27V_18V
+  # supervisor IC (SOT-23-8) in subsystem S3, NOT a connector or FC header.
+  # The real FC header is J14 (SM08B-SRSS-TB, 8-pin JST). Foundation set is
+  # now {J1, J12, J14} — drop J11 from foundation (S3 parks+brings it).
+  # ============================================================
+  # J12 = AUX/DShot 6-pin JST header (bottom area, S6 roster)
   - ref: J12
     pos: [25.00, 95.00]
     layer: F.Cu
     rotation: 0
     footprint: JST_SH_SM06B-SRSS-TB_1x06-1MP_P1.00mm_Horizontal
     role: aux_dshot_header
+    subsystem: S6
+    edge_distance_mm: 5.0
+  # J14 = Flight controller 8-pin JST header (bottom edge, S6 roster)
+  # Position (50, 90) per worker recommendation — FC pin-pitch demands edge placement
+  - ref: J14
+    pos: [50.00, 90.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: JST_SH_SM08B-SRSS-TB_1x08-1MP_P1.00mm_Horizontal
+    role: flight_controller_header
+    subsystem: S6
     edge_distance_mm: 5.0
 
 motor_pads:

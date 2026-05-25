@@ -42,7 +42,7 @@ Smoke-test on simplest first (validates process), then hardest (defines topology
 
 | Stage | Subsystem(s) | Reason | Component count |
 |---|---|---|---|
-| 0 | S6 connectors (smoke-test only — 3 components: J11, J12, U_ESD) | Validate park+bring tooling on trivial case | 3 |
+| 0 | S6 full subsystem smoke-test — 22 components (J12 AUX header + J14 FC header anchored + USBLC6 ESD U_ESD + 10 supply test pads TP1/2/3/5/7/9/10/11/12/16 + LEDs D23 etc + 4 SWD/BOOT TPs assigned to S6) | Validate park+bring tooling end-to-end on smallest real subsystem (corrected from prior misstatement of "3 components"; actual S6 roster per netlist verification 2026-05-25) | 22 |
 | 1 | Mechanical anchors (Tier 1) | XT30, FC header, mount holes, motor pads, test points, LEDs, fiducials — immovable foundation | ~30 |
 | 2 | CH1 full cycle (Tier 2 cluster + Tier 3 template) | Hardest = defines power+thermal+EMI topology | ~81 |
 | 3 | CH2 mirror_X(CH1) | Symmetry preserves work | ~81 |
