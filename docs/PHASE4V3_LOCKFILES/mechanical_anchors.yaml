@@ -59,16 +59,33 @@ connectors:
   # (acceptable: J14 centered, J12 right). Math: J12 distance to J14 same
   # 25mm, edge clearance unchanged, J12-to-east-motor-pad clearance 9.87mm.
   #
-  # J1 = XT30 battery input (top edge) — already centered, symmetric on its own
-  - ref: J1
-    pos: [50.00, 5.00]
+  # [invariant-change] 2026-05-26: J1 XT30 REMOVED per Sai call — replaced
+  # with BAT_P / BAT_N solder pads at top edge for hand-soldered external-XT90
+  # wire. Closes OQ-008 (XT30 was 3× undersized for 70A cont). Solder pads +
+  # external XT90 wire = sureshot: no connector pin-current FoS limit (wire
+  # handles full current), 2mm THT plated hole gives mechanical strain relief,
+  # massive BOM + cable-swing audit simplification.
+  # Footprint: BatterySolderPad_5x5_THT2.0_HC (5×5mm Cu both sides + 16-via
+  # grid + 2mm THT, ~150A burst capacity per IPC-2152).
+  # Positions: pair-centered around old J1@(50,5), 10mm pad-pad spacing.
+  - ref: BAT_P
+    pos: [45.00, 5.00]
     layer: F.Cu
     rotation: 0
-    footprint: AMASS_XT30U-M_1x02_P5.0mm_Vertical  # worker 2026-05-26: real KiCad Connector_AMASS fp (male board-mount, Sai-confirmed); board swapped via migrate_footprints
-    role: battery_input
+    footprint: BatterySolderPad_5x5_THT2.0_HC
+    role: battery_pos_solder_pad
     subsystem: S1
-    max_load_A: 100  # 6S × 70A cont = 420W; XT30 dual-pin rated 30A theoretical, derated to 15A practical → G_FoS5 (1.5× FoS = 22.5A needs override note: this hits Sai burst-spec OK at 100A peak for ≤2s)
     edge_distance_mm: 5.0
+    notes: "Hand-solder 10-12 AWG silicone wire here; external connector = user-supplied XT90"
+  - ref: BAT_N
+    pos: [55.00, 5.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: BatterySolderPad_5x5_THT2.0_HC
+    role: battery_neg_solder_pad
+    subsystem: S1
+    edge_distance_mm: 5.0
+    notes: "Hand-solder 10-12 AWG silicone wire (paired with BAT_P); external = XT90"
   # ============================================================
   # CORRECTED 2026-05-25 per worker R21 catch from netlist verification:
   # Prior J11 entry was WRONG — J11 in netlist is TPS3700_VMOTOR_27V_18V
