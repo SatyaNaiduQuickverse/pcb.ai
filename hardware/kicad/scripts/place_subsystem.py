@@ -270,10 +270,10 @@ def bring_selected(board, subsystem):
 
     roster = roster_mod.derive_roster(roster_mod.parse_netlist())
     foundation = lockfile.foundation_refs()
-    # Foundation (mount holes, fiducials, shared connectors J1/J11/J12) is placed
-    # once at lockfile position and never parked — excluded from any subsystem
-    # bring even though the netlist assigns e.g. J1→S1, J12→S6.
-    want = {r for r, s in roster.items() if s == subsystem} - foundation
+    # Lockfile anchors (foundation + motor pads + SWD/BOOT TPs + LEDs) are placed at
+    # fixed coords by park / the Stage-1 TIER1 bring — NOT by the per-subsystem
+    # cluster bring. Exclude them; role_place uses the placed motor pads as parents.
+    want = {r for r, s in roster.items() if s == subsystem} - foundation - set(anchors)
     present = {fp.GetReference(): fp for fp in board.GetFootprints()}
     refs = sorted(want & present.keys(), key=_ref_sort_key)
     missing = sorted(want - present.keys())
