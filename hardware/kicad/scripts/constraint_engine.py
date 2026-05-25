@@ -53,9 +53,20 @@ def parse_board_invariants(path="docs/BOARD_INVARIANTS.md"):
     if m:
         inv.invariant_hash = m.group(1)
 
-    # Zones table — flexible name (allow parens, words, spaces)
+    # Zones table — flexible name (allow parens, words, spaces).
+    # 2026-05-26 worker URGENT catch: PR #126 inserted "## Bilateral layer
+    # assignment" subheader BETWEEN "## Subsystem zones" and its coord table,
+    # making the prior section-bounded (?=\n##) regex stop early and return
+    # 0 zones → KeyError 'CH1' crash everywhere.
+    # FIX: anchor on the coord-table HEADER row pattern itself, not the
+    # section heading. The unique signature is `| Subsystem | x_min | y_min |
+    # x_max | y_max |` which appears exactly once in the doc.
     zone_section = re.search(
-        r"## Subsystem zones.*?\n\n([\s\S]+?)(?=\n##|\Z)", text)
+        r"\|\s*Subsystem\s*\|\s*x_min\s*\|\s*y_min\s*\|\s*x_max\s*\|\s*y_max\s*\|[^\n]*\n"
+        r"\|[\s\-:|]+\|\s*\n"  # alignment row
+        r"((?:\|[^\n]*\n)+)",  # capture all subsequent table rows
+        text
+    )
     if zone_section:
         for line in zone_section.group(1).split("\n"):
             row = re.match(
