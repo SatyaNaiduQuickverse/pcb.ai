@@ -50,7 +50,7 @@ connectors:
     pos: [50.00, 5.00]
     layer: F.Cu
     rotation: 0
-    footprint: Connector_XT30  # current master has PinHeader placeholder; needs proper XT30 footprint
+    footprint: AMASS_XT30U-M_1x02_P5.0mm_Vertical  # worker 2026-05-26: real KiCad Connector_AMASS fp (male board-mount, Sai-confirmed); board swapped via migrate_footprints
     role: battery_input
     subsystem: S1
     edge_distance_mm: 5.0
@@ -71,9 +71,10 @@ connectors:
     subsystem: S6
     edge_distance_mm: 5.0
   # J14 = Flight controller 8-pin JST header (bottom edge, S6 roster)
-  # Position (50, 90) per worker recommendation — FC pin-pitch demands edge placement
+  # worker 2026-05-26: moved (50,90)→(50,96). At y=90 it was 10mm from the y=100
+  # edge, violating EXTERNAL-CONNECTOR-EDGE (Sai catch #5, ≤5mm). y=96 → 4mm.
   - ref: J14
-    pos: [50.00, 90.00]
+    pos: [50.00, 96.00]
     layer: F.Cu
     rotation: 0
     footprint: JST_SH_SM08B-SRSS-TB_1x08-1MP_P1.00mm_Horizontal
