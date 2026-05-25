@@ -638,8 +638,12 @@ def check_component_inside_body():
 
     R25 exemption: decoupling cap on power net within 3mm of host IC's matching
     VDD/VCC pin is exempt — R25 same-side-decoupling rule wins. The cap MUST be
-    near the VDD pin even if that pin is inside the IC body bbox."""
-    fps = list(board.GetFootprints())
+    near the VDD pin even if that pin is inside the IC body bbox.
+
+    --parked-exempt 2026-05-26 (worker-caught): parking grid 5mm pitch + 8mm
+    polymer-cap bodies cause parked components to legitimately overlap each
+    other in the pen. That's by-design off-board state, not a fab-blocking bug."""
+    fps = list(_onboard_fps(board))
     info = []
     for fp in fps:
         ref = fp.GetReference()

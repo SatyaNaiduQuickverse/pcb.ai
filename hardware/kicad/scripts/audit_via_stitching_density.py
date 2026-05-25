@@ -88,6 +88,15 @@ def main():
     print(f"=== Via stitching density audit: {board_path.name} ===")
     print(f"Board area: {area_cm2:.2f} cm²\n")
 
+    # Via stitching is a ROUTING gate — only meaningful when board has tracks/vias.
+    # Worker 2026-05-26: placement-only PRs (Stage 0/1) flagged 0 vias as FAIL by
+    # design — that's a routing-stage concern, not placement. SKIP cleanly here
+    # (mirrors G7 audit_routing.py no-tracks skip).
+    track_count = sum(1 for t in board.GetTracks() if isinstance(t, pcbnew.PCB_TRACK))
+    if track_count == 0:
+        print("INFO: board has 0 tracks — via stitching is a routing gate; SKIP")
+        sys.exit(0)
+
     fails = []
     passes = 0
     skipped = 0

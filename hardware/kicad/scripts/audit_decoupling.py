@@ -70,7 +70,22 @@ def _body_bbox_area_mm2(fp):
 
 
 def is_ic(fp):
-    """True if footprint is likely an IC (vs passive)."""
+    """True if footprint is likely an IC (vs passive/connector/test-point).
+
+    BUG-FIX 2026-05-26 (worker-caught on real S6 board): bbox-only heuristic
+    incorrectly classified connectors (J* — JST/XT30) and test-pads (TP* —
+    PAD_V3V3 etc) as ICs. They have ≥4mm² body but they aren't powered ICs
+    needing decoupling. Exclude by refdes prefix.
+    """
+    ref = fp.GetReference()
+    # Connectors (J), test-points (TP), mount holes (H), fiducials (FID),
+    # diodes (D), inductors (L), ferrites (FB) — none need IC-class decoupling.
+    if ref.startswith(("J", "TP", "H", "FID", "FB")):
+        return False
+    if ref.startswith("D") and ref[1:].isdigit():
+        return False  # diodes (LEDs, schottky)
+    if ref.startswith("L") and ref[1:].isdigit():
+        return False  # inductors / ferrite beads
     return _body_bbox_area_mm2(fp) > IC_BODY_AREA_MIN_MM2
 
 

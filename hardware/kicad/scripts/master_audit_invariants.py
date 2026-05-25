@@ -107,17 +107,52 @@ def _component_subsystem(ref):
     return None  # position-based for unsuffixed refs
 
 
+def _load_lockfile_anchor_refs():
+    """Return set of refdes that are lockfile-anchored (position is G1's job,
+    not zone-compliance's). Includes mount holes + fiducials + connectors +
+    motor pads + test points + LEDs from mechanical_anchors.yaml.
+
+    Added 2026-05-26 (worker-caught on real S6 board): TP3 + TP10 are
+    centrally-placed supply test pads anchored by lockfile; zone compliance
+    falsely flagged them as out-of-zone because their lockfile pos doesn't
+    map to any subsystem zone (they're board-spanning supply rails)."""
+    try:
+        import yaml
+        lock_path = Path("docs/PHASE4V3_LOCKFILES/mechanical_anchors.yaml")
+        if not lock_path.exists():
+            return set()
+        lf = yaml.safe_load(lock_path.read_text()) or {}
+        refs = set()
+        for cat in ("mount_holes", "fiducials", "connectors", "motor_pads",
+                    "test_points", "leds"):
+            for e in lf.get(cat, []) or []:
+                r = e.get("ref")
+                if r and not (isinstance(r, str) and r.upper() == "TBD"):
+                    refs.add(r)
+        return refs
+    except Exception:
+        return set()
+
+
 def check_subsystem_zone_compliance(inv, board):
     """Every component must be within declared zone bbox (for the subsystem
-    its refdes maps to). For position-only subsystems, must be inside SOME zone."""
+    its refdes maps to). For position-only subsystems, must be inside SOME zone.
+
+    Lockfile-anchored refs are EXEMPT — their position is G1's job (lockfile
+    diff), not zone-compliance. Includes mount holes / fiducials / connectors /
+    motor pads / test points / LEDs from mechanical_anchors.yaml."""
     if not inv.zones:
         return "WARN", "no zones declared — parser may have failed"
+
+    anchor_refs = _load_lockfile_anchor_refs()
 
     fails = []
     for fp in _onboard_footprints(board):
         ref = fp.GetReference()
         if re.match(r"^(H|FID)\d+$", ref):
-            continue  # skip mount holes + fiducials
+            continue  # skip mount holes + fiducials (legacy regex catch)
+        if ref in anchor_refs:
+            continue  # lockfile-anchored — G1 owns the position
 
         pos = fp.GetPosition()
         x, y = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
