@@ -63,18 +63,37 @@ def main():
             cols[col_key].append((ref, x, y))
 
         for col_x, members in cols.items():
-            if len(members) < 3:
-                continue
-            members.sort(key=lambda m: m[2])  # sort by y
-            pitches = [members[i+1][2] - members[i][2] for i in range(len(members)-1)]
-            median_pitch = statistics.median(pitches)
-            for i, p in enumerate(pitches):
-                if abs(p - median_pitch) > PITCH_TOL_MM:
-                    a_ref, a_x, a_y = members[i]
-                    b_ref, b_x, b_y = members[i+1]
-                    fails.append(f"  [FAIL] {category} column x≈{col_x:.0f}: "
-                                 f"{a_ref}@y{a_y:.1f} → {b_ref}@y{b_y:.1f} pitch {p:.2f}mm "
-                                 f"vs median {median_pitch:.2f}mm (Δ {abs(p-median_pitch):.2f}mm > {PITCH_TOL_MM}mm)")
+            # 2026-05-26 refinement: only enforce uniform pitch for SAME-role
+            # anchors within a column. Different-role TPs that coincidentally
+            # share X (e.g. CH3-SWD-CLK at y25 + CH2-SWD-CLK at y75 + V5-AI
+            # supply pad at y87) are independent functional anchors — uniform
+            # pitch doesn't apply across role boundaries.
+            # Re-bin by role within column.
+            from collections import defaultdict as _dd
+            by_role = _dd(list)
+            for ref, x, y in members:
+                # role is the 4th element (added in cols.append below)
+                role = "_unknown"
+                # fetch from lockfile if available
+                for cat_anchors in [lf.get(category, []) or []]:
+                    for a in cat_anchors:
+                        if a.get("ref") == ref:
+                            role = a.get("role", "_unknown")
+                            break
+                by_role[role].append((ref, x, y))
+            for role, role_members in by_role.items():
+                if len(role_members) < 3:
+                    continue
+                role_members.sort(key=lambda m: m[2])
+                pitches = [role_members[i+1][2] - role_members[i][2] for i in range(len(role_members)-1)]
+                median_pitch = statistics.median(pitches)
+                for i, p in enumerate(pitches):
+                    if abs(p - median_pitch) > PITCH_TOL_MM:
+                        a_ref, a_x, a_y = role_members[i]
+                        b_ref, b_x, b_y = role_members[i+1]
+                        fails.append(f"  [FAIL] {category} role={role} column x≈{col_x:.0f}: "
+                                     f"{a_ref}@y{a_y:.1f} → {b_ref}@y{b_y:.1f} pitch {p:.2f}mm "
+                                     f"vs median {median_pitch:.2f}mm (Δ {abs(p-median_pitch):.2f}mm > {PITCH_TOL_MM}mm)")
 
     if fails:
         for f in fails: print(f)
