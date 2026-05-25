@@ -263,20 +263,30 @@ def role_place(board, refs, zones, roles):
             wb = want_back_of(rec, pfp)
             if fp.IsFlipped() != wb:
                 fp.Flip(fp.GetPosition(), False)
+            # Try the preferred side, then (for non-loop passives) overflow to the
+            # opposite side — Sai's B.Cu decoupling strategy: a bypass/filter cap
+            # that can't fit a saturated F.Cu region drops to the roomy backside
+            # rather than stretching its trace. Loop-members (FET/shunt) never flip.
+            sides = [wb] if rec.get("loop_member") else [wb, not wb]
             done = False
-            for dx, dy in _spiral_offsets(search_r):
-                cx, cy = pcx + dx, pcy + dy
-                fp.SetPosition(pcbnew.VECTOR2I(int(cx * 1e6), int(cy * 1e6)))
-                bb = _pad_bbox(fp)
-                if fits(bb, wb):
-                    place_fp_at(fp, cx, cy, wb)
-                    placed[r] = (_pad_bbox(fp), wb)
-                    done = True
+            for side in sides:
+                if fp.IsFlipped() != side:
+                    fp.Flip(fp.GetPosition(), False)
+                for dx, dy in _spiral_offsets(search_r):
+                    cx, cy = pcx + dx, pcy + dy
+                    fp.SetPosition(pcbnew.VECTOR2I(int(cx * 1e6), int(cy * 1e6)))
+                    bb = _pad_bbox(fp)
+                    if fits(bb, side):
+                        place_fp_at(fp, cx, cy, side)
+                        placed[r] = (_pad_bbox(fp), side)
+                        done = True
+                        break
+                if done:
                     break
             pending.remove(r)
             progress = True
             if not done:
-                errs.append(f"role_place: no slot ≤{search_r:.1f}mm for {r} near {parent}")
+                errs.append(f"role_place: no slot ≤{search_r:.1f}mm for {r} near {parent} (both sides)")
     for r in pending:
         errs.append(f"role_place: unresolved parent chain for {r}")
     return errs

@@ -86,7 +86,7 @@ def derive():
         lsfet = next((rf for rf, pn in net_nodes.get(topnet, []) if rf.startswith("Q") and pn == "S"), None)
         roles[s] = {"tier": 2, "role": "cluster-member", "subsystem": "CH1",
                     "parent": lsfet or motor_of.get(topnet), "parent_pin": "S" if lsfet else "1",
-                    "relation": "source-shunt", "max_distance_mm": 4,
+                    "relation": "source-shunt", "max_distance_mm": 6,
                     "layer": "F.Cu",  # methodology: shunt F.Cu after LS-source via cluster
                     "loop_member": True, "kelvin_sense": True}
     # Gate resistors (15R): between driver out and a FET gate net. Parent = the FET
@@ -156,7 +156,7 @@ def derive():
         is_cap = ref.startswith("C")
         roles[ref] = {"tier": 3, "role": "decoupling" if is_cap else "cluster-member",
                       "subsystem": "CH1", "parent": parent or MCU, "parent_pin": "1",
-                      "relation": "auto", "max_distance_mm": 3 if is_cap else 5,
+                      "relation": "auto", "max_distance_mm": 4 if is_cap else 6,
                       "same_layer_as_parent": True}
     return roles
 
