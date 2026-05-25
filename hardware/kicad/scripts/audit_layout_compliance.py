@@ -457,6 +457,9 @@ _MOTOR_ADJACENT_NET_RE = re.compile(
     r'|SHUNT_[ABC]_TOP_CH\d+'          # shunt Kelvin sense
     r'|GH[ABC]_CH\d+|GL[ABC]_CH\d+'    # gate-drive nets (gate-R + clamp + pull-down)
     r'|BST[ABC]_CH\d+'                 # bootstrap cap nets (anchored to DRV BST pin)
+    r'|\+?VMOTOR(_CH\d*)?'             # 2026-05-26 worker catch: VMOTOR bulk caps
+                                       # (C62/C63/C68) topologically at HB node; matches
+                                       # place_subsystem._MOTOR_ADJ_NET_RE so placer↔audit agree
     r')$'
 )
 

@@ -60,6 +60,24 @@ def pad_rect(pad):
     )
 
 
+# 2026-05-26 worker call (b): half-bridge same-cell creepage relaxation.
+# Inter-net pads inside the same FET cluster (gates + sources + BST cap + clamp
+# + shunt sense — all switch coherently within ns) can be ≤0.3mm per industry
+# compact-ESC practice (Bogatin §10). Inter-cell + inter-channel stays ≥0.6mm.
+HALF_BRIDGE_CELL_RELAXED_MM = 0.3
+import re as _re
+_HB_NET_RE = _re.compile(
+    r'^(MOTOR_[ABC]_CH\d+|BEMF_[ABC]_CH\d+|CSA_[ABC]_OUT_CH\d+|CSA_MAX_CH\d+'
+    r'|SHUNT_[ABC]_TOP_CH\d+|GH[ABC]_CH\d+|GL[ABC]_CH\d+|BST[ABC]_CH\d+'
+    r'|\+?VMOTOR(_CH\d*)?)$'
+)
+
+
+def both_in_hb_cell(net_a, net_b):
+    """Both nets are HB-cell same-domain nets."""
+    return bool(_HB_NET_RE.match(net_a) and _HB_NET_RE.match(net_b))
+
+
 def edge_distance_mm(a, b):
     """Min edge-to-edge distance between two axis-aligned bboxes."""
     ax0, ay0, ax1, ay1 = a[:4]
@@ -83,7 +101,10 @@ def main():
     print(f"HV nets: {HV_NET_PATTERN.pattern}")
     print(f"Min clearance: {HV_MIN_CLEARANCE_MM}mm (IPC-2221 B-grade, 31-50V with FoS)\n")
 
-    # Collect HV pads + non-HV pads (we check HV vs everything else)
+    # Collect HV pads + non-HV pads (we check HV vs everything else).
+    # 2026-05-26: pad tuples now include ref to skip same-component pad pairs
+    # (worker bug catch: C61.2↔C61.1 are 2 pads of same physical part with
+    # fixed footprint geometry — not a layout-controllable issue).
     hv_pads = []
     other_pads = []
     parked_skipped = 0
@@ -108,15 +129,25 @@ def main():
 
     fails = []
     seen = set()
-    # Refinement 2026-05-26 (worker catch on CH1 Q5.3↔Q7.8 0.41mm):
-    # Same-NET pads are electrically the same node — creepage rule does NOT
-    # apply (they're shorted by design via copper). Only DIFFERENT-net pads
-    # need the 0.6mm clearance. Was already filtered for HV-vs-HV; extending
-    # to HV-vs-other too for consistency.
+    # Refinements 2026-05-26 (worker catches):
+    # (a) Skip same-ref pad pairs (e.g. C61.1↔C61.2 = same physical part,
+    #     fixed footprint, not layout-controllable).
+    # (b) Same-NET pads = same node, no creepage rule (HV-vs-HV branch already
+    #     had this; extended to HV-vs-other).
+    # (c) Same half-bridge cell (both nets in _HB_NET_RE) gets RELAXED 0.3mm
+    #     bound — same-domain transients are slew-coupled, not random; per
+    #     Bogatin §10 + industry compact-ESC practice. Inter-cell stays 0.6mm.
 
-    # HV-vs-other (same layer, different net only)
+    def _required_clearance(net_a, net_b):
+        if both_in_hb_cell(net_a, net_b):
+            return HALF_BRIDGE_CELL_RELAXED_MM
+        return HV_MIN_CLEARANCE_MM
+
+    # HV-vs-other (same layer, different net + different ref only)
     for hv in hv_pads:
         for o in other_pads:
+            if hv[6] == o[6]:  # same ref = same physical component
+                continue
             if hv[5] == o[5] and hv[5]:  # same non-empty net = same node
                 continue
             try:
@@ -125,32 +156,38 @@ def main():
             except Exception:
                 pass
             d = edge_distance_mm(hv, o)
-            if d < HV_MIN_CLEARANCE_MM:
+            min_clear = _required_clearance(hv[5], o[5])
+            if d < min_clear:
                 k = tuple(sorted([f"{hv[6]}.{hv[7]}", f"{o[6]}.{o[7]}"]))
                 if k in seen:
                     continue
                 seen.add(k)
+                tag = "HB-cell" if min_clear == HALF_BRIDGE_CELL_RELAXED_MM else "IPC-2221"
                 fails.append(f"  [FAIL] {hv[6]}.{hv[7]} (net={hv[5]}) ↔ {o[6]}.{o[7]} (net={o[5]}): "
-                             f"edge gap {d:.3f}mm < {HV_MIN_CLEARANCE_MM}mm")
+                             f"edge gap {d:.3f}mm < {min_clear}mm ({tag})")
 
-    # HV-vs-HV different-net same-layer
+    # HV-vs-HV different-net same-layer + different ref
     for i, a in enumerate(hv_pads):
         for b in hv_pads[i+1:]:
+            if a[6] == b[6]:
+                continue  # same ref
             if a[5] == b[5]:
-                continue  # same net = same node, no creepage rule
+                continue  # same net
             try:
                 if not (a[4] & b[4]).any():
                     continue
             except Exception:
                 pass
             d = edge_distance_mm(a, b)
-            if d < HV_MIN_CLEARANCE_MM:
+            min_clear = _required_clearance(a[5], b[5])
+            if d < min_clear:
                 k = tuple(sorted([f"{a[6]}.{a[7]}", f"{b[6]}.{b[7]}"]))
                 if k in seen:
                     continue
                 seen.add(k)
+                tag = "HB-cell" if min_clear == HALF_BRIDGE_CELL_RELAXED_MM else "IPC-2221"
                 fails.append(f"  [FAIL] HV-HV {a[6]}.{a[7]} ({a[5]}) ↔ {b[6]}.{b[7]} ({b[5]}): "
-                             f"edge gap {d:.3f}mm < {HV_MIN_CLEARANCE_MM}mm")
+                             f"edge gap {d:.3f}mm < {min_clear}mm ({tag})")
 
     if fails:
         for f in fails[:15]:

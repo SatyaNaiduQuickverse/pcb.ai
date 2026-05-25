@@ -19,8 +19,8 @@ Per master v2 review #1: CH1-CH4 tightened to EXCLUDE the 35-65 central spine
 
 | Subsystem | x_min | y_min | x_max | y_max | Function |
 |---|---|---|---|---|---|
-| S1 battery input | 0 | 0 | 100 | 18 | top edge — XT30 + NTC inrush + TVS |
-| S6 connectors | 0 | 82 | 100 | 100 | bottom edge — FC + AUX + DShot |
+| S1 battery input | 0 | 82 | 100 | 100 | bottom edge — BAT_P/BAT_N solder pads + NTC + TVS (swapped 2026-05-26 with S6 per Sai mechanical revamp) |
+| S6 connectors | 0 | 0 | 100 | 18 | top edge — J14 FC + J12 AUX + USBLC6 ESDs + LDO (swapped 2026-05-26 with S1) |
 | CH1 (channel A) | 0 | 50 | 35 | 82 | NW — FET cluster + DRV + MCU + INA |
 | CH2 (channel B) | 65 | 50 | 100 | 82 | NE — mirror_X(CH1) |
 | CH3 (channel C) | 65 | 18 | 100 | 50 | SE — mirror_X(CH4) |
