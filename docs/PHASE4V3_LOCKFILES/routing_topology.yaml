@@ -138,6 +138,31 @@ nets:
 # ============================================================
 # Component role classification (per-component)
 # ============================================================
+#
+# Role taxonomy (used by role_place + audits):
+#
+#   cluster-anchor    : positioned by zone_hint or near_anchor offset;
+#                        starts a cluster. Examples: ICs, gate drivers, MCU.
+#   cluster-member    : near a parent_pin within max_distance_mm. Tight.
+#                        Examples: gate-R, BST cap, ferrite, op-amp filter cap.
+#   cluster-aux       : in subsystem zone + same layer as parent;
+#                        NOT distance-constrained to a specific pin.
+#                        Examples: OR-gate diode caps (D34/D36 BAT54), BEMF
+#                        divider auxiliary caps, status-LED bypass caps,
+#                        comparator hysteresis caps — NOT decoupling (R25),
+#                        NOT switching-loop (G3). They serve nearby nodes
+#                        but routing flexibility lets them sit anywhere
+#                        in-zone same-side without electrical penalty.
+#                        Added 2026-05-26 (worker fits() debug — relaxes
+#                        over-constrained density on dense channels).
+#   decoupling        : ≤3mm same-layer to parent_pin (R25 enforced via G4).
+#   loop-member       : in switching loop (HS/LS/shunt/cap) — G3 audits.
+#
+# fits() over-rejection note (2026-05-26 worker catch):
+#   When max_distance_mm is too tight AND the zone has highway/edge keepouts
+#   AND MIN_CENTER 1.6mm, the free-space tessellation fragments such that
+#   even 14% area-dense zones can have 0 fittable slots for a small (1.6mm)
+#   cap. cluster-aux role bypasses this by allowing zone-wide search.
 
 components:
 
