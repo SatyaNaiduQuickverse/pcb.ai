@@ -218,3 +218,12 @@ Massive simplification:
   - Mech: simpler enclosure (no connector cutout needed)
 
 Lockfile updated [invariant-change]. Worker re-runs Stage 0 to land BAT pads.
+
+### OQ-009 — INA186 (J20/J21/J22) V+ bypass cap gap (latent, future schem rev)
+
+- **Raised**: 2026-05-26 (worker latent-finding during CH1 G4 debug)
+- **Issue**: The 3 INA186 current-sense op-amps (J20/J21/J22 per channel) have NO V+ bypass cap on pin 4 / +3V3 input. Their only cap (c_csa) sits on the output net, not the supply pin. Per R25, every IC with V+ needs ≥1 decoupling cap ≤3mm same-layer.
+- **Why G4 doesn't catch it**: INA footprints use Connector_Generic with unnamed pins (legacy SKiDL); G4 audit_decoupling scopes IC.VDD by pin NAME (matches "VDD", "VCC", "AVDD" patterns). Unnamed pins escape detection.
+- **Impact**: at worst, slight INA noise / settling-time degradation. Not power-supply-rejection-ratio sensitive enough to be a CH1 PR blocker. Sai-acceptable for first fab; tighten in commercial rev.
+- **Resolution**: NEXT schematic rev — add 3× 100nF X7R caps to J20.4 / J21.4 / J22.4 → GND, ≤3mm same-layer. Also extend G4 to handle Connector_Generic with pin-NUMBER convention (pin 4 = V+ on INA186).
+- **Blocks**: nothing immediate (CH1 PR can proceed). Future commercial fab freeze should address.
