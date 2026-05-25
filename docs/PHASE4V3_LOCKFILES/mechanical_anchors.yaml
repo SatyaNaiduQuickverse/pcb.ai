@@ -36,12 +36,19 @@ mount_holes:
 
 fiducials:
   # 6× fiducials (3 top + 3 bottom), 1mm diameter, 2mm solder mask opening
-  # Spacing ≥40mm per IPC-7351 (Sai-catch #8)
-  - {ref: FID1, pos: [15.00, 50.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}
-  - {ref: FID2, pos: [90.00, 50.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}
+  # Spacing ≥40mm per IPC-7351 (Sai-catch #8).
+  #
+  # 2026-05-26 [invariant-change] motor-pad-conflict fix:
+  # Original FID1/FID4 (15,50) overlapped west motor column TP19/TP40 (x=15.13, 4×4 pads).
+  # Original FID2 (90,50) was 2.13mm from TP26 east column (x=84.87) — borderline.
+  # Original FID5 (85,50) overlapped east motor column TP26/TP33 (x=84.87) directly.
+  # Fix: shift fid X away from motor columns; all neighbor distances re-verified ≥40mm,
+  # all ≥6mm from board edge, motor-pad clearance ≥3mm.
+  - {ref: FID1, pos: [8.00,  50.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}  # was (15,50); 7.13mm to TP19/TP40
+  - {ref: FID2, pos: [92.00, 50.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}  # was (90,50); 7.13mm to TP26/TP33
   - {ref: FID3, pos: [50.00, 85.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}
-  - {ref: FID4, pos: [15.00, 50.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}
-  - {ref: FID5, pos: [85.00, 50.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}
+  - {ref: FID4, pos: [8.00,  50.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}  # was (15,50); paired with FID1
+  - {ref: FID5, pos: [92.00, 50.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}  # was (85,50); paired with FID2 (B.Cu via cluster of motor pads cleared)
   - {ref: FID6, pos: [50.00, 15.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}
 
 connectors:
