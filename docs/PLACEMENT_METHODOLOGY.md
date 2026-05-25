@@ -61,12 +61,32 @@ Around the locked Tier 2 cluster, all on F.Cu (top side) unless noted:
 | Component | Position rule |
 |---|---|
 | `U_INA_CHn` (current sense op-amp) | ≤5mm from shunt Kelvin pads, sense lines short |
-| `U_MCU_CHn` (channel MCU) | ≤5mm from DRV (SPI/clock cleanliness) |
+| `U_MCU_CHn` (channel MCU) | ≤10mm from DRV (relaxed 2026-05-26 from 5mm — see note below) |
 | `U_CMP_CHn` (LM393 BEMF comparator) | Adjacent to MCU comparator input pins |
 | Per-IC decoupling caps | ≤3mm to IC.VDD pin, **SAME layer** (R25, `[[feedback-same-side-decoupling]]`) |
 | Per-channel passives (BST, gate-R, BEMF divs) | Anchored to parent IC by role per `routing_topology.yaml` |
 
 **Audit**: `audit_decoupling.py` per IC — cap count ≥1 per VDD pin, distance ≤3mm, layer match.
+
+### MCU≤10mm relaxation note (2026-05-26)
+
+Original spec was MCU ≤5mm from DRV (SPI/clock cleanliness). Worker found at
+Stage 2 CH1 that west-column FET+driver density forced MCU 10mm east to allow
+its 13 decoupling caps + logic ICs ring room. Master decision (anticipate-Sai
++ R32 sureshot): **ACCEPT 10mm**, because:
+
+- Our SPI/digital interconnect runs at ≤10MHz → propagation delay 5mm vs 10mm
+  differs by 0.02ns (well below jitter budget)
+- Gate-driver gate-trace inductance from extra 5mm = ~5nH, bounded by the
+  ≤5mm gate-R + driver internal clamp; no observable ringing at switching
+  edges
+- Alternative (B.Cu backside passive placement) adds thermal-coupling via
+  risk + harder rework + non-standard for hand-tuning; worse R32 sureshot
+- Decision applies uniformly to all 4 channels (CH1 template → CH2/3/4
+  mirrors), so the relaxation costs us nothing in symmetry
+
+Rule: **≤10mm OK for digital interconnect at our clock rates**. Tighter
+remains better for HF/RF designs (>50MHz) but does not apply here.
 **Audit**: existing `audit_layout_compliance.py` R23/R25 checks.
 
 **Lock CH1 at end of Tier 3.** It becomes the template for CH2/3/4 mirrors.
