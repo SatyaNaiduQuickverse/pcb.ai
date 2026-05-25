@@ -231,14 +231,14 @@ def role_place(board, refs, zones, roles):
             x = fp.GetPosition().x / 1e6
             if -2 <= x <= 102:        # only on-board obstacles matter
                 bb = _pad_bbox(fp)
-                # Fiducials / mechanical marks have silk but no (or a point) copper
-                # pad, so the pad bbox reserves no area and a passive can land under
-                # the silk mark (G5 SILK-ON-PAD: FID1 silk on C71.pad1). Reserve a
-                # keepout box around such no-area footprints.
-                if bb[2] - bb[0] < 0.1 and bb[3] - bb[1] < 0.1:
-                    cx0, cy0 = bb[0], bb[1]
-                    FID_K = 1.5
-                    bb = (cx0 - FID_K, cy0 - FID_K, cx0 + FID_K, cy0 + FID_K)
+                # Fiducials / mech marks: their ~1mm copper dot + silk refdes text
+                # extend past the tiny pad bbox, so a passive can land under the silk
+                # (G5 SILK-ON-PAD: FID silk on Cxx.pad1). Reserve a generous keepout
+                # around the whole footprint so passives clear the mark + its silk.
+                if r.startswith(("FID", "REF**")) or (bb[2]-bb[0] < 0.1 and bb[3]-bb[1] < 0.1):
+                    fcx, fcy = (bb[0]+bb[2])/2, (bb[1]+bb[3])/2
+                    FID_K = 2.5
+                    bb = (fcx - FID_K, fcy - FID_K, fcx + FID_K, fcy + FID_K)
                 hf, hb = _layers(fp)
                 occupied.append((bb, (bb[0]+bb[2])/2, (bb[1]+bb[3])/2, hf, hb))
     # G5 motor keep-out: a component must clear motor-terminal pads unless it sits

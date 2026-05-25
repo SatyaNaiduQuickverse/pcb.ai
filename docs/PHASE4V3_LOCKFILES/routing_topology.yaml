@@ -196,10 +196,10 @@ components:
   # anchor to their parent IC pin per R23/R25. Refs map: J13=TLV76733 LDO,
   # J15-17=USBLC6 ESD, C45=LDO Vin, C46=LDO Vout, L11=VDDA ferrite, C47/C48=VDDA
   # bypass, D23=power-good LED, R35=LED limit-R.
-  J13: {tier: 5, role: cluster-anchor, subsystem: S6, zone_hint: [70.0, 90.0]}
-  J15: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [-10.0, -4.0]}
-  J16: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [0.0, -4.0]}
-  J17: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [10.0, -4.0]}
+  J13: {tier: 5, role: cluster-anchor, subsystem: S6, zone_hint: [25.0, 10.0]}
+  J15: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [-10.0, 6.0]}
+  J16: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [0.0, 6.0]}
+  J17: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [10.0, 6.0]}
   C45: {tier: 5, role: decoupling, subsystem: S6, parent: J13, parent_pin: "3", max_distance_mm: 3, same_layer_as_parent: true}
   C46: {tier: 5, role: decoupling, subsystem: S6, parent: J13, parent_pin: "5", max_distance_mm: 3, same_layer_as_parent: true}
   L11: {tier: 5, role: cluster-member, subsystem: S6, parent: J13, parent_pin: "5", max_distance_mm: 5, same_layer_as_parent: true}
