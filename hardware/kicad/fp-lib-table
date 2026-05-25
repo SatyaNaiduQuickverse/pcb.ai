@@ -1,0 +1,10 @@
+(fp_lib_table
+	(version 7)
+	(lib
+		(name "pcbai")
+		(type "KiCad")
+		(uri "${KIPRJMOD}/pcbai.pretty")
+		(options "")
+		(descr "pcb.ai project-local footprints (Phase 4-v3: ESCMotorPad_4x4mm_5via)")
+	)
+)

@@ -1,0 +1,126 @@
+(footprint "ESCMotorPad_4x4mm_5via"
+	(version 20241229)
+	(generator "pcbnew")
+	(generator_version "9.0")
+	(layer "F.Cu")
+	(descr "Motor phase solder pad, 4x4mm SMD + 5 stitching vias. Phase A/B/C output (HS-source/LS-drain switching node). 100A/sqrt3=58A RMS burst per phase; 16mm2 pad + 5 vias spreading to B.Cu/inner phase copper -> ~150A per IPC-2152 (~2.5x margin). Phase 4-v3 Sai-locked option (b) 2026-05-25. Vias carry the MOTOR phase net (NOT +VMOTOR); VMOTOR plane is isolated by zone antipad.")
+	(tags "motor phase solder pad ESC stitching via")
+	(property "Reference" "REF**"
+		(at 0 -2.9 0)
+		(layer "F.SilkS")
+		(uuid "a1b2c3d4-0001-4000-8000-000000000001")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "ESCMotorPad_4x4mm_5via"
+		(at 0 3.1 0)
+		(layer "F.Fab")
+		(uuid "a1b2c3d4-0001-4000-8000-000000000002")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "a1b2c3d4-0001-4000-8000-000000000003")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" "ESC motor phase solder pad with thermal/current stitching vias"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "a1b2c3d4-0001-4000-8000-000000000004")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr exclude_from_pos_files exclude_from_bom)
+	(fp_rect
+		(start -2.25 -2.25)
+		(end 2.25 2.25)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+		(uuid "a1b2c3d4-0002-4000-8000-000000000001")
+	)
+	(fp_text user "${REFERENCE}"
+		(at 0 -2.9 0)
+		(layer "F.Fab")
+		(uuid "a1b2c3d4-0003-4000-8000-000000000001")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(pad "1" smd rect
+		(at 0 0)
+		(size 4 4)
+		(layers "F.Cu" "F.Paste" "F.Mask")
+		(uuid "a1b2c3d4-0004-4000-8000-000000000001")
+	)
+	(pad "1" thru_hole circle
+		(at 0 0)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu")
+		(remove_unused_layers no)
+		(uuid "a1b2c3d4-0004-4000-8000-000000000002")
+	)
+	(pad "1" thru_hole circle
+		(at 1.2 1.2)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu")
+		(remove_unused_layers no)
+		(uuid "a1b2c3d4-0004-4000-8000-000000000003")
+	)
+	(pad "1" thru_hole circle
+		(at -1.2 1.2)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu")
+		(remove_unused_layers no)
+		(uuid "a1b2c3d4-0004-4000-8000-000000000004")
+	)
+	(pad "1" thru_hole circle
+		(at 1.2 -1.2)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu")
+		(remove_unused_layers no)
+		(uuid "a1b2c3d4-0004-4000-8000-000000000005")
+	)
+	(pad "1" thru_hole circle
+		(at -1.2 -1.2)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu")
+		(remove_unused_layers no)
+		(uuid "a1b2c3d4-0004-4000-8000-000000000006")
+	)
+	(embedded_fonts no)
+)
