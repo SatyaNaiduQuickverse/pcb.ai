@@ -95,17 +95,34 @@ def both_in_hb_cell(net_a, net_b):
 
 
 def layer_sets_intersect(ls_a, ls_b):
-    """True if pad layer sets share any copper layer (so creepage can apply).
+    """True if pad layer sets share any COPPER layer (creepage rule).
     Opposite-layer pads (F.Cu vs B.Cu only) have NO creepage path across
-    PCB substrate (FR-4 ~1.6mm dielectric). 2026-05-26 worker catch on
-    HS-top/LS-bottom stacked FETs: Q5.9(F.Cu)↔Q6.9(B.Cu) at 0.000mm XY
-    is BY DESIGN — they're the SW node connected through stitched vias.
+    PCB substrate (FR-4 ~1.6mm dielectric).
+
+    2026-05-26 worker catch: HS-top/LS-bottom stacked FETs Q5.9(F.Cu) ↔
+    Q6.9(B.Cu) at 0.000mm XY — same SW node connected through stitched
+    vias by design.
+
+    FIX 2026-05-26 v2: explicit copper-layer-id check (was using LSET '&'
+    operator which had unexpected behavior on KiCad 9 SWIG — pads have
+    non-copper layers like F.Paste/F.Mask that could falsely intersect).
     """
     try:
-        return (ls_a & ls_b).any()
+        cu_layer_ids = set()
+        # KiCad copper layer IDs: F_Cu=0, In1-30_Cu=1..30, B_Cu=31 (varies by version)
+        for lid in (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.In3_Cu,
+                    pcbnew.In4_Cu, pcbnew.In5_Cu, pcbnew.In6_Cu, pcbnew.In7_Cu,
+                    pcbnew.In8_Cu, pcbnew.B_Cu):
+            try:
+                a_has = ls_a.Contains(lid)
+                b_has = ls_b.Contains(lid)
+                if a_has and b_has:
+                    return True
+            except Exception:
+                continue
+        return False  # no shared copper layer = no creepage path
     except Exception:
-        # If layer sets aren't comparable, fall through to creepage check
-        return True
+        return True  # if we can't determine, default to checking (safe)
 
 
 def edge_distance_mm(a, b):
