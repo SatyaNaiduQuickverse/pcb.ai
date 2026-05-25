@@ -50,8 +50,10 @@ def resolve_lib(fp_name):
 def build_targets():
     """ref -> target bare footprint name, for every ref whose footprint changes."""
     targets = dict(CAP_TARGET)
+    # Anchors whose lockfile footprint differs from the imported one: motor pads
+    # (→ESCMotorPad) and connectors (J1→AMASS XT30; J12/J14 already JST → no-op).
     for ref, a in lockfile.load_anchors().items():
-        if a.get("category") == "motor_pads" and a.get("footprint"):
+        if a.get("category") in ("motor_pads", "connectors") and a.get("footprint"):
             targets[ref] = a["footprint"]
     return targets
 

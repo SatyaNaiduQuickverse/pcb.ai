@@ -187,6 +187,14 @@ def role_place(board, refs, zones, roles):
                 fp.Flip(fp.GetPosition(), False)
         fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
         reset_text_to_body(fp)
+        # reset_text_to_body hides refs on R/C/D/TP; small inductors/others (e.g.
+        # 0201 L11) keep visible refs that land on neighbour pads (SILK-ON-PAD).
+        # Hide the ref on any small passive (pad-bbox < 3mm) the helper missed.
+        bb = _pad_bbox(fp)
+        if max(bb[2] - bb[0], bb[3] - bb[1]) < 3.0:
+            rf = fp.Reference()
+            if rf is not None:
+                rf.SetVisible(False)
 
     errs = []
     # Phase A: cluster-anchor ICs.
