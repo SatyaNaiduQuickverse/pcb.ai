@@ -240,7 +240,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_lockfile_completeness.py" ]]; then
   run_gate "G_L1_lockfile_completeness" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_lockfile_completeness.py' '$BOARD'" false
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_lockfile_completeness.py' '$BOARD'" true
 else
   echo "[G_L1_lockfile_completeness] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -252,7 +252,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_polarity_marker.py" ]]; then
   run_gate "G_PP1_polarity_marker" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_polarity_marker.py' '$BOARD'" false
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_polarity_marker.py' '$BOARD'" true
 else
   echo "[G_PP1_polarity_marker] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -264,7 +264,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_silk_size.py" ]]; then
   run_gate "G_PP3_silk_size" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_silk_size.py' '$BOARD'" false
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_silk_size.py' '$BOARD'" true
 else
   echo "[G_PP3_silk_size] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -324,7 +324,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_pickplace_reach.py" ]]; then
   run_gate "G_PP2_pickplace_reach" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_pickplace_reach.py' '$BOARD'" false
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_pickplace_reach.py' '$BOARD'" true
 else
   echo "[G_PP2_pickplace_reach] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -336,7 +336,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_rotation_alignment.py" ]]; then
   run_gate "G_PP4_rotation_alignment" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_rotation_alignment.py' '$BOARD'" false
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_rotation_alignment.py' '$BOARD'" true
 else
   echo "[G_PP4_rotation_alignment] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -360,7 +360,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_cable_swing.py" ]]; then
   run_gate "G_PP7_cable_swing" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_cable_swing.py' '$BOARD'" false
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_cable_swing.py' '$BOARD'" true
 else
   echo "[G_PP7_cable_swing] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -492,7 +492,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_polarity_direction.py" ]]; then
   run_gate "G_PP9_polarity_direction" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_polarity_direction.py' '$BOARD'" false
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_polarity_direction.py' '$BOARD'" true
 else
   echo "[G_PP9_polarity_direction] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
 fi
@@ -512,7 +512,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_assembly_drawing.py" ]]; then
   run_gate "G_M5_assembly_drawing" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_assembly_drawing.py' '$BOARD'" false
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_assembly_drawing.py' '$BOARD'" true
 else
   echo "[G_M5_assembly_drawing] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
 fi
@@ -522,7 +522,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_sim_mesh_validity.py" ]]; then
   run_gate "G_S2_sim_mesh_validity" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_sim_mesh_validity.py'" false
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_sim_mesh_validity.py'" true
 else
   echo "[G_S2_sim_mesh_validity] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
 fi
@@ -532,7 +532,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_sim_result_sanity.py" ]]; then
   run_gate "G_S3_sim_result_sanity" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_sim_result_sanity.py'" false
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_sim_result_sanity.py'" true
 else
   echo "[G_S3_sim_result_sanity] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
 fi
@@ -542,7 +542,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_doc_sync.py" ]]; then
   run_gate "G_D_doc_sync" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_doc_sync.py'" false
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_doc_sync.py'" true
 else
   echo "[G_D_doc_sync] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
