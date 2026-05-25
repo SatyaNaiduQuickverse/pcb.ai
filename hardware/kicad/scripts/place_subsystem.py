@@ -157,6 +157,10 @@ def role_place(board, refs, zones, roles):
     ICs in-zone (or near a foundation anchor), then passives ≤max_distance from
     their parent's pad, same layer, collision-free, in-zone. Deterministic; refs
     whose parent can't be resolved are returned as failures (no silent fallback)."""
+    inv = ce.parse_board_invariants()
+    highways = [(h[1], h[2], h[3], h[4]) for h in inv.highways]
+    ox0, oy0, ox1, oy1 = inv.outline if inv.outline else (0.0, 0.0, 100.0, 100.0)
+    EDGE_MARGIN = 3.0                  # G17: non-connector comps ≥3mm from board edge
     placed = {}                       # ref -> (bbox, is_back) of committed placement
     occupied = []                     # (bbox, cx, cy, is_back) already on board
     for fp in board.GetFootprints():
@@ -174,6 +178,14 @@ def role_place(board, refs, zones, roles):
         cx, cy = (bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2
         if not any(z[0] <= cx <= z[2] and z[1] <= cy <= z[3] for z in zones):
             return False
+        # G17 board-edge keepout: the whole footprint (pad bbox) ≥ EDGE_MARGIN in.
+        if (bbox[0] < ox0 + EDGE_MARGIN or bbox[1] < oy0 + EDGE_MARGIN or
+                bbox[2] > ox1 - EDGE_MARGIN or bbox[3] > oy1 - EDGE_MARGIN):
+            return False
+        # G6 highway reservation: no pad bbox may intersect a reserved corridor.
+        for hx0, hy0, hx1, hy1 in highways:
+            if not (bbox[2] <= hx0 or hx1 <= bbox[0] or bbox[3] <= hy0 or hy1 <= bbox[1]):
+                return False
         for ob, ocx, ocy, ob_back in occupied:
             if ob_back != want_back:
                 continue
@@ -267,7 +279,10 @@ def role_place(board, refs, zones, roles):
             # opposite side — Sai's B.Cu decoupling strategy: a bypass/filter cap
             # that can't fit a saturated F.Cu region drops to the roomy backside
             # rather than stretching its trace. Loop-members (FET/shunt) never flip.
-            sides = [wb] if rec.get("loop_member") else [wb, not wb]
+            # Decoupling caps must stay on their IC's side (R25/G4) — never overflow.
+            # Loop members (FET/shunt) never flip. Other aux passives may overflow.
+            can_flip = not rec.get("loop_member") and rec.get("role") != "decoupling"
+            sides = [wb, not wb] if can_flip else [wb]
             done = False
             for side in sides:
                 if fp.IsFlipped() != side:
@@ -283,10 +298,36 @@ def role_place(board, refs, zones, roles):
                         break
                 if done:
                     break
+            # Last resort for non-critical aux passives (not decoupling, not a loop
+            # member): if no slot near the parent on either side, place anywhere
+            # valid in the zone (B.Cu first — it's roomy and these are not
+            # distance-critical). Keeps the cluster's critical parts tight while
+            # guaranteeing 0-unplaced. Decoupling/loop parts never use this.
+            if not done and can_flip:
+                z = zones[0]
+                for side in (True, False):  # B.Cu first
+                    if fp.IsFlipped() != side:
+                        fp.Flip(fp.GetPosition(), False)
+                    step = 0.5  # finer than MIN_CENTER so spread placement's gaps are found
+                    yy = z[1] + 1
+                    while yy <= z[3] - 1 and not done:
+                        xx = z[0] + 1
+                        while xx <= z[2] - 1:
+                            fp.SetPosition(pcbnew.VECTOR2I(int(xx*1e6), int(yy*1e6)))
+                            bb = _pad_bbox(fp)
+                            if fits(bb, side):
+                                place_fp_at(fp, xx, yy, side)
+                                placed[r] = (_pad_bbox(fp), side)
+                                done = True
+                                break
+                            xx += step
+                        yy += step
+                    if done:
+                        break
             pending.remove(r)
             progress = True
             if not done:
-                errs.append(f"role_place: no slot ≤{search_r:.1f}mm for {r} near {parent} (both sides)")
+                errs.append(f"role_place: no slot ≤{search_r:.1f}mm for {r} near {parent} (both sides + zone-fill)")
     for r in pending:
         errs.append(f"role_place: unresolved parent chain for {r}")
     return errs
