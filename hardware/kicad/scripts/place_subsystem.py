@@ -321,6 +321,27 @@ def bring_selected(board, subsystem):
     return refs, errs, stats
 
 
+def bring_anchors(board):
+    """Stage 1 (Tier-1): place every parked lockfile anchor at its lockfile
+    coordinate. Foundation is already placed by park; this brings the rest
+    (motor pads, SWD/BOOT test points, status LEDs) so Tier-2 channel clusters
+    can anchor to the motor pads. Returns (placed_refs, errors)."""
+    anchors = lockfile.load_anchors()
+    placed, errs = [], []
+    for ref, a in anchors.items():
+        fp = board.FindFootprintByReference(ref)
+        if fp is None:
+            continue
+        place_at_anchor(fp, a)
+        placed.append(ref)
+        ax, ay = a["pos"]
+        p = fp.GetPosition()
+        if abs(p.x / 1e6 - ax) > ANCHOR_TOL_MM or abs(p.y / 1e6 - ay) > ANCHOR_TOL_MM:
+            errs.append(f"POSTCONDITION fail: {ref} at "
+                        f"({p.x/1e6:.3f},{p.y/1e6:.3f}) != lockfile ({ax},{ay})")
+    return placed, errs
+
+
 def _render(board_path, subsystem):
     """Invoke render_pr_visual.py for the vision-check set (G11). Best-effort:
     render_pr_visual degrades gracefully if render tools are missing."""
@@ -337,7 +358,7 @@ def _render(board_path, subsystem):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("subsystem", help="CH1 CH2 CH3 CH4 S1 S2 S3 S5 S6")
+    ap.add_argument("subsystem", help="TIER1 | CH1 CH2 CH3 CH4 S1 S2 S3 S5 S6")
     ap.add_argument("--board", default="hardware/kicad/pcbai_fpv4in1_parked.kicad_pcb")
     ap.add_argument("--out", default=None, help="defaults to in-place on --board")
     ap.add_argument("--render", action="store_true",
@@ -346,10 +367,15 @@ def main():
     out = args.out or args.board
 
     board = pcbnew.LoadBoard(args.board)
-    brought, errs, stats = bring_selected(board, args.subsystem)
-    print(f"{args.subsystem}: brought {len(brought)} components "
-          f"(anchor={stats.get('anchored',0)} role={stats.get('role',0)} "
-          f"grid={stats.get('grid',0)})")
+    if args.subsystem == "TIER1":
+        brought, errs = bring_anchors(board)
+        stats = {}
+        print(f"TIER1: placed {len(brought)} lockfile anchors at lockfile coords")
+    else:
+        brought, errs, stats = bring_selected(board, args.subsystem)
+        print(f"{args.subsystem}: brought {len(brought)} components "
+              f"(anchor={stats.get('anchored',0)} role={stats.get('role',0)} "
+              f"grid={stats.get('grid',0)})")
     if errs:
         print("ERRORS:")
         for e in errs:
