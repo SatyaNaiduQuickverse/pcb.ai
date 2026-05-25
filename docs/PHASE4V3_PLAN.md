@@ -104,6 +104,7 @@ Every stage's PR must pass:
 | G8 | sim execution proof per R18 (4-point evidence in PR doc) | manual + audit | every sim PR |
 | G9 | per-tier sim PASS within threshold (defined in SIM_METHODOLOGY.md) | per-tier sim scripts | every routing/place PR |
 | G10 | target.h md5 unchanged (firmware contract lock) | manual md5 | every PR |
+| G11 | Vision check render set present + master visual inspection per VISION_CHECK_METHODOLOGY.md §3 | `render_pr_visual.py` + manual review | every per-subsystem PR Stage 0+ |
 
 Master runs `master_pre_merge.sh` on every PR review. No exceptions per `[[feedback-master-gate-checklist]]`.
 
@@ -158,16 +159,19 @@ PR sequence: master's methodology PR (this branch `phase4v3-methodology-ssot`) m
 
 ---
 
-## 9. S2 BOM blocker (Sai-decision)
+## 9. S2 BOM — Sai-locked 2026-05-25: option (a)
 
-S2 bulk-cap electrolytic 10×14.3mm doesn't fit current 20×20mm S2 zone. Options:
+**LOCKED decision**: option (a) — 4× polymer 220µF in 8×6.3mm package (was: 4× 470µF in 10×14.3mm).
 
-(a) Switch to smaller polymer cap package (more parts, lower per-cap C, parallel for total C)
-(b) Enlarge S2 zone (overlaps S3 supervisor zone — cascading impact)
-(c) Move S2 bulk-cap bank to different zone (changes routing topology)
-(d) Mix: smaller polymer caps + accept slightly different EMI profile
+- Total bulk: 880µF (was 1880µF; still above 400µF minimum per IPC bulk-cap rule for 400A peak system) → 2.2× margin
+- Footprint: 4× 8×6.3mm in 2×2 grid = 16×12.6mm → fits 20×20mm S2 zone with 3.4-3.7mm margin to zone edges
+- ESR: 4-cap parallel preserved (vs option c 2-cap which would halve ESR margin)
+- Standard FPV ESC practice (same logic as motor pad option b)
+- Sureshot per `[[feedback-sureshot-over-sota]]`
 
-Decision needed before Stage 9 PR. Queued in `/tmp/sai-queue.md`.
+Worker action in REDO infra PR: update schematic BOM for C1-C4 to **220µF / 35V / 8×6.3mm polymer** (verify exact LCSC part number against availability + 105°C derating).
+
+S2 PR (Stage 9) **NOT blocked anymore**. Standard sequence proceeds.
 
 ---
 

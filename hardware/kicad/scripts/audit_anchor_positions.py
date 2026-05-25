@@ -37,8 +37,12 @@ except ImportError:
 TOLERANCE_MM = 0.01  # per methodology spec
 
 
-def check_anchor_match(board, ref, expected_pos, expected_layer, expected_rotation):
-    """Returns (status, msg). status: 'PASS', 'FAIL', 'MISSING'."""
+def check_anchor_match(board, ref, expected_pos, expected_layer, expected_rotation, expected_footprint=None):
+    """Returns (status, msg). status: 'PASS', 'FAIL', 'MISSING'.
+
+    Footprint comparison: strips library prefix (e.g. 'pcbai:ESCMotorPad_4x4mm_5via'
+    → 'ESCMotorPad_4x4mm_5via') and compares bare name to lockfile entry.
+    """
     fp = board.FindFootprintByReference(ref)
     if fp is None:
         return "MISSING", f"{ref} not on board"
@@ -47,6 +51,9 @@ def check_anchor_match(board, ref, expected_pos, expected_layer, expected_rotati
     actual_y = pcbnew.ToMM(pos.y)
     actual_layer = fp.GetLayerName()
     actual_rot = fp.GetOrientationDegrees()
+    # Footprint bare-name extraction: GetLibItemName() returns just the footprint name
+    # without the library prefix; this matches lockfile format which omits 'pcbai:' prefix.
+    actual_fp_bare = str(fp.GetFPID().GetLibItemName())
 
     issues = []
     if abs(actual_x - expected_pos[0]) > TOLERANCE_MM:
@@ -57,6 +64,8 @@ def check_anchor_match(board, ref, expected_pos, expected_layer, expected_rotati
         issues.append(f"layer={actual_layer} expected {expected_layer}")
     if abs(actual_rot - expected_rotation) > 0.5:
         issues.append(f"rot={actual_rot:.1f} expected {expected_rotation:.1f}")
+    if expected_footprint and actual_fp_bare != expected_footprint:
+        issues.append(f"fp={actual_fp_bare} expected {expected_footprint}")
 
     if issues:
         return "FAIL", f"{ref}: " + ", ".join(issues)
@@ -92,19 +101,21 @@ def main():
     any_missing = False
 
     # Categories with concrete refs (TBD placeholders skipped)
-    for category in ("mount_holes", "fiducials", "connectors", "test_points"):
+    # Include motor_pads which now have concrete entries with footprint field
+    for category in ("mount_holes", "fiducials", "connectors", "motor_pads", "test_points"):
         entries = lockfile.get(category, [])
         print(f"--- {category} ({len(entries)}) ---")
         for entry in entries:
             ref = entry["ref"]
-            pos = entry["pos"]
-            layer = entry["layer"]
-            rot = entry["rotation"]
-            # Skip if pos is TBD placeholder
-            if any(p == "TBD" or isinstance(p, str) for p in pos):
+            pos = entry.get("pos")
+            layer = entry.get("layer")
+            rot = entry.get("rotation")
+            fp_expected = entry.get("footprint")  # bare name (no lib prefix)
+            # Skip if pos missing or is TBD placeholder
+            if pos is None or any(p == "TBD" or isinstance(p, str) for p in pos):
                 print(f"  [SKIP] {ref}: placeholder (worker fills)")
                 continue
-            status, msg = check_anchor_match(board, ref, pos, layer, rot)
+            status, msg = check_anchor_match(board, ref, pos, layer, rot, fp_expected)
             if status == "PASS":
                 print(f"  [PASS] {msg}")
             elif status == "MISSING":

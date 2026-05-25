@@ -76,17 +76,26 @@ motor_pads:
   # Netlist-verified roles (worker 2026-05-25): MOTOR_<phase>_CH<n>.
   # CH1 phases on west edge (x≈15), CH2 east (x≈85), CH3 east (x≈85), CH4 west (x≈15).
   #
-  # FOOTPRINT: ESCMotorPad_4x4mm_5via (4×4mm solder pad with 5 thermal vias to In3.Cu +VMOTOR plane)
+  # FOOTPRINT: ESCMotorPad_4x4mm_5via — 4×4mm SMD pad on F.Cu + 5 through-hole vias
   # LOCKED 2026-05-25 PER SAI DECISION: option (b) — "safest sureshot, standard practice"
+  #
+  # IMPORTANT — VIA ELECTRICAL DESTINATION (corrected per worker 2026-05-25):
+  # Vias carry the PHASE net (MOTOR_<A/B/C>_CH<n>), NOT +VMOTOR. Phase pads ARE the
+  # switching node (HS-FET source / LS-FET drain), connecting them to +VMOTOR plane
+  # would short HS-FET drain-source. Vias go F.Cu ↔ B.Cu phase copper. The +VMOTOR
+  # plane on In3.Cu is isolated by antipad. Net effect = thermal+current spreading
+  # onto B.Cu phase pour + any inner phase copper, NOT into +VMOTOR plane.
+  #
   # PHYSICS: 100A burst per CH ÷ √3 ≈ 58A RMS per phase
-  # PER IPC-2152: 4×4mm pad (16mm²) with 5 vias to 3oz In3.Cu plane → ~150A capacity per phase
-  # → ~2.5× margin over 58A burst. STANDARD FPV ESC PRACTICE.
+  # PER IPC-2152: 4×4mm SMD pad (16mm²) + 5× 0.3mm drill / 0.6mm pad vias spread
+  # current onto top + bottom copper on phase net → ~150A capacity per phase.
+  # → 2.5× margin over 58A burst. STANDARD FPV ESC PRACTICE.
   #
   # Worker action in REDO infra PR:
-  #   1. Create KiCad footprint `ESCMotorPad_4x4mm_5via` in library
+  #   1. ✅ Created KiCad footprint `pcbai:ESCMotorPad_4x4mm_5via` (worker pre-built 2026-05-25)
   #   2. Update schematic to reference new footprint for 12 motor pad refs (TP19-TP42 family)
   #   3. Old TestPoint_Pad_D3.0mm refs stay valid but footprint reference changes
-  #   4. audit_anchor_positions.py verifies footprint name matches lockfile
+  #   4. audit_anchor_positions.py G1 compares on BARE footprint name (lib prefix `pcbai:` stripped)
   - {ref: TP19, pos: [15.13, 52.38], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_A, channel: CH1, net: MOTOR_A_CH1}
   - {ref: TP20, pos: [15.25, 64.09], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_B, channel: CH1, net: MOTOR_B_CH1}
   - {ref: TP21, pos: [15.25, 76.09], layer: F.Cu, rotation: 0,   footprint: ESCMotorPad_4x4mm_5via, role: motor_phase_C, channel: CH1, net: MOTOR_C_CH1}

@@ -168,6 +168,35 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G11: Vision check render set present (per VISION_CHECK_METHODOLOGY.md)
+# Master visually inspects content per VISION_CHECK_METHODOLOGY.md §3 checklist
+# ──────────────────────────────────────────────────────────────────
+RENDER_DIR_CANDIDATE="$(find "$REPO_ROOT/sims" -type d -name renders 2>/dev/null | sort | tail -1)"
+if [[ -n "$RENDER_DIR_CANDIDATE" ]] && [[ -d "$RENDER_DIR_CANDIDATE" ]]; then
+  required_files=("RENDER_SET_MANIFEST.md" "top.png" "bottom.png" "iso.png" "zone_zoom.png" "diff.png")
+  missing=()
+  for f in "${required_files[@]}"; do
+    if [[ ! -f "$RENDER_DIR_CANDIDATE/$f" ]]; then
+      missing+=("$f")
+    fi
+  done
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    echo "[G11_vision_check_render_set] ✅ PASS — render set complete in $RENDER_DIR_CANDIDATE"
+    GATES_PASS=$((GATES_PASS + 1))
+  else
+    echo "[G11_vision_check_render_set] ❌ FAIL — missing in $RENDER_DIR_CANDIDATE:"
+    for f in "${missing[@]}"; do echo "  - $f"; done
+    echo "  Generate via: python3 $SCRIPTS/render_pr_visual.py <board> $RENDER_DIR_CANDIDATE --subsystem <Sn|CHn> --diff-against origin/master"
+    GATES_FAIL=$((GATES_FAIL + 1))
+    FAIL_DETAILS+=("G11_vision_check_render_set")
+  fi
+else
+  echo "[G11_vision_check_render_set] ⏭  SKIP (no renders dir found; pre-Stage0 PR exempt)"
+  GATES_SKIP=$((GATES_SKIP + 1))
+fi
+echo
+
+# ──────────────────────────────────────────────────────────────────
 # G9: target.h md5 (firmware contract lock)
 # ──────────────────────────────────────────────────────────────────
 TARGET_H="$REPO_ROOT/firmware/am32-target/PCBAI_FPV4IN1_F421.target.h"
