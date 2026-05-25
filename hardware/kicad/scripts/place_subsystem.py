@@ -76,9 +76,11 @@ def place_at_anchor(fp, anchor):
     fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
     if anchor.get("rotation") is not None:
         fp.SetOrientationDegrees(float(anchor["rotation"]))
-    target_layer = anchor.get("layer", "F.Cu")
-    if fp.GetLayerName() != target_layer and target_layer in ("F.Cu", "B.Cu"):
-        # Flip to the lockfile-specified side (keeps position).
+    # Compare canonical side via IsFlipped() — GetLayerName() returns the board's
+    # custom stackup display name, never bare "F.Cu"/"B.Cu", so a name compare
+    # would flip everything wrongly.
+    want_back = anchor.get("layer") == "B.Cu"
+    if fp.IsFlipped() != want_back:
         fp.Flip(fp.GetPosition(), False)
     reset_text_to_body(fp)
 

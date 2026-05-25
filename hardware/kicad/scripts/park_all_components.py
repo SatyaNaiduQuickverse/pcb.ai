@@ -43,6 +43,7 @@ def main():
 
     grid = lockfile.parking_grid()
     foundation = lockfile.foundation_refs()
+    anchors = lockfile.load_anchors()
     roster = roster_mod.derive_roster(roster_mod.parse_netlist())
 
     ox, oy = grid["origin"]
@@ -78,6 +79,25 @@ def main():
     for i, fp in enumerate(placeable):
         x, y = slot(i)
         fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
+        reset_text_to_body(fp)
+
+    # Foundation is not parked, but on a REDO from the inherited board it sits at
+    # stale v2 positions — snap it to its lockfile coordinate so Tier-1 anchors
+    # (mount holes, fiducials, J1/J12/J14) are correct from the empty board on.
+    for fp in kept:
+        a = anchors.get(fp.GetReference())
+        if not a:
+            continue
+        x, y = a["pos"]
+        fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
+        if a.get("rotation") is not None:
+            fp.SetOrientationDegrees(float(a["rotation"]))
+        # Compare canonical side via IsFlipped() — GetLayerName() returns the
+        # board's custom stackup display name (e.g. "B.Cu 3oz — …"), never the
+        # bare "F.Cu"/"B.Cu", so a name compare would flip everything wrongly.
+        want_back = a.get("layer") == "B.Cu"
+        if fp.IsFlipped() != want_back:
+            fp.Flip(fp.GetPosition(), False)
         reset_text_to_body(fp)
 
     tracks = list(board.GetTracks())
