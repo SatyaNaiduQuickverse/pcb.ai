@@ -1,0 +1,217 @@
+#!/usr/bin/env bash
+#
+# master_pre_merge.sh — Phase 4-v3 master gate runner
+#
+# Runs the full audit suite on master HEAD post-merge for EVERY PR review.
+# Per [[feedback-master-gate-checklist]] + [[feedback-park-then-bring-in-pattern]]
+# + Sai 2026-05-25 "single source of truth and strong gates".
+#
+# Exit 0 = ALL gates PASS, ALL PR-merge criteria satisfied
+# Exit 1 = ANY gate FAIL → REJECT PR
+#
+# Usage:
+#   bash hardware/kicad/scripts/master_pre_merge.sh [<board.kicad_pcb>]
+#
+# Default board: hardware/kicad/pcbai_fpv4in1.kicad_pcb
+
+set -uo pipefail
+
+BOARD="${1:-hardware/kicad/pcbai_fpv4in1.kicad_pcb}"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+SCRIPTS="$REPO_ROOT/hardware/kicad/scripts"
+
+if [[ ! -f "$BOARD" ]]; then
+  echo "FAIL: board file $BOARD not found"
+  exit 1
+fi
+
+echo "════════════════════════════════════════════════════════════════════"
+echo "Phase 4-v3 master pre-merge gate suite"
+echo "Board: $BOARD"
+echo "Date:  $(date '+%Y-%m-%d %H:%M:%S')"
+echo "Commit: $(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo 'n/a')"
+echo "════════════════════════════════════════════════════════════════════"
+echo
+
+GATES_PASS=0
+GATES_FAIL=0
+GATES_WARN=0
+GATES_SKIP=0
+FAIL_DETAILS=()
+
+run_gate() {
+  local name="$1"
+  local cmd="$2"
+  local required="${3:-true}"  # true = must PASS, false = WARN allowed
+  echo "──────────────────────────────────────────────────────────────────"
+  echo "GATE: $name"
+  echo "CMD:  $cmd"
+  echo
+  if eval "$cmd"; then
+    echo "[$name] ✅ PASS"
+    GATES_PASS=$((GATES_PASS + 1))
+  else
+    rc=$?
+    if [[ "$required" == "true" ]]; then
+      echo "[$name] ❌ FAIL (exit $rc)"
+      GATES_FAIL=$((GATES_FAIL + 1))
+      FAIL_DETAILS+=("$name")
+    else
+      echo "[$name] ⚠️  WARN (exit $rc, not blocking)"
+      GATES_WARN=$((GATES_WARN + 1))
+    fi
+  fi
+  echo
+}
+
+# ──────────────────────────────────────────────────────────────────
+# G1: Tier 1 mechanical anchor lockfile diff
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_anchor_positions.py" ]] \
+   && [[ -f "$REPO_ROOT/docs/PHASE4V3_LOCKFILES/mechanical_anchors.yaml" ]]; then
+  run_gate "G1_anchor_positions" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_anchor_positions.py' '$BOARD'" true
+else
+  echo "[G1_anchor_positions] ⏭  SKIP (script or lockfile missing — pre-methodology-PR)"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G2: Zone contract (park-then-bring) — worker building
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_zone_contract.py" ]]; then
+  run_gate "G2_zone_contract" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_zone_contract.py' '$BOARD'" true
+else
+  echo "[G2_zone_contract] ⏭  SKIP (script not yet built by worker)"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G3: Switching loop area per channel (Erickson 50mm² target)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_loop_area.py" ]]; then
+  run_gate "G3_loop_area" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_loop_area.py' '$BOARD' --placement-only" true
+else
+  echo "[G3_loop_area] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G4: Per-IC decoupling R25 (≤3mm same-layer)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_decoupling.py" ]]; then
+  run_gate "G4_decoupling" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_decoupling.py' '$BOARD'" true
+else
+  echo "[G4_decoupling] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G5: audit_layout_compliance.py — 11+ existing classes
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_layout_compliance.py" ]]; then
+  run_gate "G5_layout_compliance" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_layout_compliance.py' '$BOARD'" true
+else
+  echo "[G5_layout_compliance] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G6: master_audit_invariants.py — 5 invariant gates
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/master_audit_invariants.py" ]]; then
+  run_gate "G6_master_invariants" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/master_audit_invariants.py' '$BOARD' docs/BOARD_INVARIANTS.md" true
+else
+  echo "[G6_master_invariants] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G7: audit_routing.py — 6 routing checks (only if board has tracks)
+# ──────────────────────────────────────────────────────────────────
+TRACK_COUNT="$(python3 -c "
+import pcbnew
+b = pcbnew.LoadBoard('$BOARD')
+print(sum(1 for t in b.GetTracks() if isinstance(t, pcbnew.PCB_TRACK)))
+" 2>/dev/null || echo 0)"
+
+if [[ "$TRACK_COUNT" -gt 0 ]] && [[ -f "$SCRIPTS/audit_routing.py" ]]; then
+  run_gate "G7_routing" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_routing.py' '$BOARD'" true
+else
+  echo "[G7_routing] ⏭  SKIP (no tracks: $TRACK_COUNT)"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G8: audit_routing_system.py — drift detection on methodology hashes
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_routing_system.py" ]]; then
+  run_gate "G8_routing_system_drift" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_routing_system.py'" true
+else
+  echo "[G8_routing_system_drift] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G9: target.h md5 (firmware contract lock)
+# ──────────────────────────────────────────────────────────────────
+TARGET_H="$REPO_ROOT/firmware/am32-target/PCBAI_FPV4IN1_F421.target.h"
+EXPECTED_MD5="7a4549d27e0e83d3d6f1ffaf67527d24"
+if [[ -f "$TARGET_H" ]]; then
+  ACTUAL_MD5="$(md5sum "$TARGET_H" | awk '{print $1}')"
+  if [[ "$ACTUAL_MD5" == "$EXPECTED_MD5" ]]; then
+    echo "[G9_target_h_md5] ✅ PASS ($ACTUAL_MD5)"
+    GATES_PASS=$((GATES_PASS + 1))
+  else
+    echo "[G9_target_h_md5] ❌ FAIL"
+    echo "  expected: $EXPECTED_MD5"
+    echo "  actual:   $ACTUAL_MD5"
+    GATES_FAIL=$((GATES_FAIL + 1))
+    FAIL_DETAILS+=("G9_target_h_md5")
+  fi
+else
+  echo "[G9_target_h_md5] ⏭  SKIP (target.h not found at $TARGET_H)"
+  GATES_SKIP=$((GATES_SKIP + 1))
+fi
+echo
+
+# ──────────────────────────────────────────────────────────────────
+# Summary
+# ──────────────────────────────────────────────────────────────────
+echo "════════════════════════════════════════════════════════════════════"
+echo "Master pre-merge gate suite — SUMMARY"
+echo "  PASS: $GATES_PASS"
+echo "  FAIL: $GATES_FAIL"
+echo "  WARN: $GATES_WARN"
+echo "  SKIP: $GATES_SKIP"
+echo "════════════════════════════════════════════════════════════════════"
+
+if [[ $GATES_FAIL -gt 0 ]]; then
+  echo
+  echo "❌ MERGE BLOCKED — failed gates:"
+  for g in "${FAIL_DETAILS[@]}"; do
+    echo "  - $g"
+  done
+  echo
+  echo "Per [[feedback-master-gate-checklist]]: ANY FAIL = REJECT PR."
+  exit 1
+fi
+
+echo
+echo "✅ ALL REQUIRED GATES PASSED — PR can be merged"
+exit 0

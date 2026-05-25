@@ -1,0 +1,383 @@
+# Routing topology + component role classification — SSoT for Phase 4-v3
+#
+# Two consumers, one source:
+# 1. `place_subsystem.py bringSelected()` reads role + parent + max_distance
+#    to deterministically place each component (no random search)
+# 2. `route_tier.py` reads tier + topology + Z0 + length_match to route
+#    constraint-driven (no Freerouter)
+#
+# Per `[[feedback-sureshot-over-sota]]`: every entry is explicit, no inference,
+# no ML, no autoplacer. Industry-standard constraint-driven approach.
+#
+# Changes require PR title tag `[methodology-change]` and recompute
+# ROUTING_TOPOLOGY_HASH via `audit_routing_system.py --write`.
+
+version: 1
+created: 2026-05-25
+status: schema-and-skeleton  # worker fills concrete entries during REDO infra PR
+
+# ============================================================
+# Net classification (per-net)
+# ============================================================
+
+nets:
+
+  # ---- Tier 1: PDN (Power Delivery Network) ----
+
+  +VMOTOR:
+    tier: 1
+    class: power-plane
+    topology: plane-via-grid
+    layer: In3.Cu
+    width: plane
+    constraint:
+      ampacity_A: 280  # burst per IPC-2152 + spec
+      copper_oz: 3
+      via_stitching_density_per_cm2: 4  # min for 280A spread
+
+  GND:
+    tier: 1
+    class: ground-plane
+    topology: plane-continuous
+    layer: [In1.Cu, In5.Cu]
+    width: plane
+    split: false  # single GND, no analog/digital split (Bogatin Ch. 4)
+
+  +BATT:
+    tier: 1
+    class: power-trunk
+    topology: star
+    source: J1.pin1  # XT30 +
+    sink: [S3.input, S2.input]  # to supervisor + bulk caps
+    layer: F.Cu
+    ref_layer: In1.Cu
+    width_mm: 2.5
+    ampacity_A: 40  # continuous
+
+  +3V3:
+    tier: 1
+    class: bec-trunk
+    topology: tree
+    source: U_BEC_3V3.OUT
+    sinks: [each_CHn_MCU.VDD, each_CHn_DRV.VDD_LV, U_SUPERVISOR.VDD]
+    layer: In2.Cu  # signal/power mid-layer
+    ref_layer: In1.Cu
+    width_mm: 1.5
+    ampacity_A: 10
+
+  +5V:
+    tier: 1
+    class: bec-trunk
+    topology: tree
+    source: U_BEC_5V.OUT
+    sinks: [each_CHn_DRV.VDD_5V, status_LEDs.VDD]
+    layer: In2.Cu
+    ref_layer: In1.Cu
+    width_mm: 1.5
+    ampacity_A: 10
+
+  +9V:
+    tier: 1
+    class: bec-trunk
+    topology: tree
+    source: U_BEC_9V.OUT
+    sinks: [each_CHn_DRV.VCC_GATE]  # high-side gate supply
+    layer: In4.Cu
+    ref_layer: In5.Cu
+    width_mm: 1.5
+    ampacity_A: 6
+
+  +3V3A:
+    tier: 1
+    class: bec-trunk
+    topology: tree
+    source: U_LDO_3V3A.OUT
+    sinks: [each_CHn_INA.VDD, U_SUPERVISOR.AVDD, U_HALL.VDD, each_CHn_CMP.VDD]
+    layer: In4.Cu
+    ref_layer: In5.Cu
+    width_mm: 1.0
+    ampacity_A: 3
+    note: "Analog 3V3 — separate from digital +3V3 for noise isolation per Ott Ch. 18"
+
+  # ---- Tier 4: Critical analog ----
+
+  BUS_CURR_HALL_OUT:
+    tier: 4
+    class: analog-star
+    topology: star
+    source: U_HALL.OUT  # ACS770 analog out
+    sinks: [each_CHn_MCU.ADC_BUS_I]
+    layer: In4.Cu
+    ref_layer: In5.Cu
+    width_mm: 0.25
+    note: "Star from single Hall to 4 channel MCUs; matched length within 5mm"
+
+  # SHUNT_SENSE_CHn_POS / SHUNT_SENSE_CHn_NEG (per CHn)
+  # Worker to expand per-channel entries from netlist
+
+  # BEMF_A_CHn / BEMF_B_CHn / BEMF_C_CHn (per CHn, per phase)
+  # Worker to expand per-channel entries from netlist
+
+  # ---- Tier 5: Signal highways ----
+
+  # DShot_CHn (per CHn)
+  # Worker to expand per-channel entries from netlist
+  # Schema:
+  #   DShot_CH1:
+  #     tier: 5
+  #     class: signal-highway
+  #     topology: point-to-point
+  #     source: J11.pin_DSHOT_CH1
+  #     sink: U_MCU_CH1.pin_PWM_IN
+  #     z0: 50
+  #     layer: In2.Cu
+  #     ref_layer: In1.Cu
+  #     length_match_group: dshot_ch1234
+  #     length_match_tolerance_mm: 2
+
+# ============================================================
+# Component role classification (per-component)
+# ============================================================
+
+components:
+
+  # ---- Schema example (worker fills concrete entries from netlist) ----
+
+  # Tier 1: Already in mechanical_anchors.yaml (mount holes, fiducials, J1, J11, J12, motor pads, test points, LEDs)
+
+  # Tier 2: Switching cluster per channel
+  # Example for CH1 (CH2/3/4 are mirrors, derived not specified)
+
+  # C_VMOTOR_CH1:                  # bus cap
+  #   tier: 2
+  #   role: cluster-member
+  #   subsystem: CH1
+  #   parent: Q_HS_CH1
+  #   relation: bus-cap
+  #   max_distance_mm: 5
+  #   same_layer_as_parent: true
+  #   ipc_spacing_mm: 0.5
+
+  # Q_HS_CH1:                      # high-side FET
+  #   tier: 2
+  #   role: cluster-anchor
+  #   subsystem: CH1
+  #   anchor: motor_pad_CH1_A    # ref from mechanical_anchors.yaml
+  #   relation: drain-to-anchor
+  #   same_layer_as_anchor: true
+  #   loop_member: true            # part of switching loop area calc
+
+  # Q_LS_CH1:
+  #   tier: 2
+  #   role: cluster-member
+  #   subsystem: CH1
+  #   parent: Q_HS_CH1
+  #   relation: ls-pair
+  #   max_distance_mm: 5
+  #   same_layer_as_parent: true
+  #   loop_member: true
+
+  # R_SHUNT_CH1:
+  #   tier: 2
+  #   role: cluster-member
+  #   subsystem: CH1
+  #   parent: Q_LS_CH1
+  #   relation: source-shunt
+  #   max_distance_mm: 3
+  #   same_layer_as_parent: true
+  #   loop_member: true
+  #   kelvin_sense: true
+
+  # U_DRV_CH1:                     # gate driver
+  #   tier: 2
+  #   role: cluster-member
+  #   subsystem: CH1
+  #   parent: Q_HS_CH1
+  #   relation: gate-driver
+  #   max_distance_mm: 5
+  #   same_layer_as_parent: true
+
+  # C_BST_CH1:                     # bootstrap cap
+  #   tier: 2
+  #   role: cluster-member
+  #   subsystem: CH1
+  #   parent: U_DRV_CH1
+  #   relation: bootstrap
+  #   max_distance_mm: 2
+  #   same_layer_as_parent: true
+
+  # R_G_HS_CH1:                    # gate resistor HS
+  #   tier: 2
+  #   role: cluster-member
+  #   subsystem: CH1
+  #   parent: U_DRV_CH1
+  #   relation: gate-r-hs
+  #   max_distance_mm: 5
+  #   same_layer_as_parent: true
+
+  # R_G_LS_CH1:
+  #   tier: 2
+  #   role: cluster-member
+  #   subsystem: CH1
+  #   parent: U_DRV_CH1
+  #   relation: gate-r-ls
+  #   max_distance_mm: 5
+  #   same_layer_as_parent: true
+
+  # Tier 3: CH1 template
+
+  # U_INA_CH1:                     # current sense op-amp
+  #   tier: 3
+  #   role: template-member
+  #   subsystem: CH1
+  #   parent: R_SHUNT_CH1
+  #   relation: ina-near-shunt
+  #   max_distance_mm: 5
+  #   same_layer_as_parent: true
+
+  # U_MCU_CH1:                     # channel MCU
+  #   tier: 3
+  #   role: template-member
+  #   subsystem: CH1
+  #   parent: U_DRV_CH1
+  #   relation: mcu-near-driver
+  #   max_distance_mm: 5
+  #   same_layer_as_parent: true
+
+  # U_CMP_CH1:                     # BEMF comparator (LM393)
+  #   tier: 3
+  #   role: template-member
+  #   subsystem: CH1
+  #   parent: U_MCU_CH1
+  #   relation: cmp-near-mcu
+  #   max_distance_mm: 5
+  #   same_layer_as_parent: true
+
+  # Tier 3: Decoupling caps (one entry per IC.VDD pin per R25)
+  # Worker auto-generates from netlist iterating IC VDD pins
+
+  # C_DECOUP_U_DRV_CH1_VDD:
+  #   tier: 3
+  #   role: decoupling
+  #   subsystem: CH1
+  #   parent: U_DRV_CH1
+  #   parent_pin: VDD
+  #   max_distance_mm: 3
+  #   same_layer_as_parent: true      # R25 enforced
+  #   value: 100nF
+  #   package: 0402
+
+  # Tier 4: Channel mirrors (CH2/3/4)
+  # All entries derived from CH1 entries via mirror_X / mirror_Y; NOT specified individually
+  # `place_subsystem.py` for CHn (n>1) reads CH1 entries + applies mirror primitive
+
+  # Tier 5: Central/edge subsystems (S1, S2, S3, S5)
+  # Worker fills per-component entries during REDO infra PR
+
+# ============================================================
+# Per-class routing constraints (for audit_routing.py enforcement)
+# ============================================================
+
+routing_classes:
+
+  power-plane:
+    width_constraint: plane
+    spacing_constraint: 1.0mm  # to other plane
+    via_constraint: stitching
+
+  power-trunk:
+    width_min_mm: 1.5
+    spacing_min_mm: 0.5
+    z0: null
+    length_match: false
+
+  bec-trunk:
+    width_min_mm: 1.0
+    spacing_min_mm: 0.5
+    z0: null
+    length_match: false
+
+  decoupling:
+    width_min_mm: 0.5
+    spacing_min_mm: 0.2
+    z0: null
+    length_match: false
+    same_layer_as_ic: true  # R25
+
+  signal-highway:
+    width_min_mm: 0.25
+    spacing_min_mm: 0.25
+    z0: 50  # SE controlled-impedance
+    length_match: true  # per-group tolerance in net entry
+
+  signal-diff:
+    width_min_mm: 0.20
+    spacing_min_mm: 0.15
+    z0: 90  # diff
+    length_match: true
+
+  analog-star:
+    width_min_mm: 0.25
+    spacing_min_mm: 0.25
+    z0: null
+    length_match: true  # all sinks within 5mm
+
+  ground-plane:
+    width_constraint: plane
+    spacing_constraint: 0.3mm
+    via_constraint: stitching
+
+
+# ============================================================
+# Sim trigger mapping (per-tier sim requirements)
+# ============================================================
+
+sim_requirements:
+
+  tier_1_pdn:
+    - dc_ir_drop_ngspice
+    - ac_pdn_impedance_skrf
+    - thermal_local_elmer_plane_regions
+
+  tier_2_switching:
+    - switching_loop_area_geometric
+    - thermal_local_elmer_fet_cluster
+    - transient_ringing_ngspice_extracted_L
+    - emi_nearfield_openems_local
+
+  tier_3_decoupling:
+    - z_vs_freq_skrf_per_ic_vdd
+    - analog_noise_margin_ngspice
+
+  tier_4_analog:
+    - crosstalk_openems_switching_to_analog
+    - noise_margin_ngspice_extracted_parasitic
+
+  tier_5_signal:
+    - tdr_skrf
+    - eye_diagram_ngspice_dshot
+    - reflection_coefficient_branches
+    - length_match_geometric
+
+  tier_6_bulk:
+    - drc_kicad
+    - visual_review
+
+
+# ============================================================
+# Mirror primitive (Tier 4)
+# ============================================================
+
+mirror_primitive:
+  axis_x: 50.0  # board center x
+  axis_y: 50.0  # board center y (for mirror_Y)
+  ch2_from_ch1: mirror_X
+  ch3_from_ch2: mirror_Y
+  ch4_from_ch3: mirror_X
+  algorithm: |
+    # pure geometric transform, NO fp.Flip (changes layer)
+    new_x = 2 * axis_x - old_x  (for mirror_X)
+    new_y = 2 * axis_y - old_y  (for mirror_Y)
+    new_rotation = (180 - old_rotation) % 360
+    reset_text_to_body(fp)  # ref/value text re-centered
+  tolerance_mm: 0.5  # per R19

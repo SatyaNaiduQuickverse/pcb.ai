@@ -1,0 +1,195 @@
+# Tier 1 mechanical anchors — immovable positions per Phase 4-v3 placement methodology
+#
+# These components have constraints from PHYSICS OUTSIDE the PCB (enclosure,
+# mating connectors, mounting fixtures, current pads). Their position is set
+# here as SSoT. Audit `audit_anchor_positions.py` enforces match to ±0.01mm.
+#
+# Changes require PR title tag `[invariant-change]` and `audit_routing_system.py --write`
+# to recompute MECHANICAL_ANCHORS_HASH.
+#
+# Coords extracted 2026-05-25 from master HEAD (pre-REDO). Verified by:
+# - mount holes: per enclosure spec (5,95 / 95,95 / 5,5 / 95,5 on 100x100 board)
+# - fiducials: ≥3 per side, ≥40mm separation (IPC-7351 + Sai-catch #8)
+# - J1 XT30: top edge mid-board
+# - J11 FC header: bottom edge mid-board area (mates flight controller pin pitch)
+# - J12 AUX: bottom-left area
+#
+# Tier 1 components from this lockfile MUST be placed BEFORE any Tier 2-5 components.
+# park_all_components.py skips these (they stay at their lockfile positions, not parked).
+
+version: 1
+extracted_from_commit: 428bc3d  # Phase 4-v2 CH4 mirror, last "good" mechanical state pre-REDO
+extracted_date: 2026-05-25
+
+mount_holes:
+  # 4× M3 standoff mounting holes at board corners (3.2mm drill)
+  # Footprint: MountingHole_3.2mm_M3
+  # Keep-out: 3mm radius copper-clear
+  - ref: H1
+    pos: [5.00, 95.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: MountingHole_3.2mm_M3
+    keepout_radius_mm: 3.0
+  - ref: H2
+    pos: [95.00, 95.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: MountingHole_3.2mm_M3
+    keepout_radius_mm: 3.0
+  - ref: H3
+    pos: [5.00, 5.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: MountingHole_3.2mm_M3
+    keepout_radius_mm: 3.0
+  - ref: H4
+    pos: [95.00, 5.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: MountingHole_3.2mm_M3
+    keepout_radius_mm: 3.0
+
+fiducials:
+  # 6× fiducials (3 top + 3 bottom), 1mm diameter, 2mm solder mask opening
+  # Footprint: Fiducial_1mm_Mask2mm
+  # Spacing ≥40mm per IPC-7351 (Sai-catch #8)
+  - ref: FID1
+    pos: [15.00, 50.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: Fiducial_1mm_Mask2mm
+  - ref: FID2
+    pos: [90.00, 50.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: Fiducial_1mm_Mask2mm
+  - ref: FID3
+    pos: [50.00, 85.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: Fiducial_1mm_Mask2mm
+  - ref: FID4
+    pos: [15.00, 50.00]
+    layer: B.Cu
+    rotation: 180
+    footprint: Fiducial_1mm_Mask2mm
+  - ref: FID5
+    pos: [85.00, 50.00]
+    layer: B.Cu
+    rotation: 180
+    footprint: Fiducial_1mm_Mask2mm
+  - ref: FID6
+    pos: [50.00, 15.00]
+    layer: B.Cu
+    rotation: 180
+    footprint: Fiducial_1mm_Mask2mm
+
+connectors:
+  # J1 = XT30 battery input (top edge, mid-board)
+  # NOTE: footprint in current master is PinHeader placeholder; replace with actual XT30 footprint
+  - ref: J1
+    pos: [50.00, 5.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: Connector_XT30  # to be set when proper footprint exists
+    role: battery_input
+    edge_distance_mm: 5.0  # top edge constraint (≤5mm per Sai-catch #5)
+  # J11 = Flight controller header (bottom edge area)
+  # Currently in spine for Phase 4-v2; may need to move per Phase 4-v3 review
+  - ref: J11
+    pos: [50.00, 38.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: SOT-23-8  # placeholder in current master; needs proper FC header footprint
+    role: flight_controller_header
+    edge_distance_mm: null  # FC header is central per current FPV 4-in-1 spec (not edge)
+    note: "If actual FC pin pitch requires edge, move to (50, 90)"
+  # J12 = AUX/DShot 6-pin header (bottom-left area, edge-pulled)
+  - ref: J12
+    pos: [25.00, 95.00]
+    layer: F.Cu
+    rotation: 0
+    footprint: JST_SH_SM06B-SRSS-TB_1x06-1MP_P1.00mm_Horizontal
+    role: aux_dshot_header
+    edge_distance_mm: 5.0  # bottom edge constraint
+
+motor_pads:
+  # Per-channel motor solder pads (12mm² each, edge-pulled)
+  # CH1 motor pads at NW corner area
+  # CH2 motor pads at NE corner area
+  # CH3 motor pads at SE corner area
+  # CH4 motor pads at SW corner area
+  # TODO: extract actual refs from netlist (currently J18-J22 family is MCU/DRV/passives,
+  # not motor pads). Worker to fill in correct motor pad refs from SKiDL netlist.
+  # Placeholder schema below; worker fills concrete entries during REDO infra PR.
+  - ref: PAD_MOTOR_CH1_A  # placeholder
+    pos: [TBD, TBD]
+    layer: F.Cu
+    rotation: TBD
+    footprint: SolderPad_Motor_12mm
+    role: motor_phase_A
+    channel: CH1
+    edge_distance_mm: 0  # at edge
+
+test_points:
+  # 34 test points extracted from current master. ≥4mm c-to-c per IPC-A-610.
+  # Per CH: SWD (CLK/DAT/RST), supply rail (3V3), debug (BEMF, BOOT0)
+  # Per channel quadrant.
+  # TODO: classify each TP by purpose (worker can attach role field during REDO)
+  - {ref: TP1,  pos: [38.00, 53.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: tbd}
+  - {ref: TP2,  pos: [5.00, 86.00],  layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: tbd}
+  - {ref: TP3,  pos: [47.00, 74.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: tbd}
+  - {ref: TP5,  pos: [72.00, 87.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: tbd}
+  - {ref: TP7,  pos: [15.23, 87.48], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: tbd}
+  - {ref: TP9,  pos: [25.00, 86.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: tbd}
+  - {ref: TP10, pos: [63.80, 45.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: tbd}
+  - {ref: TP11, pos: [35.50, 47.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D2.5mm, role: tbd}
+  - {ref: TP12, pos: [41.00, 47.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D2.5mm, role: tbd}
+  - {ref: TP16, pos: [44.50, 53.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: tbd}
+  - {ref: TP17, pos: [25.15, 69.56], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.5mm, role: ch1_debug_small}
+  - {ref: TP19, pos: [15.13, 52.38], layer: F.Cu, rotation: 0,   footprint: TestPoint_Pad_D3.0mm, role: ch1_swd_or_supply}
+  - {ref: TP20, pos: [15.25, 64.09], layer: F.Cu, rotation: 0,   footprint: TestPoint_Pad_D3.0mm, role: ch1_swd_or_supply}
+  - {ref: TP21, pos: [15.25, 76.09], layer: F.Cu, rotation: 0,   footprint: TestPoint_Pad_D3.0mm, role: ch1_swd_or_supply}
+  - {ref: TP22, pos: [29.24, 70.75], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.0mm, role: ch1_debug_small}
+  - {ref: TP23, pos: [27.81, 74.61], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.0mm, role: ch1_debug_small}
+  - {ref: TP24, pos: [74.85, 69.56], layer: B.Cu, rotation: 0,   footprint: TestPoint_Pad_D1.5mm, role: ch2_debug_small}
+  - {ref: TP26, pos: [84.87, 52.38], layer: F.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: ch2_swd_or_supply}
+  - {ref: TP27, pos: [84.75, 64.09], layer: F.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: ch2_swd_or_supply}
+  - {ref: TP28, pos: [84.75, 76.09], layer: F.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: ch2_swd_or_supply}
+  - {ref: TP29, pos: [70.76, 70.75], layer: B.Cu, rotation: 0,   footprint: TestPoint_Pad_D1.0mm, role: ch2_debug_small}
+  - {ref: TP30, pos: [72.19, 74.61], layer: B.Cu, rotation: 0,   footprint: TestPoint_Pad_D1.0mm, role: ch2_debug_small}
+  - {ref: TP31, pos: [74.85, 30.44], layer: B.Cu, rotation: 0,   footprint: TestPoint_Pad_D1.5mm, role: ch3_debug_small}
+  - {ref: TP33, pos: [84.87, 47.62], layer: F.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: ch3_swd_or_supply}
+  - {ref: TP34, pos: [84.75, 35.91], layer: F.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: ch3_swd_or_supply}
+  - {ref: TP35, pos: [84.75, 23.91], layer: F.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: ch3_swd_or_supply}
+  - {ref: TP36, pos: [70.76, 29.25], layer: B.Cu, rotation: 0,   footprint: TestPoint_Pad_D1.0mm, role: ch3_debug_small}
+  - {ref: TP37, pos: [72.19, 25.39], layer: B.Cu, rotation: 0,   footprint: TestPoint_Pad_D1.0mm, role: ch3_debug_small}
+  - {ref: TP38, pos: [25.15, 30.44], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.5mm, role: ch4_debug_small}
+  - {ref: TP40, pos: [15.13, 47.62], layer: F.Cu, rotation: 0,   footprint: TestPoint_Pad_D3.0mm, role: ch4_swd_or_supply}
+  - {ref: TP41, pos: [15.25, 35.91], layer: F.Cu, rotation: 0,   footprint: TestPoint_Pad_D3.0mm, role: ch4_swd_or_supply}
+  - {ref: TP42, pos: [15.25, 23.91], layer: F.Cu, rotation: 0,   footprint: TestPoint_Pad_D3.0mm, role: ch4_swd_or_supply}
+  - {ref: TP43, pos: [29.24, 29.25], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.0mm, role: ch4_debug_small}
+  - {ref: TP44, pos: [27.81, 25.39], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.0mm, role: ch4_debug_small}
+
+leds:
+  # Status LEDs (per-channel + global)
+  # TODO: worker to fill from netlist (channel status, KILL active, power-good, etc)
+  # Placeholder: visible from top, near function block
+  - ref: TBD
+    pos: [TBD, TBD]
+    layer: F.Cu
+    rotation: TBD
+    footprint: LED_0603
+    role: tbd
+
+parking_grid:
+  # Off-board parking coordinates for park_all_components.py
+  # All non-Tier-1 components start here, brought onto board by per-subsystem PRs
+  origin: [200.0, -50.0]
+  spacing_mm: 5.0
+  layer: F.Cu
+  rotation: 0
+  # Grid format: x = origin_x + (i % cols) * spacing, y = origin_y + (i // cols) * spacing
+  # cols = 30 (covers ~150mm wide off-board area)
+  cols: 30
