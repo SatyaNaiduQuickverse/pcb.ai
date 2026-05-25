@@ -42,11 +42,24 @@ MAX_DISTANCE_MM = 3.0  # R25
 IC_BODY_AREA_MIN_MM2 = 4.0  # heuristic: ICs are >4mm² body, passives smaller
 
 
+def _body_bbox_area_mm2(fp):
+    """Footprint body area in mm² — EXCLUDES reference + value text.
+
+    BUG-FIX 2026-05-26 (caught by validate_audits.py):
+    Default FOOTPRINT.GetBoundingBox() includes reference text, which on
+    long refs (e.g. "C_DECOUP_OK", "Q_HS_CH1") makes every footprint look
+    bigger than its body. With (False, False) we get body-only.
+
+    Validated against synthetic board with pad-area ground truth — see
+    docs/AUDIT_VALIDATION/audit_decoupling.md.
+    """
+    bb = fp.GetBoundingBox(False, False)  # aIncludeText=False, aIncludeInvisibleText=False
+    return pcbnew.ToMM(bb.GetWidth()) * pcbnew.ToMM(bb.GetHeight())
+
+
 def is_ic(fp):
     """True if footprint is likely an IC (vs passive)."""
-    bb = fp.GetBoundingBox()
-    area = pcbnew.ToMM(bb.GetWidth()) * pcbnew.ToMM(bb.GetHeight())
-    return area > IC_BODY_AREA_MIN_MM2
+    return _body_bbox_area_mm2(fp) > IC_BODY_AREA_MIN_MM2
 
 
 def is_decoupling_cap(fp):
@@ -54,9 +67,7 @@ def is_decoupling_cap(fp):
     ref = fp.GetReference()
     if not ref.startswith("C"):
         return False
-    bb = fp.GetBoundingBox()
-    area = pcbnew.ToMM(bb.GetWidth()) * pcbnew.ToMM(bb.GetHeight())
-    return area < 5.0  # 0805 and smaller
+    return _body_bbox_area_mm2(fp) < 5.0  # 0805 and smaller
 
 
 def get_vdd_pins(fp):

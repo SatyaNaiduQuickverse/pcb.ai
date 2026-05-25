@@ -49,7 +49,12 @@ def check_anchor_match(board, ref, expected_pos, expected_layer, expected_rotati
     pos = fp.GetPosition()
     actual_x = pcbnew.ToMM(pos.x)
     actual_y = pcbnew.ToMM(pos.y)
-    actual_layer = fp.GetLayerName()
+    # BUG-FIX 2026-05-26 (worker-caught on real staged board):
+    # GetLayerName() returns DISPLAY name like "F.Cu 3oz — Phase 4-v3 inner heat
+    # copper" when the board has custom layer names. Lockfile uses canonical "F.Cu"
+    # / "B.Cu". Compare canonical side via IsFlipped() instead.
+    # See docs/AUDIT_VALIDATION/audit_anchor_positions.md.
+    actual_layer = "B.Cu" if fp.IsFlipped() else "F.Cu"
     actual_rot = fp.GetOrientationDegrees()
     # Footprint bare-name extraction: GetLibItemName() returns just the footprint name
     # without the library prefix; this matches lockfile format which omits 'pcbai:' prefix.

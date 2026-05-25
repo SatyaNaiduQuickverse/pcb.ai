@@ -9,14 +9,24 @@ Checks (all hard gates):
   4. Passive anchoring: every R/C/L within role-specific max distance of parent device
   5. Decoupling: every IC's VDD/VCC pin has a cap within 3mm
 
-Run: python3 audit_layout_compliance.py <board.kicad_pcb>
+Run: python3 audit_layout_compliance.py <board.kicad_pcb> [--parked-exempt]
 Exit 0 on PASS, 1 on any FAIL.
+
+--parked-exempt: skip components in parking zone (x ≥ 130mm) when evaluating
+zone/anchoring/symmetry checks. Used by per-stage Phase 4-v3 PRs where most
+components are intentionally parked off-board and only the brought subset
+should be audited. Per [[reference-placement-bbox-overlap-bug]] +
+park-then-bring-in pattern; added 2026-05-26 (worker-caught: G5 flagged 539
+parked components by design).
 """
 import sys, os, math, re
 import pcbnew
 
 if len(sys.argv) < 2:
-    sys.exit("usage: audit_layout_compliance.py <board.kicad_pcb>")
+    sys.exit("usage: audit_layout_compliance.py <board.kicad_pcb> [--parked-exempt]")
+
+PARKED_EXEMPT = "--parked-exempt" in sys.argv[2:]
+PARKING_X_THRESHOLD = 130.0  # board is ≤100mm wide; parking_grid origin (200,-50)
 
 board = pcbnew.LoadBoard(sys.argv[1])
 fails = []
@@ -36,16 +46,30 @@ def get_outline_bbox():
 
 
 def collect_components():
+    """Build {ref: {x,y,fp,side}} for on-board components.
+
+    When --parked-exempt is set, components with x ≥ PARKING_X_THRESHOLD are
+    excluded — they're parked off-board by design (park-then-bring-in pattern,
+    R27). The audit then validates only the on-board subset.
+    """
     items = {}
+    parked = 0
     for fp in board.GetFootprints():
         ref = fp.GetReference()
         p = fp.GetPosition()
+        x_mm = pcbnew.ToMM(p.x)
+        y_mm = pcbnew.ToMM(p.y)
+        if PARKED_EXEMPT and x_mm >= PARKING_X_THRESHOLD:
+            parked += 1
+            continue
         items[ref] = {
-            "x": pcbnew.ToMM(p.x),
-            "y": pcbnew.ToMM(p.y),
+            "x": x_mm,
+            "y": y_mm,
             "fp": fp,
             "side": "F" if fp.GetLayer() == pcbnew.F_Cu else "B",
         }
+    if PARKED_EXEMPT:
+        print(f"[parked-exempt] excluded {parked} parked components (x ≥ {PARKING_X_THRESHOLD}mm); auditing {len(items)} on-board\n")
     return items
 
 

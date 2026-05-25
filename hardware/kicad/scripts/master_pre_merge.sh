@@ -17,6 +17,18 @@
 set -uo pipefail
 
 BOARD="${1:-hardware/kicad/pcbai_fpv4in1.kicad_pcb}"
+
+# --staged: pass --parked-exempt to per-component-set audits so each per-stage
+# PR audits only its on-board subset (parked components excluded). Added
+# 2026-05-26 (worker-caught: G5 flagged 539 intentionally-parked components).
+STAGED_MODE=""
+for arg in "$@"; do
+  if [[ "$arg" == "--staged" ]]; then
+    STAGED_MODE="--parked-exempt"
+    break
+  fi
+done
+
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 SCRIPTS="$REPO_ROOT/hardware/kicad/scripts"
 
@@ -118,7 +130,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_layout_compliance.py" ]]; then
   run_gate "G5_layout_compliance" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_layout_compliance.py' '$BOARD'" true
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_layout_compliance.py' '$BOARD' $STAGED_MODE" true
 else
   echo "[G5_layout_compliance] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -130,7 +142,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/master_audit_invariants.py" ]]; then
   run_gate "G6_master_invariants" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/master_audit_invariants.py' '$BOARD' docs/BOARD_INVARIANTS.md" true
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/master_audit_invariants.py' '$BOARD' docs/BOARD_INVARIANTS.md $STAGED_MODE" true
 else
   echo "[G6_master_invariants] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
