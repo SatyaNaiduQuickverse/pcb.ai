@@ -68,7 +68,7 @@ def derive():
         roles[q] = {"tier": 2, "role": "cluster-member", "subsystem": "CH1",
                     "parent": pad, "parent_pin": "1",
                     "relation": "hs-fet" if is_hs else "ls-fet",
-                    "max_distance_mm": 3, "same_layer_as_parent": True,
+                    "max_distance_mm": 7, "same_layer_as_parent": True,  # 6×5mm SuperSO8
                     "loop_member": True}
     # Shunts (0.2mR): SHUNT_x_TOP ↔ GND; parent = the LS FET whose S is that net.
     for s in [r for r in ch1 if val[r] == "0.2mR"]:
@@ -78,19 +78,30 @@ def derive():
                     "parent": lsfet or motor_of.get(topnet), "parent_pin": "S" if lsfet else "1",
                     "relation": "source-shunt", "max_distance_mm": 2,
                     "same_layer_as_parent": True, "loop_member": True, "kelvin_sense": True}
-    # Gate resistors (15R): one pin on a FET gate net (N$..), parent = driver J19.
+    # Gate resistors (15R): between driver out and a FET gate net. Parent = the FET
+    # whose gate pin shares the resistor's gate-side net — spreads the 6 gate-R to
+    # the 6 FETs (≤5mm from gate per R23) instead of piling on the driver.
     for g in [r for r in ch1 if val[r] == "15R"]:
+        gatefet = None
+        for p, net in rpn[g].items():
+            fet = next((rf for rf, pn in net_nodes.get(net, [])
+                        if val.get(rf) == "BSC014N06NS" and pn == "G"), None)
+            if fet:
+                gatefet = fet
+                break
         roles[g] = {"tier": 2, "role": "cluster-member", "subsystem": "CH1",
-                    "parent": DRV, "parent_pin": "1", "relation": "gate-r",
-                    "max_distance_mm": 5, "same_layer_as_parent": True}
+                    "parent": gatefet or DRV, "parent_pin": "G" if gatefet else "1",
+                    "relation": "gate-r", "max_distance_mm": 5, "same_layer_as_parent": True}
     # Gate driver: cluster anchor near the phase-A motor pad cluster.
     roles[DRV] = {"tier": 2, "role": "cluster-anchor", "subsystem": "CH1",
                   "parent": "TP20", "parent_pin": "1", "relation": "gate-driver",
                   "max_distance_mm": 8, "same_layer_as_parent": True}
-    # MCU near driver.
-    roles[MCU] = {"tier": 3, "role": "cluster-member", "subsystem": "CH1",
-                  "parent": DRV, "parent_pin": "1", "relation": "mcu-near-drv",
-                  "max_distance_mm": 8, "same_layer_as_parent": True}
+    # MCU: zone-anchored centre-east of CH1 so its ~13 decoupling caps + logic ICs
+    # ring it with room (driver+FETs occupy the west motor-pad column; piling MCU
+    # on the driver overflowed the west). SPI to driver stays short via the gate-R
+    # chain; exact MCU↔DRV distance flagged to master (methodology says ≤5mm).
+    roles[MCU] = {"tier": 3, "role": "cluster-anchor", "subsystem": "CH1",
+                  "zone_hint": [26.0, 66.0]}
     # INA186 (current sense): parent = its phase shunt (shares SHUNT net).
     for ina in [r for r in ch1 if val[r] == "INA186A3IDCKR"]:
         snet = next((rpn[ina][p] for p in rpn[ina] if "SHUNT" in (rpn[ina][p] or "")), None)

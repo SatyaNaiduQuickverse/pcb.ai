@@ -237,22 +237,30 @@ def role_place(board, refs, zones, roles):
                 pending.remove(r); progress = True; continue
             fp = board.FindFootprintByReference(r)
             maxd = float(rec.get("max_distance_mm", 3))
+            # Ring candidates around the parent BODY centre, reaching maxd past the
+            # parent's half-diagonal — a big IC's decoupling caps distribute around
+            # its perimeter (near its VDD pins) instead of piling on one pad.
+            pbb = _pad_bbox(pfp) if pfp is not None else (ppos[0], ppos[1], ppos[0], ppos[1])
+            pcx, pcy = (pbb[0] + pbb[2]) / 2, (pbb[1] + pbb[3]) / 2
+            half_diag = 0.5 * math.hypot(pbb[2] - pbb[0], pbb[3] - pbb[1])
+            search_r = maxd + half_diag
             done = False
-            for dx, dy in _spiral_offsets(maxd):
-                fp.SetPosition(pcbnew.VECTOR2I(int((ppos[0]+dx)*1e6), int((ppos[1]+dy)*1e6)))
+            for dx, dy in _spiral_offsets(search_r):
+                cx, cy = pcx + dx, pcy + dy
+                fp.SetPosition(pcbnew.VECTOR2I(int(cx * 1e6), int(cy * 1e6)))
                 if rec.get("same_layer_as_parent") and pfp is not None:
                     if fp.IsFlipped() != pfp.IsFlipped():
                         fp.Flip(fp.GetPosition(), False)
                 bb = _pad_bbox(fp)
                 if fits(bb):
-                    place_fp_at(fp, ppos[0]+dx, ppos[1]+dy, pfp if rec.get("same_layer_as_parent") else None)
+                    place_fp_at(fp, cx, cy, pfp if rec.get("same_layer_as_parent") else None)
                     placed[r] = _pad_bbox(fp)
                     done = True
                     break
             pending.remove(r)
             progress = True
             if not done:
-                errs.append(f"role_place: no slot ≤{maxd}mm for {r} near {parent}.{rec.get('parent_pin')}")
+                errs.append(f"role_place: no slot ≤{search_r:.1f}mm for {r} near {parent}")
     for r in pending:
         errs.append(f"role_place: unresolved parent chain for {r}")
     return errs
