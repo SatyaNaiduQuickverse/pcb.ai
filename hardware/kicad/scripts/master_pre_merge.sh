@@ -478,6 +478,36 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G_M5: assembly drawing completeness (CPL/BOM/rotation/value)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_assembly_drawing.py" ]]; then
+  run_gate "G_M5_assembly_drawing" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_assembly_drawing.py' '$BOARD'" false
+else
+  echo "[G_M5_assembly_drawing] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_S2: sim mesh validity (Elmer mesh pre-solve sanity)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_sim_mesh_validity.py" ]]; then
+  run_gate "G_S2_sim_mesh_validity" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_sim_mesh_validity.py'" false
+else
+  echo "[G_S2_sim_mesh_validity] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_S3: sim result physical-plausibility (T/I/V/P range check)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_sim_result_sanity.py" ]]; then
+  run_gate "G_S3_sim_result_sanity" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_sim_result_sanity.py'" false
+else
+  echo "[G_S3_sim_result_sanity] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G_D1/G_D2/G_D3: doc-sync combined gate
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_doc_sync.py" ]]; then
