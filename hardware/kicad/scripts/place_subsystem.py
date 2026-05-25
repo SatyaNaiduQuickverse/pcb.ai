@@ -35,6 +35,11 @@ import lockfile
 import roster as roster_mod
 from place_subsystem_ch1_v3 import reset_text_to_body
 
+# Footprint corrections (motor pads → ESCMotorPad, bulk caps → CP_Elec_8x6.2) are
+# applied once by migrate_footprints.py BEFORE the bring stages — an in-place
+# pcbnew swap, no kinet2pcb re-import (master+Sai 2026-05-25, path ii). Kept out
+# of bring_selected so positioning stays decoupled from footprint geometry.
+
 try:
     import pcbnew
 except ImportError:
