@@ -200,6 +200,54 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G12: Tier 4 differential pair length match
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_diff_pair_match.py" ]]; then
+  run_gate "G12_diff_pair_match" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_diff_pair_match.py' '$BOARD'" true
+else
+  echo "[G12_diff_pair_match] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G13: Tier 4 Kelvin shunt sense routing
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_kelvin_shunt_routing.py" ]]; then
+  run_gate "G13_kelvin_shunt" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_kelvin_shunt_routing.py' '$BOARD'" true
+else
+  echo "[G13_kelvin_shunt] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G14: Tier 1 PDN via stitching density
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_via_stitching_density.py" ]]; then
+  run_gate "G14_via_stitching" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_via_stitching_density.py' '$BOARD'" true
+else
+  echo "[G14_via_stitching] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G15: Tier 5 signal highway length match
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_length_match.py" ]]; then
+  run_gate "G15_length_match" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_length_match.py' '$BOARD'" true
+else
+  echo "[G15_length_match] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G11: Vision check render set present (per VISION_CHECK_METHODOLOGY.md)
 # Master visually inspects content per VISION_CHECK_METHODOLOGY.md §3 checklist
 # ──────────────────────────────────────────────────────────────────
@@ -224,6 +272,25 @@ if [[ -n "$RENDER_DIR_CANDIDATE" ]] && [[ -d "$RENDER_DIR_CANDIDATE" ]]; then
   fi
 else
   echo "[G11_vision_check_render_set] ⏭  SKIP (no renders dir found; pre-Stage0 PR exempt)"
+  GATES_SKIP=$((GATES_SKIP + 1))
+fi
+echo
+
+# ──────────────────────────────────────────────────────────────────
+# G10: verify_spec_diff.py — R20 mirror geometry gate (CH1↔CH2/3/4 ≤2mm)
+# Wired 2026-05-26 to close R20 GAP. Symmetric-mirror channels only.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/verify_spec_diff.py" ]]; then
+  # In --staged mode: parked mirror partners aren't on-board → skip gate
+  if [[ -n "$STAGED_MODE" ]]; then
+    echo "[G10_spec_diff_R20] ⏭  SKIP (staged mode — partner channels not all brought)"
+    GATES_SKIP=$((GATES_SKIP + 1))
+  else
+    run_gate "G10_spec_diff_R20" \
+      "cd '$REPO_ROOT' && python3 '$SCRIPTS/verify_spec_diff.py' '$BOARD'" true
+  fi
+else
+  echo "[G10_spec_diff_R20] ⏭  SKIP (script missing)"
   GATES_SKIP=$((GATES_SKIP + 1))
 fi
 echo

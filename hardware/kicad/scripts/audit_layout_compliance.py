@@ -28,6 +28,24 @@ if len(sys.argv) < 2:
 PARKED_EXEMPT = "--parked-exempt" in sys.argv[2:]
 PARKING_X_THRESHOLD = 130.0  # board is ≤100mm wide; parking_grid origin (200,-50)
 
+
+def _is_parked_fp(fp):
+    """True if fp is in parking zone (off-board by design)."""
+    if not PARKED_EXEMPT:
+        return False
+    return pcbnew.ToMM(fp.GetPosition().x) >= PARKING_X_THRESHOLD
+
+
+def _onboard_fps(board):
+    """Yield only on-board footprints when --parked-exempt; else all.
+    Use in check_* functions that iterate board.GetFootprints() directly
+    (vs check functions that take pre-filtered items dict)."""
+    for fp in board.GetFootprints():
+        if _is_parked_fp(fp):
+            continue
+        yield fp
+
+
 board = pcbnew.LoadBoard(sys.argv[1])
 fails = []
 warns = []
@@ -201,6 +219,9 @@ def check_symmetry(items, board_h=None, board_w=None):
     ch4 = {ref: (x, y) for ref, (x, y) in fets.items() if x < 50 and y < 47.5}
     for name, ch, n in [("CH1", ch1, 6), ("CH2", ch2, 6),
                         ("CH3", ch3, 6), ("CH4", ch4, 6)]:
+        # Staged-mode skip: 0 FETs = channel not brought, not a violation.
+        if PARKED_EXEMPT and len(ch) == 0:
+            continue
         if len(ch) != n:
             fails.append(f"SYMMETRY: {name} has {len(ch)} FETs, expected {n}")
     # Pure row-pitch check: each channel's Y rows must be P=12
@@ -859,9 +880,14 @@ def check_label_overlap():
 def check_silk_on_pad():
     """Real fp.Reference() text bbox intersects another component's PAD bbox
     on the same copper side. DFM critical — silk ink on solder pad creates
-    bad joint. Uses pcbnew GetBoundingBox() for the text PCB_FIELD."""
+    bad joint. Uses pcbnew GetBoundingBox() for the text PCB_FIELD.
+
+    --parked-exempt aware: parked components excluded from BOTH pad collection
+    AND text-iteration. Parking-grid 5mm spacing makes default silk text overlap
+    adjacent pads — that's by design for off-board parked state, not a real DFM bug.
+    """
     pads_by_layer = {'F': [], 'B': []}
-    for fp in board.GetFootprints():
+    for fp in _onboard_fps(board):
         for pad in fp.Pads():
             bb = pad.GetBoundingBox()
             ls = pad.GetLayerSet()
@@ -872,7 +898,7 @@ def check_silk_on_pad():
             if ls.Contains(pcbnew.B_Cu): pads_by_layer['B'].append(entry)
     bugs = []
     CLR = 0.05
-    for fp in board.GetFootprints():
+    for fp in _onboard_fps(board):
         ref = fp.GetReference()
         if ref.startswith('H'): continue
         rf = fp.Reference()
@@ -1104,7 +1130,9 @@ def check_quadrant_count_balance():
     # 152 components fp_layer to B.Cu — they were no longer counted, breaking
     # CH1↔CH2 R19 mirror symmetry check (Δ=8 false positive).
     # Quadrant assignment is by physical (x, y) position, not layer.
-    for fp in board.GetFootprints():
+    # 2026-05-26 --parked-exempt: skip parked components (off-board by design;
+    # they would all bucket into a fake "parking quadrant" and skew counts).
+    for fp in _onboard_fps(board):
         pos = fp.GetPosition()
         x, y = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
         cls = classify_ref(fp.GetReference(), fp)
@@ -1135,20 +1163,27 @@ def check_quadrant_count_balance():
     total_se = sum(b['SE'] for b in buckets.values())
 
     # CHANNEL rule: ≤2 delta on NW↔NE (CH1↔CH2) and SW↔SE (CH4↔CH3)
+    # --parked-exempt 2026-05-26: when both quadrants have 0 components, the
+    # channels aren't brought yet — not a violation. Only assert when at least
+    # one of the partner quadrants has components.
     ch = buckets['channel']
     ch_fails = []
-    if abs(ch['NW']-ch['NE']) > QUADRANT_DELTA_LIMIT:
-        ch_fails.append(f"CH1(NW)↔CH2(NE) Δ={abs(ch['NW']-ch['NE'])}")
-    if abs(ch['SW']-ch['SE']) > QUADRANT_DELTA_LIMIT:
-        ch_fails.append(f"CH4(SW)↔CH3(SE) Δ={abs(ch['SW']-ch['SE'])}")
+    if not (PARKED_EXEMPT and ch['NW'] == 0 and ch['NE'] == 0):
+        if abs(ch['NW']-ch['NE']) > QUADRANT_DELTA_LIMIT:
+            ch_fails.append(f"CH1(NW)↔CH2(NE) Δ={abs(ch['NW']-ch['NE'])}")
+    if not (PARKED_EXEMPT and ch['SW'] == 0 and ch['SE'] == 0):
+        if abs(ch['SW']-ch['SE']) > QUADRANT_DELTA_LIMIT:
+            ch_fails.append(f"CH4(SW)↔CH3(SE) Δ={abs(ch['SW']-ch['SE'])}")
 
     # S-ZONE-MIRROR-PAIR rule: ≤2 delta on NW↔NE and SW↔SE
     sm = buckets['s_mirror']
     sm_fails = []
-    if abs(sm['NW']-sm['NE']) > QUADRANT_DELTA_LIMIT:
-        sm_fails.append(f"S-mirror NW↔NE Δ={abs(sm['NW']-sm['NE'])}")
-    if abs(sm['SW']-sm['SE']) > QUADRANT_DELTA_LIMIT:
-        sm_fails.append(f"S-mirror SW↔SE Δ={abs(sm['SW']-sm['SE'])}")
+    if not (PARKED_EXEMPT and sm['NW'] == 0 and sm['NE'] == 0):
+        if abs(sm['NW']-sm['NE']) > QUADRANT_DELTA_LIMIT:
+            sm_fails.append(f"S-mirror NW↔NE Δ={abs(sm['NW']-sm['NE'])}")
+    if not (PARKED_EXEMPT and sm['SW'] == 0 and sm['SE'] == 0):
+        if abs(sm['SW']-sm['SE']) > QUADRANT_DELTA_LIMIT:
+            sm_fails.append(f"S-mirror SW↔SE Δ={abs(sm['SW']-sm['SE'])}")
 
     # AUTO bucket rule: WARN ONLY (master adjudication 2026-05-23).
     # Auto-anchored debris (debug TPs, generic +3V3/GND/N$nn pulls, IC decoupling)

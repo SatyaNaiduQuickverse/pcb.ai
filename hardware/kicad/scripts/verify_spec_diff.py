@@ -38,7 +38,9 @@ MAX_DX_FOR_MIRROR_Y = 15.0
 
 
 def main():
-    b = pcbnew.LoadBoard(PCB)
+    # Accept board arg (added 2026-05-26 for G10 wiring); fall back to default PCB.
+    board_path = sys.argv[1] if len(sys.argv) > 1 else PCB
+    b = pcbnew.LoadBoard(board_path)
     fps = list(b.GetFootprints())
 
     info = {}
