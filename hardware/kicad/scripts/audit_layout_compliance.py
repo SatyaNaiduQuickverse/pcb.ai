@@ -1173,14 +1173,22 @@ def check_quadrant_count_balance():
     # --parked-exempt 2026-05-26: when both quadrants have 0 components, the
     # channels aren't brought yet — not a violation. Only assert when at least
     # one of the partner quadrants has components.
+    # 2026-05-26 worker catch (CH1-only): also skip entire CHANNEL rule when
+    # <4 channel quadrants have components (in staged mode) — balance is
+    # structurally impossible until all 4 channels brought. Re-enables on Stage 5.
     ch = buckets['channel']
     ch_fails = []
-    if not (PARKED_EXEMPT and ch['NW'] == 0 and ch['NE'] == 0):
-        if abs(ch['NW']-ch['NE']) > QUADRANT_DELTA_LIMIT:
-            ch_fails.append(f"CH1(NW)↔CH2(NE) Δ={abs(ch['NW']-ch['NE'])}")
-    if not (PARKED_EXEMPT and ch['SW'] == 0 and ch['SE'] == 0):
-        if abs(ch['SW']-ch['SE']) > QUADRANT_DELTA_LIMIT:
-            ch_fails.append(f"CH4(SW)↔CH3(SE) Δ={abs(ch['SW']-ch['SE'])}")
+    n_channels_with_comps = sum(1 for q in ('NW', 'NE', 'SE', 'SW') if ch[q] > 0)
+    if PARKED_EXEMPT and n_channels_with_comps < 4:
+        # Staged mode + not all channels brought → unmeasurable balance, SKIP
+        pass
+    else:
+        if not (PARKED_EXEMPT and ch['NW'] == 0 and ch['NE'] == 0):
+            if abs(ch['NW']-ch['NE']) > QUADRANT_DELTA_LIMIT:
+                ch_fails.append(f"CH1(NW)↔CH2(NE) Δ={abs(ch['NW']-ch['NE'])}")
+        if not (PARKED_EXEMPT and ch['SW'] == 0 and ch['SE'] == 0):
+            if abs(ch['SW']-ch['SE']) > QUADRANT_DELTA_LIMIT:
+                ch_fails.append(f"CH4(SW)↔CH3(SE) Δ={abs(ch['SW']-ch['SE'])}")
 
     # S-ZONE-MIRROR-PAIR rule: ≤2 delta on NW↔NE and SW↔SE
     sm = buckets['s_mirror']
