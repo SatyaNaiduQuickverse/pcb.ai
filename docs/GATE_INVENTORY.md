@@ -52,7 +52,7 @@ Sai-eye-catch waiting to happen. Build the gate BEFORE the error.
 | G_FoS3 cap voltage derating | 🔴 | TODO audit_fos_voltage | electrolytic cap V_rated ≥ V_max × 1.4 (industry 40% derating) ceramic ≥ 1.5× for X7R |
 | G_FoS4 cap ripple current | 🔴 | TODO audit_fos_ripple | cap I_ripple_rated ≥ I_RMS × 1.5 (links OQ-006 R17) |
 | G_FoS5 connector pin current | 🔴 | TODO audit_fos_pin_current | per-pin rating × pin count ≥ I_load × 1.5 |
-| G_FoS6 via current density | 🔴 | TODO audit_fos_via_current | sum(via_amp_capacity) ≥ I_load × 1.5 |
+| G_FoS6 via current density | ✅ (covered by G_R5) | audit_via_current_capacity | sum(via_amp_capacity) ≥ I_load × 1.5 — same logic, merged with G_R5 |
 
 ## D. Lockfile + metadata gates
 
@@ -71,16 +71,16 @@ Sai-eye-catch waiting to happen. Build the gate BEFORE the error.
 | G_M2 min via drill 0.3mm | ✅ | audit_jlc_dfm | JLC SMT capability |
 | G_M3 min annular ring 0.13mm | ✅ | audit_jlc_dfm | JLC SMT capability |
 | G_M4 LCSC stock + part-number presence | 🔴 | TODO audit_bom_lcsc_stock | every BOM line has stocked LCSC part |
-| G_M5 assembly drawing complete | 🔴 | TODO audit_assembly_drawing | rotations + polarity marks + 0,0 reference |
-| G_M6 panelization fit | 🔴 | TODO audit_panel_fit | board ≤ JLC max panel × N |
+| G_M5 assembly drawing complete | ✅ | audit_assembly_drawing | rotations + Value + attrs set per fp; WARN class (JLC infers most) |
+| G_M6 panelization fit | ✅ | audit_panel_fit | board ≤ JLC max panel × N |
 
 ## F. Sim execution + result gates (R18)
 
 | Gate | Status | Script | What it catches |
 |---|---|---|---|
 | G_S1 sim 4-point execution proof | ✅ | (R18 in PR body) | result file + mtime + extract script + literal exec cmd |
-| G_S2 mesh validity pre-run | 🔴 | TODO audit_mesh_validity | Elmer mesh non-degenerate before solve |
-| G_S3 result physical-plausibility | 🔴 | TODO audit_result_sanity | T_J in Kelvin not Celsius; current in Amps not nA |
+| G_S2 mesh validity pre-run | ✅ | audit_sim_mesh_validity | Elmer mesh non-degenerate before solve; node/element count + header consistency |
+| G_S3 result physical-plausibility | ✅ | audit_sim_result_sanity | T 0-200°C / I 1µA-1kA / V 0-1kV / P ≥ 0 ranges enforced |
 
 ## G. Vision + manual gates
 
