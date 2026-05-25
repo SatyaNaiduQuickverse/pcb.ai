@@ -157,3 +157,23 @@ Cross-reference: locked specs live in `docs/REQUIREMENTS.md`; this file logs
   - **(B)** Worker has read-only access to master's clone at `/home/novatics64/novapcbmaster/pcb.ai` — no write workspace, defeats PR review boundary, CLAUDE.md autoload doesn't trigger
   - **(C)** Shared writable clone — concurrent-edit risk, defeats master/worker review model
 - **Rationale**: Existing GitHub origin is the natural shared remote (no new infra). Standard PR workflow: branches per sub-phase, master reviews on GitHub. Setup is one `gh repo clone` away. Closed by Sai/master authorization in the Phase 0 task contract (2026-05-22).
+
+---
+
+### OQ-006 — C1-C4 bulk-cap ripple-current FoS verification
+
+- **Raised**: 2026-05-25 (worker R17 catch during Phase 4-v3 REDO infra PR #101)
+- **Status**: OPEN — to resolve at Stage 9 (S2 PR) via ngspice ripple sim
+- **Context**: S2 BOM relock changed 4× 470µF (Panasonic, 4A RMS rated, prior FoS analysis) → 4× 150µF (Nichicon PCH1V151MCL1GS, datasheet ripple rating not yet sourced). Per-cap rated ripple at 100kHz / 105°C for the PCH1V151 must be confirmed before fab freeze.
+- **Engineering**: 4-channel phase-staggered switching reduces bulk-cap RMS ripple by ~3-4× vs single-channel worst-case. Pure analytical estimate now would be pessimistic.
+- **Resolution plan**: 
+  1. Stage 9 S2 PR runs ngspice transient with routed +VMOTOR plane (real parasitics) and measures actual RMS ripple seen at C1-C4
+  2. Source datasheet rated ripple for PCH1V151MCL1GS (Nichicon PCH series)
+  3. Compute FoS = (4 × rated_per_cap_RMS_at_30kHz_105C) / measured_RMS
+  4. PASS criterion: FoS ≥ 1.5×
+- **If FAIL paths**: 
+  - Swap to higher-rated polymer in same package
+  - Add ceramic 1210 X7R array in parallel (option ε from PR #104 traceability table)
+  - Re-derive at Stage 9 PR with new BOM
+- **Blocker for**: fab freeze (Phase 9). NOT a blocker for Stage 0-8 PRs.
+- **Owner**: master (ngspice cross-check) + worker (BOM swap if FAIL)
