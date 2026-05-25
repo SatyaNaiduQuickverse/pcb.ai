@@ -177,3 +177,12 @@ Cross-reference: locked specs live in `docs/REQUIREMENTS.md`; this file logs
   - Re-derive at Stage 9 PR with new BOM
 - **Blocker for**: fab freeze (Phase 9). NOT a blocker for Stage 0-8 PRs.
 - **Owner**: master (ngspice cross-check) + worker (BOM swap if FAIL)
+
+### OQ-007 — Multi-layer thermal sim re-validation post B.Cu LS-FETs
+
+- **Raised**: 2026-05-26
+- **Trigger**: Stage 2 CH1 adopted B.Cu backside LS-FET placement (Sai-anticipated call)
+- **Question**: Does the Phase 4-v2 single-side thermal baseline (T_J cont=62.76°C, burst=82.99°C, recorded in `docs/THERMAL_BASELINE.md`) still apply to the multi-layer placement, or do we need a fresh Elmer sim with HS-top + LS-bottom geometry?
+- **Expected impact**: MODEST improvement (heat spreads to both copper layers via thermal-via clusters under each FET) — directionally favourable, may relax burst-FoS pressure (currently 17.0% margin, exceeds 25% continuous standard but justified at 10% transient)
+- **Resolution**: re-run Elmer FEM at Stage 10 (full board placed + routed) with multi-layer mesh. Compare against single-side baseline. If new T_J ≤ old T_J, baseline stands as conservative bound. If new T_J ≤ 65.5°C cont / ≤87°C burst (FoS limits), board passes.
+- **Blocks**: fab freeze only
