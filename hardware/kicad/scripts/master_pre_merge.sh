@@ -380,6 +380,54 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G_R2: transmission-line stub length (post-routing)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_stub_length.py" ]]; then
+  run_gate "G_R2_stub_length" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_stub_length.py' '$BOARD'" true
+else
+  echo "[G_R2_stub_length] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_R4: aggressor-victim crosstalk spacing (post-routing)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_crosstalk_spacing.py" ]]; then
+  run_gate "G_R4_crosstalk_spacing" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_crosstalk_spacing.py' '$BOARD'" true
+else
+  echo "[G_R4_crosstalk_spacing] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_FoS3: cap voltage derating FoS (BOM metadata)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_fos_cap_voltage.py" ]]; then
+  run_gate "G_FoS3_cap_voltage" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_fos_cap_voltage.py'" true
+else
+  echo "[G_FoS3_cap_voltage] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_M6: JLC panelization fit
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_panel_fit.py" ]]; then
+  run_gate "G_M6_panel_fit" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_panel_fit.py' '$BOARD'" true
+else
+  echo "[G_M6_panel_fit] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G_D1/G_D2/G_D3: doc-sync combined gate
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_doc_sync.py" ]]; then
