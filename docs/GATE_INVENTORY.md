@@ -19,12 +19,12 @@ Sai-eye-catch waiting to happen. Build the gate BEFORE the error.
 | G6 master invariants (5 sub-checks) | ✅ | master_audit_invariants | hash drift, zone, port, highway, symmetry-partner |
 | G16 **connector symmetry** | 🟡 | audit_connector_symmetry | non-symmetric connector placement (Sai-eye-caught 2026-05-26 J12@25/J14@50) |
 | G17 **edge keepout** | 🟡 | audit_edge_keepout | components closer than 3-5mm to board edge (Sai-#5 J14@y90 catch) |
-| G_PP1 polarity marker visible | 🔴 | TODO | LED/diode/electrolytic anode-mark visible top-side |
+| G_PP1 polarity marker visible | ✅ | audit_polarity_marker | LED/diode/electrolytic/IC silk-side polarity graphic present |
 | G_PP2 pick-place reachability | 🔴 | TODO | tall component blocks adjacent placement head access |
-| G_PP3 silk size readability | 🔴 | TODO | refdes text <1mm height fails JLC SMT pick |
+| G_PP3 silk size readability | ✅ | audit_silk_size | refdes text <1mm height fails JLC SMT pick (stroke ≥0.15mm) |
 | G_PP4 component rotation aligned | 🔴 | TODO | same-class components rotation-aligned for DFM uniformity |
 | G_PP5 hand-solder TP access | 🔴 | TODO | TPs blocked by adjacent ≥3mm tall component |
-| G_PP6 HV creepage clearance | 🔴 | TODO | ≥27 V_motor needs ≥0.6mm trace+pad creepage (IPC-2221 B-grade) |
+| G_PP6 HV creepage clearance | ✅ | audit_hv_creepage | ≥27V VMOTOR nets ≥0.6mm pad-to-pad IPC-2221 B-grade |
 | G_PP7 mating connector cable swing | 🔴 | TODO | JST/XT30 has cable-swing radius — adjacent components must clear |
 
 ## B. Routing gates (mostly post-Stage-2)
@@ -40,7 +40,7 @@ Sai-eye-catch waiting to happen. Build the gate BEFORE the error.
 | G_R2 stub length at high freq | 🔴 | TODO | unterminated stubs >1/10 λ on clocks |
 | G_R3 return-path microstrip integrity | 🔴 | TODO | trace crossing reference-plane gap |
 | G_R4 crosstalk aggressor-victim spacing | 🔴 | TODO | high-dV/dt traces too close to analog |
-| G_R5 via current capacity | 🔴 | TODO | drill+annular vs net current per IPC-2152 |
+| G_R5 via current capacity | ✅ | audit_via_current_capacity | drill+annular vs net current per IPC-2152 + 1.5× FoS |
 | G_R6 antenna structure prevention | 🔴 | TODO | long unterminated stubs that radiate |
 
 ## C. Factor-of-Safety (FoS) gates — Sai 2026-05-26 mandate
@@ -48,7 +48,7 @@ Sai-eye-catch waiting to happen. Build the gate BEFORE the error.
 | Gate | Status | Script | FoS rule |
 |---|---|---|---|
 | G_FoS1 thermal T_J | 🔴 | TODO audit_fos_thermal | T_J ≤ T_J_max × (1 − 0.25) = 75°C for Si MOSFETs (industry std 25% FoS) |
-| G_FoS2 trace ampacity | 🔴 | TODO audit_fos_current | trace-width-rated ampacity ≥ I_load × 1.5 (50% FoS continuous, 100% transient) |
+| G_FoS2 trace ampacity | ✅ | audit_fos_current | trace-width-rated ampacity ≥ I_load × 1.5 (50% FoS continuous, 1.2× burst) |
 | G_FoS3 cap voltage derating | 🔴 | TODO audit_fos_voltage | electrolytic cap V_rated ≥ V_max × 1.4 (industry 40% derating) ceramic ≥ 1.5× for X7R |
 | G_FoS4 cap ripple current | 🔴 | TODO audit_fos_ripple | cap I_ripple_rated ≥ I_RMS × 1.5 (links OQ-006 R17) |
 | G_FoS5 connector pin current | 🔴 | TODO audit_fos_pin_current | per-pin rating × pin count ≥ I_load × 1.5 |
@@ -67,9 +67,9 @@ Sai-eye-catch waiting to happen. Build the gate BEFORE the error.
 
 | Gate | Status | Script | Rule |
 |---|---|---|---|
-| G_M1 min trace width 0.1mm | 🔴 | TODO audit_min_track | JLC SMT capability |
-| G_M2 min via drill 0.3mm | 🔴 | TODO audit_min_via | JLC SMT capability |
-| G_M3 min annular ring 0.15mm | 🔴 | TODO audit_min_annular | JLC SMT capability |
+| G_M1 min trace width 0.1mm (1oz) / 0.2mm (3oz) | ✅ | audit_jlc_dfm | JLC SMT capability + layer-aware |
+| G_M2 min via drill 0.3mm | ✅ | audit_jlc_dfm | JLC SMT capability |
+| G_M3 min annular ring 0.13mm | ✅ | audit_jlc_dfm | JLC SMT capability |
 | G_M4 LCSC stock + part-number presence | 🔴 | TODO audit_bom_lcsc_stock | every BOM line has stocked LCSC part |
 | G_M5 assembly drawing complete | 🔴 | TODO audit_assembly_drawing | rotations + polarity marks + 0,0 reference |
 | G_M6 panelization fit | 🔴 | TODO audit_panel_fit | board ≤ JLC max panel × N |

@@ -248,6 +248,78 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G_PP1: polarity marker visibility (proactive — silent reverse-install class)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_polarity_marker.py" ]]; then
+  run_gate "G_PP1_polarity_marker" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_polarity_marker.py' '$BOARD'" false
+else
+  echo "[G_PP1_polarity_marker] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_PP3: silk text size readability (JLC SMT ≥1mm)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_silk_size.py" ]]; then
+  run_gate "G_PP3_silk_size" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_silk_size.py' '$BOARD'" false
+else
+  echo "[G_PP3_silk_size] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_PP6: HV creepage clearance (IPC-2221 B-grade for 27V VMOTOR)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_hv_creepage.py" ]]; then
+  run_gate "G_PP6_hv_creepage" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_hv_creepage.py' '$BOARD'" true
+else
+  echo "[G_PP6_hv_creepage] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_M1/G_M2/G_M3 combined: JLC DFM (min trace + via drill + annular)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_jlc_dfm.py" ]]; then
+  run_gate "G_M_jlc_dfm" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_jlc_dfm.py' '$BOARD'" true
+else
+  echo "[G_M_jlc_dfm] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_FoS2: trace ampacity FoS (post-routing)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_fos_current.py" ]]; then
+  run_gate "G_FoS2_trace_ampacity" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_fos_current.py' '$BOARD'" true
+else
+  echo "[G_FoS2_trace_ampacity] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_R5: via current capacity FoS (post-routing)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_via_current_capacity.py" ]]; then
+  run_gate "G_R5_via_current_capacity" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_via_current_capacity.py' '$BOARD'" true
+else
+  echo "[G_R5_via_current_capacity] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G12: Tier 4 differential pair length match
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_diff_pair_match.py" ]]; then
