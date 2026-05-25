@@ -54,6 +54,9 @@ SUBSYS_ZONES = {
     "S5": ["S5_east", "S5_west", "S5_south"],
 }
 ON_BOARD_MARGIN = 2.0
+# Per-phase symmetry transform — gated off until J18/J19 placement is resolved
+# clear of the 3-phase FET column (see replicate_phases docstring).
+PHASE_REPLICATE = False
 ANCHOR_TOL_MM = 0.01
 
 
@@ -445,6 +448,129 @@ def role_place(board, refs, zones, roles):
     return errs
 
 
+_PHASE_NET_RE = re.compile(r'(?:MOTOR_|SHUNT_|BEMF_|CSA_)([ABC])(?:_|\b)|(?:GH|GL|BST)([ABC])\b')
+
+
+def _phase_of(fp):
+    """The half-bridge phase (A/B/C) a footprint belongs to, from its pad nets."""
+    ph = set()
+    for pad in fp.Pads():
+        m = _PHASE_NET_RE.search(pad.GetNetname() or "")
+        if m:
+            ph.add(m.group(1) or m.group(2))
+    return next(iter(ph)) if len(ph) == 1 else None
+
+
+def _strip_phase(n):
+    n = re.sub(r'(MOTOR_|SHUNT_|BEMF_|CSA_)[ABC]', r'\1X', n)
+    return re.sub(r'(GH|GL|BST)[ABC]', r'\1X', n)
+
+
+def _phase_sig(fp, role):
+    """Phase-invariant signature: role + named nets with the phase letter masked.
+    A's HS-FET and B's HS-FET share this signature; counterparts map by it."""
+    nets = []
+    for pad in fp.Pads():
+        n = pad.GetNetname() or ""
+        if not n or n.startswith(("N$", "Net-", "unconnected")):
+            continue
+        nets.append(_strip_phase(n))
+    return (role, tuple(sorted(set(nets))))
+
+
+def replicate_phases(board, refs, roles, subsystem, zones):
+    """R20 / symmetry-preserves-work: a channel's 3 half-bridge phases must be
+    IDENTICAL geometric copies. Place all phases via the role engine, then snap
+    every phase onto ONE reference phase's geometry translated by the motor-pad
+    pitch (so FET rows land at the lockfile 12mm pitch and the channel is a clean
+    mirror template). The reference is chosen so the translated copies all stay
+    in-zone — e.g. for a zone whose top edge crowds the last motor pad, the top
+    phase is the reference and the others translate inward. Returns issues."""
+    import re as _re
+    chan = _re.search(r'\d+', subsystem)
+    if not chan:
+        return []
+    cn = chan.group()
+    present = {fp.GetReference(): fp for fp in board.GetFootprints()}
+    mpads = {}
+    for r in MOTOR_TP_REFS:
+        fp = present.get(r)
+        if not fp:
+            continue
+        for pad in fp.Pads():
+            m = _re.match(rf'MOTOR_([ABC])_CH{cn}$', pad.GetNetname() or "")
+            if m:
+                p = fp.GetPosition()
+                mpads[m.group(1)] = (p.x / 1e6, p.y / 1e6)
+                break
+    if set(mpads) != {"A", "B", "C"}:
+        return [f"replicate_phases: {subsystem} motor pads incomplete: {sorted(mpads)}"]
+    # Group placeable phase components by phase, keyed by phase-invariant signature.
+    by_phase = {"A": {}, "B": {}, "C": {}}
+    for r in refs:
+        fp = present.get(r)
+        if fp is None or r in MOTOR_TP_REFS:
+            continue
+        ph = _phase_of(fp)
+        if ph in by_phase:
+            by_phase[ph].setdefault(_phase_sig(fp, roles.get(r, {}).get("role")), []).append(r)
+
+    z = zones[0]  # channel zones are a single rectangle
+
+    def _safe_subzone(ref_ph):
+        # A reference-phase CENTER placed in this box stays in-zone for ALL phases
+        # (= intersection of zone − phase_offset over A/B/C). Empty ⇒ zone too small.
+        dxs = [mpads[p][0] - mpads[ref_ph][0] for p in ("A", "B", "C")]
+        dys = [mpads[p][1] - mpads[ref_ph][1] for p in ("A", "B", "C")]
+        return (z[0] - min(dxs), z[1] - min(dys), z[2] - max(dxs), z[3] - max(dys))
+
+    def _clamp_plan(ref_ph):
+        """Map ref_ph components to all phases, clamping the reference CENTER into
+        the safe sub-zone first. Returns (moves, distortion) or None on mismatch."""
+        sx0, sy0, sx1, sy1 = _safe_subzone(ref_ph)
+        if sx0 > sx1 or sy0 > sy1:
+            return None, None  # safe sub-zone empty → zone genuinely too tight
+        moves, dist = [], 0.0
+        for sig, ref_refs in by_phase[ref_ph].items():
+            ref_refs = sorted(ref_refs, key=_ref_sort_key)
+            groups = {}
+            for ph in ("A", "B", "C"):
+                groups[ph] = sorted(by_phase[ph].get(sig, []), key=_ref_sort_key)
+                if len(groups[ph]) != len(ref_refs):
+                    return None, None
+            for i, rr in enumerate(ref_refs):
+                rp = present[rr].GetPosition()
+                cx = min(max(rp.x / 1e6, sx0), sx1)
+                cy = min(max(rp.y / 1e6, sy0), sy1)
+                dist += abs(cx - rp.x / 1e6) + abs(cy - rp.y / 1e6)
+                for ph in ("A", "B", "C"):
+                    tgt = present[groups[ph][i]]
+                    moves.append((tgt, present[rr],
+                                  cx + mpads[ph][0] - mpads[ref_ph][0],
+                                  cy + mpads[ph][1] - mpads[ref_ph][1]))
+        return moves, dist
+
+    # Pick the reference phase needing the least clamp distortion (best-preserved
+    # role-engine geometry) among those whose safe sub-zone is non-empty.
+    best, best_dist, best_ph = None, None, None
+    for ref_ph in ("A", "B", "C"):
+        moves, dist = _clamp_plan(ref_ph)
+        if moves is None:
+            continue
+        if best is None or dist < best_dist:
+            best, best_dist, best_ph = moves, dist, ref_ph
+    if best is None:
+        return [f"replicate_phases: {subsystem} no valid reference "
+                f"(zone too tight for 3 phases, or signature groups mismatch)"]
+    for tgt, ref, x, y in best:
+        if tgt.IsFlipped() != ref.IsFlipped():
+            tgt.Flip(tgt.GetPosition(), False)
+        tgt.SetOrientation(ref.GetOrientation())
+        tgt.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
+        reset_text_to_body(tgt)
+    return []
+
+
 def bring_selected(board, subsystem):
     """Bring one subsystem's roster from parking into its zone(s).
     Returns (brought_refs, errors, stats)."""
@@ -483,6 +609,15 @@ def bring_selected(board, subsystem):
     if role_placed:
         errs += role_place(board, role_placed, zones,
                            {r: roles[r] for r in role_placed})
+        # R20: make a channel's 3 phases identical geometric copies (clean mirror
+        # template) via replicate_phases(). DISABLED pending an architecture call:
+        # forcing per-phase symmetry collides the FET column with the shared driver
+        # (J19) + MCU (J18), which the role engine had placed INSIDE the phase strip
+        # (the inconsistent per-phase offsets were its collision-avoidance). Needs
+        # J18/J19 relocated clear of the 3-phase column first (master decision).
+        if subsystem.startswith("CH") and PHASE_REPLICATE:
+            errs += replicate_phases(board, role_placed,
+                                     {r: roles[r] for r in role_placed}, subsystem, zones)
     if grid_rest:
         grid_placer(board, grid_rest, zones)
 
