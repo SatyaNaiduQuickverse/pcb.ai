@@ -17,6 +17,32 @@
 set -uo pipefail
 
 BOARD="${1:-hardware/kicad/pcbai_fpv4in1.kicad_pcb}"
+
+# --staged <brought-csv>: per-stage PR mode. Propagates:
+#   G1 audit_anchor_positions  → --staged <brought>     (parked anchors → PARK)
+#   G2 audit_zone_contract     → --brought <brought>    (already supports)
+#   G4 audit_decoupling        → --parked-exempt        (skip parked ICs/caps)
+#   G5 audit_layout_compliance → --parked-exempt
+#   G6 master_audit_invariants → --parked-exempt
+# Example: master_pre_merge.sh <board.kicad_pcb> --staged S6
+# Added 2026-05-26 (worker-caught: gates need staged-awareness; synthetic test
+# boards have no parking concept so could not surface this class of bug).
+STAGED_MODE=""
+STAGED_BROUGHT=""
+i=1
+for arg in "$@"; do
+  if [[ "$arg" == "--staged" ]]; then
+    STAGED_MODE="--parked-exempt"
+    # Next arg is the brought-csv (e.g. "S6" or "S6,CH1")
+    next_idx=$((i + 1))
+    if [[ $next_idx -le $# ]]; then
+      STAGED_BROUGHT="${!next_idx}"
+    fi
+    break
+  fi
+  i=$((i + 1))
+done
+
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 SCRIPTS="$REPO_ROOT/hardware/kicad/scripts"
 
@@ -69,8 +95,12 @@ run_gate() {
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_anchor_positions.py" ]] \
    && [[ -f "$REPO_ROOT/docs/PHASE4V3_LOCKFILES/mechanical_anchors.yaml" ]]; then
+  G1_STAGED_ARGS=""
+  if [[ -n "$STAGED_BROUGHT" ]]; then
+    G1_STAGED_ARGS="--staged $STAGED_BROUGHT"
+  fi
   run_gate "G1_anchor_positions" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_anchor_positions.py' '$BOARD'" true
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_anchor_positions.py' '$BOARD' $G1_STAGED_ARGS" true
 else
   echo "[G1_anchor_positions] ⏭  SKIP (script or lockfile missing — pre-methodology-PR)"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -81,8 +111,10 @@ fi
 # G2: Zone contract (park-then-bring) — worker building
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_zone_contract.py" ]]; then
+  # G2 takes --board <B> --brought <csv>; defaults brought="" (Stage 0 = foundation only)
+  G2_BROUGHT_ARG="--brought $STAGED_BROUGHT"
   run_gate "G2_zone_contract" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_zone_contract.py' '$BOARD'" true
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_zone_contract.py' --board '$BOARD' $G2_BROUGHT_ARG" true
 else
   echo "[G2_zone_contract] ⏭  SKIP (script not yet built by worker)"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -106,7 +138,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_decoupling.py" ]]; then
   run_gate "G4_decoupling" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_decoupling.py' '$BOARD'" true
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_decoupling.py' '$BOARD' $STAGED_MODE" true
 else
   echo "[G4_decoupling] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -118,7 +150,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_layout_compliance.py" ]]; then
   run_gate "G5_layout_compliance" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_layout_compliance.py' '$BOARD'" true
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_layout_compliance.py' '$BOARD' $STAGED_MODE" true
 else
   echo "[G5_layout_compliance] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -130,7 +162,7 @@ fi
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/master_audit_invariants.py" ]]; then
   run_gate "G6_master_invariants" \
-    "cd '$REPO_ROOT' && python3 '$SCRIPTS/master_audit_invariants.py' '$BOARD' docs/BOARD_INVARIANTS.md" true
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/master_audit_invariants.py' '$BOARD' docs/BOARD_INVARIANTS.md $STAGED_MODE" true
 else
   echo "[G6_master_invariants] ⏭  SKIP"
   GATES_SKIP=$((GATES_SKIP + 1))
@@ -168,6 +200,54 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G12: Tier 4 differential pair length match
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_diff_pair_match.py" ]]; then
+  run_gate "G12_diff_pair_match" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_diff_pair_match.py' '$BOARD'" true
+else
+  echo "[G12_diff_pair_match] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G13: Tier 4 Kelvin shunt sense routing
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_kelvin_shunt_routing.py" ]]; then
+  run_gate "G13_kelvin_shunt" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_kelvin_shunt_routing.py' '$BOARD'" true
+else
+  echo "[G13_kelvin_shunt] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G14: Tier 1 PDN via stitching density
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_via_stitching_density.py" ]]; then
+  run_gate "G14_via_stitching" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_via_stitching_density.py' '$BOARD'" true
+else
+  echo "[G14_via_stitching] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G15: Tier 5 signal highway length match
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_length_match.py" ]]; then
+  run_gate "G15_length_match" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_length_match.py' '$BOARD'" true
+else
+  echo "[G15_length_match] ⏭  SKIP"
+  GATES_SKIP=$((GATES_SKIP + 1))
+  echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G11: Vision check render set present (per VISION_CHECK_METHODOLOGY.md)
 # Master visually inspects content per VISION_CHECK_METHODOLOGY.md §3 checklist
 # ──────────────────────────────────────────────────────────────────
@@ -192,6 +272,25 @@ if [[ -n "$RENDER_DIR_CANDIDATE" ]] && [[ -d "$RENDER_DIR_CANDIDATE" ]]; then
   fi
 else
   echo "[G11_vision_check_render_set] ⏭  SKIP (no renders dir found; pre-Stage0 PR exempt)"
+  GATES_SKIP=$((GATES_SKIP + 1))
+fi
+echo
+
+# ──────────────────────────────────────────────────────────────────
+# G10: verify_spec_diff.py — R20 mirror geometry gate (CH1↔CH2/3/4 ≤2mm)
+# Wired 2026-05-26 to close R20 GAP. Symmetric-mirror channels only.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/verify_spec_diff.py" ]]; then
+  # In --staged mode: parked mirror partners aren't on-board → skip gate
+  if [[ -n "$STAGED_MODE" ]]; then
+    echo "[G10_spec_diff_R20] ⏭  SKIP (staged mode — partner channels not all brought)"
+    GATES_SKIP=$((GATES_SKIP + 1))
+  else
+    run_gate "G10_spec_diff_R20" \
+      "cd '$REPO_ROOT' && python3 '$SCRIPTS/verify_spec_diff.py' '$BOARD'" true
+  fi
+else
+  echo "[G10_spec_diff_R20] ⏭  SKIP (script missing)"
   GATES_SKIP=$((GATES_SKIP + 1))
 fi
 echo

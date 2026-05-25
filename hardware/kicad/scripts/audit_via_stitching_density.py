@@ -67,6 +67,13 @@ def main():
         print(__doc__)
         sys.exit(2)
     board_path = Path(sys.argv[1])
+    # Accept optional --topology arg (added 2026-05-26 for validation isolation).
+    global TOPOLOGY_PATH
+    if "--topology" in sys.argv:
+        i = sys.argv.index("--topology")
+        TOPOLOGY_PATH = Path(sys.argv[i + 1])
+    elif len(sys.argv) > 2 and not sys.argv[2].startswith("--"):
+        TOPOLOGY_PATH = Path(sys.argv[2])
     if not board_path.exists():
         print(f"FAIL: {board_path} not found")
         sys.exit(1)
@@ -80,6 +87,15 @@ def main():
 
     print(f"=== Via stitching density audit: {board_path.name} ===")
     print(f"Board area: {area_cm2:.2f} cm²\n")
+
+    # Via stitching is a ROUTING gate — only meaningful when board has tracks/vias.
+    # Worker 2026-05-26: placement-only PRs (Stage 0/1) flagged 0 vias as FAIL by
+    # design — that's a routing-stage concern, not placement. SKIP cleanly here
+    # (mirrors G7 audit_routing.py no-tracks skip).
+    track_count = sum(1 for t in board.GetTracks() if isinstance(t, pcbnew.PCB_TRACK))
+    if track_count == 0:
+        print("INFO: board has 0 tracks — via stitching is a routing gate; SKIP")
+        sys.exit(0)
 
     fails = []
     passes = 0

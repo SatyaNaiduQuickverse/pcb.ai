@@ -40,13 +40,58 @@ except ImportError:
 
 MAX_DISTANCE_MM = 3.0  # R25
 IC_BODY_AREA_MIN_MM2 = 4.0  # heuristic: ICs are >4mm² body, passives smaller
+PARKING_X_THRESHOLD = 130.0  # board ≤100mm; parking_grid origin x=200; 30mm buffer
+
+# --parked-exempt: skip ICs AND caps in parking zone. Added 2026-05-26 (worker-
+# caught: G4 flagged channel MCUs J18/J26/J32/J35 at parking coords for not-yet-
+# brought channels, which is by design for park-then-bring-in R27).
+PARKED_EXEMPT = "--parked-exempt" in sys.argv[2:]
+
+
+def _is_parked(fp):
+    if not PARKED_EXEMPT:
+        return False
+    return pcbnew.ToMM(fp.GetPosition().x) >= PARKING_X_THRESHOLD
+
+
+def _body_bbox_area_mm2(fp):
+    """Footprint body area in mm² — EXCLUDES reference + value text.
+
+    BUG-FIX 2026-05-26 (caught by validate_audits.py):
+    Default FOOTPRINT.GetBoundingBox() includes reference text, which on
+    long refs (e.g. "C_DECOUP_OK", "Q_HS_CH1") makes every footprint look
+    bigger than its body. With (False, False) we get body-only.
+
+    Validated against synthetic board with pad-area ground truth — see
+    docs/AUDIT_VALIDATION/audit_decoupling.md.
+    """
+    bb = fp.GetBoundingBox(False, False)  # aIncludeText=False, aIncludeInvisibleText=False
+    return pcbnew.ToMM(bb.GetWidth()) * pcbnew.ToMM(bb.GetHeight())
 
 
 def is_ic(fp):
-    """True if footprint is likely an IC (vs passive)."""
-    bb = fp.GetBoundingBox()
-    area = pcbnew.ToMM(bb.GetWidth()) * pcbnew.ToMM(bb.GetHeight())
-    return area > IC_BODY_AREA_MIN_MM2
+    """True if footprint is likely an IC (vs passive/connector/test-point).
+
+    BUG-FIX 2026-05-26 (worker-caught on real S6 board): bbox-only heuristic
+    incorrectly classified connectors (J* — JST/XT30) and test-pads (TP* —
+    PAD_V3V3 etc) as ICs. They have ≥4mm² body but they aren't powered ICs
+    needing decoupling. Exclude by refdes prefix.
+    """
+    ref = fp.GetReference()
+    # 2026-05-26 batch 1.6 (VESC cross-check caught C11 false positive):
+    # Exhaustive passive + connector + mech-fiducial prefix exclusion. Only
+    # U* style ICs need decoupling check (and a handful of niche IC prefixes
+    # like MK / IC). Better to under-exclude here than over-flag every big-body
+    # bulk cap on real boards.
+    if ref.startswith(("J", "P", "TP", "H", "FID", "FB", "CP", "C", "R", "Q", "Y", "BT", "SW", "SP", "K", "M")):
+        return False  # P/J = connectors/pin-headers/sockets
+    if ref.startswith("D") and ref[1:].isdigit():
+        return False  # diodes (LEDs, schottky)
+    if ref.startswith("L") and ref[1:].isdigit():
+        return False  # inductors / ferrite beads
+    if ref.startswith("F") and ref[1:].isdigit():
+        return False  # fuses
+    return _body_bbox_area_mm2(fp) > IC_BODY_AREA_MIN_MM2
 
 
 def is_decoupling_cap(fp):
@@ -54,9 +99,7 @@ def is_decoupling_cap(fp):
     ref = fp.GetReference()
     if not ref.startswith("C"):
         return False
-    bb = fp.GetBoundingBox()
-    area = pcbnew.ToMM(bb.GetWidth()) * pcbnew.ToMM(bb.GetHeight())
-    return area < 5.0  # 0805 and smaller
+    return _body_bbox_area_mm2(fp) < 5.0  # 0805 and smaller
 
 
 def get_vdd_pins(fp):
@@ -83,6 +126,8 @@ def find_decoupling_caps_for_pin(board, ic_pad, ic_layer, vdd_netname):
     for fp in board.GetFootprints():
         if not is_decoupling_cap(fp):
             continue
+        if _is_parked(fp):
+            continue  # parked cap not on-board yet (--parked-exempt)
         # Check if any pad of this cap is on the same VDD net
         cap_on_net = False
         for pad in fp.Pads():
@@ -113,15 +158,23 @@ def main():
     board = pcbnew.LoadBoard(board_path)
 
     print(f"=== Per-IC decoupling audit: {Path(board_path).name} ===")
-    print(f"Max distance: {MAX_DISTANCE_MM}mm same-layer (R25, Bogatin Ch. 5)\n")
+    print(f"Max distance: {MAX_DISTANCE_MM}mm same-layer (R25, Bogatin Ch. 5)")
+    if PARKED_EXEMPT:
+        print(f"--parked-exempt: ICs and caps at x ≥ {PARKING_X_THRESHOLD}mm skipped\n")
+    else:
+        print()
 
     fails = []
     warns = []
     passes = 0
     skipped_ics = 0
+    skipped_parked = 0
 
     for fp in board.GetFootprints():
         if not is_ic(fp):
+            continue
+        if _is_parked(fp):
+            skipped_parked += 1
             continue
         ic_ref = fp.GetReference()
         ic_layer = fp.GetLayerName()
@@ -171,7 +224,8 @@ def main():
             print(f"  {f}")
         if len(fails) > 20:
             print(f"  ... +{len(fails)-20} more")
-    print(f"\n(skipped {skipped_ics} ICs with no VDD-named net)")
+    print(f"\n(skipped {skipped_ics} ICs with no VDD-named net"
+          f"{f', plus {skipped_parked} parked ICs' if skipped_parked else ''})")
 
     if fails:
         print("\nRESULT: FAIL — decoupling rule R25 violated")

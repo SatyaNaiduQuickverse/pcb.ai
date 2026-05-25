@@ -63,6 +63,10 @@ def main():
         print(__doc__)
         sys.exit(2)
     board_path = Path(sys.argv[1])
+    # Accept optional topology arg (added 2026-05-26 for validation isolation).
+    global TOPOLOGY_PATH
+    if len(sys.argv) > 2 and not sys.argv[2].startswith("--"):
+        TOPOLOGY_PATH = Path(sys.argv[2])
     if not board_path.exists():
         print(f"FAIL: {board_path} not found")
         sys.exit(1)

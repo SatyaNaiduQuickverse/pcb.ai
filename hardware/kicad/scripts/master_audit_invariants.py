@@ -40,6 +40,30 @@ except ImportError:
     sys.exit(1)
 
 
+# --parked-exempt: skip components in parking zone (x ≥ 130mm) when iterating
+# footprints. Used by per-stage Phase 4-v3 PRs where most components are
+# intentionally parked off-board and only the brought subset should be audited.
+# Added 2026-05-26 (worker-caught: invariants flagged 244+ parked CH3/4 mirrors
+# that didn't exist on-board yet — false fails by design).
+PARKED_EXEMPT = "--parked-exempt" in sys.argv[2:]
+PARKING_X_THRESHOLD = 130.0  # board ≤100mm wide; parking_grid origin (200, -50)
+
+
+def _is_parked(fp):
+    """True if footprint is in the parking zone (off-board by design)."""
+    if not PARKED_EXEMPT:
+        return False
+    return pcbnew.ToMM(fp.GetPosition().x) >= PARKING_X_THRESHOLD
+
+
+def _onboard_footprints(board):
+    """Yield only on-board footprints when --parked-exempt; else all."""
+    for fp in board.GetFootprints():
+        if _is_parked(fp):
+            continue
+        yield fp
+
+
 # ─── Gate 1: invariant hash drift (via worker's canonical script) ─────────
 
 def check_board_invariants_hash(inv_path):
@@ -83,17 +107,52 @@ def _component_subsystem(ref):
     return None  # position-based for unsuffixed refs
 
 
+def _load_lockfile_anchor_refs():
+    """Return set of refdes that are lockfile-anchored (position is G1's job,
+    not zone-compliance's). Includes mount holes + fiducials + connectors +
+    motor pads + test points + LEDs from mechanical_anchors.yaml.
+
+    Added 2026-05-26 (worker-caught on real S6 board): TP3 + TP10 are
+    centrally-placed supply test pads anchored by lockfile; zone compliance
+    falsely flagged them as out-of-zone because their lockfile pos doesn't
+    map to any subsystem zone (they're board-spanning supply rails)."""
+    try:
+        import yaml
+        lock_path = Path("docs/PHASE4V3_LOCKFILES/mechanical_anchors.yaml")
+        if not lock_path.exists():
+            return set()
+        lf = yaml.safe_load(lock_path.read_text()) or {}
+        refs = set()
+        for cat in ("mount_holes", "fiducials", "connectors", "motor_pads",
+                    "test_points", "leds"):
+            for e in lf.get(cat, []) or []:
+                r = e.get("ref")
+                if r and not (isinstance(r, str) and r.upper() == "TBD"):
+                    refs.add(r)
+        return refs
+    except Exception:
+        return set()
+
+
 def check_subsystem_zone_compliance(inv, board):
     """Every component must be within declared zone bbox (for the subsystem
-    its refdes maps to). For position-only subsystems, must be inside SOME zone."""
+    its refdes maps to). For position-only subsystems, must be inside SOME zone.
+
+    Lockfile-anchored refs are EXEMPT — their position is G1's job (lockfile
+    diff), not zone-compliance. Includes mount holes / fiducials / connectors /
+    motor pads / test points / LEDs from mechanical_anchors.yaml."""
     if not inv.zones:
         return "WARN", "no zones declared — parser may have failed"
 
+    anchor_refs = _load_lockfile_anchor_refs()
+
     fails = []
-    for fp in board.GetFootprints():
+    for fp in _onboard_footprints(board):
         ref = fp.GetReference()
         if re.match(r"^(H|FID)\d+$", ref):
-            continue  # skip mount holes + fiducials
+            continue  # skip mount holes + fiducials (legacy regex catch)
+        if ref in anchor_refs:
+            continue  # lockfile-anchored — G1 owns the position
 
         pos = fp.GetPosition()
         x, y = pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)
@@ -137,7 +196,7 @@ def check_io_port_compliance(inv, board, tolerance_mm=0.5):
                 continue
             found = False
             # Check pads
-            for fp in board.GetFootprints():
+            for fp in _onboard_footprints(board):
                 for pad in fp.Pads():
                     if pad.GetNetname() == sig:
                         pp = pad.GetPosition()
@@ -171,13 +230,24 @@ def check_io_port_compliance(inv, board, tolerance_mm=0.5):
 # ─── Gate 4: highway reservation ───────────────────────────────────────────
 
 def check_highway_reservation(inv, board, exclusion_margin_mm=0.5):
-    """No component pad inside reserved highway corridor."""
+    """No component pad inside reserved highway corridor.
+
+    Lockfile-anchored refs EXEMPT (worker-caught 2026-05-26 batch 1.6): J1
+    battery connector lives AT the +BATT spine source by design; FID6 +
+    supply test pads (TP3, TP11) are lockfile-positioned along power
+    centerlines. Their position is G1's job, not highway-reservation. Real
+    subsystem components (caps/ICs, non-anchored) STILL get highway-checked,
+    so the exemption is safe — it won't hide a real component in a corridor."""
     if not inv.highways:
         return "WARN", "no highways declared"
 
+    anchor_refs = _load_lockfile_anchor_refs()
+
     fails = []
-    for fp in board.GetFootprints():
+    for fp in _onboard_footprints(board):
         ref = fp.GetReference()
+        if ref in anchor_refs:
+            continue  # lockfile-anchored — G1 owns the position
         for pad in fp.Pads():
             pp = pad.GetPosition()
             x, y = pcbnew.ToMM(pp.x), pcbnew.ToMM(pp.y)
@@ -203,7 +273,7 @@ def check_symmetry_partner_diff(inv, board, tolerance_mm=5.0):
     fails = []
     for (sys_a, sys_b, axis, axis_val) in inv.symmetry_pairs:
         a_comps, b_comps = {}, {}
-        for fp in board.GetFootprints():
+        for fp in _onboard_footprints(board):
             ref = fp.GetReference()
             stem_match = re.match(r"([A-Z]+\d+)_(CH\d)$", ref)
             if not stem_match:
