@@ -188,7 +188,12 @@ test_points:
   # to clear y86-extended CH zones (PR #134/#135). Worker reported phase-C collides at y80-86.
   # NOTE 2026-05-26 [Sai-catch follow-up]: TP2 marginal 1mm from H1 (5,95) — shifted x=5→2 to gain 1.4mm KO margin.
   # All TPs now ≥4mm from H1-H4 corner mounts (verified by audit_mount_hole_keepout.py G_M7).
-  - {ref: TP2,  pos: [2.00,  89.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_fc_gnd}
+  # TP2 fix history: was (5,86) -> (5,90) -> (2,89) [pad bbox crossed board edge!] -> (6, 89.5)
+  # 2026-05-26 third-fix: (2,89) put 4mm pad bbox extending past x=0 board edge (G17 + G5 OFF-BOARD-PAD).
+  # NEW (6, 89.5): center 6mm from x=0 edge (pad radius 2mm → 4mm bbox-to-edge clearance ≥ G17 4mm),
+  # 6.18mm from H1 (5,95) KO center (≥4mm M3 KO), inside S1 (y86-100), 5.5mm to BAT_P (45,95).
+  # Lesson codified in NEW G_M14 audit (this PR): every pad+pad_size must have bbox ≥ edge_clearance from board outline.
+  - {ref: TP2,  pos: [6.00,  89.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_fc_gnd}
   - {ref: TP3,  pos: [47.00, 74.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_pi5_plus}
   - {ref: TP5,  pos: [72.00, 92.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_ai_plus}
   - {ref: TP7,  pos: [15.00, 92.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: pad_v9_vtx1_plus}
