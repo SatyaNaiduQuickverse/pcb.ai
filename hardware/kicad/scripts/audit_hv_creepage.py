@@ -94,6 +94,45 @@ def both_in_hb_cell(net_a, net_b):
     return False
 
 
+# 2026-05-26 SPATIAL HB-cell detection (worker call: N$ auto-named gate-clamp
+# nets can't pattern-match HB_NET_RE). If BOTH pads are within HB_CELL_RADIUS
+# of any known HS-FET (Q_HS_PHASE_CHn ref), treat as same HB-cell = relaxed
+# 0.3mm bound. Net-name-agnostic, works with SKiDL auto-naming.
+HB_CELL_RADIUS_MM = 10.0  # half-bridge cell physical scope
+
+# Cache of HS-FET reference positions (populated at audit start)
+_HS_FET_POSITIONS = []  # list of (x_mm, y_mm)
+
+
+def _populate_hs_fet_positions(board):
+    """Find Q_HS_* refs and cache their positions."""
+    import re
+    global _HS_FET_POSITIONS
+    _HS_FET_POSITIONS = []
+    hs_pat = re.compile(r'^Q_HS_[ABC]_CH\d+$|^Q[5-9]$|^Q1[0-9]$|^Q2[0-8]$', re.IGNORECASE)
+    for fp in board.GetFootprints():
+        ref = fp.GetReference()
+        if hs_pat.match(ref):
+            pos = fp.GetPosition()
+            _HS_FET_POSITIONS.append((pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y)))
+
+
+def _pad_near_hs_fet(pad_xy):
+    """True if pad is within HB_CELL_RADIUS of any cached HS-FET."""
+    for fx, fy in _HS_FET_POSITIONS:
+        d = ((pad_xy[0] - fx) ** 2 + (pad_xy[1] - fy) ** 2) ** 0.5
+        if d <= HB_CELL_RADIUS_MM:
+            return True
+    return False
+
+
+def both_pads_in_hb_cell(rect_a, rect_b):
+    """Spatial check: both pads near some HS-FET = same HB-cell."""
+    a_center = ((rect_a[0] + rect_a[2]) / 2, (rect_a[1] + rect_a[3]) / 2)
+    b_center = ((rect_b[0] + rect_b[2]) / 2, (rect_b[1] + rect_b[3]) / 2)
+    return _pad_near_hs_fet(a_center) and _pad_near_hs_fet(b_center)
+
+
 def layer_sets_intersect(ls_a, ls_b):
     """True if pad layer sets share any COPPER layer (creepage rule).
     Opposite-layer pads (F.Cu vs B.Cu only) have NO creepage path across
@@ -144,7 +183,9 @@ def main():
         sys.exit(1)
 
     board = pcbnew.LoadBoard(board_path)
+    _populate_hs_fet_positions(board)  # cache HS-FET positions for spatial HB-cell check
     print(f"=== HV creepage audit: {Path(board_path).name} ===")
+    print(f"HB-cell spatial: {len(_HS_FET_POSITIONS)} HS-FETs cached (R={HB_CELL_RADIUS_MM}mm)")
     print(f"HV nets: {HV_NET_PATTERN.pattern}")
     print(f"Min clearance: {HV_MIN_CLEARANCE_MM}mm (IPC-2221 B-grade, 31-50V with FoS)\n")
 
@@ -185,9 +226,15 @@ def main():
     #     bound — same-domain transients are slew-coupled, not random; per
     #     Bogatin §10 + industry compact-ESC practice. Inter-cell stays 0.6mm.
 
-    def _required_clearance(net_a, net_b):
+    def _required_clearance(net_a, net_b, rect_a=None, rect_b=None):
+        # 1. Pattern-based: both nets match HB_NET_RE → same-domain
         if both_in_hb_cell(net_a, net_b):
             return HALF_BRIDGE_CELL_RELAXED_MM
+        # 2. Spatial: both pads near a known HS-FET → same HB-cell physically
+        #    (covers SKiDL N$ auto-named gate-clamp internal nets)
+        if rect_a is not None and rect_b is not None:
+            if both_pads_in_hb_cell(rect_a, rect_b):
+                return HALF_BRIDGE_CELL_RELAXED_MM
         return HV_MIN_CLEARANCE_MM
 
     # HV-vs-other (same layer, different net + different ref only)
@@ -200,7 +247,7 @@ def main():
             if not layer_sets_intersect(hv[4], o[4]):
                 continue  # opposite layers — no creepage path (worker catch HS-top/LS-bottom stacked)
             d = edge_distance_mm(hv, o)
-            min_clear = _required_clearance(hv[5], o[5])
+            min_clear = _required_clearance(hv[5], o[5], hv[:4], o[:4])
             if d < min_clear:
                 k = tuple(sorted([f"{hv[6]}.{hv[7]}", f"{o[6]}.{o[7]}"]))
                 if k in seen:
@@ -220,7 +267,7 @@ def main():
             if not layer_sets_intersect(a[4], b[4]):
                 continue  # opposite layers — no creepage path
             d = edge_distance_mm(a, b)
-            min_clear = _required_clearance(a[5], b[5])
+            min_clear = _required_clearance(a[5], b[5], a[:4], b[:4])
             if d < min_clear:
                 k = tuple(sorted([f"{a[6]}.{a[7]}", f"{b[6]}.{b[7]}"]))
                 if k in seen:

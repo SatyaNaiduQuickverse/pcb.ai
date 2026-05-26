@@ -48,6 +48,11 @@ except ImportError:
 PARKED_EXEMPT = "--parked-exempt" in sys.argv  # 2026-05-26: any-position, robust to runner quoting
 PARKING_X_THRESHOLD = 130.0  # board ≤100mm wide; parking_grid origin (200, -50)
 
+# 2026-05-26 debug: print PARKED_EXEMPT state at startup so we can diagnose
+# runner argument-passing issues. Looks like a SKIP / no-op when state is wrong.
+import sys as _sys
+print(f"[master_audit_invariants] PARKED_EXEMPT={PARKED_EXEMPT}  argv={_sys.argv[1:]}", file=_sys.stderr)
+
 
 def _is_parked(fp):
     """True if footprint is in the parking zone (off-board by design)."""
