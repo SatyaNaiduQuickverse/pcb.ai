@@ -287,10 +287,50 @@ def check_diff_pair_balance():
 
 
 # ---------- check 5: track width ----------
+# Pad-entry-neck exemption (worker fab-reality catch 2026-05-26):
+# A track-width violation is EXEMPT iff (i) segment length ≤ 2.0mm AND
+# (ii) at least one endpoint touches a pad with min(width,height) < class_min.
+# This is the IPC fab convention: 0.5mm pad cannot accept 1.0mm trace; the
+# necked entry is a geometric constraint of the pad, not a trace choice.
+# Current density at 0.54mm × 2mm carrying mA-level tap current is safe
+# (J ≈ 5 A/mm² vs IPC 30 A/mm² 35°C-rise limit for 1oz Cu).
+# Per [[feedback-physics-as-compass]] + [[feedback-codify-not-patch]]:
+# precise + bounded exemption, recorded as INFO with pad ref for audit trail.
+PAD_ENTRY_NECK_MAX_LEN_MM = 2.0
+_PAD_INDEX = None
+def _build_pad_index():
+    """Build spatial index: list of (x, y, min_dim_mm, ref) for all pads."""
+    global _PAD_INDEX
+    if _PAD_INDEX is not None:
+        return _PAD_INDEX
+    _PAD_INDEX = []
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            pos = pad.GetPosition()
+            size = pad.GetSize()
+            min_dim = min(pcbnew.ToMM(size.x), pcbnew.ToMM(size.y))
+            _PAD_INDEX.append((pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y),
+                               min_dim, fp.GetReference() + "." + pad.GetPadName()))
+    return _PAD_INDEX
+
+def _endpoint_on_undersized_pad(endpoint_x_mm, endpoint_y_mm, class_min_mm):
+    """Return (pad_ref, pad_min_dim) if endpoint lies on a pad with
+    min-dim < class_min. Else None."""
+    pads = _build_pad_index()
+    for px, py, pmin, pref in pads:
+        # Endpoint within pad bbox (approx — pad size used as bbox half-extent)
+        if abs(px - endpoint_x_mm) < pmin / 2 + 0.1 and abs(py - endpoint_y_mm) < pmin / 2 + 0.1:
+            if pmin < class_min_mm:
+                return (pref, pmin)
+    return None
+
 def check_track_width():
-    """Each track segment must meet net-class minimum width."""
+    """Each track segment must meet net-class minimum width.
+    Pad-entry necks (bounded segment touching undersized pad) exempted."""
     violations_by_class = defaultdict(int)
     examples = defaultdict(list)
+    exempted_by_class = defaultdict(int)
+    exempt_examples = []
     for trk in board.GetTracks():
         if isinstance(trk, pcbnew.PCB_VIA):
             continue
@@ -303,14 +343,32 @@ def check_track_width():
         if cls == 'NO_NET' or cls == 'GND':
             continue
         if width_mm < min_w - 0.001:  # tiny float tolerance
+            # Pad-entry-neck exemption check
+            s = trk.GetStart()
+            e = trk.GetEnd()
+            sx, sy = pcbnew.ToMM(s.x), pcbnew.ToMM(s.y)
+            ex, ey = pcbnew.ToMM(e.x), pcbnew.ToMM(e.y)
+            seg_len = math.hypot(ex - sx, ey - sy)
+            if seg_len <= PAD_ENTRY_NECK_MAX_LEN_MM:
+                pad_hit = _endpoint_on_undersized_pad(sx, sy, min_w) or \
+                          _endpoint_on_undersized_pad(ex, ey, min_w)
+                if pad_hit:
+                    exempted_by_class[cls] += 1
+                    if len(exempt_examples) < 5:
+                        exempt_examples.append(
+                            f"{netname} {width_mm:.2f}mm (class min {min_w:.2f}mm) "
+                            f"len {seg_len:.2f}mm → pad {pad_hit[0]} min_dim {pad_hit[1]:.2f}mm")
+                    continue  # exempt — pad-entry neck
             violations_by_class[cls] += 1
             if len(examples[cls]) < 3:
-                s = trk.GetStart()
-                examples[cls].append((netname, width_mm, min_w,
-                                      pcbnew.ToMM(s.x), pcbnew.ToMM(s.y)))
+                examples[cls].append((netname, width_mm, min_w, sx, sy))
+    if exempted_by_class:
+        info.append(f"TRACK-WIDTH: {sum(exempted_by_class.values())} pad-entry-neck segments exempted (≤{PAD_ENTRY_NECK_MAX_LEN_MM}mm + endpoint on undersized pad)")
+        for ex in exempt_examples:
+            info.append(f"  exempt: {ex}")
     if violations_by_class:
         fails.append(f"TRACK-WIDTH: {sum(violations_by_class.values())} tracks below "
-                     f"net-class minimum")
+                     f"net-class minimum (after pad-entry-neck exemption)")
         for cls, n in violations_by_class.items():
             fails.append(f"  {cls}: {n} undersized tracks")
             for net, w, min_w, x, y in examples[cls]:
