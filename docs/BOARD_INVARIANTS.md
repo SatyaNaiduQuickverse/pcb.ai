@@ -46,9 +46,10 @@ sim at Stage 10 (OQ-007) validates the strategy.
 | CH4 (channel D) | 0 | 14 | 35 | 50 | SW — bottom-pair template |
 | S2 bulk caps | 40 | 40 | 60 | 60 | central — 4× polymer caps low-ESR |
 | S3 supervisor+Hall | 40 | 18 | 60 | 40 | central spine — TL431 + Hall |
-| S5 BEC east strip | 35 | 50 | 40 | 82 | east of CH1 spine — 5mm BEC bus (CH1/CH2 feed) |
-| S5 BEC west strip | 60 | 50 | 65 | 82 | west of CH2 spine — 5mm BEC bus (S5-2) |
-| S5 BEC south strip | 35 | 18 | 40 | 50 | for CH3/CH4 (mirror) |
+| S5 BEC east strip (CH1 feed) | 35 | 50 | 40 | 82 | east of CH1 — feeds CH1 BEC rails |
+| S5 BEC west strip (CH2 feed) | 60 | 50 | 65 | 82 | west of CH2 — feeds CH2 BEC rails (mirror of east) |
+| S5 BEC south strip (CH4 feed) | 35 | 18 | 40 | 50 | east of CH4 — feeds CH4 BEC rails |
+| S5 BEC north strip (CH3 feed) | 60 | 18 | 65 | 50 | west of CH3 — feeds CH3 BEC rails (mirror of south, ADDED 2026-05-26 per R20 symmetry — Sai-catch) |
 
 Channels NO LONGER overlap central 35-65 column. S5 explicit bbox per v2 #4.
 
@@ -89,7 +90,7 @@ coords.
 |---|---|---|---|---|---|
 | +BATT/GND spine | 48 | 0 | 52 | 50 | 280A continuous power path top→center |
 | BEMF return centerline | 47 | 50 | 53 | 82 | 4× BEMF signals to central MCU |
-| TLM/AUX bus strip | 0 | 11.5 | 100 | 13.5 | inter-subsystem digital — relocated 2026-05-26 from (0,80,100,82) which collided with y86-extended CH south zones (worker phase-C cluster + TP21/TP28 motor pads at y80); now inside S6 (y0-14) just below J14/J12 connectors at y=5, traversal to channel MCUs via internal layers |
+| TLM/AUX bus strip | 0 | 11.5 | 100 | 13.5 | inter-subsystem digital — relocated 2026-05-26 from (0,80,100,82) which collided with y86-extended CH south zones; now inside S6 (y0-14) just below J14/J12 connectors at y=5; full-width restored after dropping cinematic mounts H5-H8 (audit_highway_keepout.py G_M8 verifies no mount-hole intersection) |
 | S2 to CH1 +VMOTOR feed | 30 | 47 | 36 | 53 | low-loop radial CH1 (6×6mm corner) |
 | S2 to CH2 +VMOTOR feed | 64 | 47 | 70 | 53 | low-loop radial CH2 |
 | S2 to CH3 +VMOTOR feed | 64 | 47 | 70 | 53 | low-loop radial CH3 (mirror) |
@@ -103,7 +104,7 @@ Run `python3 hardware/kicad/scripts/compute_board_invariant_hash.py --write`
 to compute and write.
 
 ```
-BOARD_INVARIANT_HASH = 2d61f9712db8fe91a96051561745c45216181dd4d88e8e020ae828fa09cf8a9d
+BOARD_INVARIANT_HASH = 5f4455633d5f6185372c7b21ac18357842cde8b44f8cf9652881034109624b7c
 ```
 
 ## Audit gate
