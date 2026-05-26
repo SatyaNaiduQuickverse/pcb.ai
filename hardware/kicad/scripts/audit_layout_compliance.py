@@ -224,17 +224,28 @@ def check_symmetry(items, board_h=None, board_w=None):
             continue
         if len(ch) != n:
             fails.append(f"SYMMETRY: {name} has {len(ch)} FETs, expected {n}")
-    # Pure row-pitch check: each channel's Y rows must be P=12
-    for name, ch in [("CH1", ch1), ("CH2", ch2), ("CH3", ch3), ("CH4", ch4)]:
-        if len(ch) < 3:
-            continue
+    # Row-pitch check: measure the HS-FET (phase) pitch ONLY (master-approved
+    # 2026-05-26). The LS FET sits drain-aligned ~3.6mm below its HS for the
+    # option-a SW-node via (collision-free; exact-under causes real clamp
+    # overlaps), so all-6-FET Y-values read as 6 rows — the 3 PHASES are the 3
+    # HS-FET rows (F.Cu) at 12mm. Filter to F-side FETs.
+    fets_hs = {ref: (d["x"], d["y"]) for ref, d in items.items()
+               if ref.startswith("Q") and ref[1:].isdigit()
+               and 5 <= int(ref[1:]) <= 28 and d["side"] == "F"}
+    hs_ch = [
+        ("CH1", {r: p for r, p in fets_hs.items() if p[0] < 50 and p[1] >= 47.5}),
+        ("CH2", {r: p for r, p in fets_hs.items() if p[0] >= 50 and p[1] >= 47.5}),
+        ("CH3", {r: p for r, p in fets_hs.items() if p[0] >= 50 and p[1] < 47.5}),
+        ("CH4", {r: p for r, p in fets_hs.items() if p[0] < 50 and p[1] < 47.5}),
+    ]
+    for name, ch in hs_ch:
         ys = sorted({round(y, 2) for _, y in ch.values()})
         if len(ys) < 2:
             continue
         deltas = [ys[i + 1] - ys[i] for i in range(len(ys) - 1)]
         for d in deltas:
             if abs(d - 12.0) > 0.5:
-                fails.append(f"SYMMETRY: {name} row pitch {d:.2f}mm (expected 12.00mm)")
+                fails.append(f"SYMMETRY: {name} HS-FET row pitch {d:.2f}mm (expected 12.00mm)")
                 break
     # Cross-channel mirror: CH1 vs CH2 about X=board_w/2
     for r1 in ch1:
@@ -291,7 +302,13 @@ def check_passive_anchoring(items):
             and 5 <= int(ref[1:]) <= 28]
     ics = [(ref, d["x"], d["y"]) for ref, d in items.items()
            if ref.startswith("U") and ref[1:].isdigit()]
-    parents = fets + ics
+    # This design uses Conn_01x footprints for ICs (J13 LDO, J18 MCU, J19 driver,
+    # J20-22 INA) and inductors (L*) as legit passive anchors — e.g. S6/S5 BEC caps
+    # cluster on the LDO/inductor, not a FET. Count them so power-mgmt passives
+    # aren't falsely flagged "islanded" (2026-05-26).
+    jic = [(ref, d["x"], d["y"]) for ref, d in items.items()
+           if ref[0] in ("J", "L") and ref[1:].isdigit()]
+    parents = fets + ics + jic
     passives = [(ref, d["x"], d["y"]) for ref, d in items.items()
                 if ref[0] in ("R", "C") and ref[1:].isdigit()]
     far = []
@@ -1178,9 +1195,16 @@ def check_quadrant_count_balance():
     # structurally impossible until all 4 channels brought. Re-enables on Stage 5.
     ch = buckets['channel']
     ch_fails = []
-    n_channels_with_comps = sum(1 for q in ('NW', 'NE', 'SE', 'SW') if ch[q] > 0)
-    if PARKED_EXEMPT and n_channels_with_comps < 4:
-        # Staged mode + not all channels brought → unmeasurable balance, SKIP
+    # A quadrant counts as a BROUGHT channel only if it holds a full cluster, not
+    # just the foundation motor pads (TIER1 places all 12 motor pads → every
+    # quadrant has ~6 channel-net components even before its cluster is brought).
+    # A brought channel cluster is ~80+ comps; motor-pad-only is ~6. Threshold 15
+    # separates them so the skip triggers in staged CH1-only mode (master-approved
+    # 2026-05-26; was counting any comp >0 → never skipped).
+    CLUSTER_MIN = 15
+    n_channels_brought = sum(1 for q in ('NW', 'NE', 'SE', 'SW') if ch[q] > CLUSTER_MIN)
+    if PARKED_EXEMPT and n_channels_brought < 4:
+        # Staged mode + not all channel clusters brought → unmeasurable balance, SKIP
         pass
     else:
         if not (PARKED_EXEMPT and ch['NW'] == 0 and ch['NE'] == 0):
