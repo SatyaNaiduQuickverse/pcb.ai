@@ -417,3 +417,27 @@ R19 / OQ-017 SW-symmetry binding is re-scoped to **commutation loop symmetry**, 
 
 **Status**: RESOLVED — worker proceeds with clean Freerouter base (option a per worker recommendation).
 
+
+## OQ-020 — Blind/buried via for J18 MCU fan-in (STANDBY fallback to OQ-019/option-b)
+
+**Raised**: 2026-05-26 by worker STEP 4 CH1 collision-aware re-route. After OQ-019 R19 scope clarification + clean Freerouter base, 10 hand-route leftover nets remain (3 BEMF on In2, 6 stragglers GLB/GLC/OTP/PWM×3, +3V3A). Worker's collision-aware router routed 6, but BEMF + 2 PWM hit NO-CLEAR-PATH due to J18 MCU fan-in density: F-B vias at J18 pads span through inner layers where other J18-converging nets (BOOT0/CSA/NRST/SWDIO) already run → 26 real via-vs-track overlaps.
+
+**Master decision (2026-05-26)**: PRIMARY = option (b) placement relief (LOGIC-side passives spread). Constraints: preserve G_PP22 clusters, FET cluster, J18 placement; only relieve MCU-side decoupling/pulls/analog passives. Per [[feedback-sureshot-over-sota]] + [[feedback-redo-not-mitigate]].
+
+**STANDBY fallback**: blind/buried via for specific nets if (b) insufficient.
+
+| Scope | Via type | JLC capability | Cost impact |
+|---|---|---|---|
+| BEMF F→In2 (3 nets) | Buried micro-via (F to In2 only) | Yes, supported | ~$30-50/board (small qty) |
+| PWM via micro-via (2 nets) | Buried (F to inner) | Yes, supported | (included in above) |
+| Through-hole (current) | n/a | Standard | $0 extra |
+
+**Sai-decision pending IF (b) insufficient**:
+- Approve blind/buried for BEMF + PWM micro-vias?
+- Accept fab cost (~$30-50/board prototype, ~$15-25 production)?
+- Or further placement relief (continue option-b iteration)?
+
+**Class rule (regardless of outcome)**: per [[feedback-jlc-dfm-pre-fab-gate]] — any blind/buried via decision must be DFM-confirmed with JLC's specific multilayer capability sheet BEFORE committing to Phase 7 fab. Pre-fab check via audit_jlc_dfm.py.
+
+**Status**: STANDBY — pending worker (b) outcome. If (b) resolves all 26 overlaps, OQ-020 closes as NOT-NEEDED. If 2-5 overlaps remain, OQ-020 activates for Sai decision.
+
