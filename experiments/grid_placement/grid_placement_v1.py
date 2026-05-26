@@ -118,6 +118,10 @@ def place_ch1_majors(p: BoardParameters, g: GridConfig) -> Dict[str, Tuple[float
     }
 
     placed = {}
+    # Per-layer occupied lists (BILATERAL: F.Cu HS-FET can sit at same XY as B.Cu LS-FET)
+    occupied_per_layer: Dict[str, List[Tuple[float,float,float,float,str]]] = {
+        'F.Cu': [], 'B.Cu': []
+    }
     # Priority order: FETs first (most constrained), then driver, then MCU, then INAs, then op-amps
     order = ['Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10',  # FETs (HS first, then LS)
              'J19', 'J18',                          # Driver + MCU
@@ -133,14 +137,18 @@ def place_ch1_majors(p: BoardParameters, g: GridConfig) -> Dict[str, Tuple[float
         else:
             continue
         body_w, body_h = BODY_DIM[ref]
-        slot = walk_grid_for_slot(ideal_x, ideal_y, body_w, body_h, g, p, zones, occupied)
+        # Forbidden zones are LAYER-AGNOSTIC (mount holes go through all layers)
+        # Occupied lists are PER-LAYER (HS F.Cu can sit at same XY as LS B.Cu — bilateral)
+        slot = walk_grid_for_slot(ideal_x, ideal_y, body_w, body_h, g, p,
+                                  zones, occupied_per_layer[layer])
         if slot is None:
             placed[ref] = (None, None, layer, sub_zone, body_w, body_h)
             continue
         gx, gy = slot
         placed[ref] = (gx, gy, layer, sub_zone, body_w, body_h)
-        # Mark occupied (for next iterations to avoid this one)
-        occupied.append((gx-body_w/2, gy-body_h/2, gx+body_w/2, gy+body_h/2, ref))
+        # Mark occupied IN THIS LAYER (other layer free for paired component)
+        occupied_per_layer[layer].append((gx-body_w/2, gy-body_h/2,
+                                          gx+body_w/2, gy+body_h/2, ref))
 
     return placed
 
