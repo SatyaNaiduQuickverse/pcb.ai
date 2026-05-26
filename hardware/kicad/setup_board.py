@@ -178,6 +178,50 @@ import uuid as _uuid
 # orphan accumulation (PR-S3 discovery: H1/H2 at (44.6, 37.5)/(51.8, 37.5)
 # were legacy positions from old spine-pattern run). Regex matches the entire
 # (footprint "MountingHole:..." ...) S-expression block.
+def _strip_edge_cuts(s):
+    """Remove all (gr_rect ... layer "Edge.Cuts") blocks. Mirror of
+    _strip_mounting_holes — prevents duplicate Edge.Cuts on re-run.
+    Worker R21/R22 catch 2026-05-27 during 10L migration: setup_board.py
+    was non-idempotent on Edge.Cuts — re-running on placed canonical
+    produced 2 outlines (kept original uuid'd rect, ran-time gr_rect
+    appended). Fixed by stripping all gr_rect on Edge.Cuts before re-add."""
+    import re
+    # Match (gr_rect ... layer "Edge.Cuts" ...) with paren-counting
+    out = []
+    i = 0
+    stripped = 0
+    needle = '(gr_rect'
+    while i < len(s):
+        j = s.find(needle, i)
+        if j < 0:
+            out.append(s[i:])
+            break
+        # Find matching close paren
+        depth = 0
+        k = j
+        while k < len(s):
+            if s[k] == '(': depth += 1
+            elif s[k] == ')':
+                depth -= 1
+                if depth == 0: break
+            k += 1
+        # Check if this gr_rect is on Edge.Cuts (peek inside)
+        block = s[j:k+1]
+        if 'layer "Edge.Cuts"' in block or "layer Edge.Cuts" in block:
+            out.append(s[i:j])
+            i = k + 1
+            stripped += 1
+            # Skip trailing newline/whitespace
+            while i < len(s) and s[i] in '\n\t ':
+                i += 1
+        else:
+            # Keep non-Edge.Cuts gr_rect (e.g., decorative)
+            out.append(s[i:k+1])
+            i = k + 1
+    return ''.join(out), stripped
+
+
+
 def _strip_mounting_holes(s):
     """Remove all (footprint "MountingHole:..." ...) blocks. Uses paren-counting
     to handle nested S-expressions properly."""
@@ -207,6 +251,10 @@ def _strip_mounting_holes(s):
         while i < len(s) and s[i] in '\n\t ':
             i += 1
     return ''.join(out), stripped
+
+txt, _orig_edge_count = _strip_edge_cuts(txt)
+if _orig_edge_count:
+    print(f"  Stripped {_orig_edge_count} existing Edge.Cuts gr_rect (legacy/orphan)")
 
 txt, _orig_mh_count = _strip_mounting_holes(txt)
 if _orig_mh_count:
