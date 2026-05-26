@@ -56,7 +56,8 @@ SUBSYS_ZONES = {
 ON_BOARD_MARGIN = 2.0
 # Per-phase symmetry transform — gated off until J18/J19 placement is resolved
 # clear of the 3-phase FET column (see replicate_phases docstring).
-PHASE_REPLICATE = False
+PHASE_REPLICATE = True
+PHASE_LOOKAHEAD = False  # phantom keep-out (needs TP2/TP7 moved out of FET column first)
 ANCHOR_TOL_MM = 0.01
 
 
@@ -210,7 +211,7 @@ def _spiral_offsets(max_r, step=0.6):
     return out
 
 
-def role_place(board, refs, zones, roles):
+def role_place(board, refs, zones, roles, extra_keepouts=()):
     """Place role-classified components per PLACEMENT_METHODOLOGY: cluster-anchor
     ICs in-zone (or near a foundation anchor), then passives ≤max_distance from
     their parent's pad, same layer, collision-free, in-zone. Deterministic; refs
@@ -272,6 +273,12 @@ def role_place(board, refs, zones, roles):
             for mx0, my0, mx1, my1 in motor_keepouts:
                 if not (bbox[2] <= mx0 or mx1 <= bbox[0] or bbox[3] <= my0 or my1 <= bbox[1]):
                     return False
+        # Phase-replication look-ahead: when placing a reference phase, avoid spots
+        # whose +pitch translations (the B/C copies) would land on foundation —
+        # these are foundation obstacles shifted back by the phase offsets.
+        for kx0, ky0, kx1, ky1 in extra_keepouts:
+            if not (bbox[2] <= kx0 or kx1 <= bbox[0] or bbox[3] <= ky0 or ky1 <= bbox[1]):
+                return False
         # A candidate on side `want_back` collides with an obstacle only if the
         # obstacle has copper on THAT side. Both-layer parts (MCU thermal pad,
         # thru-hole) block whichever side is being placed.
@@ -394,11 +401,19 @@ def role_place(board, refs, zones, roles):
             # Loop members (FET/shunt) never flip. Other aux passives may overflow.
             can_flip = not rec.get("loop_member") and rec.get("role") != "decoupling"
             sides = [wb, not wb] if can_flip else [wb]
+            # HS FET sits BESIDE its motor pad, not on it: the LS FET stacked on
+            # B.Cu beneath the HS must clear the motor pad's both-layer thru-via
+            # field. With ~7.7×5.6mm FETs over a 4.5×6mm pad, the HS centre must be
+            # ≥~6.5mm from the pad so the LS (at ≤1.5mm) clears it. Skip nearer
+            # offsets for HS FETs.
+            min_off = 6.5 if rec.get("relation") == "hs-fet" else 0.0
             done = False
             for side in sides:
                 if fp.IsFlipped() != side:
                     fp.Flip(fp.GetPosition(), False)
                 for dx, dy in _spiral_offsets(search_r):
+                    if min_off and math.hypot(dx, dy) < min_off:
+                        continue
                     cx, cy = pcx + dx, pcy + dy
                     fp.SetPosition(pcbnew.VECTOR2I(int(cx * 1e6), int(cy * 1e6)))
                     bb = _pad_bbox(fp)
@@ -659,8 +674,32 @@ def bring_selected(board, subsystem):
                 z = zones[0]
                 yspan = max(p[1] for p in mp.values()) - min(p[1] for p in mp.values())
                 sub = (z[0], z[1], min(z[2], 22.0), z[3] - yspan)
-                errs += role_place(board, pa, [sub], {r: rmap[r] for r in pa})
+                # EAST control (MCU/DRV/INA + decoupling) first, so phase-A's west
+                # cluster — and therefore its replicated B/C copies — avoid them.
+                # (Otherwise the HS-FET offsets toward the empty east band and the
+                # replicated FET lands on the driver.)
                 errs += role_place(board, rest_role, zones, {r: rmap[r] for r in rest_role})
+                # Phantom keep-outs: NON-CH1, NON-motor-pad foundation in the FET
+                # strip, translated BACK by the B/C phase offsets, so the reference
+                # phase A avoids spots whose replicated copies would land on it.
+                # (Only effective if such foundation is NOT inside the FET column —
+                # a probe pad at the column x makes both the reference AND phase C
+                # unplaceable, which must be resolved by moving the pad.)
+                ch1_role = set(role_placed)
+                offs = [(mp[p][0] - mp["A"][0], mp[p][1] - mp["A"][1]) for p in ("B", "C")]
+                phantoms = []
+                for fp in board.GetFootprints():
+                    r = fp.GetReference()
+                    if r in ch1_role or r in MOTOR_TP_REFS:
+                        continue
+                    fx = fp.GetPosition().x / 1e6
+                    if fx >= 130 or not (sub[0] <= fx <= sub[2]):
+                        continue
+                    bb = _pad_bbox(fp)
+                    for dx, dy in offs:
+                        phantoms.append((bb[0] - dx, bb[1] - dy, bb[2] - dx, bb[3] - dy))
+                errs += role_place(board, pa, [sub], {r: rmap[r] for r in pa},
+                                   extra_keepouts=phantoms if PHASE_LOOKAHEAD else [])
                 errs += replicate_phases(board, pa + pbc,
                                          {r: rmap[r] for r in pa + pbc}, subsystem, zones)
                 did_phase = True
