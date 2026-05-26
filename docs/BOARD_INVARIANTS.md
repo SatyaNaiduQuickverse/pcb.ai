@@ -38,12 +38,12 @@ sim at Stage 10 (OQ-007) validates the strategy.
 
 | Subsystem | x_min | y_min | x_max | y_max | Function |
 |---|---|---|---|---|---|
-| S1 battery input | 0 | 82 | 100 | 100 | bottom edge — BAT_P/BAT_N solder pads + NTC + TVS (swapped 2026-05-26 with S6 per Sai mechanical revamp) |
-| S6 connectors | 0 | 0 | 100 | 18 | top edge — J14 FC + J12 AUX + USBLC6 ESDs + LDO (swapped 2026-05-26 with S1) |
-| CH1 (channel A) | 0 | 50 | 35 | 82 | NW — FET cluster + DRV + MCU + INA |
-| CH2 (channel B) | 65 | 50 | 100 | 82 | NE — mirror_X(CH1) |
-| CH3 (channel C) | 65 | 18 | 100 | 50 | SE — mirror_X(CH4) |
-| CH4 (channel D) | 0 | 18 | 35 | 50 | SW — bottom-pair template |
+| S1 battery input | 0 | 84 | 100 | 100 | bottom edge — BAT_P/BAT_N solder pads + NTC + TVS (swapped 2026-05-26 with S6 per Sai mechanical revamp) |
+| S6 connectors | 0 | 0 | 100 | 16 | top edge — J14 FC + J12 AUX + USBLC6 ESDs + LDO (swapped 2026-05-26 with S1) |
+| CH1 (channel A) | 0 | 48 | 35 | 84 | NW — FET cluster + DRV + MCU + INA |
+| CH2 (channel B) | 65 | 48 | 100 | 84 | NE — mirror_X(CH1) |
+| CH3 (channel C) | 65 | 16 | 100 | 52 | SE — mirror_X(CH4) |
+| CH4 (channel D) | 0 | 16 | 35 | 52 | SW — bottom-pair template |
 | S2 bulk caps | 40 | 40 | 60 | 60 | central — 4× polymer caps low-ESR |
 | S3 supervisor+Hall | 40 | 18 | 60 | 40 | central spine — TL431 + Hall |
 | S5 BEC east strip | 35 | 50 | 40 | 82 | east of CH1 spine — 5mm BEC bus (CH1/CH2 feed) |
