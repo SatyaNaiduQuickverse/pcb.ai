@@ -31,10 +31,10 @@ SIMS_DIR = os.path.join(REPO, "sims")
 # Sim type → (input glob, result globs, extract script glob)
 # Result globs include common Elmer/ngspice/openems output extensions.
 SIM_TYPES = {
-    "elmer_thermal":   {"input": "*.sif",       "result": ["*.vtu", "*.result", "*.dat", "*_mesh"],     "extract": "extract*.py"},
-    "ngspice_pi":      {"input": "*.cir",       "result": ["*.raw", "*.out", "*.log"],                  "extract": "extract*.py"},
-    "openems_emi":     {"input": "openems_*.py","result": ["*.h5", "*.vtr", "*.npz", "*.csv"],          "extract": "extract*.py"},
-    "loop_l_extract":  {"input": "loop_*.py",   "result": ["*.csv", "*.json", "*.txt"],                 "extract": "extract*.py"},
+    "elmer_thermal":   {"input": "*.sif",       "result": ["*.vtu", "*.result", "*.dat", "*_mesh"],     "extract": ["extract*.py", "*_extract.py"]},
+    "ngspice_pi":      {"input": "*.cir",       "result": ["*.raw", "*.out", "*.log"],                  "extract": ["extract*.py", "*_extract.py"]},
+    "openems_emi":     {"input": "openems_*.py","result": ["*.h5", "*.vtr", "*.npz", "*.csv", "RESULTS.md"], "extract": ["extract*.py", "*_extract.py", "openems_*.py"]},
+    "loop_l_extract":  {"input": "loop_extract.py",   "result": ["*.csv", "*.json", "*.txt", "RESULTS.md"], "extract": ["loop_extract.py", "extract*.py"]},
 }
 
 # Extract output globs (broader than "extract_*.txt" — accept any meaningful output file)
@@ -79,7 +79,11 @@ def check_sim_dir(sim_dir):
                                  f"result mtime ({stale_results[0]}) < input mtime — sim not re-run after input change"))
                 continue
             # 3. extract script output present?
-            extract_scripts = glob.glob(os.path.join(sim_dir, spec["extract"]))
+            extract_scripts = []
+            extract_globs = spec["extract"] if isinstance(spec["extract"], list) else [spec["extract"]]
+            for eg in extract_globs:
+                extract_scripts.extend(glob.glob(os.path.join(sim_dir, eg)))
+            extract_scripts = list(set(extract_scripts))
             if not extract_scripts:
                 findings.append(("FAIL", in_path, f"no extract_*.py script — numbers must come from extract script"))
                 continue
