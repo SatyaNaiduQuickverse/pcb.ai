@@ -302,3 +302,35 @@ Both fixed in Phase 4-v3 CH1 thermal (worker validated against lumped + conducti
 2. Approve Stage 10 full-board thermal re-run as MANDATORY
 3. Approve G_S3 strengthening to catch density-factor class bugs
 
+
+---
+
+## OQ-016 — EMI placement-stage geometric bound; real coupling is post-route
+
+**Raised**: 2026-05-26 by worker CH1 STEP 3 EMI sim.
+
+**Symptom**: openEMS FDTD on placement-only board (no routed SW/BEMF traces) doesn't converge — synthetic geometry has no defined conductor structure for FDTD to compute coupling. Worker correctly identified that EMI coupling, like loop-L (OQ-014), is FUNDAMENTALLY a post-route metric.
+
+**Placement-stage actionable proxy**: SW(MOTOR_CH1)↔BEMF pad separation; worker measured min 1.02mm at MCU east cluster (target ≥10mm per BILATERAL §40).
+
+**Master decision (2026-05-26, per [[feedback-physics-as-compass]] + analogous to OQ-014)**:
+- DO NOT trigger placement re-do. 1.02mm pad-separation is BY DESIGN — both pad classes have to reach the MCU/INA in the dense east cluster.
+- The 10mm rule from BILATERAL_PLACEMENT.md §40 is for SAME-LAYER trace routing without GND-plane shielding.
+- Our multi-layer board provides:
+  * SW node on F.Cu (HS drain) + B.Cu (LS via cluster)
+  * BEMF traces on internal In2 signal layer (post-route)
+  * In1 GND plane between them (~0.1mm prepreg) → tight inductive shielding
+  → Effective EMI isolation comes from LAYER STACKUP, not XY pad distance
+  → Analogous to HB-cell creepage exemption (physics depends on multi-layer geometry, not raw XY)
+
+EMI marked **STAGE-3 conditional PASS, post-route STEP 6 EMI re-sim mandatory** with routed traces + GND plane reference for real coupling number.
+
+**Action items**:
+- [ ] Post-route STEP 6: openEMS FDTD with routed SW + BEMF + GND plane (real coupling number)
+- [ ] During Phase 5 routing: enforce BEMF on In2 signal layer + dedicated GND plane reference (In1)
+- [ ] Audit: extend G_PP6 / hv_creepage to flag SW↔BEMF same-layer routing (post-route gate)
+
+**Sai-attention items at review**:
+1. Confirm acceptance of EMI conditional PASS (1.02mm pad sep, layer-shielding rationale)
+2. Approve post-route STEP 6 EMI re-sim mandatory
+
