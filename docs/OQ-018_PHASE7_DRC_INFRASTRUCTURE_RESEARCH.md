@@ -141,3 +141,74 @@ Doesn't block Phase 4-v3 work (worker continues on Pi); needed before fab submis
 - [INTI-CMNB/kicad_auto on GitHub](https://github.com/INTI-CMNB/kicad_auto)
 - AWS EC2 pricing reference (c6i instance class)
 - Used workstation market (eBay/Newegg) Dell/HP Xeon spec class
+
+
+---
+
+## UPDATE 2026-05-26 — Sai R22 question: "cant we like run it slower on this pi only"
+
+**Answer: YES — Pi-only DRC is viable.** Master jumped to external-workstation too quickly. Cheaper Pi-only paths researched:
+
+### Pi current state
+- 16GB RAM (15GB usable; 11GB currently available after baseline)
+- 2GB zram (compressed RAM swap; limited)
+- 19GB free disk space on SD card
+- Stock Pi 5 — no external storage attached
+
+### Pi-only paths (cheaper than external)
+
+**A. Big swap file on existing SD card** ($0 cost)
+- `sudo dd if=/dev/zero of=/swap_16G bs=1M count=16384` (or 32G)
+- `sudo mkswap /swap_16G && sudo swapon /swap_16G`
+- Adds 16-32GB virtual RAM via SD card swap
+- DRC working-set exceeding 15GB → swaps in/out
+- Slowdown factor: ~10-20× (SD card ~25-100 MB/s vs RAM ~25,000 MB/s)
+- Expected DRC time: 107min × 10-20× = **18-36 hours overnight**
+- Trade-off: slow but completes; $0 cost; uses existing 19GB free
+
+**B. USB 3.0 SSD swap** (~$30 one-time)
+- 256GB USB 3.0 SSD (Samsung T7 or similar): $30-50
+- 5-10× faster than SD card swap (400-500 MB/s vs 25-100 MB/s)
+- Expected DRC time: ~3-6 hours = same-day
+- Trade-off: $30 + setup; fast enough; survives SD card reflash
+
+**C. Incremental DRC tool** ($0 + worker dev time)
+- Worker's `check_ch1_clearance.py` is partial implementation (pad-AABB per-subsystem)
+- Extend to full-board via N×N subsystem-pair passes
+- Per-pass memory bounded to <2GB (subsystem-scope)
+- 20 subsystem-pair passes × 5-10 min each = 2-3 hours total
+- Trade-off: ~1-2 worker days to write; bypasses kicad-cli entirely; reusable for HV60
+
+**D. External 64GB workstation** (~$400-600 — PRIOR RECOMMENDATION)
+- Now downgraded to "if A/B/C don't work" fallback
+- Overkill for current Pi swap-file gap
+
+### Revised recommendation
+
+**Path A first (zero cost):**
+1. Add 16-32GB swap file on Pi SD card (5 min worker action — `dd` + `swapon`)
+2. Try kicad-cli pcb drc full-board OVERNIGHT (let it swap)
+3. If completes successfully, Pi-only DRC works — Path B/C/D not needed
+
+**Path B fallback ($30):** if SD card swap too slow / SD card lifetime concern, USB 3.0 SSD swap.
+
+**Path C fallback ($0):** write incremental DRC tool if external memory still insufficient.
+
+**Path D fallback ($400-600):** physical external workstation ONLY if A/B/C all fail or production-scale needed.
+
+### Why this path is per-rulebook
+
+- ✅ [[feedback-sureshot-over-sota]] — try the cheapest known-working option first (swap file)
+- ✅ [[feedback-redo-not-mitigate]] — root cause is memory bound; swap addresses root, not band-aid
+- ✅ [[feedback-anticipate-sai-default]] — Sai's question "Pi-only slower" anticipated; my prior framing was wrong
+- ✅ Cost OK directive applies even cheaper now ($0 vs $400-600 — bigger savings)
+- ✅ Master self-correction owed: prior recommendation was over-engineered
+
+### Sai-decision (refined)
+
+- **(A1) Try swap file on SD card $0** [recommended first attempt]
+- (A2) USB SSD swap $30 [if A1 too slow/risky]
+- (A3) Incremental DRC tool worker dev [$0 + time]
+- (A4) External workstation $400-600 [last resort]
+
+Master can do A1 immediately (autonomous, just system command). A2/A3/A4 escalate.
