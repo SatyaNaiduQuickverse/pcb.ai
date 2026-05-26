@@ -90,7 +90,7 @@ coords.
 |---|---|---|---|---|---|
 | +BATT/GND spine | 48 | 0 | 52 | 50 | 280A continuous power path top→center |
 | BEMF return centerline | 47 | 50 | 53 | 82 | 4× BEMF signals to central MCU |
-| TLM/AUX bus strip | 0 | 8.5 | 100 | 10.0 | inter-subsystem digital — relocated 2026-05-26 from (0,80,100,82) which collided with y86-extended CH south zones; now inside S6 (y0-14) just below J14/J12 connectors at y=5; full-width restored after dropping cinematic mounts H5-H8 (audit_highway_keepout.py G_M8 verifies no mount-hole intersection) |
+| TLM/AUX bus strip | 10 | 8.5 | 90 | 10.0 | inter-subsystem digital — relocated 2026-05-26 from (0,80,100,82) which collided with y86-extended CH south zones; now inside S6 (y0-14) just below J14/J12 connectors at y=5; x=10-90 width (cleared from H3/H4 corner mount KO circles at x<9 + x>91) (audit_highway_keepout.py G_M8 verifies no mount-hole intersection) |
 | S2 to CH1 +VMOTOR feed | 30 | 47 | 36 | 53 | low-loop radial CH1 (6×6mm corner) |
 | S2 to CH2 +VMOTOR feed | 64 | 47 | 70 | 53 | low-loop radial CH2 |
 | S2 to CH3 +VMOTOR feed | 64 | 47 | 70 | 53 | low-loop radial CH3 (mirror) |
@@ -104,7 +104,7 @@ Run `python3 hardware/kicad/scripts/compute_board_invariant_hash.py --write`
 to compute and write.
 
 ```
-BOARD_INVARIANT_HASH = e3941caa74ef1fefc3c1ca98b112d09e815141d89f10472dde5a2d0d18a9636a
+BOARD_INVARIANT_HASH = c35d8b0c20db6452edf639011ddb3abf0c3c3c42b38425c57f8541bf3d3747f4
 ```
 
 ## Audit gate
