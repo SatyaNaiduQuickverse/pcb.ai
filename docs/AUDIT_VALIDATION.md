@@ -243,3 +243,19 @@ The following audits were added in PRs #112-#130 with smoke-test on Stage 1 + wo
 **Class-of-mistake context**: G_M7-M13 added after PR #122 H5-H8 cinematic-mount fiasco (added 4 mounts without checking surrounding TPs/highways/keepouts). G_M14 added after my PR #137 OWN mistake — moved TP2 to (2,89) which put its 4mm pad bbox flush against x=0 board edge.
 
 Both audit batches enforce [[feedback-sai-catches-are-samples]] + [[feedback-codify-not-patch]]: any class-of-mistake gets a CODIFIED audit gate so it can never recur silently.
+
+
+## G_PP11/G_PP16/G_PP19/G_PP20/G_PP21/G_META1 audits (PR #137-149)
+
+| Gate | Script | Purpose |
+|---|---|---|
+| G_PP11 | audit_body_bbox_overlap.py | Same-layer component-body bbox overlap (the big miss caught 2026-05-26 by Sai-eye after 55 gates passed 57 overlaps) |
+| G_PP16 | audit_channel_bom_match.py | Per-channel (role,value) BOM consistency — R20 symmetry deep-check (staged-mode aware: FET-presence per channel) |
+| G_PP19 | audit_routing_channels.py | 8 reserved routing channels (4 per-channel FET/east + 4 inter-sub-zone MOTOR/LOGIC) clear of components (mechanical anchors TP/FID/H exempt) |
+| G_PP20 | audit_zone_density.py | Per-zone density budget (≤55% comp, ≥20% routing, ≥25% headroom); staged-mode aware for CH zones (advisory only when <4 channels have FETs) |
+| G_PP21 | audit_parametric_compliance.py | parametric_placement.py engine ↔ lockfile YAML + BOARD_INVARIANTS.md sync (19 relationships verified) |
+| G_META1 | audit_meta_coverage.py | META: scans audit_*.py + verify_*.py + FAILS if any not wired into master_pre_merge.sh as BLOCKING (or explicitly deferred in docs/AUDIT_DEFERRED.txt). Catches future migration-drift orphan audits. |
+
+Context: G_PP11 closed the audit-suite gap that allowed verify_placement.py's bbox-overlap detection to be orphaned during Phase 4-v1→v2→v3 migrations. G_META1 prevents future orphans. G_PP19-21 implement the parametric placement framework (Sai 2026-05-26 directive). G_PP16 implements per-channel BOM consistency for R20 symmetry verification.
+
+Also Sai-adjudicated 2026-05-26 batch 2.5: G6 highway_reservation now SAME-NET EXEMPT — a same-net component pad inside its highway is the intended electrical tap (e.g., VMOTOR bypass cap in VMOTOR feed corridor), not a routing violation.
