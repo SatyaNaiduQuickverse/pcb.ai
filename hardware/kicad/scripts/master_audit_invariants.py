@@ -242,11 +242,36 @@ def check_highway_reservation(inv, board, exclusion_margin_mm=0.5):
     supply test pads (TP3, TP11) are lockfile-positioned along power
     centerlines. Their position is G1's job, not highway-reservation. Real
     subsystem components (caps/ICs, non-anchored) STILL get highway-checked,
-    so the exemption is safe — it won't hide a real component in a corridor."""
+    so the exemption is safe — it won't hide a real component in a corridor.
+
+    SAME-NET EXEMPT (Sai-adjudicated 2026-05-26 batch 2.5): a component pad
+    on the SAME NET as the highway is the ELECTRICAL LOAD/SOURCE of that
+    highway — VMOTOR bypass cap on VMOTOR feed corridor IS the decoupling at
+    load, not noise. G6's intent is to prevent SWITCHING/UNRELATED components
+    from blocking routing space. Same-net taps are intended."""
     if not inv.highways:
         return "WARN", "no highways declared"
 
     anchor_refs = _load_lockfile_anchor_refs()
+
+    # Highway-name → net-name mapping (Sai-adjudicated 2026-05-26 batch 2.5)
+    # Maps highway names from BOARD_INVARIANTS.md to the net pattern that
+    # qualifies for same-net exemption.
+    highway_net_map = {
+        "+BATT/GND spine": ["+BATT", "BATGND", "GND"],
+        "S2 to CH1 +VMOTOR feed": ["+VMOTOR", "VMOTOR_CH1"],
+        "S2 to CH2 +VMOTOR feed": ["+VMOTOR", "VMOTOR_CH2"],
+        "S2 to CH3 +VMOTOR feed": ["+VMOTOR", "VMOTOR_CH3"],
+        "S2 to CH4 +VMOTOR feed": ["+VMOTOR", "VMOTOR_CH4"],
+        "BEMF return centerline": ["GND", "BEMF_"],
+        "TLM/AUX bus strip": ["TLM_", "AUX_", "DShot_", "KILL_"],
+    }
+
+    def _pad_is_same_net_as_highway(pad_net, hwy_name):
+        for prefix in highway_net_map.get(hwy_name, []):
+            if pad_net.startswith(prefix) or prefix in pad_net:
+                return True
+        return False
 
     fails = []
     for fp in _onboard_footprints(board):
@@ -256,11 +281,15 @@ def check_highway_reservation(inv, board, exclusion_margin_mm=0.5):
         for pad in fp.Pads():
             pp = pad.GetPosition()
             x, y = pcbnew.ToMM(pp.x), pcbnew.ToMM(pp.y)
+            pad_net = pad.GetNetname()
             for hw in inv.highways:
                 name, hx_min, hy_min, hx_max, hy_max = hw[:5]
                 if (hx_min - exclusion_margin_mm <= x <= hx_max + exclusion_margin_mm and
                         hy_min - exclusion_margin_mm <= y <= hy_max + exclusion_margin_mm):
-                    fails.append(f"{ref}.{pad.GetPadName()} at ({x:.1f},{y:.1f}) inside highway '{name}'")
+                    # Same-net exemption (intended electrical tap)
+                    if _pad_is_same_net_as_highway(pad_net, name):
+                        break  # same-net is intended
+                    fails.append(f"{ref}.{pad.GetPadName()} at ({x:.1f},{y:.1f}) inside highway '{name}' (net={pad_net})")
                     break
 
     if fails:
