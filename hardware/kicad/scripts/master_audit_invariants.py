@@ -278,19 +278,37 @@ def check_highway_reservation(inv, board, exclusion_margin_mm=0.5):
         ref = fp.GetReference()
         if ref in anchor_refs:
             continue  # lockfile-anchored — G1 owns the position
-        for pad in fp.Pads():
-            pp = pad.GetPosition()
-            x, y = pcbnew.ToMM(pp.x), pcbnew.ToMM(pp.y)
-            pad_net = pad.GetNetname()
-            for hw in inv.highways:
-                name, hx_min, hy_min, hx_max, hy_max = hw[:5]
-                if (hx_min - exclusion_margin_mm <= x <= hx_max + exclusion_margin_mm and
-                        hy_min - exclusion_margin_mm <= y <= hy_max + exclusion_margin_mm):
-                    # Same-net exemption (intended electrical tap)
-                    if _pad_is_same_net_as_highway(pad_net, name):
-                        break  # same-net is intended
-                    fails.append(f"{ref}.{pad.GetPadName()} at ({x:.1f},{y:.1f}) inside highway '{name}' (net={pad_net})")
-                    break
+
+        # Whole-component same-net exemption (Sai-adjudicated 2026-05-26 batch 2.6):
+        # A 2-pad bypass cap (e.g. C66 VMOTOR↔GND) is INHERENTLY a 2-terminal device
+        # where BOTH pads are part of the decoupling network at the highway. Exempt
+        # the whole component if ≥1 pad matches highway net AND the component is
+        # passive/small (≤4 pads — catches 2-pin caps/Rs/Ds + small 4-pin DFNs).
+        pad_count = len(list(fp.Pads()))
+        component_pads = [(p, p.GetNetname(), pcbnew.ToMM(p.GetPosition().x),
+                           pcbnew.ToMM(p.GetPosition().y)) for p in fp.Pads()]
+
+        for hw in inv.highways:
+            name, hx_min, hy_min, hx_max, hy_max = hw[:5]
+            # First check: is ANY pad of this component inside this highway?
+            pads_in_hwy = [(p, n, x, y) for p, n, x, y in component_pads
+                           if (hx_min - exclusion_margin_mm <= x <= hx_max + exclusion_margin_mm and
+                               hy_min - exclusion_margin_mm <= y <= hy_max + exclusion_margin_mm)]
+            if not pads_in_hwy:
+                continue
+
+            # Whole-component exemption: if ANY of the component's pads is on
+            # a same-net to the highway AND pad_count ≤ 4 (passive), exempt all pads.
+            any_same_net = any(_pad_is_same_net_as_highway(n, name)
+                              for _, n, _, _ in component_pads)
+            if any_same_net and pad_count <= 4:
+                continue  # whole-component exempt (2-terminal cap, 4-pin DFN etc.)
+
+            # Otherwise, fail per-pad as before
+            for pad, pad_net, x, y in pads_in_hwy:
+                if _pad_is_same_net_as_highway(pad_net, name):
+                    continue  # this pad is same-net, OK
+                fails.append(f"{ref}.{pad.GetPadName()} at ({x:.1f},{y:.1f}) inside highway '{name}' (net={pad_net})")
 
     if fails:
         return "FAIL", f"{len(fails)} pads in reserved highways:\n  " + "\n  ".join(fails[:10])
