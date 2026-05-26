@@ -83,7 +83,7 @@ class BoardParameters:
     ch_zone_height_mm:  float = 39.0    # was 36; (3 phases × 13mm pitch = 39mm exact fit)
 
     # ─── HS-FET placement (parametric, NOT hardcoded) ───
-    hs_fet_x_offset_from_motor: float = -7.5  # HS x = motor_pad_x ± offset (west: motor-6.6, east: motor+6.6)
+    hs_fet_x_offset_from_motor: float = -6.6  # HS x = motor_pad_x ± offset (west: motor-6.6, east: motor+6.6)
     hs_fet_y0_offset_from_motor: float = 0.0  # HS y aligned with motor pad y (SW-node trace short)
     hs_fet_row_pitch:   float = 12.0          # = motor_pad_pitch_y (KEY: enables 12mm symmetric pitch + same SW-node via grid)
 

@@ -623,6 +623,14 @@ else
   echo "[G_PP21_parametric_compliance] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
 fi
 
+# ──────────────────────────────────────────────────────────────────
+# RENDER (non-blocking): net connectivity graph — Sai 2026-05-26 viz
+# Auto-generates /tmp/board-render/latest/net_graph.png for visual review
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/render_net_connectivity_graph.py" ]]; then
+  python3 "$SCRIPTS/render_net_connectivity_graph.py" "$BOARD" 2>&1 | tail -1 || true
+fi
+
 # G_M5: assembly drawing completeness (CPL/BOM/rotation/value)
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_assembly_drawing.py" ]]; then

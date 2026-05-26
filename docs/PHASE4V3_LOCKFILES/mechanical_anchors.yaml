@@ -52,11 +52,11 @@ fiducials:
   # Original FID5 (85,50) overlapped east motor column TP26/TP33 (x=84.87) directly.
   # Fix: shift fid X away from motor columns; all neighbor distances re-verified ≥40mm,
   # all ≥6mm from board edge, motor-pad clearance ≥3mm.
-  - {ref: FID1, pos: [3.00,  50.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}  # was (15,50); 7.13mm to TP19/TP40
-  - {ref: FID2, pos: [97.00, 50.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}  # was (90,50); 7.13mm to TP26/TP33
+  - {ref: FID1, pos: [10.00, 8.00 ], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}  # was (15,50); 7.13mm to TP19/TP40
+  - {ref: FID2, pos: [90.00, 8.00 ], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}  # was (90,50); 7.13mm to TP26/TP33
   - {ref: FID3, pos: [50.00, 85.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}
-  - {ref: FID4, pos: [3.00,  50.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}  # was (15,50); paired with FID1
-  - {ref: FID5, pos: [97.00, 50.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}  # was (85,50); paired with FID2 (B.Cu via cluster of motor pads cleared)
+  - {ref: FID4, pos: [10.00, 8.00 ], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}  # was (15,50); paired with FID1
+  - {ref: FID5, pos: [90.00, 8.00 ], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}  # was (85,50); paired with FID2 (B.Cu via cluster of motor pads cleared)
   - {ref: FID6, pos: [50.00, 15.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}
 
 connectors:
