@@ -57,7 +57,7 @@ ON_BOARD_MARGIN = 2.0
 # Per-phase symmetry transform — gated off until J18/J19 placement is resolved
 # clear of the 3-phase FET column (see replicate_phases docstring).
 PHASE_REPLICATE = True
-PHASE_LOOKAHEAD = False  # phantom keep-out (needs TP2/TP7 moved out of FET column first)
+PHASE_LOOKAHEAD = True  # phantom keep-out (needs TP2/TP7 moved out of FET column first)
 ANCHOR_TOL_MM = 0.01
 
 
