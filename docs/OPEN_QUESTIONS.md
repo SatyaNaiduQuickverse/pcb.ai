@@ -334,3 +334,53 @@ EMI marked **STAGE-3 conditional PASS, post-route STEP 6 EMI re-sim mandatory** 
 1. Confirm acceptance of EMI conditional PASS (1.02mm pad sep, layer-shielding rationale)
 2. Approve post-route STEP 6 EMI re-sim mandatory
 
+
+## OQ-017 — Inner-layer SW escape on In4 (CH1 routing geometry)
+
+**Raised**: 2026-05-26 by worker STEP 4 CH1 routing. Naive hand-route of SW node FAILS (32 clearance violations) because SW pads are at FET WEST column x=5.55, motor pad TP is at EAST x=15, with VMOTOR_CH drain + shunt pads at x=11.25 BETWEEN them — SW cannot escape east on F.Cu/B.Cu only without crossing opposite-polarity pads. Gate pad N$9 also in SW column.
+
+**Master decision (2026-05-26, per [[feedback-physics-as-compass]])**:
+
+Inner-layer SW escape ALLOWED — **layer must be In4.Cu, NOT In2.Cu**. Reasoning:
+
+| Layer | Nearest GND ref | Distance | Risk |
+|---|---|---|---|
+| In2.Cu | In1 (core above) | 0.20 mm | Co-layer with BEMF per OQ-016 — defeats shield |
+| In4.Cu | In5 (prepreg below) | 0.10 mm | No conflict; matches F.Cu→In1 stackup symmetry |
+
+In4 chosen: (1) 0.10mm prepreg to In5 GND matches F.Cu→In1 0.10mm — stackup-symmetric loop-L per unit length; (2) preserves OQ-016 BEMF-on-In2 shielded by In1 GND; (3) In3 +VMOTOR plane above acts as capacitive shield (favorable since SW switches against VMOTOR — decoupling effect).
+
+B.Cu LS pads ref'd by In5 at d=0.335mm (prepreg+In6+core) → effective bilateral d_avg ≈ 0.22mm → recomputed loop-L ~0.33nH per phase, still 6× headroom from 2nH target.
+
+**Binding gates**:
+- Measured loop-L on routed COPY ≤2nH per phase (geometric extract, not analytical) before promotion to canonical
+- Each SW inner-layer transition via has ≥1 GND return via within 0.5mm (Bogatin/Johnson mutual-inductance cancellation rule)
+- Phase A routed first; B+C are pure geometric transforms of A (symmetry, [[feedback-symmetry-preserves-work]])
+- If measured loop-L >2nH: STRUCTURAL RETHINK = placement REDO (motor TP eastward OR VMOTOR_CH/shunt cluster westward of FET column). NOT band-aid trace re-route ([[feedback-redo-not-mitigate]]).
+
+**CH2/3/4 implication**: bilateral CH1 SW-escape geometry inherits to all 4 channels via mirror transforms. If In4 escape is needed for CH1, it's needed for all 4. Flag in STEP 7 CH1 PR for master review whether template revision is needed before Stage 7-9 mirror PRs.
+
+**Status**: ADJUDICATED — worker may proceed with In4 escape. Re-evaluate post-route on measured loop-L.
+
+---
+
+## OQ-018 — Phase 7 full-board DRC infrastructure (15GB Pi insufficient)
+
+**Raised**: 2026-05-26 by worker during CH1 STEP 4 Freerouter verification. `kicad-cli pcb drc` hung 107min CPU then OOM-killed on 15GB Pi. Full-board GND+VMOTOR plane zones × 573 footprints × clearance checks exhausts available RAM during boolean intersection computation.
+
+**Class lesson**: 15GB Pi is insufficient for full-board DRC on this design density. Subsystem-scope DRC (CH1 nets only) is feasible and CORRECT per §8 subsystem-PR methodology; full-board DRC is Phase 7 integration gate, not STEP 5 acceptance gate.
+
+**Codified workaround (immediate, this session)**:
+- PLACEMENT_GLOBAL_PLAN §8 addendum: "Pi-bounded operations (DRC, full-render, full-route) MUST be subsystem-scoped during Phase 4-v3 STEP 4-6. Full-board operations are Phase 7 gates only."
+- audit_routing.py + audit_subsystem_scoped_drc.py (if needed) targets CH1-only.
+- Memory: `feedback-pi-bounded-subsystem-scope` saved.
+
+**Sai-decision pending (Phase 7 entry)**:
+- Cloud DRC (KiCad on Anthropic cloud / cloud KiCad-server)?
+- External x86 machine (rent/dedicated)?
+- Skip pre-fab full-board DRC + rely on JLC fab DFM check (RISKY — JLC catches gross errors but not subtle clearance issues; rework cycle 5+ days per [[feedback-jlc-dfm-pre-fab-gate]])?
+
+Recommend external x86 for Phase 7 — same toolchain, no cloud dependency, deterministic.
+
+**Status**: BLOCKING for Phase 7 entry. Non-blocking for Phase 4-v3 STEP 4-6 (subsystem-scope sufficient).
+

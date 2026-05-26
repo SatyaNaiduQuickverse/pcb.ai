@@ -393,3 +393,21 @@ For CH1 STEP 7 PR (placement+route): worker MUST update the 5 known
 `sims/phase4v3/ch1_loop_l/` to point at `hardware/kicad/pcbai_fpv4in1.kicad_pcb`
 + re-extract loop-L from the canonical board (must yield same 13.5578 nH
 free-space; plane-referenced ~0.15 nH post-route).
+
+
+### Stage 2 — CH1 STEP 4 ROUTE — addendum 2026-05-26 #2 (Pi-bounded operations)
+
+**Class lesson** (worker-caught 2026-05-26 during Freerouter verification): `kicad-cli pcb drc` on full-board hung 107min CPU then OOM-killed on 15GB Pi. Plane zones × 573 footprints × clearance boolean intersections exceeds available RAM.
+
+**Binding rule for Phase 4-v3 STEP 4-6**:
+
+> Pi-bounded operations (DRC, full-board render, full-board route, full-board sim) MUST be **subsystem-scoped** during Phase 4-v3 placement+route. Full-board operations are **Phase 7 integration gates only** and require external x86 infrastructure (logged OQ-018).
+
+**STEP 5 acceptance DRC** = CH1 nets only, via one of:
+1. `pcbnew.RunDRC()` Python API with footprint/track pre-filter to CH1 nets (preferred — fastest, bounded memory)
+2. Plane-clipped copy: extract CH1 zone bbox + 5mm port buffer, clip GND/VMOTOR planes to scope, run `kicad-cli pcb drc` on copy (cleanest PR artifact)
+3. Pure-Python pairwise clearance check (slowest, fully bounded)
+
+Worker picks fastest per context; STEP 5 PR artifact should be option 2 output (reproducible by any future auditor).
+
+**See also**: OQ-018 (Phase 7 full-board DRC infrastructure decision), [[feedback-pi-bounded-subsystem-scope]].
