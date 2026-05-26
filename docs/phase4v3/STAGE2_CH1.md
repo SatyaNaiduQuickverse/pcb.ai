@@ -8,10 +8,32 @@ template that CH2/CH3/CH4 mirror in Stages 3–5.
 ## What this PR does
 
 - Brings CH1 to **99/99 placed** (anchor + role engine, 0 grid, 0 unplaced).
-- Adds the role-based placement fixes (below) to `place_subsystem.py` +
-  `derive_ch1_roles.py`; regenerates CH1 roles in `routing_topology.yaml`.
+- Establishes the **west/east sub-zone split** (master 2026-05-26): west FET strip
+  (x0–22) holds the 3 half-bridge phases as **R20-identical 12mm-pitch geometric
+  copies**; east control strip (x22–35) holds MCU(J18) + DRV(J19) + INA + the
+  +3V3 decoupling. CH1 is the locked template; CH2=mirror_X, CH3/CH4=mirror_Y/X.
+- Adds the role-based placement engine + per-phase transform (below) to
+  `place_subsystem.py` + `derive_ch1_roles.py`; CH1 roles in `routing_topology.yaml`.
 - No netlist / schematic / target.h change (md5 `7a4549d27e0e83d3d6f1ffaf67527d24`
   unchanged).
+
+## Per-phase R20 transform (the channel-template core)
+
+The 3 phases must be **identical geometric copies** (Sai symmetry-preserves-work /
+R20) so the channel composes for sims + mirrors cleanly. Implementation
+(`replicate_phases` + `bring_selected`):
+- Place ONE reference phase's west switching cell (HS+LS FET, shunt, gate-R,
+  clamp, VMOTOR bypass) via the role engine in the replication-safe sub-zone, then
+  snap phases B/C onto it translated by the 12mm motor-pad pitch — *not* an
+  independent ring-search per phase (which gave a 21.6mm non-uniform row pitch).
+- **HS-FET left-offset** (≥6.5mm −X of its motor pad): the B.Cu LS FET stacked
+  beneath must clear the motor pad's both-layer thru-via field, and a −X offset
+  keeps the cluster at pad-Y so the replicated phase-C copy stays clear of the
+  zone top edge.
+- **East-control-first ordering**: the east strip (MCU/DRV/INA) is placed before
+  the reference phase, so the FET cluster — and its replicated copies — avoid the
+  driver/MCU instead of landing on them.
+- Result: HS FETs at exact 12mm Y-pitch (56/68/80), G5 SYMMETRY + QUADRANT pass.
 
 ## Root-cause log (per Sai R: Symptom / Fix / Root cause / Prevention)
 
