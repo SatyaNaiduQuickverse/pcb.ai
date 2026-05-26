@@ -308,3 +308,55 @@ Post-this-PR: same subsystem PRs + same gates + same lockfile + ADDED top-down p
 Per [[feedback-audit-coverage-not-count]]: this is dimension coverage, not gate-count theater.
 Per [[feedback-codify-not-patch]]: methodology gap codified into engine + audits, not patched in next PR.
 Per [[feedback-systemic-rule-enforcement]]: structural change (SSoT + engine), not procedural.
+
+## §8 STEP 4 ROUTE CH1 (DISPATCHED 2026-05-26)
+
+
+### Stage 2 — CH1 STEP 4 ROUTE (DISPATCHED 2026-05-26)
+
+**Status**: Worker confirmed pull of PR #162 (OQ-014 stackup lock @ 8813d28).
+STEP 3 sims master-cross-validated (thermal 54.65°C PASS / PI 0.037mV PASS /
+EMI CONDITIONAL OQ-016 / loop-L CONDITIONAL OQ-014 → 0.15nH plane-ref post-lock).
+
+**Dispatch constraints (BINDING per rulebook)**:
+
+1. **Subsystem-only routing** — CH1 nets ONLY. No global autoroute on adjacent
+   zones. (Sai 2026-05-24 + R34 + [[feedback-build-routing-system-not-freerouter]].)
+2. **Scoped Freerouter R34 OK** — for tangled inner-zone passive→IC nets if
+   manual+rule-based router can't converge. Whole-board scope BANNED.
+3. **Eagles-eye I/O ports** — CH1 connects to neighbors only at the I/O port
+   coordinates allocated in BOARD_INVARIANTS.md §io_ports (gate-driver outputs,
+   MOSFET SW node, BEMF sense, +VMOTOR, GND). Routes must terminate at port,
+   not cross into S2/S5 zones.
+4. **SW-node plane-referenced on In1.Cu GND** — per [[reference-dsn-plane-injection-vs-playbook-t1]]:
+   SW conductor on F.Cu (HS drain) + B.Cu (LS via cluster) with In1.Cu GND
+   plane reference at d=0.10mm. This achieves the L_loop ≤2nH target
+   computed at 0.15nH (90× headroom) — OQ-014 closure.
+5. **BEMF sense on In2 with In1.Cu between BEMF and F.Cu SW** — multi-layer
+   shield per OQ-016. Routing must NOT escape In2 onto F.Cu/B.Cu in the BEMF
+   path (would defeat shield).
+6. **HS-LS commutation loop width ≥ 4.99mm** — per loop-L analytical: w=4.99mm
+   minimum, area ≤27mm² per phase, 16 SW vias per phase (worker measured).
+7. **High-current trace ampacity** — +VMOTOR & motor phases: per R17 burst
+   spec (150A burst, 100A continuous). Use copper-pour fills + 35µm/70µm rules.
+8. **Post-route audit gates** must pass before STEP 5 PR:
+   - `audit_routing.py` (6 checks, already exists per Task #79)
+   - `audit_sim_execution.py` (re-run loop-L extract on routed geometry +
+     openEMS FDTD post-route — both will then yield REAL numbers, not
+     CONDITIONAL placement-stage)
+   - `audit_sim_result_sanity.py` (G_S3)
+   - `extract_sim_verdicts.py` (STEP 6 binding: loop-L < 2nH measured,
+     EMI BEMF ≤ -40dB measured)
+
+**Tools allowed**: KiCad pcbnew Python API + Freerouter (scoped) + DSN
+roundtrip per [[reference-dsn-plane-injection-vs-playbook-t1]] (plane injection
+mandatory for VMOTOR/GND multi-rail).
+
+**Acceptance gate**: STEP 4 PR must include (a) routed .kicad_pcb, (b) DRC
+zero-errors report, (c) audit_routing.py PASS, (d) preliminary post-route
+loop-L re-extract showing ≤2nH measured (not analytical), (e) topology
+render (top/bottom/inner-layer overlay).
+
+**Adjacent-next pairing**: After STEP 4 ROUTE CH1 + STEP 5 audit, the
+adjacent-first queue advances to S5 BEC east strip (CH1 east edge ↔ S5
+gate-driver supply path). S5 placement uses same 7-step flow.
