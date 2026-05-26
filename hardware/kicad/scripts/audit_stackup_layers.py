@@ -73,19 +73,18 @@ def main():
         if not is_enabled:
             fails.append(f"Layer {attr_name} not enabled — expected for 10L stackup")
 
-    # Total enabled copper count
-    copper_count = 0
-    for layer_id in range(50):
-        try:
-            if enabled_layers.Contains(layer_id):
-                lname = board.GetLayerName(layer_id)
-                if ".Cu" in lname:
-                    copper_count += 1
-        except Exception:
-            pass
-    print(f"\nTotal enabled copper layers: {copper_count}")
+    # Total enabled copper count — use GetCopperLayerCount() (authoritative
+    # pcbnew method, avoids LSET.Contains() index ambiguity in earlier code).
+    copper_count = board.GetCopperLayerCount()
+    print(f"\nTotal enabled copper layers (GetCopperLayerCount): {copper_count}")
     if copper_count != 10:
-        fails.append(f"Total copper layers = {copper_count}; expected 10 for Phase 4a-restack-10L")
+        if copper_count == 8:
+            fails.append(f"Total copper layers = 8 — canonical board is still 8L. "
+                         f"Worker has NOT executed setup_board.py 10L migration yet "
+                         f"(Phase 4a-restack-10L per PR #180 Stage 0 dispatch). "
+                         f"Run setup_board.py to apply NEW_LAYERS_10L.")
+        else:
+            fails.append(f"Total copper layers = {copper_count}; expected 10 for Phase 4a-restack-10L")
 
     if fails:
         print(f"\nRESULT: FAIL — {len(fails)} stackup issue(s)")

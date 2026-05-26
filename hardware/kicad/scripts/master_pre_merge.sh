@@ -27,6 +27,11 @@ BOARD="${1:-hardware/kicad/pcbai_fpv4in1.kicad_pcb}"
 # Example: master_pre_merge.sh <board.kicad_pcb> --staged S6
 # Added 2026-05-26 (worker-caught: gates need staged-awareness; synthetic test
 # boards have no parking concept so could not surface this class of bug).
+# Set KICAD 3D model dir per worker-local install (per [[reference-nova-coord]] +
+# kicad-packages3D location). Without this, G_M15 falsely reports all 529 fps
+# as missing 3D models (it's just env var unset, not a real defect).
+export KICAD9_3DMODEL_DIR=${KICAD9_3DMODEL_DIR:-/home/novatics64/escworker/local/kicad-packages3D}
+
 STAGED_MODE=""
 STAGED_BROUGHT=""
 i=1
