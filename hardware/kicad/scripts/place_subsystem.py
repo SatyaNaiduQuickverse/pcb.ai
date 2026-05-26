@@ -401,18 +401,18 @@ def role_place(board, refs, zones, roles, extra_keepouts=()):
             # Loop members (FET/shunt) never flip. Other aux passives may overflow.
             can_flip = not rec.get("loop_member") and rec.get("role") != "decoupling"
             sides = [wb, not wb] if can_flip else [wb]
-            # HS FET sits BESIDE its motor pad, not on it: the LS FET stacked on
-            # B.Cu beneath the HS must clear the motor pad's both-layer thru-via
-            # field. With ~7.7×5.6mm FETs over a 4.5×6mm pad, the HS centre must be
-            # ≥~6.5mm from the pad so the LS (at ≤1.5mm) clears it. Skip nearer
-            # offsets for HS FETs.
-            min_off = 6.5 if rec.get("relation") == "hs-fet" else 0.0
+            # HS FET sits to the LEFT of its motor pad (not on/above it): the B.Cu
+            # LS FET stacked beneath must clear the pad's both-layer thru-via field
+            # (~7.7×5.6mm FET over a 4.5×6mm pad ⇒ ≥~6.5mm offset), and a LEFT
+            # (−X) offset keeps the cluster at the pad's Y-level so the replicated
+            # phase-C copy stays clear of the CH-zone top edge (TPs / bus strips).
+            is_hs = rec.get("relation") == "hs-fet"
             done = False
             for side in sides:
                 if fp.IsFlipped() != side:
                     fp.Flip(fp.GetPosition(), False)
                 for dx, dy in _spiral_offsets(search_r):
-                    if min_off and math.hypot(dx, dy) < min_off:
+                    if is_hs and not (dx <= -6.5 and abs(dy) <= 3.0):
                         continue
                     cx, cy = pcx + dx, pcy + dy
                     fp.SetPosition(pcbnew.VECTOR2I(int(cx * 1e6), int(cy * 1e6)))
