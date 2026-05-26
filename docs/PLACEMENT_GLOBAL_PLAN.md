@@ -556,3 +556,31 @@ Codified by: [[feedback-move-the-obstacle-per-net-targeted]] (memory) + this §8
 **Cross-channel mirror inheritance**: S5 east → S5 west (mirror_X) → S5 north (mirror_Y) → S5 south. Re-mirror via existing scripts post-east-strip lock.
 
 **Sai's GUI session for CH1 (when he returns) is INDEPENDENT** of S5 work — S5 placement+routing doesn't depend on CH1's 7 unrouted nets. Worker can start S5 anytime after CH1 STEP 7 PR lands.
+
+
+### Stage 3 — S5 BEC DISPATCH CORRECTION 2026-05-26 (worker R22 caught)
+
+**My prior Stage-3 dispatch (PR #174) was WRONG on zone width.** The "S5 east strip x=35-40" in BOARD_INVARIANTS + §8 ASCII is a 5mm rail-distribution LANE (output routes to CH1), NOT where the bucks themselves live. Worker R22'd this empirically: zone = 160mm² single-layer / 320mm² both-layer vs total BEC area = 1006-2000mm² (6-12× too small); single buck IC J2 is 7.5mm WIDE > 5mm strip width. Pausing per Rule 3/5 was correct.
+
+**The ACTUAL S5 BEC placement scheme** (per `docs/PHASE4_PLACE_BEC.md` Phase 4-v2 era, validated):
+
+| Pocket | Location | Components | Rationale |
+|---|---|---|---|
+| **NW strip** | x=8-36, y=58-72 (28×14mm) | V5_FC buck (J2/L1/D5) + V5_PI5 buck (J3/L2/D6) | 2× 5A high-current bucks, closest to S6 FC connector |
+| **NE strip** | x=64-92, y=58-72 (28×14mm) | V5_AI buck (J4/L3/D7) + V9_VTX1 buck (J5/L4/D8) | mid-current bucks, closest to S6 AUX |
+| **SW corner** | x=8-16, y=18-42 (8×24mm) | V9_VTX2 buck (J6/L5/D9) — isolated from V9_VTX1 per master spec | independent VTX rail per master spec |
+| **Central spine** | x=36-64, y=62-72 (28×10mm) | J13 LDO + J10 V5_PI5 supervisor + LC filters + FB resistors | between S3 Hall body (y_max=46) and S6 connectors (y=72) |
+
+**The east strip x=35-40 / y=50-82 is the OUTPUT RAIL DISTRIBUTION LANE from these pockets TO the CH1 port at (35, 65)** — NOT the buck zone.
+
+**BOARD_INVARIANTS zone table needs amendment** (separate PR follow-up): clarify "S5 east strip" = output lane, not placement zone. Actual placement zones = the 4 pockets above.
+
+**Re-dispatched S5 STEP 1 PLACE constraints**:
+- Bring 51 BEC components from PARKED off-board to the 4 pockets above
+- Codify pocket coordinates in `parametric_placement.py` (new BoardParameters fields per pocket)
+- Each buck SW node ≥15mm from S3 Hall (BILATERAL §40 — Hall future zone at S3 placement spec)
+- Each buck ≥10mm from FET cluster (bec_to_fet_min_mm)
+- LC filter order: inductor → output cap → ferrite → BEC output port
+- Status LEDs on B.Cu (visible from underneath per [[feedback-vision-check-gate]])
+
+Other STEP 2-7 unchanged from prior dispatch (PR #174). Worker resume with corrected zone scheme next session.
