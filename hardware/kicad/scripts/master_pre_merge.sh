@@ -508,6 +508,18 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G_M7-M13: mount-hole keep-out + pattern + symmetry + spacing + edge
+# (Sai 2026-05-26 — class-of-mistake gate after H5-H8 cinematic-mount fiasco)
+# 7 sub-gates in one script: mount-hole-vs-everything exhaustive audit
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_mount_hole_keepout.py" ]]; then
+  run_gate "G_M7_through_M13_mount_hole_audit" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_mount_hole_keepout.py'" true
+else
+  echo "[G_M7_through_M13_mount_hole_audit] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G_M5: assembly drawing completeness (CPL/BOM/rotation/value)
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_assembly_drawing.py" ]]; then
