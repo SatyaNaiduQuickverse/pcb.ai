@@ -478,6 +478,23 @@ def _phase_sig(fp, role):
     return (role, tuple(sorted(set(nets))))
 
 
+def _channel_motor_pads(board, present, cn):
+    """{phase: (x_mm, y_mm)} for this channel's 3 motor terminal pads."""
+    import re as _re
+    mp = {}
+    for r in MOTOR_TP_REFS:
+        fp = present.get(r)
+        if fp is None:
+            continue
+        for pad in fp.Pads():
+            m = _re.match(rf"MOTOR_([ABC])_CH{cn}$", pad.GetNetname() or "")
+            if m:
+                p = fp.GetPosition()
+                mp[m.group(1)] = (p.x / 1e6, p.y / 1e6)
+                break
+    return mp
+
+
 def replicate_phases(board, refs, roles, subsystem, zones):
     """R20 / symmetry-preserves-work: a channel's 3 half-bridge phases must be
     IDENTICAL geometric copies. Place all phases via the role engine, then snap
@@ -617,18 +634,38 @@ def bring_selected(board, subsystem):
     role_placed = [r for r in rest if r in roles]
     grid_rest = [r for r in rest if r not in roles]
     errs = []
-    if role_placed:
-        errs += role_place(board, role_placed, zones,
-                           {r: roles[r] for r in role_placed})
-        # R20: make a channel's 3 phases identical geometric copies (clean mirror
-        # template) via replicate_phases(). DISABLED pending an architecture call:
-        # forcing per-phase symmetry collides the FET column with the shared driver
-        # (J19) + MCU (J18), which the role engine had placed INSIDE the phase strip
-        # (the inconsistent per-phase offsets were its collision-avoidance). Needs
-        # J18/J19 relocated clear of the 3-phase column first (master decision).
-        if subsystem.startswith("CH") and PHASE_REPLICATE:
-            errs += replicate_phases(board, role_placed,
-                                     {r: roles[r] for r in role_placed}, subsystem, zones)
+    rmap = {r: roles[r] for r in role_placed}
+    did_phase = False
+    if role_placed and subsystem.startswith("CH") and PHASE_REPLICATE:
+        # R20 west/east split (master 2026-05-26): place the WEST switching cell of
+        # ONE reference phase (A) in the replication-safe sub-zone via the role
+        # engine, DON'T place phases B/C's west components, then replicate A's
+        # geometry onto them (motor-pad-pitch translation). This keeps each phase a
+        # clean collision-free copy — the earlier place-all-then-clamp stacked the
+        # cluster into the narrow safe band. East control (MCU/DRV/INA) places
+        # normally via its zone_hints.
+        mp = _channel_motor_pads(board, present, re.search(r"\d+", subsystem).group())
+        if set(mp) == {"A", "B", "C"}:
+            def _wphase(r):
+                rec = rmap.get(r, {})
+                if rec.get("role") == "cluster-anchor" or rec.get("relation") == "ina-near-shunt":
+                    return None
+                fp = present.get(r)
+                return _phase_of(fp) if fp else None
+            pa = [r for r in role_placed if _wphase(r) == "A"]
+            pbc = [r for r in role_placed if _wphase(r) in ("B", "C")]
+            rest_role = [r for r in role_placed if r not in pa and r not in pbc]
+            if pa and pbc:
+                z = zones[0]
+                yspan = max(p[1] for p in mp.values()) - min(p[1] for p in mp.values())
+                sub = (z[0], z[1], min(z[2], 22.0), z[3] - yspan)
+                errs += role_place(board, pa, [sub], {r: rmap[r] for r in pa})
+                errs += role_place(board, rest_role, zones, {r: rmap[r] for r in rest_role})
+                errs += replicate_phases(board, pa + pbc,
+                                         {r: rmap[r] for r in pa + pbc}, subsystem, zones)
+                did_phase = True
+    if role_placed and not did_phase:
+        errs += role_place(board, role_placed, zones, rmap)
     if grid_rest:
         grid_placer(board, grid_rest, zones)
 
