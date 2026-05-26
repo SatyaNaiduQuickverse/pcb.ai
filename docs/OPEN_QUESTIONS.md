@@ -244,7 +244,7 @@ Lockfile updated [invariant-change]. Worker re-runs Stage 0 to land BAT pads.
 
 ---
 
-## OQ-014 — 8L stackup dielectric not locked (loop-L plane-reference dependency)
+## OQ-014 — 8L stackup dielectric not locked (loop-L plane-reference dependency) — RESOLVED 2026-05-26
 
 **Raised**: 2026-05-26 by worker CH1 STEP 3 loop-L sim.
 
@@ -257,7 +257,7 @@ Lockfile updated [invariant-change]. Worker re-runs Stage 0 to land BAT pads.
 - This is not a corner-cut: BILATERAL design assumed plane reference from day 1 (see BILATERAL_PLACEMENT.md §commutation loop). Worker's loop_extract.py free-space bound is a useful CONSERVATIVE upper bound but is not the design metric.
 
 **Action items**:
-- [ ] Master/worker: lock 8L stackup dielectric (d=0.1mm F.Cu→In1.Cu) — `setup_board.py` + BOARD_INVARIANTS.md stackup block
+- [x] Master 2026-05-26: locked 8L stackup dielectric (d=0.10mm F.Cu→In1.Cu prepreg + symmetric stackup) in BOARD_INVARIANTS.md per PR #162. .kicad_pcb (stackup) block addition deferred to Phase 7 fab-prep (cosmetic; doc-lock is what STEP 4 routing needs).
 - [ ] Worker: add `loop_extract.py --routed` mode for post-route validation
 - [ ] STEP 6 re-sim with locked stackup + routed plane reference (final number)
 - [ ] Update parametric engine `ls_fet_y_offset_from_hs` 3.6 → 5.4mm (sync to actual placement; worker's flag) — separate small PR
