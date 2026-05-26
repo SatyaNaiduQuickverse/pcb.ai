@@ -659,6 +659,16 @@ else
   echo "[R_sim_provenance] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
 fi
 
+# G_PP22 per-phase cluster uniformity (2026-05-26 worker-caught J22 class):
+# transformable per-phase clusters MUST have uniform pitch within 0.5mm.
+# WARN-tolerance was the bug — this is binary FAIL. Catches sign-typo class.
+if [[ -f "$SCRIPTS/audit_per_phase_cluster_uniformity.py" ]]; then
+  run_gate "G_PP22_per_phase_cluster_uniformity" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_per_phase_cluster_uniformity.py' '$BOARD'" true
+else
+  echo "[G_PP22_per_phase_cluster_uniformity] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
 # G_M5: assembly drawing completeness (CPL/BOM/rotation/value)
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_assembly_drawing.py" ]]; then
