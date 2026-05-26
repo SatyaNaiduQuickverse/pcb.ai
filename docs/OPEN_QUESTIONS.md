@@ -241,3 +241,26 @@ Lockfile updated [invariant-change]. Worker re-runs Stage 0 to land BAT pads.
 - **Question**: Phase 4-v2 thermal baseline was single-side, single-source (FETs only). With S5 BEC on B.Cu directly under MCU + S2 bulk caps on B.Cu under FETs, the multi-layer Stage 10 thermal sim must include all heat sources: FETs (per-channel × 4) + BEC bucks (5 rails, ~0.5W each at 80% efficiency) + LDO + bulk caps (ripple I²R).
 - **Trigger**: Stage 10 Elmer FEM re-run (post all placement done)
 - **Resolution**: build multi-layer Elmer mesh + apply all 4+5+1 = 10 heat sources; verify T_J ≤ 75°C continuous / 90°C burst FoS bounds hold; OQ-007 closes when met.
+
+---
+
+## OQ-014 — 8L stackup dielectric not locked (loop-L plane-reference dependency)
+
+**Raised**: 2026-05-26 by worker CH1 STEP 3 loop-L sim.
+
+**Symptom**: loop_extract.py reports PLACEMENT-STAGE L_loop = 13.56 nH free-space bound (FAIL vs 2 nH target). Plane-referenced model with adjacent In1.Cu GND plane gives 0.16–0.36 nH (PASS) but cannot be confirmed because **F.Cu→In1.Cu prepreg dielectric thickness `d` is not defined** in the .kicad_pcb or repo. JLC 8L default ranges 0.076–0.21 mm.
+
+**Master decision (2026-05-26, per physics-as-compass + BILATERAL design intent)**:
+- DO NOT trigger placement re-do. Placement geometry is correct (5.40mm HS-LS Y-offset = body-clear pair, 13mm phase pitch, sub-zone honored). The free-space bound is conservative; the real design model is plane-referenced per BILATERAL_PLACEMENT.md.
+- LOCK stackup dielectric at d = 0.10 mm (mid-JLC-range, conservative) BEFORE Phase 5 routing begins. Update setup_board.py + BOARD_INVARIANTS.md stackup block.
+- Per stage flow: loop-L is **STAGE-3 conditional PASS, stackup-lock pending**. Post-route re-sim in STEP 6 with locked stackup + routed plane-reference will give the final L_loop number.
+- This is not a corner-cut: BILATERAL design assumed plane reference from day 1 (see BILATERAL_PLACEMENT.md §commutation loop). Worker's loop_extract.py free-space bound is a useful CONSERVATIVE upper bound but is not the design metric.
+
+**Action items**:
+- [ ] Master/worker: lock 8L stackup dielectric (d=0.1mm F.Cu→In1.Cu) — `setup_board.py` + BOARD_INVARIANTS.md stackup block
+- [ ] Worker: add `loop_extract.py --routed` mode for post-route validation
+- [ ] STEP 6 re-sim with locked stackup + routed plane reference (final number)
+- [ ] Update parametric engine `ls_fet_y_offset_from_hs` 3.6 → 5.4mm (sync to actual placement; worker's flag) — separate small PR
+
+**Sai review needed at return**: confirm acceptance of stackup-lock-pending decision OR override.
+
