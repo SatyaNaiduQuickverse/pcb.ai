@@ -520,6 +520,18 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────
+# G_M14: pad-vs-board-edge clearance (Sai 2026-05-26 — my OWN class-of-mistake catch)
+# I moved TP2 in PR #137 without checking pad bbox vs board edge -> G17 fail.
+# G_M14 prevents recurrence: every fixed pad bbox >= MIN_PAD_EDGE_CLEAR from outline.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_pad_edge_clearance.py" ]]; then
+  run_gate "G_M14_pad_edge_clearance" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_pad_edge_clearance.py'" true
+else
+  echo "[G_M14_pad_edge_clearance] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
 # G_M5: assembly drawing completeness (CPL/BOM/rotation/value)
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_assembly_drawing.py" ]]; then

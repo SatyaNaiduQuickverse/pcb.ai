@@ -225,3 +225,21 @@ The following audits were added in PRs #112-#130 with smoke-test on Stage 1 + wo
 - audit_antenna_structure.py (G_R6) — aggressor cumulative length λ/4
 - audit_fos_cap_ripple.py (G_FoS4) — cap ripple-rating vs RMS × FoS
 - audit_bom_lcsc.py (G_M4) — LCSC stock + part-number presence
+
+
+## G_M7-M14 mount-hole + pad-edge audits (added 2026-05-26)
+
+| Gate | Script | Purpose |
+|---|---|---|
+| G_M7 | audit_mount_hole_keepout.py | Every TP/connector/fiducial/motor pad ≥ KO radius from every mount hole |
+| G_M8 | audit_mount_hole_keepout.py | Highway corridor clear of every mount-hole keep-out circle |
+| G_M9 | audit_mount_hole_keepout.py | Every mount hole inside a defined subsystem zone (corner-edge OK) |
+| G_M10 | audit_mount_hole_keepout.py | Mount-hole pattern matches a documented frame standard (90/75/30.5/20/36mm); >4 holes requires explicit [invariant-change] PR |
+| G_M11 | audit_mount_hole_keepout.py | Mount holes come in mirror_X(50) pairs per R20 |
+| G_M12 | audit_mount_hole_keepout.py | No two mount holes < 10mm c-to-c (stress concentration) |
+| G_M13 | audit_mount_hole_keepout.py | Every mount hole ≥ 3mm from board edge |
+| G_M14 | audit_pad_edge_clearance.py | Every fixed pad bbox ≥ 0.5mm from board outline (covers TPs/connectors/fiducials/motor pads/mount holes) |
+
+**Class-of-mistake context**: G_M7-M13 added after PR #122 H5-H8 cinematic-mount fiasco (added 4 mounts without checking surrounding TPs/highways/keepouts). G_M14 added after my PR #137 OWN mistake — moved TP2 to (2,89) which put its 4mm pad bbox flush against x=0 board edge.
+
+Both audit batches enforce [[feedback-sai-catches-are-samples]] + [[feedback-codify-not-patch]]: any class-of-mistake gets a CODIFIED audit gate so it can never recur silently.
