@@ -418,7 +418,7 @@ R19 / OQ-017 SW-symmetry binding is re-scoped to **commutation loop symmetry**, 
 **Status**: RESOLVED — worker proceeds with clean Freerouter base (option a per worker recommendation).
 
 
-## OQ-020 — Blind/buried via for J18 MCU fan-in (STANDBY fallback to OQ-019/option-b)
+## OQ-020 — Blind/buried via for J18 MCU fan-in — RESOLVED 2026-05-26 (CLOSED NOT-NEEDED per Stage-1 measurement)
 
 **Raised**: 2026-05-26 by worker STEP 4 CH1 collision-aware re-route. After OQ-019 R19 scope clarification + clean Freerouter base, 10 hand-route leftover nets remain (3 BEMF on In2, 6 stragglers GLB/GLC/OTP/PWM×3, +3V3A). Worker's collision-aware router routed 6, but BEMF + 2 PWM hit NO-CLEAR-PATH due to J18 MCU fan-in density: F-B vias at J18 pads span through inner layers where other J18-converging nets (BOOT0/CSA/NRST/SWDIO) already run → 26 real via-vs-track overlaps.
 
@@ -441,3 +441,22 @@ R19 / OQ-017 SW-symmetry binding is re-scoped to **commutation loop symmetry**, 
 
 **Status**: STANDBY — pending worker (b) outcome. If (b) resolves all 26 overlaps, OQ-020 closes as NOT-NEEDED. If 2-5 overlaps remain, OQ-020 activates for Sai decision.
 
+
+### OQ-020 RESOLUTION — 2026-05-26 (CLOSED NOT-NEEDED)
+
+**Empirical finding** (worker Stage-1 measurement via route_ch1_stage1.py — fine-grid 0.1mm F.Cu A* + clear-via-column scan for 9 fine-pitch J18/J19 terminals on clean base `/tmp/ch1_canon_j22.kicad_pcb`):
+
+| Via type | Reachable terminals |
+|---|---|
+| Through-via | 2/9 (J18.20 @ 3.5mm, J18.18 @ 1.21mm) |
+| Blind via F→In4 | **IDENTICAL 2/9** |
+
+**Root cause** = F.Cu escape-LANE congestion (neighbor pins' escape traces wall in leftover pads) + local inner-layer saturation. **NOT via-span issue.** Blind/buried vias would not address the actual physics bottleneck.
+
+**Two classes identified**:
+- **Class-1 (4 terms)**: J19.22/24, J18.14, J19.2 — clear through-via columns DO exist nearby (19-180 in 5mm box) → fixable by cooperative ripup-reroute, ZERO fab cost
+- **Class-2 (3 terms)**: GLB/GLC J19.9/10, +3V3A J18.5 — 0 clear columns in 2.5mm box; needs longer planned escape (5mm cooperative box) or local relief; via type irrelevant
+
+**Resolution**: master adjudicated (A) cooperative ripup-reroute (engineering effort only, no fab cost). Path forward: (d) v2 maze router with global ripup on 5mm box scope per [[reference-qfn-pin-escape-bottleneck]]. Memory `reference-j18-escape-rootcause` codifies the Stage-1 measurement.
+
+**Sai action**: NONE — OQ-020 closed autonomously per empirical evidence. No fab cost change.
