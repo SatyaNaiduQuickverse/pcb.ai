@@ -451,3 +451,54 @@ Physics: 3-phase BLDC is sequential (not paralleled phases) → no current-shari
 **Sai's broader principle**: "stay within designated area, take some space [inside the zone]" — use the zone's internal space, don't escape it.
 
 Codified by: [[feedback-pre-placement-visual-decision]] (memory) + this §8 addendum.
+
+
+### Stage 2 — CH1 STEP 4 ROUTE — addendum 2026-05-26 #5 (R20 move-the-obstacle, per-net targeted)
+
+**Sai-locked rule 2026-05-26** (sourced from novapcb's hard-won lesson — routing-techniques Point 2 / their Rule 20 invented mid-session): when a passive component (resistor, capacitor, ferrite bead) blocks where a specific trace needs to go, **move that specific passive creatively to unblock that specific trace** — NOT generic envelope-edge shifts hoping to help multiple nets.
+
+**Distinction from generic envelope-edge shift (worker's earlier failed pattern)**:
+
+| Generic edge-shift (anti-pattern) | R20 targeted obstacle move |
+|---|---|
+| Pick candidate passives near "the area" | Identify SPECIFIC passive at SPECIFIC via-conflict location |
+| Shift by generic Δ (e.g., -0.5mm in some direction) | Specific creative move: 180° flip, 90° rotation, specific-direction Δxy, zone-internal relocation |
+| Hope it helps multiple nets | Targets ONE specific net's specific blockage |
+| Effect: maybe 0.5mm room | Effect: directly unblocks the conflicted via |
+
+**Apply this rule (per stuck net):**
+
+1. Identify the EXACT pad/via location where the conflict occurs
+2. Identify the EXACT passive component(s) blocking THAT specific via — not generic candidates
+3. Check the passive's electrical envelope:
+   - Decoupling cap → R25 ≤3mm to IC VDD pin
+   - Kelvin sense R → R13 ≤5mm to FET shunt pad
+   - G_PP22 cluster member → CANNOT move (uniformity locked)
+   - Gate-R → R23 no-passive-island ≤5mm to FET gate
+   - Other passives → mostly position-flexible
+4. Propose the SPECIFIC creative move: rotation, flip, or directional Δxy that opens the SPECIFIC blocked path
+5. Per addendum #4: render BEFORE/AFTER + visually verify the move helps + no new collisions
+6. Apply ONLY on master+Sai approval per visual review
+
+**novapcb's 6 worked examples (reference proof of the pattern)**:
+- R45/R46 CAN termination: **180° flip** opened bus daisy
+- SPI1_MOSI: **0.4mm specific-direction nudge** unblocked MOT1/2
+- FB2 ferrite: **repositioned entirely** for CAN keystone
+- U15 CAN ESD: **relocated** to open bus daisy
+- R11/R12 I²C pull-ups: **moved** to unblock bus tangle
+- IMU CS verticals: **repositioned** for HSE crystal work
+
+**When R20 is the right path (vs J19-shift cascade or full GUI)**:
+- Multiple stuck nets each with identifiable specific obstacle
+- Obstacles are non-critical passives (not G_PP22 / not R25-tight / not R13-tight)
+- Cascading reroute is uncertain
+- Full GUI manual is expensive
+- Worker has live geometry context to identify specifics
+
+**Anti-patterns (banned)**:
+- Generic "move R60 -0.5mm" without identifying it as the blocker for a specific net
+- Moving G_PP22 cluster members (breaks symmetry)
+- Moving R25/R13-critical passives past their electrical envelope
+- Skipping the §8 #4 visual verification before commit
+
+Codified by: [[feedback-move-the-obstacle-per-net-targeted]] (memory) + this §8 addendum #5. Reference source: http://100.81.21.121:8765/static/techniques.html (novapcb routing-techniques Point 2 / Rule 20).
