@@ -1,0 +1,12 @@
+# Explicitly-deferred audit scripts
+#
+# Each line: <scriptname.py> = <reason for deferral>
+# Comments start with #. Blank lines ignored.
+#
+# Any audit script in hardware/kicad/scripts/audit_*.py or verify_*.py NOT
+# wired into master_pre_merge.sh as BLOCKING MUST appear here with a reason.
+# Otherwise G_META1 audit_meta_coverage.py fails the PR.
+#
+# Per Sai 2026-05-26 mandate: no silent orphan audits.
+
+audit_diff_pair_z0.py = Routing-phase audit; wire in when Phase 5 routing begins (USB/SWD diff-pair impedance)

@@ -532,6 +532,72 @@ else
   echo "[G_M14_pad_edge_clearance] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
 fi
 
+# ──────────────────────────────────────────────────────────────────
+# G_PP11: component-body bbox overlap (the BIG miss — Sai 2026-05-26)
+# 57 same-layer body overlaps on CH1 passed every other audit.
+# verify_placement.py existed since Phase 4-v1 Task #47 but was never wired.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_body_bbox_overlap.py" ]]; then
+  run_gate "G_PP11_body_bbox_overlap" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_body_bbox_overlap.py' '$BOARD'" true
+else
+  echo "[G_PP11_body_bbox_overlap] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_LEGACY_VERIFY_PLACEMENT: Phase 4-v1 Task #47 placement verifier
+# Belt-and-suspenders alongside G_PP11.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/verify_placement.py" ]]; then
+  run_gate "G_LEGACY_verify_placement" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/verify_placement.py' '$BOARD'" true
+else
+  echo "[G_LEGACY_verify_placement] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_M15: 3D model coverage (OQ-009 follow-up — every footprint has .step assigned)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_3d_model_coverage.py" ]]; then
+  run_gate "G_M15_3d_model_coverage" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_3d_model_coverage.py' '$BOARD'" true
+else
+  echo "[G_M15_3d_model_coverage] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_META_HASH: BOARD_INVARIANT_HASH chain validity
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_meta.py" ]]; then
+  run_gate "G_META_HASH_chain" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_meta.py'" true
+else
+  echo "[G_META_HASH_chain] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_META1: audit-suite coverage (every audit script wired or explicitly deferred)
+# Catches future "audit exists but never runs" gaps from phase migrations.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_meta_coverage.py" ]]; then
+  run_gate "G_META1_audit_coverage" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_meta_coverage.py'" true
+else
+  echo "[G_META1_audit_coverage] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_PP16: per-channel BOM consistency (R20 symmetry deep-check)
+# Sai 2026-05-26 outward-thinking sweep — would catch a missing per-channel cap
+# that mirror-transform forgot, before it ships.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_channel_bom_match.py" ]]; then
+  run_gate "G_PP16_channel_bom_match" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_channel_bom_match.py' '$BOARD'" true
+else
+  echo "[G_PP16_channel_bom_match] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
 # G_M5: assembly drawing completeness (CPL/BOM/rotation/value)
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_assembly_drawing.py" ]]; then
