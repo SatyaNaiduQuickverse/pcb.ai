@@ -10,18 +10,23 @@ Any PR changing this hash WITHOUT explicit "invariant-change" PR title = REJECT.
 - Outline: 100×100 mm
 - Mount holes: 4× M3 at corners (5,5), (95,5), (5,95), (95,95)
 - target.h md5: `7a4549d27e0e83d3d6f1ffaf67527d24` (firmware contract — LOCKED)
-- Stackup: 8-layer (F.Cu / In1=GND / In2=signal / In3=+VMOTOR / In4=signal / In5=GND / In6=signal / B.Cu)
-- **Stackup dielectric LOCKED 2026-05-26 (OQ-014 resolution, pre-Phase-5 routing entry)**:
-  - F.Cu→In1.Cu prepreg: **0.10 mm** (conservative mid-JLC-range; load-bearing for HS-LS commutation loop ≤2nH via In1.Cu GND plane reference per BILATERAL_PLACEMENT.md)
-  - In1.Cu→In2.Cu core: 0.20 mm
-  - In2.Cu→In3.Cu prepreg: 0.10 mm
-  - In3.Cu→In4.Cu core: 0.20 mm (3oz +VMOTOR plane on In3.Cu)
-  - In4.Cu→In5.Cu prepreg: 0.10 mm
-  - In5.Cu→In6.Cu core: 0.20 mm
-  - In6.Cu→B.Cu prepreg: 0.10 mm
-  - Total: 1.6 mm (8-layer 1.6mm JLC standard) — copper 4×35µm (1oz signal) + 3×70µm (3oz F.Cu/In3.Cu/B.Cu) + 4×100µm prepreg + 3×200µm core = 1.6mm
-  - Justification: loop-L plane-referenced model L_loop = μ₀·d·l/w = 4πe-7 × 0.1e-3 × 5.92e-3 / 4.99e-3 ≈ 0.15 nH per phase, well under 2nH BILATERAL target. EMI multi-layer shielding (OQ-016) also uses d=0.10mm prepreg between BEMF (In2) and SW (F.Cu) reference plane (In1.Cu).
-  - JLC fab spec: confirm at Phase 7 fab-submission that the chosen JLC 8L 1.6mm prepreg/core thicknesses match (typical JLC: 0.076–0.21 mm prepreg). If JLC default deviates, master/worker request custom spec or re-verify post-route sims.
+- Stackup: **10-layer** (F.Cu / In1=GND / In2=signal / In3=GND / In4=signal-BEMF / In5=+VMOTOR / In6=signal-SW / In7=GND / In8=signal / B.Cu)
+- **Phase 4a-restack-10L 2026-05-26 (Sai-locked per PR #179 + docs/PHASE4A_RESTACK_10L_PROPOSAL.md)**: upgraded from 8L per Howard Johnson Sig Prop Ch.13.7 (more-layers remedy when QFN32 pin-remap unavailable). Sai cost-OK directive cleared (+$1-2/board production = 1-2% on $50-200 ESC BOM).
+- **Stackup dielectric LOCKED 10L (preserves OQ-014 F.Cu→In1.Cu = 0.10mm)**:
+  - F.Cu→In1.Cu prepreg: **0.10 mm** UNCHANGED (OQ-014 LOAD-BEARING; SW loop-L plane reference; STEP 6 0.1953nH/phase verification preserved)
+  - In1.Cu→In2.Cu core: 0.15 mm (thinner than 8L's 0.20mm to fit extra layers in 1.6mm total)
+  - In2.Cu→In3.Cu prepreg: 0.075 mm (NEW pair)
+  - In3.Cu→In4.Cu core: 0.15 mm (NEW pair)
+  - In4.Cu→In5.Cu prepreg: 0.10 mm (BEMF-to-VMOTOR spacing for OQ-016 shield)
+  - In5.Cu→In6.Cu core: 0.15 mm
+  - In6.Cu→In7.Cu prepreg: 0.075 mm (NEW pair)
+  - In7.Cu→In8.Cu core: 0.15 mm (NEW pair)
+  - In8.Cu→B.Cu prepreg: 0.10 mm (symmetric to F.Cu side)
+  - Total: 1.6 mm 10L (JLC standard) — copper 9×35µm (1oz) + 1×70µm (3oz In5 +VMOTOR) + 4×100µm prepreg + 4×75µm prepreg + 4×150µm core = ~1.6mm
+  - Loop-L preservation: F.Cu→In1 = 0.10mm UNCHANGED → STEP 6 measured 0.1953nH/phase still valid + B.Cu→In7 (new) = 0.285mm (improved from 8L 0.335mm) → LS-side loop-L slightly better
+  - EMI shield: BEMF (In4) now bracketed by In3 GND + In5 +VMOTOR (was In1 GND + In3 +VMOTOR in 8L); In5 +VMOTOR provides capacitive shield (favorable since SW switches against VMOTOR)
+  - Routing capacity: 5 signal layers + 4 plane layers + dedicated In4 BEMF = 6 effective routing layers vs 4 in 8L = +50% capacity
+  - JLC fab spec: 1.6mm 10L standard option (cost +$1-2/board production verified). Worker dispatch for setup_board.py re-run on canonical board mandatory.
 
 ## Subsystem zones (LOCKED on Sai-approval)
 
