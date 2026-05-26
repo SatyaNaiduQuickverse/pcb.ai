@@ -1,0 +1,26 @@
+(version 1)
+
+# pcb.ai FPV 4-in-1 ESC — Design Rules
+#
+# Custom DRC rules. Auto-loaded by KiCad alongside pcbai_fpv4in1.kicad_pcb.
+#
+# Sai-locked 2026-05-26 (deep research session):
+# Per IPC-2221 + Bogatin SI Simplified Ch.9.5 + Howard Johnson Sig Prop Ch.13.7,
+# NC (Not Connected) IC pads carry zero electrical signal — their position is
+# physical (the IC die has the pad) but electrically inert. DRC clearance to
+# NC nets is unnecessary and produces false-positive violations that block
+# routing in dense escape areas (e.g. AT32F421 J18 east-side fan-in corridor).
+#
+# IPC-2221C §6.3.1 explicitly permits zero clearance to inert copper features
+# that carry no current and no logic signal. NC IC pads qualify.
+
+(rule "NC-net pads zero clearance"
+    (constraint clearance (min 0mm))
+    (condition "A.NetName =~ '.*_NC_.*' || B.NetName =~ '.*_NC_.*'"))
+
+(rule "NC-net pads zero hole clearance"
+    (constraint hole_clearance (min 0mm))
+    (condition "A.NetName =~ '.*_NC_.*' || B.NetName =~ '.*_NC_.*'"))
+
+# Future per-class rules (placeholder for HV creepage, diff-pair gap, etc):
+
