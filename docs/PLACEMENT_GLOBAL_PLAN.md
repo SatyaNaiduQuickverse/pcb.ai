@@ -52,7 +52,7 @@ y=14   ╞════════════╪══════════�
 y=50   ├────────────┼─── S3 supervisor y=18-40 ───┼─────┤    strip)
        │            │  (Hall ACS770 + TPS3700)    │     │
        │            ├──────── S2 bulk y=40-60 ───┤     │
-       │            │  4× 150uF polymer (B.Cu)    │     │
+       │            │  4× 470µF polymer EEHZS1V471P (BOM-actual per Phase 2d-redo) (B.Cu)    │     │
        │   CH1     │   S5E   │   S5W      │   CH2     │
        │ (SW, F+B)  │ x=35-40 │ x=60-65    │(SE, F+B)   │  y=50-86
        │ template   │ CH1 feed│ CH2 feed   │ mirror_X   │
@@ -107,7 +107,7 @@ Sub-zoning solves the PR #138 G_PP6 whack-a-mole: 27V SW-node pins live in MOTOR
 | BEMF voltage dividers (R-network) | ✓ (LOGIC sub-zone) | | Drives ADC; close to MCU pins |
 | Status LEDs (D15, D19, D33) | | ✓ | Visible from underneath board during bring-up |
 | LS-side gate-clamp diodes (D24-D36) | | ✓ ALONGSIDE LS-FETs | NOT ON TOP (the PR #139 catch); 2-3mm offset to LS-FET source pin |
-| S2 bulk caps (4× 150µF) | | ✓ | Directly under FET clusters; 1mm² loop |
+| S2 bulk caps (4× 470µF EEHZS1V471P) | | ✓ | Directly under FET clusters; 1mm² loop |
 | S5 BEC bucks (5×) | | ✓ | ≥15mm from Hall (EMC); central area, away from FET switching |
 | S6 connectors (J14, J12, J15-J17) | ✓ | | Cables enter top |
 | BAT_P / BAT_N solder pads | ✓ | | External XT90 wire hand-soldered |
