@@ -198,6 +198,9 @@ TODO; build synthetic test before relying on them as hard gates:
 - audit_jlc_dfm.py (G_M1/M2/M3) — JLC trace/via/annular floors
 - audit_fos_current.py (G_FoS2) — trace ampacity FoS
 - audit_via_current_capacity.py (G_R5) — via array vs net current
+- audit_sim_execution.py (R-sim-execution) — 4-point sim proof per Sai 2026-05-23 lock; input + result + mtime > input + extract script + literal exec command. PRs #153, #154, #162 broader globs. Real-board smoke-test: 8/8 sim files PASS on master HEAD post-PR-#162.
+- audit_subsystem_flow.py (G_FLOW1/2/3) — 7-step subsystem flow enforcement (PLACEMENT_GLOBAL_PLAN §8); G_FLOW1 STEP markers in subsystem doc, G_FLOW2 adjacent integration sim per pairing table, G_FLOW3 I/O port allocation. Pre-flow-lock stages (S6/TIER1) grandfathered as WARN.
+- audit_sim_artifact_provenance.py (R-sim-provenance) — sim inputs/results/RESULTS.md must cite git-tracked paths only; /tmp/ citations FAIL. Added 2026-05-26 after worker caught CH1 placement living only in /tmp/ch1_152.kicad_pcb (STEP-3 sims would be unreproducible if /tmp wiped).
 
 ## Pre-existing audits (Phase 4-v2 era, no synthetic test):
 

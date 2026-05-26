@@ -360,3 +360,36 @@ render (top/bottom/inner-layer overlay).
 **Adjacent-next pairing**: After STEP 4 ROUTE CH1 + STEP 5 audit, the
 adjacent-first queue advances to S5 BEC east strip (CH1 east edge ↔ S5
 gate-driver supply path). S5 placement uses same 7-step flow.
+
+
+### Stage 2 — CH1 STEP 4 ROUTE — addendum 2026-05-26 (worker-caught class lesson)
+
+**NEW BINDING PRECONDITION for STEP 3 entry (retroactive)**: the .kicad_pcb
+geometry under test MUST be committed to canonical
+`hardware/kicad/pcbai_fpv4in1.kicad_pcb` BEFORE STEP 3 sims fire. Sims that
+cite `/tmp/`, `~/Desktop`, `/home/<user>/local/*.kicad_pcb`, or
+`escworker/local/*.kicad_pcb` produce unreproducible verdicts and are REJECTED.
+
+**Class lesson**: worker discovered during CH1 STEP 4 pickup that the validated
+CH1 placement existed ONLY in `/tmp/ch1_152.kicad_pcb` — committed canonical
+board still had CH1 parked off-board (4041eed Stage-1 anchors). All 4 STEP 3
+sims cited the volatile /tmp/ artifact; if /tmp had been cleaned (reboot,
+tmpwatch cron), the verdicts would be unreproducible from SHA.
+
+**Codified by**: `audit_sim_artifact_provenance.py` (R-sim-provenance, wired
+into master_pre_merge.sh 2026-05-26). Distinguishes solver TOOL paths
+(`ElmerSolver`, `openems` libs — exempt) from DATA artifact paths
+(`/tmp/*.kicad_pcb`, `/tmp/*.sif` — REJECTED).
+
+**STEP 3 sim entry checklist** (revised):
+- [ ] Geometry committed to canonical board path (no /tmp/ artifact)
+- [ ] Worker PR cites canonical-board SHA at top of sim RESULTS.md
+- [ ] R-sim-provenance audit PASS
+- [ ] R-sim-execution audit PASS (4-point proof)
+- [ ] G_S3 sanity audit PASS
+
+For CH1 STEP 7 PR (placement+route): worker MUST update the 5 known
+`/tmp/ch1_152.kicad_pcb` references in `sims/phase4v3/ch1_emi/` +
+`sims/phase4v3/ch1_loop_l/` to point at `hardware/kicad/pcbai_fpv4in1.kicad_pcb`
++ re-extract loop-L from the canonical board (must yield same 13.5578 nH
+free-space; plane-referenced ~0.15 nH post-route).
