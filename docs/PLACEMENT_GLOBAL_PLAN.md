@@ -584,3 +584,49 @@ Codified by: [[feedback-move-the-obstacle-per-net-targeted]] (memory) + this §8
 - Status LEDs on B.Cu (visible from underneath per [[feedback-vision-check-gate]])
 
 Other STEP 2-7 unchanged from prior dispatch (PR #174). Worker resume with corrected zone scheme next session.
+
+
+### Stage 0 — Phase 4a-restack-10L MIGRATION (DISPATCHED 2026-05-26)
+
+**Status**: Sai-locked per PR #179 proposal. setup_board.py + BOARD_INVARIANTS.md amended (PR-pending). Worker dispatch for canonical board re-run + re-verification.
+
+**What changes**:
+- Stackup: 8L → 10L (adds In7.Cu GND + In8.Cu signal)
+- F.Cu→In1.Cu prepreg = 0.10mm UNCHANGED (OQ-014 lock preserved)
+- B.Cu→In7.Cu = 0.285mm (improved from 8L's 0.335mm)
+- BEMF (In4) now bracketed by In3 GND + In5 +VMOTOR (was In1 GND + In3 +VMOTOR)
+- Routing capacity: +50% (5 signal + 4 plane + 1 dedicated BEMF = 6 effective routing layers)
+
+**Worker dispatch — STEP 0 actions (BINDING)**:
+
+1. **Backup current canonical** to `escworker/local/canonical_pre_10L_migration/pcbai_fpv4in1.kicad_pcb` with md5 (provenance per [[feedback-sim-artifact-must-be-canonical]])
+2. **Re-run setup_board.py** on canonical board — applies NEW_LAYERS_10L stackup
+3. **Map existing 8L routes to 10L layer indices** — 8L→10L layer mapping:
+   - F.Cu (idx 0) → F.Cu (idx 0) UNCHANGED
+   - In1.Cu (idx 1, GND) → In1.Cu (idx 1, GND) UNCHANGED
+   - In2.Cu (idx 2, BEMF) → **In4.Cu (idx 4, BEMF)** [BEMF moves to In4 in 10L to be shielded by In3+In5]
+   - In3.Cu (idx 3, +VMOTOR) → **In5.Cu (idx 5, +VMOTOR)** [moved more central]
+   - In4.Cu (idx 4, SW escape) → **In6.Cu (idx 6, SW escape)** [renumbered]
+   - In5.Cu (idx 5, GND) → **In7.Cu (idx 7, GND)** [renumbered]
+   - In6.Cu (idx 6, stragglers) → **In8.Cu (idx 8, stragglers)** [renumbered]
+   - B.Cu (idx 31) → B.Cu (idx 31) UNCHANGED
+4. **Re-extract loop-L per phase** — verify A=B=C still 0.1953nH ± tolerance (FET cluster + In1.Cu GND reference UNCHANGED, so should remain identical)
+5. **Re-run sims** per [[feedback-sim-execution-gate]] 4-point proof:
+   - Elmer thermal (full-board, all heat sources)
+   - ngspice PI (each output rail)
+   - openEMS post-route EMI (OQ-016 closure)
+6. **Re-route 7 stuck nets** using new In2.Cu + In8.Cu capacity — expected to achieve 12/12 + 0-viol without GUI session
+7. **Re-run all 58 audit gates** including new `audit_stackup_layers.py` (G_M16)
+
+**Acceptance gate for STEP 0**:
+- All v9 routes successfully migrated to 10L (layer remapping clean)
+- Loop-L per phase unchanged (0.1953nH baseline preserved)
+- All 4 sims PASS or improve
+- 12/12 CH1 nets routed
+- audit_routing 7/7 PASS
+- audit_stackup_layers PASS (new gate)
+- DRC zero errors on CH1 nets
+
+**If 10L doesn't fully resolve** (worst case): fallback to Sai GUI session on residual nets (was the original plan for 8L).
+
+**Expected outcome (high confidence)**: 10L resolves CH1 STEP 4 fully without GUI session. Per Howard Johnson + capacity math, +50% routing capacity is sufficient for the 7-net residual which couldn't fit in 8L.

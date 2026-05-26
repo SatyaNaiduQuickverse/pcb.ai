@@ -661,6 +661,16 @@ fi
 
 # G_PP22 per-phase cluster uniformity (2026-05-26 worker-caught J22 class):
 # transformable per-phase clusters MUST have uniform pitch within 0.5mm.
+# G_M16 stackup layer count (Phase 4a-restack-10L 2026-05-26): board must have
+# 10 enabled copper layers (F.Cu + In1-In8 + B.Cu). Catches accidental 8L drift
+# after stackup upgrade. Per OQ-014 lock + STEP 6 loop-L preservation.
+if [[ -f "$SCRIPTS/audit_stackup_layers.py" ]]; then
+  run_gate "G_M16_stackup_layers" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_stackup_layers.py' '$BOARD'" true
+else
+  echo "[G_M16_stackup_layers] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
 # WARN-tolerance was the bug — this is binary FAIL. Catches sign-typo class.
 if [[ -f "$SCRIPTS/audit_per_phase_cluster_uniformity.py" ]]; then
   run_gate "G_PP22_per_phase_cluster_uniformity" \

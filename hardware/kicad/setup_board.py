@@ -1,4 +1,8 @@
-"""Phase 4a-restack-8L — board setup: 8-layer stack + Edge.Cuts + M3 mounting holes.
+"""Phase 4a-restack-10L — board setup: 10-layer stack + Edge.Cuts + M3 mounting holes.
+
+(Was 8L until 2026-05-26 Sai-locked 10L upgrade per docs/PHASE4A_RESTACK_10L_PROPOSAL.md.
+Howard Johnson Sig Prop Ch.13.7 textbook remedy for QFN32 pin-remap-unavailable case;
+Sai cost-OK directive cleared. Adds +1 signal layer + +1 GND plane = +50% routing capacity.)
 
 Reads pcbai_fpv4in1.kicad_pcb (kinet2pcb output, 2-layer default),
 upgrades to 8-layer per Phase 4a-restack-8L master directive (Task #37),
@@ -14,24 +18,37 @@ Board-size history:
   Phase 4a-restack-8L (this): 100×85 mm + 8-layer stackup (Phase 3-redo added
     +413 components requiring more signal-routing capacity per master D/S model)
 
-Stackup specification (master Phase 4a-restack-8L directive 2026-05-22):
-  Layer 0  F.Cu       signal  3oz   (top — high-current motor traces, TOLL MOSFET pads, thermal face)
-  Layer 1  In1.Cu     power   1oz   (GND plane — full board, return-path integrity)
-  Layer 2  In2.Cu     signal  1oz   (inner signal — autoroute target)
-  Layer 3  In3.Cu     power   3oz   (+VMOTOR plane — heavy-copper for bus current ≥280A)
-  Layer 4  In4.Cu     signal  1oz   (inner signal — autoroute target)
-  Layer 5  In5.Cu     power   1oz   (GND plane — dual GND for EMC + return-path symmetry)
-  Layer 6  In6.Cu     signal  1oz   (inner signal — autoroute target)
-  Layer 31 B.Cu       signal  3oz   (bottom — thermal face for TOLL MOSFETs, secondary high-current)
+Stackup specification (master Phase 4a-restack-10L directive 2026-05-26):
+  Layer 0  F.Cu       signal  1oz   (top — HS FETs, MCU pads, J19 driver, connectors)
+  Layer 1  In1.Cu     power   1oz   (GND plane — F.Cu reference, 0.10mm prepreg = OQ-014 LOCK)
+  Layer 2  In2.Cu     signal  1oz   (NEW dedicated escape layer — J18/J19 fan-in destination)
+  Layer 3  In3.Cu     power   1oz   (NEW GND plane — brackets In2 signals + In4 BEMF)
+  Layer 4  In4.Cu     signal  1oz   (BEMF analog — shielded by In3 + In5, OQ-016 multi-layer shield)
+  Layer 5  In5.Cu     power   3oz   (+VMOTOR plane — 280A burst, 3oz heavy-copper)
+  Layer 6  In6.Cu     signal  1oz   (SW inner escape per OQ-017 In4 escape, was In4 in 8L)
+  Layer 7  In7.Cu     power   1oz   (NEW GND plane — brackets In6 + In8 signals)
+  Layer 8  In8.Cu     signal  1oz   (NEW signal — PWM_IN stragglers + low-current overflow)
+  Layer 31 B.Cu       signal  1oz   (bottom — LS FETs, bulk caps, status LEDs)
 
-5 signal layers (F.Cu, In2.Cu, In4.Cu, In6.Cu, B.Cu) for autoroute;
-3 power/plane layers (In1.Cu GND, In3.Cu +VMOTOR, In5.Cu GND).
+5 signal layers (F.Cu, In2.Cu, In4.Cu, In6.Cu, In8.Cu, B.Cu) + 4 power planes
+(In1.Cu GND, In3.Cu GND, In5.Cu +VMOTOR, In7.Cu GND) + dedicated BEMF (In4).
+= 6 effective routing layers vs 4 in 8L = +50% routing capacity.
 
-3oz copper layers: F.Cu, In3.Cu, B.Cu — for ≥100A burst current on motor phases
-and ≥400A peak on +VMOTOR bus. JLC DRC at 3oz: minimum trace width = 5 mil
-(vs 4 mil for 1oz/2oz); update routing constraint baseline for Phase 5b-retry.
-1oz copper layers: In1.Cu, In2.Cu, In4.Cu, In5.Cu, In6.Cu — standard signal
-density at JLC SMT capability spec.
+3oz copper layer: In5.Cu — for ≥280A continuous +VMOTOR bus (moved from In3 in 8L).
+1oz copper layers: F.Cu, In1.Cu, In2.Cu, In3.Cu, In4.Cu, In6.Cu, In7.Cu, In8.Cu, B.Cu
+— standard signal density at JLC SMT capability spec.
+
+Stackup dielectric (locked, see docs/BOARD_INVARIANTS.md):
+  F.Cu→In1.Cu prepreg = 0.10mm (LOAD-BEARING for loop-L plane reference, OQ-014 UNCHANGED)
+  In1.Cu→In2.Cu core = 0.15mm
+  In2.Cu→In3.Cu prepreg = 0.075mm
+  In3.Cu→In4.Cu core = 0.15mm
+  In4.Cu→In5.Cu prepreg = 0.10mm
+  In5.Cu→In6.Cu core = 0.15mm
+  In6.Cu→In7.Cu prepreg = 0.075mm
+  In7.Cu→In8.Cu core = 0.15mm
+  In8.Cu→B.Cu prepreg = 0.10mm (symmetric to F.Cu side)
+Total board: 1.6mm 10L (JLC standard option, +\$1-2/board production).
 """
 
 import re
@@ -92,6 +109,41 @@ NEW_LAYERS_8L = '''(layers
 		(49 "F.Fab" user)
 	)'''
 
+NEW_LAYERS_10L = '''(layers
+		(0 "F.Cu" signal "F.Cu 1oz — HS FETs, MCU pads, drivers, connectors")
+		(1 "In1.Cu" signal "GND plane #1 — F.Cu reference @ 0.10mm prepreg (OQ-014 lock); signal-typed for DSN export; Phase 5c re-classifies to power")
+		(2 "In2.Cu" signal "Inner signal #2 (NEW 10L) — dedicated J18/J19 fan-in escape layer")
+		(3 "In3.Cu" signal "GND plane #2 (NEW 10L) — brackets In2 escape signals; signal-typed for DSN export; Phase 5c re-classifies to power")
+		(4 "In4.Cu" signal "Inner signal #4 — BEMF analog (shielded by In3 + In5, OQ-016)")
+		(5 "In5.Cu" signal "+VMOTOR plane (3oz, ≥280A bus; moved from In3 in 8L); signal-typed for DSN export; Phase 5c re-classifies to power")
+		(6 "In6.Cu" signal "Inner signal #6 — SW inner escape per OQ-017 (was In4 in 8L)")
+		(7 "In7.Cu" signal "GND plane #3 (NEW 10L) — brackets In6 + In8 signals; signal-typed for DSN export; Phase 5c re-classifies to power")
+		(8 "In8.Cu" signal "Inner signal #8 (NEW 10L) — PWM_IN stragglers + low-current overflow")
+		(31 "B.Cu" signal "B.Cu 1oz — LS FETs, bulk caps, status LEDs")
+		(32 "B.Adhes" user "B.Adhesive")
+		(33 "F.Adhes" user "F.Adhesive")
+		(34 "B.Paste" user)
+		(35 "F.Paste" user)
+		(36 "B.SilkS" user "B.Silkscreen")
+		(37 "F.SilkS" user "F.Silkscreen")
+		(38 "B.Mask" user)
+		(39 "F.Mask" user)
+		(40 "Dwgs.User" user "User.Drawings")
+		(41 "Cmts.User" user "User.Comments")
+		(42 "Eco1.User" user "User.Eco1")
+		(43 "Eco2.User" user "User.Eco2")
+		(44 "Edge.Cuts" user)
+		(45 "Margin" user)
+		(46 "B.CrtYd" user "B.Courtyard")
+		(47 "F.CrtYd" user "F.Courtyard")
+		(48 "B.Fab" user)
+		(49 "F.Fab" user)
+	)'''
+
+# Phase 4a-restack-10L (2026-05-26): default to 10L per Sai-locked proposal
+# PR #179. NEW_LAYERS_8L kept as deprecated reference for migration audit.
+NEW_LAYERS = NEW_LAYERS_10L
+
 # Replace the existing (layers ...) block (multiline, ends with matching paren).
 # Use a careful regex matched against the kinet2pcb default 2-layer output.
 pat = re.compile(r'\(layers\s*\n.*?\n\t\)', re.DOTALL)
@@ -105,9 +157,9 @@ if not m:
 # carry "(Phase 5c re-classifies to power)" descriptors — Phase 5c reclassifies
 # AFTER the DSN export → Freerouting autoroute → SES re-import workflow.
 # dsn_strip_planes.py + dsn_inject_planes.py handle the autoroute-time geometry.
-txt = txt[:m.start()] + NEW_LAYERS_8L + txt[m.end():]
-print(f"[1/3] Upgraded layer stack to 8L: 5 signal (F/In2/In4/In6/B) + 3 plane (In1/In3/In5 GND/VMOTOR/GND)")
-print(f"        3oz copper on: F.Cu, In3.Cu, B.Cu (heavy-current); 1oz on inner signal layers")
+txt = txt[:m.start()] + NEW_LAYERS + txt[m.end():]
+print(f"[1/3] Upgraded layer stack to 10L: 5 signal (F/In2/In4/In6/In8/B) + 4 plane (In1/In3 GND + In5 VMOTOR + In7 GND)")
+print(f"        3oz on: In5.Cu (+VMOTOR 280A bus); 1oz on all other 9 layers")
 
 # ───────────── 2. Append Edge.Cuts outline (rectangle at origin) ─────────────
 # Phase 5b discovery: pcbnew.ExportSpecctraDSN fails on 4-separate-gr_line outlines
