@@ -264,3 +264,41 @@ Lockfile updated [invariant-change]. Worker re-runs Stage 0 to land BAT pads.
 
 **Sai review needed at return**: confirm acceptance of stackup-lock-pending decision OR override.
 
+
+---
+
+## OQ-015 — Phase-4-v2 thermal template carried 2 real bugs (worker-caught 2026-05-26)
+
+**Raised**: 2026-05-26 by worker during CH1 STEP 3 thermal sim. The v2 thermal template (sims/phase4v2/ch1_thermal/ch1.sif + ch1_v1.sif and downstream sims using same template) was producing **non-physical 36,236°C** results — silently passing as "completed" because no audit gate validated physical plausibility against analytic check.
+
+**Bugs found + fixed by worker in Phase 4-v3 CH1 thermal sim**:
+
+1. **mesh.boundary parent-element columns were '0 0'** — Elmer never coupled the convective boundary condition → no heat left the block → temperature ran away. The mesh export from previous templates was incomplete; Elmer silently used adiabatic BC instead of the specified convective.
+
+2. **Elmer Body-Force `Heat Source` unit confusion** — Elmer's Heat Source is **SPECIFIC power (W/kg)**, NOT volumetric W/m³. Template was specifying volumetric → Elmer multiplied by FR4 density (~1850 kg/m³) → over-drove the source by ×1850. Hence the absurd 36,236°C.
+
+Both fixed in Phase 4-v3 CH1 thermal (worker validated against lumped + conduction analytic check).
+
+**IMPLICATION (Sai-attention)**: Every prior thermal sim using the same template lineage is SUSPECT:
+- Phase-4c (Task #22, #39) — Elmer thermal v3 on R1 + 8L
+- Phase-4-CH1-replace-P12 (Task #64) — Elmer FEM v3
+- Phase-5c full-board integration thermal — claimed 83°C; likely also affected by ×1850 over-drive  
+- Any downstream sim referenced from sims/phase4_integrate/full_thermal/
+
+**Master action (DECISION)**:
+- ACCEPT CH1 thermal PASS (54.65°C continuous, 89.28°C burst — both <110°C target).
+- LOG this OQ; mark Stage 10 full-board thermal re-run as MANDATORY with the 2 fixes applied + analytic-check validation.
+- Make G_S3 sim-result-sanity gate stronger: include analytic-bound check that flags any T_J >5× ambient as suspect (catches density-factor bugs by class).
+- Don't retroactively re-do Phase-2b/4c/Phase-5c PRs — they shipped on the assumption sims passed; data was wrong but conclusion (sim is "in spec") was hard to verify. CH1 STEP 3 thermal is the FIRST CORRECT thermal sim.
+
+**Caveats on Phase 4-v3 CH1 thermal PASS** (worker-disclosed, master-accepted):
+- CH1-ONLY model with heatsink External Temp pinned at 25°C
+- At full-board burst 4×144.5W=578W, heatsink base + ambient WILL rise → 89.28°C burst margin (20.7°C) is OPTIMISTIC LOWER BOUND
+- Real burst number requires full-board integration thermal at Stage 10
+- Load-bearing BC: effective h=15000/5000 W/m²K (TIM-to-heatsink conduction, not free-conv 15/5 which diverges for isolated island). Option-b convention, master-approved.
+
+**Sai-attention items at review**:
+1. Confirm acceptance of thin 20.7°C burst margin at single-channel sim (full-board verifies)
+2. Approve Stage 10 full-board thermal re-run as MANDATORY
+3. Approve G_S3 strengthening to catch density-factor class bugs
+
