@@ -184,11 +184,17 @@ test_points:
   - {ref: TP38, pos: [25.15, 30.44], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.5mm, role: boot_jumper, channel: CH4}
   # Supply test pads (10): power-rail bring-up probes (FC PI5/AI/V5, VTX1/VTX2 V9, V3V3, GND distribution)
   - {ref: TP1,  pos: [38.00, 53.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_fc_plus}
-  - {ref: TP2,  pos: [5.00,  86.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_fc_gnd}
+  # NOTE 2026-05-26: TP2/TP7/TP9 (CH1-side) and TP5 (CH2 mirror) relocated +3-6mm deeper into S1
+  # to clear CH1/CH2 top edge (y=86) for the y86-extended CH zones (PR #134/#135).
+  # Worker reported phase-C cluster collides at y80-86; FET package silk extends to ~y84-86.
+  # New y=90-92 keeps probes inside S1 (BAT pads at y=95 → ≥3mm clearance) and out of FET column reach.
+  # TP7 also shifted x=15.23 → 15.00 (clean grid; still in west FET column x but at y=92 well clear).
+  # TP9 x shifted 25→28 to avoid CH1 east MCU strip x=22-35 at silk extension.
+  - {ref: TP2,  pos: [5.00,  90.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_fc_gnd}
   - {ref: TP3,  pos: [47.00, 74.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_pi5_plus}
-  - {ref: TP5,  pos: [72.00, 87.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_ai_plus}
-  - {ref: TP7,  pos: [15.23, 87.48], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: pad_v9_vtx1_plus}
-  - {ref: TP9,  pos: [25.00, 86.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: pad_v9_vtx2_plus}
+  - {ref: TP5,  pos: [72.00, 92.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_ai_plus}
+  - {ref: TP7,  pos: [15.00, 92.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: pad_v9_vtx1_plus}
+  - {ref: TP9,  pos: [28.00, 90.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: pad_v9_vtx2_plus}
   - {ref: TP10, pos: [63.80, 45.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: pad_v9_vtx2_gnd}
   - {ref: TP11, pos: [35.50, 47.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D2.5mm, role: pad_v3v3_plus}
   - {ref: TP12, pos: [41.00, 47.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D2.5mm, role: pad_v3v3_gnd}

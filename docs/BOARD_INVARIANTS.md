@@ -89,7 +89,7 @@ coords.
 |---|---|---|---|---|---|
 | +BATT/GND spine | 48 | 0 | 52 | 50 | 280A continuous power path top→center |
 | BEMF return centerline | 47 | 50 | 53 | 82 | 4× BEMF signals to central MCU |
-| TLM/AUX bus strip | 0 | 80 | 100 | 82 | inter-subsystem digital |
+| TLM/AUX bus strip | 0 | 11.5 | 100 | 13.5 | inter-subsystem digital — relocated 2026-05-26 from (0,80,100,82) which collided with y86-extended CH south zones (worker phase-C cluster + TP21/TP28 motor pads at y80); now inside S6 (y0-14) just below J14/J12 connectors at y=5, traversal to channel MCUs via internal layers |
 | S2 to CH1 +VMOTOR feed | 30 | 47 | 36 | 53 | low-loop radial CH1 (6×6mm corner) |
 | S2 to CH2 +VMOTOR feed | 64 | 47 | 70 | 53 | low-loop radial CH2 |
 | S2 to CH3 +VMOTOR feed | 64 | 47 | 70 | 53 | low-loop radial CH3 (mirror) |
@@ -103,7 +103,7 @@ Run `python3 hardware/kicad/scripts/compute_board_invariant_hash.py --write`
 to compute and write.
 
 ```
-BOARD_INVARIANT_HASH = e4bfcd00a4189d5bd0e1571e52e9cceeddda1170f4c2eac42bfb8747b1547640
+BOARD_INVARIANT_HASH = 2d61f9712db8fe91a96051561745c45216181dd4d88e8e020ae828fa09cf8a9d
 ```
 
 ## Audit gate
