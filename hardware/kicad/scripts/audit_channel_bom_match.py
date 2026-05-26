@@ -71,6 +71,28 @@ def main():
         print(f"  ℹ Only {len(chs)} channel(s) have placed parts — skipping (staged mode)")
         return 0
 
+    # Staged-mode detection: count FETs (Q-prefix) per channel via pads' nets.
+    # If any channel has 0 FETs, this is staged single-channel placement — the
+    # BOM mismatch is expected (CH2/3/4 only have motor pads until their PR).
+    # Same pattern as G_PP20 staged-mode (worker 2026-05-26 catch).
+    ch_fet_counts = {ch: 0 for ch in chs}
+    for ref, (x, y, val, fp) in by_ref.items():
+        if not ref.startswith('Q'): continue
+        for pad in fp.Pads():
+            net = pad.GetNetname()
+            import re as _re
+            m = _re.search(r'_CH([1-4])\b', net)
+            if m:
+                ch_fet_counts[int(m.group(1))] = ch_fet_counts.get(int(m.group(1)), 0) + 1
+                break
+    if any(v == 0 for v in ch_fet_counts.values()):
+        empty_chs = [ch for ch, v in ch_fet_counts.items() if v == 0]
+        print(f"  ℹ STAGED MODE — channels without FETs: {empty_chs} → BOM mismatch advisory only")
+        # Still print the report but return 0 (don't fail PR)
+        STAGED = True
+    else:
+        STAGED = False
+
     all_keys = set()
     for ch in chs: all_keys.update(ch_counts[ch].keys())
     fails = []
@@ -85,6 +107,12 @@ def main():
             fails.append((key, counts, details, extras))
 
     print(f"  {len(chs)} channels with placed parts, {len(all_keys)} distinct (role,value) keys")
+    if fails and STAGED:
+        print(f"  ℹ {len(fails)} mismatches (advisory — staged mode):")
+        for key, counts, details, extras in fails[:10]:
+            role, val = key
+            print(f"    ({role}, {val}): {details}")
+        return 0  # don't fail PR in staged mode
     if fails:
         print()
         print(f"  ❌ FAIL — {len(fails)} key(s) with mismatched per-channel count:")
