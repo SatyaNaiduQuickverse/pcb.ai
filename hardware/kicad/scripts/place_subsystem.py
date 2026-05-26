@@ -506,16 +506,27 @@ def replicate_phases(board, refs, roles, subsystem, zones):
     if set(mpads) != {"A", "B", "C"}:
         return [f"replicate_phases: {subsystem} motor pads incomplete: {sorted(mpads)}"]
     # Group placeable phase components by phase, keyed by phase-invariant signature.
+    # West FET strip only (master 2026-05-26 sub-zone split): replicate the
+    # switching cell (FET/shunt/gate-R/clamp/VMOTOR-bypass). The east control
+    # strip (MCU/DRV/INA/decoupling) is placed separately by their zone_hints, so
+    # exclude cluster-anchors (MCU/DRV/INA/U3/U4) and the INA from replication.
     by_phase = {"A": {}, "B": {}, "C": {}}
     for r in refs:
         fp = present.get(r)
         if fp is None or r in MOTOR_TP_REFS:
             continue
+        rec = roles.get(r, {})
+        if rec.get("role") == "cluster-anchor" or rec.get("relation") == "ina-near-shunt":
+            continue
         ph = _phase_of(fp)
         if ph in by_phase:
-            by_phase[ph].setdefault(_phase_sig(fp, roles.get(r, {}).get("role")), []).append(r)
+            by_phase[ph].setdefault(_phase_sig(fp, rec.get("role")), []).append(r)
 
-    z = zones[0]  # channel zones are a single rectangle
+    # West FET strip only: cap x at the sub-zone split (master 2026-05-26) so the
+    # replicated phases stay clear of the east control strip (MCU/DRV/INA).
+    FET_STRIP_X1 = 22.0
+    _z0 = zones[0]
+    z = (_z0[0], _z0[1], min(_z0[2], FET_STRIP_X1), _z0[3])
 
     def _safe_subzone(ref_ph):
         # A reference-phase CENTER placed in this box stays in-zone for ALL phases
