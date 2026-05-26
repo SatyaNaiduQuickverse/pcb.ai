@@ -45,7 +45,7 @@ except ImportError:
 # intentionally parked off-board and only the brought subset should be audited.
 # Added 2026-05-26 (worker-caught: invariants flagged 244+ parked CH3/4 mirrors
 # that didn't exist on-board yet — false fails by design).
-PARKED_EXEMPT = "--parked-exempt" in sys.argv  # 2026-05-26: any-position, robust to runner quoting
+PARKED_EXEMPT = "--parked-exempt" in sys.argv or "--staged" in sys.argv  # 2026-05-26: --staged implies parked-exempt (worker debug-print proved runner passes --staged not --parked-exempt to G6)
 PARKING_X_THRESHOLD = 130.0  # board ≤100mm wide; parking_grid origin (200, -50)
 
 # 2026-05-26 debug: print PARKED_EXEMPT state at startup so we can diagnose
