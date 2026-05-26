@@ -28,19 +28,19 @@ worker_verified_against_netlist: 2026-05-25
 mount_holes:
   # 4× M3 standoff mounting holes at board corners (3.2mm drill)
   # Footprint: MountingHole_3.2mm_M3
-  # Keep-out: 3mm radius copper-clear per IPC-7351 + Sai-catch #1
-  - {ref: H1, pos: [5.00,  95.00], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
-  - {ref: H2, pos: [95.00, 95.00], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
-  - {ref: H3, pos: [5.00,  5.00],  layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
-  - {ref: H4, pos: [95.00, 5.00],  layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
-  # 75x75mm cinematic mount pattern added 2026-05-26 (Sai-anticipated): our
-  # 100x100mm board is cinematic/heavy class (1-3kg AUW). 75mm = iFlight
-  # TitanH7 / HGLRC Sector / GEPRC MOZ7 cinematic standard (2024+ most-shipped).
-  # Race 30.5mm + micro 20mm NOT included — wrong frame class for this board size.
-  - {ref: H5, pos: [12.50, 12.50], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
-  - {ref: H6, pos: [87.50, 12.50], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
-  - {ref: H7, pos: [12.50, 87.50], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
-  - {ref: H8, pos: [87.50, 87.50], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 3.0}
+  # Keep-out: 4mm radius (was 3mm; widened to M3 washer OD 6.5mm + 0.75mm component-edge clearance per IPC-7351 + audit_mount_hole_keepout.py G_M7)
+  # Pattern: 90×90mm corner. Non-standard pitch but max stiffness for 100×100 board; frame mounts via standoffs/adapter.
+  #
+  # [invariant-change] 2026-05-26 — Sai call: dropped H5-H8 (75mm cinematic pattern added in PR #122).
+  # Reasoning: 8 holes was overprotective; cinematic 75mm holes caused (a) TP2/TP7 marginal
+  # keep-out clearance (1.0-1.15mm vs 4mm KO), (b) TLM/AUX bus strip blocked at x≈8-16 and x≈83-91,
+  # (c) consumed S6/S1 placement real estate. 4 corners H1-H4 give sufficient mechanical support
+  # for 100×100 board (mid-board flex within IPC limits at 2-layer epoxy with 8L stiffener).
+  # User adapts to specific frame via M3 standoffs.
+  - {ref: H1, pos: [5.00,  95.00], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 4.0}
+  - {ref: H2, pos: [95.00, 95.00], layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 4.0}
+  - {ref: H3, pos: [5.00,  5.00],  layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 4.0}
+  - {ref: H4, pos: [95.00, 5.00],  layer: F.Cu, rotation: 0, footprint: MountingHole_3.2mm_M3, keepout_radius_mm: 4.0}
 
 fiducials:
   # 6× fiducials (3 top + 3 bottom), 1mm diameter, 2mm solder mask opening
@@ -184,13 +184,11 @@ test_points:
   - {ref: TP38, pos: [25.15, 30.44], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D1.5mm, role: boot_jumper, channel: CH4}
   # Supply test pads (10): power-rail bring-up probes (FC PI5/AI/V5, VTX1/VTX2 V9, V3V3, GND distribution)
   - {ref: TP1,  pos: [38.00, 53.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_fc_plus}
-  # NOTE 2026-05-26: TP2/TP7/TP9 (CH1-side) and TP5 (CH2 mirror) relocated +3-6mm deeper into S1
-  # to clear CH1/CH2 top edge (y=86) for the y86-extended CH zones (PR #134/#135).
-  # Worker reported phase-C cluster collides at y80-86; FET package silk extends to ~y84-86.
-  # New y=90-92 keeps probes inside S1 (BAT pads at y=95 → ≥3mm clearance) and out of FET column reach.
-  # TP7 also shifted x=15.23 → 15.00 (clean grid; still in west FET column x but at y=92 well clear).
-  # TP9 x shifted 25→28 to avoid CH1 east MCU strip x=22-35 at silk extension.
-  - {ref: TP2,  pos: [5.00,  90.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_fc_gnd}
+  # NOTE 2026-05-26 [PR #136]: TP2/TP7/TP9 (CH1-side) and TP5 (CH2 mirror) relocated deeper into S1
+  # to clear y86-extended CH zones (PR #134/#135). Worker reported phase-C collides at y80-86.
+  # NOTE 2026-05-26 [Sai-catch follow-up]: TP2 marginal 1mm from H1 (5,95) — shifted x=5→2 to gain 1.4mm KO margin.
+  # All TPs now ≥4mm from H1-H4 corner mounts (verified by audit_mount_hole_keepout.py G_M7).
+  - {ref: TP2,  pos: [2.00,  89.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_fc_gnd}
   - {ref: TP3,  pos: [47.00, 74.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_pi5_plus}
   - {ref: TP5,  pos: [72.00, 92.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_ai_plus}
   - {ref: TP7,  pos: [15.00, 92.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: pad_v9_vtx1_plus}

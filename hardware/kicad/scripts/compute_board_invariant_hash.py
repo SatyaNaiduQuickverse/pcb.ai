@@ -55,12 +55,22 @@ def main():
     target_md5_m = re.search(r'target\.h md5:\s*`([a-f0-9]+)`', text)
     target_md5 = target_md5_m.group(1) if target_md5_m else ""
 
+    # Read mount holes from YAML (was hardcoded — caused drift when H5-H8 added/removed without hash update)
+    import yaml as _yaml
+    _LOCK = _os.path.normpath(_os.path.join(_SCRIPT_DIR, "..", "..", "..", "docs", "PHASE4V3_LOCKFILES", "mechanical_anchors.yaml"))
+    try:
+        _ld = _yaml.safe_load(open(_LOCK))
+        _mh = sorted([[float(m['pos'][0]), float(m['pos'][1])]
+                      for m in _ld.get('mount_holes', [])])
+    except Exception:
+        _mh = [[5,5],[95,5],[5,95],[95,95]]  # fallback
+
     # Canonical form
     canonical = {
         "outline_mm": [100, 100],
         "stackup": ["F.Cu", "In1.Cu_GND", "In2.Cu", "In3.Cu_VMOTOR",
                     "In4.Cu", "In5.Cu_GND", "In6.Cu", "B.Cu"],
-        "mount_holes_M3": [[5,5],[95,5],[5,95],[95,95]],
+        "mount_holes_M3": _mh,
         "symmetry_pairs": [["CH1","CH2","mirror_X_50"], ["CH3","CH4","mirror_X_50"]],
         "target_md5": target_md5,
         "zones": zones,
