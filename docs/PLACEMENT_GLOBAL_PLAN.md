@@ -171,24 +171,66 @@ ADC (per channel):
 
 ---
 
-## 8. Sim-driven placement loop
+## 8. Sim-driven placement + subsystem development flow (Sai 2026-05-26 lock)
 
-After parametric placement generates initial coords, sim-loop refines:
+Per Sai 2026-05-26: *"now we run physics sims.. iterate what seems off.. think in middle of each structurally.. then we do routing then sims again.. then we do next subsystem which won't be ch2/3/4 — it would be something that comes beside.. simulate the 2 adjacent subsystems together iterate.. when we get to ch2/3/4 you can use symmetry and copy.. make sure our entire plan is included in audits without skipping and with honesty"*.
+
+### 7-step flow per subsystem (BLOCKING — enforced by G_FLOW1)
 
 ```
-Loop per subsystem (CH1 example):
-  1. Initial parametric coords → place
-  2. Run analytical proxy sims (fast):
-     - Loop area = HS-LS XY distance + via count → target ≤ 2 nH
-     - Decoupling distance = each IC to nearest cap → target ≤ 3 mm
-     - HPWL = sum of net half-perimeter wire lengths → minimize
-  3. If proxy sims out of spec → adjust placement parameters
-  4. After proxy converged → run FEM sim (Elmer thermal, openEMS EMI)
-  5. If FEM sim out of spec → adjust + back to step 3
-  6. After FEM converged → push placement PR
+1. PLACE (parametric engine → bring_selected pipeline)
+2. AUDIT placement-class (65+ gates → must be 55+/56)
+3. PHYSICS SIM placement-only — Elmer thermal + openEMS EMI + ngspice PI + loop-L extract
+   Per R-sim-execution (locked rule): result file + mtime > input + extract output + literal exec command
+4. STRUCTURAL RETHINK if sim fails (not band-aid — re-place from step 1)
+5. ROUTE (subsystem-only, eagle's-eye I/O ports honored, leave others for next PR)
+6. AUDIT routing-class + RE-SIM with actual traces
+7. PR + master review + merge
 ```
 
-Implementation: `place_with_sim_loop.py` (worker-PR-B). For now (CH1 REDO): worker runs proxy sims manually + adjusts. FEM gate runs in master review.
+### Subsystem order — ADJACENT-FIRST (Sai 2026-05-26)
+
+```
+Stages 0-2: S6 + TIER1 + CH1 (✅ DONE post b612c5f)
+
+Post-CH1:
+  Stage 3 — S5 BEC east strip (directly east of CH1; feeds via S5→CH1 port)
+  Stage 4 — S2 bulk caps (feeds CH1 via S2→CH1 port)
+  Stage 5 — S3 supervisor+Hall (feeds S2)
+  Stage 6 — S1 battery input (feeds S3) — full south power chain operational
+  Stage 7 — CH2 = mirror_X(CH1) pure transform + route mirror
+  Stage 8 — CH3 = mirror_Y(CH2)
+  Stage 9 — CH4 = mirror_X(CH3)
+  Stage 10 — final integrate + cumulative sim
+```
+
+Master may fast-track Stage 7-9 (CH2/3/4 immediate after CH1 routes) per Sai's explicit option if routing-mirror efficiency wins.
+
+### Adjacent integration sim (BLOCKING — enforced by G_FLOW2)
+
+Each subsystem PR after the first MUST include a sim that pairs the new subsystem with its already-placed neighbors per the table below:
+
+| New | Paired-with | Sim purpose |
+|---|---|---|
+| S5 | CH1 | BEC switching ↔ MCU ADC noise, BEC thermal coupling to FETs |
+| S2 | S5 + CH1 | Bulk cap ESL with FET commutation, thermal at FET cluster |
+| S3 | S2 | Hall ADC response to bulk cap ripple, +BATT path thermal |
+| S1 | S3 | TVS clamping, NTC thermal response, full power chain integrity |
+| CH2 | CH1 | Cross-channel EMI (BEMF crosstalk, SW-node radiation) |
+| CH3 | CH2 | Mirror_Y validation |
+| CH4 | CH3 | Mirror_X validation + 4-channel cumulative |
+| Stage 10 | ALL | Cumulative thermal at 4×100A burst, full EMI, full DRC |
+
+### I/O port discipline (BLOCKING — enforced by G_FLOW3)
+
+A subsystem PR may only ROUTE pins to its ALLOCATED I/O ports per the BOARD_INVARIANTS.md I/O ports table. Other pins are LEFT for next-subsystem PRs.
+
+### Honesty markers (Sai-mandated, all BLOCKING)
+
+- A subsystem PR that skips step 3 placement-only sim → BANNED
+- A subsystem PR that claims step 7 without step 5+6 routing audit + post-route sim → BANNED
+- A subsystem PR for adjacent subsystem N+1 without integration sim with N → BANNED
+- All 3 enforced by G_FLOW1-3 + R-sim-execution.
 
 ---
 

@@ -88,7 +88,7 @@ class BoardParameters:
     hs_fet_row_pitch:   float = 13.0          # = motor_pad_pitch_y (KEY: enables 12mm symmetric pitch + same SW-node via grid)
 
     # ─── HS↔LS pairing (half-bridge cell, BILATERAL) ───
-    ls_fet_y_offset_from_hs: float = 3.6      # LS sits 3.6mm below HS on B.Cu (drain-aligned, collision-free, 0mm XY for vias)
+    ls_fet_y_offset_from_hs: float = 5.4      # LS sits 3.6mm below HS on B.Cu (drain-aligned, collision-free, 0mm XY for vias)
     ls_fet_x_offset_from_hs: float = 0.0      # directly under for via cluster
 
     # ─── sub-zone within each CH (Option 2 from G_PP6 dispatch) ───
