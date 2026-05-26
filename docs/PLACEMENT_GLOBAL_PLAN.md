@@ -411,3 +411,19 @@ free-space; plane-referenced ~0.15 nH post-route).
 Worker picks fastest per context; STEP 5 PR artifact should be option 2 output (reproducible by any future auditor).
 
 **See also**: OQ-018 (Phase 7 full-board DRC infrastructure decision), [[feedback-pi-bounded-subsystem-scope]].
+
+
+### Stage 2 — CH1 STEP 4 ROUTE — addendum 2026-05-26 #3 (R19 scope clarification)
+
+**Class lesson** (worker-caught 2026-05-26): R19 / OQ-017 pure-transform of per-phase ROUTING was geometrically infeasible at 13mm phase pitch — per-phase routing footprint spans ~15mm in y, so +13mm translation overlaps neighbor band by ~2mm (+273 real inter-phase clearance flags). Worker escalated rather than band-aiding ([[feedback-redo-not-mitigate]]).
+
+**Master adjudication (OQ-019)**: R19 binding re-scoped — required is **commutation loop symmetry** (FET cluster + via cluster + GND-return-discipline = identical per-phase loop-L), NOT identical SW-trace polylines.
+
+Physics: 3-phase BLDC is sequential (not paralleled phases) → no current-sharing concern. BEMF blanking tolerates per-phase switching delta. EMI compliance measured CUMULATIVELY at integrate stage. Trade-off: widening pitch 13→15mm costs 12% board area for sub-percent EMI/sim gain. Physics doesn't require it.
+
+**Updated R19/OQ-017 binding for STEP 6 verification**:
+- ✓ Measured loop-L per phase ≤2nH (geometric, from routed v6)
+- ✓ A=B=C to 4 decimals AT FET-CLUSTER COMMUTATION LOOP (not at outward traces)
+- ✗ Identical SW-trace polylines NOT required (re-scoped)
+
+**CH2/3/4 implication**: cross-channel mirror symmetry (CH2 = mirror_X(CH1) etc) UNCHANGED. Per-phase intra-channel asymmetric routing is acceptable on each channel individually.
