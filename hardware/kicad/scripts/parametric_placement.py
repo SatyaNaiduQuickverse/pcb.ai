@@ -83,7 +83,7 @@ class BoardParameters:
     ch_zone_height_mm:  float = 39.0    # was 36; (3 phases × 13mm pitch = 39mm exact fit)
 
     # ─── HS-FET placement (parametric, NOT hardcoded) ───
-    hs_fet_x_offset_from_motor: float = -7.5  # HS x = motor_pad_x ± offset (west: motor-6.6, east: motor+6.6)
+    hs_fet_x_offset_from_motor: float = -6.6  # HS x = motor_pad_x ± offset (west: motor-6.6, east: motor+6.6)
     hs_fet_y0_offset_from_motor: float = 0.0  # HS y aligned with motor pad y (SW-node trace short)
     hs_fet_row_pitch:   float = 12.0          # = motor_pad_pitch_y (KEY: enables 12mm symmetric pitch + same SW-node via grid)
 
@@ -262,6 +262,60 @@ def ch_ic_anchors(channel: str, p: BoardParameters) -> Dict[str, Tuple[float, fl
 def mechanical_anchors_from_lockfile() -> dict:
     """Read mount holes, fiducials, connectors, TPs from the YAML SSoT."""
     return yaml.safe_load(open(LOCKFILE))
+
+
+def placement_forbidden_zones(p: BoardParameters) -> List[Tuple[float,float,float,float,str]]:
+    """Returns ALL rectangles where component placement is forbidden.
+
+    Used by worker's bring_selected spiral search to reject candidate positions.
+    Includes:
+      - 8 routing channel reserves (4 per-channel FET/east + 4 inter-sub-zone)
+      - Mount-hole keep-out squares (axis-aligned approximation of M3 KO circle)
+      - Highway corridors (TLM/AUX, +BATT spine, BEMF centerline, S2 to CHn feeds)
+    """
+    out = []
+
+    # Per-channel routing channels (8 = 4 FET/east + 4 MOTOR/LOGIC)
+    south_y_min, south_y_max = 50.0, p.height_mm - p.s1_height_mm
+    north_y_min, north_y_max = p.s6_height_mm, 50.0
+    rch_pairs = [
+        (p.routing_channel_x_start, p.routing_channel_x_end),
+        (p.east_strip_motor_x_end, p.east_strip_logic_x_start),
+    ]
+    for x0, x1 in rch_pairs:
+        out.append((x0, south_y_min, x1, south_y_max, "CH1 west routing channel"))
+        out.append((mirror_x(x1, p), south_y_min, mirror_x(x0, p), south_y_max, "CH2 east routing channel"))
+        out.append((x0, north_y_min, x1, north_y_max, "CH4 west routing channel"))
+        out.append((mirror_x(x1, p), north_y_min, mirror_x(x0, p), north_y_max, "CH3 east routing channel"))
+
+    # Mount-hole KO squares (conservative axis-aligned box around circle)
+    d = yaml.safe_load(open(LOCKFILE))
+    for mh in d.get('mount_holes', []):
+        cx, cy = mh['pos']
+        r = mh.get('keepout_radius_mm', 4.0)
+        out.append((cx-r, cy-r, cx+r, cy+r, f"{mh['ref']} mount-hole KO"))
+
+    # Highway corridors (placement-forbidden — routing-only)
+    out.append((10.0, p.tlm_aux_y_start, 90.0, p.tlm_aux_y_end, "TLM/AUX bus strip"))
+    out.append((p.batt_spine_x_start, 0, p.batt_spine_x_end, 50, "+BATT/GND spine"))
+    out.append((p.bemf_centerline_x_start, 50, p.bemf_centerline_x_end, 82, "BEMF return centerline"))
+
+    return out
+
+
+def is_position_forbidden(x: float, y: float, body_w: float, body_h: float,
+                          p: BoardParameters) -> Tuple[bool, str]:
+    """Helper for worker's spiral search.
+
+    Returns (forbidden, reason). True if the body bbox at (x,y) with size
+    (body_w × body_h) intersects ANY forbidden zone.
+    """
+    bx0 = x - body_w/2; by0 = y - body_h/2
+    bx1 = x + body_w/2; by1 = y + body_h/2
+    for fx0, fy0, fx1, fy1, name in placement_forbidden_zones(p):
+        if bx0 < fx1 and bx1 > fx0 and by0 < fy1 and by1 > fy0:
+            return (True, name)
+    return (False, "")
 
 
 def headroom_per_zone(zone_bbox: Tuple[float,float,float,float],
