@@ -38,12 +38,12 @@ sim at Stage 10 (OQ-007) validates the strategy.
 
 | Subsystem | x_min | y_min | x_max | y_max | Function |
 |---|---|---|---|---|---|
-| S1 battery input | 0 | 86 | 100 | 100 | bottom edge — BAT_P/BAT_N solder pads + NTC + TVS (swapped 2026-05-26 with S6 per Sai mechanical revamp) |
-| S6 connectors | 0 | 0 | 100 | 14 | top edge — J14 FC + J12 AUX + USBLC6 ESDs + LDO (swapped 2026-05-26 with S1) |
-| CH1 (channel A) | 0 | 50 | 35 | 86 | NW — FET cluster + DRV + MCU + INA |
-| CH2 (channel B) | 65 | 50 | 100 | 86 | NE — mirror_X(CH1) |
-| CH3 (channel C) | 65 | 14 | 100 | 50 | SE — mirror_X(CH4) |
-| CH4 (channel D) | 0 | 14 | 35 | 50 | SW — bottom-pair template |
+| S1 battery input | 0 | 89 | 100 | 100 | bottom edge — BAT_P/BAT_N solder pads + NTC + TVS (swapped 2026-05-26 with S6 per Sai mechanical revamp) |
+| S6 connectors | 0 | 0 | 100 | 11 | top edge — J14 FC + J12 AUX + USBLC6 ESDs + LDO (swapped 2026-05-26 with S1) |
+| CH1 (channel A) | 0 | 50 | 35 | 89 | NW — FET cluster + DRV + MCU + INA |
+| CH2 (channel B) | 65 | 50 | 100 | 89 | NE — mirror_X(CH1) |
+| CH3 (channel C) | 65 | 11 | 100 | 50 | SE — mirror_X(CH4) |
+| CH4 (channel D) | 0 | 11 | 35 | 50 | SW — bottom-pair template |
 | S2 bulk caps | 40 | 40 | 60 | 60 | central — 4× polymer caps low-ESR |
 | S3 supervisor+Hall | 40 | 18 | 60 | 40 | central spine — TL431 + Hall |
 | S5 BEC east strip (CH1 feed) | 35 | 50 | 40 | 82 | east of CH1 — feeds CH1 BEC rails |
@@ -90,7 +90,7 @@ coords.
 |---|---|---|---|---|---|
 | +BATT/GND spine | 48 | 0 | 52 | 50 | 280A continuous power path top→center |
 | BEMF return centerline | 47 | 50 | 53 | 82 | 4× BEMF signals to central MCU |
-| TLM/AUX bus strip | 0 | 11.5 | 100 | 13.5 | inter-subsystem digital — relocated 2026-05-26 from (0,80,100,82) which collided with y86-extended CH south zones; now inside S6 (y0-14) just below J14/J12 connectors at y=5; full-width restored after dropping cinematic mounts H5-H8 (audit_highway_keepout.py G_M8 verifies no mount-hole intersection) |
+| TLM/AUX bus strip | 0 | 8.5 | 100 | 10.0 | inter-subsystem digital — relocated 2026-05-26 from (0,80,100,82) which collided with y86-extended CH south zones; now inside S6 (y0-14) just below J14/J12 connectors at y=5; full-width restored after dropping cinematic mounts H5-H8 (audit_highway_keepout.py G_M8 verifies no mount-hole intersection) |
 | S2 to CH1 +VMOTOR feed | 30 | 47 | 36 | 53 | low-loop radial CH1 (6×6mm corner) |
 | S2 to CH2 +VMOTOR feed | 64 | 47 | 70 | 53 | low-loop radial CH2 |
 | S2 to CH3 +VMOTOR feed | 64 | 47 | 70 | 53 | low-loop radial CH3 (mirror) |
@@ -104,7 +104,7 @@ Run `python3 hardware/kicad/scripts/compute_board_invariant_hash.py --write`
 to compute and write.
 
 ```
-BOARD_INVARIANT_HASH = 5f4455633d5f6185372c7b21ac18357842cde8b44f8cf9652881034109624b7c
+BOARD_INVARIANT_HASH = e3941caa74ef1fefc3c1ca98b112d09e815141d89f10472dde5a2d0d18a9636a
 ```
 
 ## Audit gate

@@ -598,6 +598,31 @@ else
   echo "[G_PP16_channel_bom_match] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
 fi
 
+# ──────────────────────────────────────────────────────────────────
+# G_PP19/G_PP20/G_PP21: parametric placement framework (Sai 2026-05-26)
+# - G_PP19 routing channel reserve (don't pack out routing space)
+# - G_PP20 zone density budget (≤55% comp, ≥20% routing, ≥25% headroom)
+# - G_PP21 parametric compliance (no hardcoded coords; consume parametric_placement.py)
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_routing_channels.py" ]]; then
+  run_gate "G_PP19_routing_channel_reserve" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_routing_channels.py' '$BOARD'" true
+else
+  echo "[G_PP19_routing_channel_reserve] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+if [[ -f "$SCRIPTS/audit_zone_density.py" ]]; then
+  run_gate "G_PP20_zone_density" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_zone_density.py' '$BOARD'" true
+else
+  echo "[G_PP20_zone_density] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+if [[ -f "$SCRIPTS/audit_parametric_compliance.py" ]]; then
+  run_gate "G_PP21_parametric_compliance" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_parametric_compliance.py'" true
+else
+  echo "[G_PP21_parametric_compliance] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
 # G_M5: assembly drawing completeness (CPL/BOM/rotation/value)
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_assembly_drawing.py" ]]; then
