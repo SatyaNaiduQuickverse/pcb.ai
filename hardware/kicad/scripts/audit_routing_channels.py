@@ -66,6 +66,12 @@ def main():
         pos = fp.GetPosition()
         if pos.x/mm < -5 or pos.x/mm > 200 or pos.y/mm < -5 or pos.y/mm > 200:
             continue  # parked
+        # Exempt mechanical anchors (TPs, fiducials, mount holes) — they're pre-placed
+        # in lockfile, not placer-chosen. Routing channel reserve is for the PLACER
+        # to honor; mechanical anchors are static input.
+        if ref.startswith(('TP', 'FID', 'H')) and ref[1:].isdigit() or \
+           ref.startswith(('TP', 'FID')) and any(c.isdigit() for c in ref):
+            continue
         bbox = fp.GetBoundingBox(False, False)
         bx0 = bbox.GetX()/mm; by0 = bbox.GetY()/mm
         bx1 = bx0 + bbox.GetWidth()/mm; by1 = by0 + bbox.GetHeight()/mm
