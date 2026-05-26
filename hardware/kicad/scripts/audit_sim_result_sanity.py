@@ -76,6 +76,31 @@ def main():
                     if not (lo <= v <= hi):
                         fails.append(f"  [FAIL] {e.relative_to(sim_root)}: {key}={v} outside plausible [{lo},{hi}]")
 
+    # ── ADDITIONAL: scan Elmer .dat files for any temperature > 700 K (427°C) ──
+    # Per OQ-015 (Sai 2026-05-26): Phase-4-v2 thermal template silently produced
+    # 36,236°C due to mesh BC + W/kg vs W/m³ heat-source unit confusion. The
+    # analytical extract per_fet_table.txt was fine; the raw Elmer .dat carried
+    # the lie. G_S3 was only scanning extract output — missed the .dat lie.
+    # Now: scan .dat columns for any value > 700 K (well above any PCB material
+    # rating; FR4 Tg ~135°C, melts ~270°C). Catches density-factor class bugs.
+    KELVIN_MAX_PLAUSIBLE = 700.0  # 427°C
+    for datfile in sim_root.rglob("*global.dat"):
+        names_file = datfile.parent / (datfile.name + ".names")
+        if not names_file.exists(): continue
+        names_text = open(names_file).read()
+        if "temperature" not in names_text.lower(): continue
+        try:
+            for line in open(datfile):
+                parts = line.split()
+                for v_str in parts:
+                    try: v = float(v_str)
+                    except ValueError: continue
+                    if v > KELVIN_MAX_PLAUSIBLE:
+                        fails.append(f"  [FAIL] {datfile.relative_to(sim_root)}: temperature value {v:.1f} K (= {v-273.15:.0f}°C) "
+                                   f"> {KELVIN_MAX_PLAUSIBLE} K plausibility — likely density-factor/unit/BC bug (OQ-015 class)")
+                        break
+        except Exception: continue
+
     if fails:
         for f in fails[:10]: print(f)
         print(f"\nRESULT: FAIL — {len(fails)} implausible sim values")
