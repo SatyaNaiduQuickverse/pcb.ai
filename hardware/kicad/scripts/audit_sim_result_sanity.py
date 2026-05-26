@@ -85,6 +85,12 @@ def main():
     # rating; FR4 Tg ~135°C, melts ~270°C). Catches density-factor class bugs.
     KELVIN_MAX_PLAUSIBLE = 700.0  # 427°C
     for datfile in sim_root.rglob("*global.dat"):
+        # KNOWN_BAD.md sentinel — directory documents a known-bad artifact
+        # retained for lesson-preservation (e.g. OQ-015 v2 thermal density-
+        # factor bug). NOT a silent skip — sentinel is the exemption record.
+        if (datfile.parent / "KNOWN_BAD.md").exists():
+            print(f"  [SKIP] {datfile.relative_to(sim_root)}: KNOWN_BAD.md sentinel present (documented bad artifact, retained for lesson)")
+            continue
         names_file = datfile.parent / (datfile.name + ".names")
         if not names_file.exists(): continue
         names_text = open(names_file).read()

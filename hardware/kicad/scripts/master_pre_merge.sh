@@ -648,6 +648,17 @@ else
   echo "[G_FLOW1_2_3_subsystem_flow] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
 fi
 
+# R-sim-provenance (2026-05-26 worker-caught CH1-placement-only-in-/tmp/ class):
+# sim inputs/results MUST cite git-tracked paths; /tmp/ + ~/Desktop + ~/scratch
+# + /home/<user>/local/*.kicad_pcb FAIL. Solver TOOL paths (ElmerSolver,
+# openems libs) are exempt — only DATA artifact paths gate reproducibility.
+if [[ -f "$SCRIPTS/audit_sim_artifact_provenance.py" ]]; then
+  run_gate "R_sim_provenance" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_sim_artifact_provenance.py'" true
+else
+  echo "[R_sim_provenance] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
 # G_M5: assembly drawing completeness (CPL/BOM/rotation/value)
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_assembly_drawing.py" ]]; then
