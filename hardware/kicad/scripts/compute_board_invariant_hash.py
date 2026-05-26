@@ -17,7 +17,10 @@ import re
 import sys
 
 
-DOC = "/home/novatics64/escworker/pcb.ai/docs/BOARD_INVARIANTS.md"
+# DOC path: auto-locate relative to script (works in any worktree)
+import os as _os
+_SCRIPT_DIR = _os.path.dirname(_os.path.abspath(__file__))
+DOC = _os.path.normpath(_os.path.join(_SCRIPT_DIR, "..", "..", "..", "docs", "BOARD_INVARIANTS.md"))
 
 
 def parse_md_table(text, header_match):
@@ -41,7 +44,8 @@ def parse_md_table(text, header_match):
 
 
 def main():
-    with open(DOC) as f:
+    doc = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else DOC
+    with open(doc) as f:
         text = f.read()
 
     # Extract structured data
