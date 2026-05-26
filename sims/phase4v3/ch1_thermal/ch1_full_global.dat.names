@@ -1,0 +1,10 @@
+Metadata for SaveScalars file: ./ch1_full_global.dat
+Elmer version: 26.2
+Elmer revision: 03313b2
+Elmer compilation date: 2026-05-20
+Solver input file: ch1_full_100a.sif
+File started at: 2026/05/26 10:46:41
+ 
+Variables in columns of matrix: 
+   1: max: temperature
+   2: min: temperature

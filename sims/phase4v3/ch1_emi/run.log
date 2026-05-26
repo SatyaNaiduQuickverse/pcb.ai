@@ -1,0 +1,293 @@
+openEMS - fixed number of threads: 4
+openEMS - verbose level 3
+ ---------------------------------------------------------------------- 
+ | openEMS 64bit -- version 655947c
+ | (C) 2010-2025 Thorsten Liebig <thorsten.liebig@gmx.de>  GPL license
+ ---------------------------------------------------------------------- 
+	Used external libraries:
+		CSXCAD -- Version: 32847a2
+		hdf5   -- Version: 1.14.5
+		          compiled against: HDF5 library version: 1.14.5
+		tinyxml -- compiled against: 2.6.2
+		fparser
+		boost  -- compiled against: 1_83
+		vtk -- Version: 9.3.0
+		       compiled against: 9.3.0
+
+-----------------------------------------
+ Property #0 Type: "Material" Name: "FR4"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #0 Type: "Box" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (-3,-10,-0.15) P2: (13,17.77,0)
+  Transform: None
+  Start: -3,-10,-0.15
+  Stop : 13,17.77,0
+ --- Material --- 
+  Isotropy	: 1
+  Epsilon_R	: 4.3, 1, 1
+  Kappa		: 0.00246396, 0, 0
+  Mue_R		: 1, 1, 1
+  Sigma		: 0, 0, 0
+  Density	: 0
+-----------------------------------------
+ Property #1 Type: "Metal" Name: "sw_trace"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #1 Type: "Box" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (0,-0.5,0) P2: (10,0.5,0)
+  Transform: None
+  Start: 0,-0.5,0
+  Stop : 10,0.5,0
+-----------------------------------------
+ Property #2 Type: "Metal" Name: "bemf_trace"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #2 Type: "Box" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (0,7.645,0) P2: (10,7.895,0)
+  Transform: None
+  Start: 0,7.645,0
+  Stop : 10,7.895,0
+-----------------------------------------
+ Property #3 Type: "LumpedElement" Name: "port_resist_1"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #3 Type: "Box" Priority: 5
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (0,-0.5,-0.15) P2: (0,0.5,0)
+  Transform: None
+  Start: 0,-0.5,-0.15
+  Stop : 0,0.5,0
+ --- Lumped Element Properties --- 
+  Direction: 2
+  Resistance: 50
+  Capacity: nan
+  Inductance: nan
+  Type: Parallel
+-----------------------------------------
+ Property #4 Type: "Excitation" Name: "port_excite_1"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #4 Type: "Box" Priority: 5
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (0,-0.5,-0.15) P2: (0,0.5,0)
+  Transform: None
+  Start: 0,-0.5,-0.15
+  Stop : 0,0.5,0
+ --- Excitation Properties --- 
+  Type: 0
+  Enabled: 1
+  Active directions: 1,1,1
+  Excitation	: 0, 0, -1
+  Weighting	: 1, 1, 1
+  Propagation Dir: 0, 0, 0
+  Delay		: 0
+-----------------------------------------
+ Property #5 Type: "ProbeBox" Name: "port_ut_1"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #5 Type: "Box" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (0,0,-0.15) P2: (0,0,0)
+  Transform: None
+  Start: 0,0,-0.15
+  Stop : 0,0,0
+-----------------------------------------
+ Property #6 Type: "ProbeBox" Name: "port_it_1"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #6 Type: "Box" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (0,-0.5,-0.075) P2: (0,0.5,-0.075)
+  Transform: None
+  Start: 0,-0.5,-0.075
+  Stop : 0,0.5,-0.075
+-----------------------------------------
+ Property #7 Type: "LumpedElement" Name: "R_agg_far"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #7 Type: "Box" Priority: 5
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (10,-0.5,-0.15) P2: (10,0.5,0)
+  Transform: None
+  Start: 10,-0.5,-0.15
+  Stop : 10,0.5,0
+ --- Lumped Element Properties --- 
+  Direction: 2
+  Resistance: 50
+  Capacity: nan
+  Inductance: nan
+  Type: Parallel
+-----------------------------------------
+ Property #8 Type: "LumpedElement" Name: "port_resist_2"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #8 Type: "Box" Priority: 5
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (0,7.645,-0.15) P2: (0,7.895,0)
+  Transform: None
+  Start: 0,7.645,-0.15
+  Stop : 0,7.895,0
+ --- Lumped Element Properties --- 
+  Direction: 2
+  Resistance: 50
+  Capacity: nan
+  Inductance: nan
+  Type: Parallel
+-----------------------------------------
+ Property #9 Type: "ProbeBox" Name: "port_ut_2"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #9 Type: "Box" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (0,7.77,-0.15) P2: (0,7.77,0)
+  Transform: None
+  Start: 0,7.77,-0.15
+  Stop : 0,7.77,0
+-----------------------------------------
+ Property #10 Type: "ProbeBox" Name: "port_it_2"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #10 Type: "Box" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (0,7.645,-0.075) P2: (0,7.895,-0.075)
+  Transform: None
+  Start: 0,7.645,-0.075
+  Stop : 0,7.895,-0.075
+-----------------------------------------
+ Property #11 Type: "LumpedElement" Name: "R_vic_far"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #11 Type: "Box" Priority: 5
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (10,7.645,-0.15) P2: (10,7.895,0)
+  Transform: None
+  Start: 10,7.645,-0.15
+  Stop : 10,7.895,0
+ --- Lumped Element Properties --- 
+  Direction: 2
+  Resistance: 50
+  Capacity: nan
+  Inductance: nan
+  Type: Parallel
+-----------------------------------------
+ Property #12 Type: "DumpBox" Name: "emi_Et"
+ Primitive Count 	: 1
+ Coordinate System 	: 0
+  -- Primitives: --
+  Primitive #12 Type: "Box" Priority: 0
+  Primary Coord-System: 2 Mesh Coord-System: 0 Bound-Box Coord-System: 0
+  Bounding Box (Valid: 1): P1: (-3,-10,0.075) P2: (13,17.77,0.075)
+  Transform: None
+  Start: -3,-10,0.075
+  Stop : 13,17.77,0.075
+ --- Dump Properties --- 
+  DumpType: 0  DumpMode: 2 FileType: 0 MultiGridLevel: 0
+Create FDTD operator (compressed SSE + multi-threading)
+Multithreaded operator using 4 threads.
+Operator::InitDataStorage(): Storing epsR material data...
+Operator::InitDataStorage(): Storing muR material data...
+Operator::CalcTimestep_Var3: Smallest timestep (1.48207e-13s) found at position: 2 : 7;62;4
+Compressing the FDTD operator... this may take a while...
+------- Stat: FDTD Operator -------
+Dimensions		: 36x94x49 = 165816 Cells (0.165816 MCells)
+Size of Operator	: 7959168 Byte (7.59045 MiB) 
+Size of Field-Data	: 3979584 Byte (3.79523 MiB) 
+-----------------------------------
+Background materials (epsR/mueR/kappa/sigma): 1/1/0/0
+-----------------------------------
+Number of PEC edges	: 28
+in x direction		: 0
+in y direction		: 28
+in z direction		: 0
+-----------------------------------
+Timestep (s)		: 1.48207e-13
+Timestep method name	: Rennings_2
+Nyquist criteria (TS)	: 3373
+Nyquist criteria (s)	: 4.99901e-10
+-----------------------------------
+SSE compression enabled	: yes
+Unique SSE operators	: 6296
+-----------------------------------
+-----------------------------------
+--- Excitation Extension ---
+Voltage excitations	: 24	 (0, 0, 24)
+Current excitations	: 0	 (0, 0, 0)
+Excitation Length (TS)	: 39856
+Excitation Length (s)	: 5.90692e-09
+--- Mur ABC Extension ---
+ Active direction	: z at line: 48
+--- Uniaxial PML Extension ---
+ PML range		: [0,0,0] to [8,93,48]
+ Grading function	: " -log(1e-6)*log(2.5)/(2*dl*Z*(pow(2.5,W/dl)-1)) * pow(2.5, D/dl) "
+--- Uniaxial PML Extension ---
+ PML range		: [27,0,0] to [35,93,48]
+ Grading function	: " -log(1e-6)*log(2.5)/(2*dl*Z*(pow(2.5,W/dl)-1)) * pow(2.5, D/dl) "
+--- Uniaxial PML Extension ---
+ PML range		: [9,0,0] to [26,8,48]
+ Grading function	: " -log(1e-6)*log(2.5)/(2*dl*Z*(pow(2.5,W/dl)-1)) * pow(2.5, D/dl) "
+--- Uniaxial PML Extension ---
+ PML range		: [9,85,0] to [26,93,48]
+ Grading function	: " -log(1e-6)*log(2.5)/(2*dl*Z*(pow(2.5,W/dl)-1)) * pow(2.5, D/dl) "
+--- Series/Parallel Lumped RLC load ---
+Active cells		: 0
+-----------------------------------
+Creation time for operator: 1.05774 s
+FDTD simulation size: 36x94x49 --> 165816 FDTD cells 
+FDTD timestep is: 1.48207e-13 s; Nyquist rate: 3373 timesteps @1.0002e+09 Hz
+openEMS::SetupFDTD: Warning, the timestep seems to be very small --> long simulation. Check your mesh!?
+Excitation signal length is: 39856 timesteps (5.90692e-09s)
+Max. number of timesteps: 300000 ( --> 7.5271 * Excitation signal length)
+Create FDTD engine (compressed SSE + multi-threading)
+---  Engine::SortExtensionByPriority() ---
+ #0: Uniaxial PML Extension (1000000)
+ #1: Uniaxial PML Extension (1000000)
+ #2: Uniaxial PML Extension (1000000)
+ #3: Uniaxial PML Extension (1000000)
+ #4: Series/Parallel Lumped RLC load (0)
+ #5: Mur ABC Extension (0)
+ #6: Excitation Extension (-1000)
+Multithreaded engine using 4 threads. Utilization: (9;9;9;9)
+Setting up processing...
+Operator::CleanupMaterialStorage(): Delete epsR material data...
+Operator::CleanupMaterialStorage(): Delete mueR material data...
+Warning: Unused primitive (type: Box) detected in property: sw_trace!
+Warning: Unused primitive (type: Box) detected in property: bemf_trace!
+Running FDTD engine... this may take a while... grab a cup of coffee?!?
+[@        7s] Timestep:          843 || Speed:   19.2 MC/s (8.644e-03 s/TS) || Energy: ~1.47e-19 (- 0.00dB)
+[@       14s] Timestep:         1686 || Speed:   18.6 MC/s (8.927e-03 s/TS) || Energy: ~1.32e-18 (- 0.00dB)
+[@       22s] Timestep:         2529 || Speed:   17.3 MC/s (9.606e-03 s/TS) || Energy: ~5.30e-18 (- 0.00dB)
+[@       30s] Timestep:         3372 || Speed:   18.3 MC/s (9.081e-03 s/TS) || Energy: ~1.15e-17 (- 0.00dB)
+[@       38s] Timestep:         4215 || Speed:   18.3 MC/s (9.053e-03 s/TS) || Energy: ~8.76e-18 (- 1.17dB)
+[@       45s] Timestep:         5058 || Speed:   19.1 MC/s (8.679e-03 s/TS) || Energy: ~8.81e-18 (- 1.15dB)
+[@       52s] Timestep:         5901 || Speed:   19.2 MC/s (8.629e-03 s/TS) || Energy: ~3.52e-16 (- 0.00dB)
+[@       59s] Timestep:         6744 || Speed:   19.7 MC/s (8.409e-03 s/TS) || Energy: ~2.80e-15 (- 0.00dB)
+[@     1m07s] Timestep:         7587 || Speed:   19.0 MC/s (8.707e-03 s/TS) || Energy: ~1.25e-14 (- 0.00dB)
+[@     1m14s] Timestep:         8430 || Speed:   19.2 MC/s (8.653e-03 s/TS) || Energy: ~3.80e-14 (- 0.00dB)
+[@     1m21s] Timestep:         9273 || Speed:   19.1 MC/s (8.697e-03 s/TS) || Energy: ~8.20e-14 (- 0.00dB)
+[@     1m29s] Timestep:        10116 || Speed:   18.9 MC/s (8.784e-03 s/TS) || Energy: ~1.20e-13 (- 0.00dB)
+[@     1m36s] Timestep:        10959 || Speed:   18.7 MC/s (8.871e-03 s/TS) || Energy: ~9.53e-14 (- 1.00dB)
+[@     1m44s] Timestep:        11802 || Speed:   18.5 MC/s (8.940e-03 s/TS) || Energy: ~1.90e-14 (- 7.99dB)
+[@     1m51s] Timestep:        12645 || Speed:   18.6 MC/s (8.897e-03 s/TS) || Energy: ~2.30e-13 (- 0.00dB)
+[@     1m59s] Timestep:        13488 || Speed:   18.5 MC/s (8.964e-03 s/TS) || Energy: ~1.65e-12 (- 0.00dB)
+[@     2m07s] Timestep:        14331 || Speed:   17.8 MC/s (9.309e-03 s/TS) || Energy: ~5.51e-12 (- 0.00dB)
+[@     2m14s] Timestep:        15174 || Speed:   18.4 MC/s (9.030e-03 s/TS) || Energy: ~1.22e-11 (- 0.00dB)
+[@     2m22s] Timestep:        16017 || Speed:   18.6 MC/s (8.922e-03 s/TS) || Energy: ~1.97e-11 (- 0.00dB)
+[@     2m29s] Timestep:        16860 || Speed:   19.9 MC/s (8.319e-03 s/TS) || Energy: ~2.39e-11 (- 0.00dB)
+[@     2m36s] Timestep:        17703 || Speed:   20.1 MC/s (8.251e-03 s/TS) || Energy: ~2.10e-11 (- 0.56dB)
+[@     2m43s] Timestep:        18546 || Speed:   20.6 MC/s (8.055e-03 s/TS) || Energy: ~1.22e-11 (- 2.93dB)

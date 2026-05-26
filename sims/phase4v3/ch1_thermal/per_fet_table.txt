@@ -1,0 +1,35 @@
+# CH1 Phase 4-v3 — per-FET junction temperature
+
+Source artifacts: ch1_full.vtu (100A), ch1_full_150A.vtu (150A); VTU max
+cross-checked == SaveScalars ch1_full_global.dat / ch1_full_150A_global.dat.
+T_J = T_substrate(at FET XY surface) + P_FET × R_θJC, R_θJC = 1.0 K/W (BSC014N06NS PDFN-8).
+
+### 100A continuous  (P_FET = 11.1 W, R_θJC = 1.0 K/W, target T_J ≤ 110°C)
+
+| FET | side | XY local (mm) | T_sub (°C) | P_FET (W) | T_J (°C) | margin to 110°C |
+|-----|------|---------------|-----------|-----------|----------|-----------------|
+| Q5 | HS | (8.4,3.0) | 31.48 | 11.1 | 42.58 | +67.42 |
+| Q7 | HS | (8.4,16.0) | 31.48 | 11.1 | 42.58 | +67.42 |
+| Q9 | HS | (8.4,29.0) | 31.48 | 11.1 | 42.58 | +67.42 |
+| Q6 | LS | (8.4,8.4) | 43.55 | 11.1 | 54.65 | +55.35 |
+| Q8 | LS | (8.4,21.4) | 43.55 | 11.1 | 54.65 | +55.35 |
+| Q10 | LS | (8.4,34.4) | 43.55 | 11.1 | 54.65 | +55.35 |
+
+T_J max = 54.65°C at Q8  ->  PASS (target ≤ 110°C)
+
+### 150A burst  (P_FET = 24.1 W, R_θJC = 1.0 K/W, target T_J ≤ 110°C)
+
+| FET | side | XY local (mm) | T_sub (°C) | P_FET (W) | T_J (°C) | margin to 110°C |
+|-----|------|---------------|-----------|-----------|----------|-----------------|
+| Q5 | HS | (8.4,3.0) | 39.05 | 24.1 | 63.15 | +46.85 |
+| Q7 | HS | (8.4,16.0) | 39.05 | 24.1 | 63.15 | +46.85 |
+| Q9 | HS | (8.4,29.0) | 39.05 | 24.1 | 63.15 | +46.85 |
+| Q6 | LS | (8.4,8.4) | 65.18 | 24.1 | 89.28 | +20.72 |
+| Q8 | LS | (8.4,21.4) | 65.18 | 24.1 | 89.28 | +20.72 |
+| Q10 | LS | (8.4,34.4) | 65.18 | 24.1 | 89.28 | +20.72 |
+
+T_J max = 89.28°C at Q10  ->  PASS (target ≤ 110°C)
+
+## Verdict
+- 100A continuous: T_J max = 54.65°C -> PASS
+- 150A burst:      T_J max = 89.28°C -> PASS

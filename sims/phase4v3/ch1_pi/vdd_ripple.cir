@@ -1,0 +1,225 @@
+* ============================================================================
+* Phase 4-v3 CH1 — +3V3 RAIL POWER-INTEGRITY: VDD ripple from FET switching
+* ----------------------------------------------------------------------------
+* Goal: VDD-rail pk-pk ripple at each IC supply pin caused by half-bridge
+*       FET switching transients capacitively coupled + injected through the
+*       shared +3V3 rail impedance.
+*
+* TOPOLOGY:
+*   +3V3 ideal source --[rail L/R segments]--> IC VDD taps along the net.
+*   Each tap:  series short-trace L --> VDD node --> local 100nF decap to GND
+*              (decap = ESL + ESR + C), plus a resistive DC load (IC Idd).
+*   Switching noise: a parasitic-coupling current PULSE train injected into
+*   the rail node nearest the FETs (gate driver J19, ~7mm from all 6 FETs),
+*   24kHz PWM, 40ns edges. Plus a secondary smaller injection at the MCU tap
+*   (next nearest), since SW-node fields couple to multiple traces.
+*
+* TAP ORDER (electrically, from rail head, by placement distance to FETs):
+*   J19 gate driver (closest to FET cluster) -> J18 MCU -> J20/21/22 INAs ->
+*   U3 LM393 comparator -> U4 74LVC1G08 logic.
+*
+* COUPLING-CURRENT DERIVATION (defensible, not tuned):
+*   dV/dt = 25.2V / 40ns = 6.30e8 V/s   (SW node slew during FET edge)
+*   C_coupling (trace-to-SW parasitic) = 3 pF  (midrange of stated 1-5pF;
+*       SW copper pour ~adjacent +3V3 trace over inner-layer ref, few mm run)
+*   I_inj = C_coupling * dV/dt = 3e-12 * 6.30e8 = 1.89 mA peak  (gate-driver tap)
+*   MCU tap secondary coupling: C=1.5pF -> I = 0.945 mA peak (farther trace)
+*   Pulse is bipolar over a switch cycle: +I on rising edge, -I on falling edge.
+*   We model each PWM period (41.667us) with a +pulse (rising) and -pulse
+*   (falling) of 40ns width via a PWL train.
+* ============================================================================
+
+* ---- Ideal +3V3 supply (BEC/LDO output, treated as stiff at this node) ----
+V3V3   vrail0  0   DC 3.3
+
+* ---- Rail parasitic segments between successive IC taps -------------------
+* Each segment: ~10mohm + ~5nH (a few mm of inner-layer +3V3 routing).
+* Segment to first (gate driver) tap from supply:
+Rseg1  vrail0  rJ19   10m
+Lseg1  rJ19    nJ19h  5n
+* Segment J19 -> J18 (MCU):
+Rseg2  rJ19    rJ18   10m
+Lseg2  rJ18    nJ18h  5n
+* Segment J18 -> INA cluster (J20/21/22 share a stub; lump as one INA tap node
+*   for the rail then fan to 3 local decaps):
+Rseg3  rJ18    rINA   10m
+Lseg3  rINA    nINAh  5n
+* Segment INA -> U3 LM393:
+Rseg4  rINA    rU3    10m
+Lseg4  rU3     nU3h   5n
+* Segment U3 -> U4 74LVC1G08:
+Rseg5  rU3     rU4    10m
+Lseg5  rU4     nU4h   5n
+
+* ============================================================================
+* PER-IC TAP:  short trace L (1-2nH) -> VDD node -> local 100nF decap + load
+* Decap model:  C(100n) in series with ESL(0.5nH) and ESR(30mohm) to GND.
+* Load: resistive Idd. (DC bias resistor sized to nominal current.)
+* ============================================================================
+
+* ---- J19 DRV8300 gate driver (closest to FETs; main injection here) ----
+Ltr_J19  nJ19h  vJ19   1.5n
+* local decap
+Resl_J19 vJ19   xJ19   30m
+Lesl_J19 xJ19   yJ19   0.5n
+Cdec_J19 yJ19   0      100n
+* load ~5 mA (driver logic/bias)  R = 3.3/5m = 660
+Rld_J19  vJ19   0      660
+
+* ---- J18 MCU AT32F421 (second injection, smaller coupling) ----
+Ltr_J18  nJ18h  vJ18   1.5n
+Resl_J18 vJ18   xJ18   30m
+Lesl_J18 xJ18   yJ18   0.5n
+Cdec_J18 yJ18   0      100n
+* MCU Idd ~20 mA  R = 3.3/20m = 165
+Rld_J18  vJ18   0      165
+
+* ---- INA cluster J20/J21/J22 (3 INA186, each own 100nF) ----
+* Rail tap nINAh feeds three local decaps + loads through tiny trace L each.
+Ltr_J20  nINAh  vJ20   1.5n
+Resl_J20 vJ20   xJ20   30m
+Lesl_J20 xJ20   yJ20   0.5n
+Cdec_J20 yJ20   0      100n
+Rld_J20  vJ20   0      2200
+* J21
+Ltr_J21  nINAh  vJ21   1.8n
+Resl_J21 vJ21   xJ21   30m
+Lesl_J21 xJ21   yJ21   0.5n
+Cdec_J21 yJ21   0      100n
+Rld_J21  vJ21   0      2200
+* J22
+Ltr_J22  nINAh  vJ22   2.0n
+Resl_J22 vJ22   xJ22   30m
+Lesl_J22 xJ22   yJ22   0.5n
+Cdec_J22 yJ22   0      100n
+Rld_J22  vJ22   0      2200
+
+* ---- U3 LM393 comparator ----
+Ltr_U3   nU3h   vU3    1.5n
+Resl_U3  vU3    xU3    30m
+Lesl_U3  xU3    yU3    0.5n
+Cdec_U3  yU3    0      100n
+* LM393 Idd ~1 mA  R = 3.3/1m = 3300
+Rld_U3   vU3    0      3300
+
+* ---- U4 74LVC1G08 single AND gate ----
+Ltr_U4   nU4h   vU4    1.5n
+Resl_U4  vU4    xU4    30m
+Lesl_U4  xU4    yU4    0.5n
+Cdec_U4  yU4    0      100n
+* 74LVC1G08 quiescent ~10uA, switching avg ~0.5mA  R = 3.3/0.5m = 6600
+Rld_U4   vU4    0      6600
+
+* ============================================================================
+* SWITCHING-NOISE INJECTION (current sources into rail tap nodes)
+* PWM period = 1/24kHz = 41.667us. Edges 40ns. Bipolar: +Ipk on SW rising,
+* -Ipk on SW falling (D=50% -> falling at mid-period 20.83us).
+* PWL train over 5 periods (covers the ~200us run). Pulses are 40ns triangles
+* approximating the coupled displacement current C*dV/dt.
+* ============================================================================
+
+* --- Gate-driver-tap injection: Ipk = 1.89 mA, bipolar ---
+* Pattern per period T=41.667u: rise edge at t0 (+1.89m over 40ns then back),
+*   fall edge at t0+20.833u (-1.89m over 40ns then back).
+Iinj_J19 0 rJ19 PWL(
++ 0        0
++ 0.000005 0
++ 0.00000502  1.89m
++ 0.00000504  0
++ 0.000025833 0
++ 0.000025853 -1.89m
++ 0.000025873 0
++ 0.000046667 0
++ 0.000046687  1.89m
++ 0.000046707  0
++ 0.0000675   0
++ 0.00006752 -1.89m
++ 0.00006754  0
++ 0.000088334 0
++ 0.000088354 1.89m
++ 0.000088374 0
++ 0.000109167 0
++ 0.000109187 -1.89m
++ 0.000109207 0
++ 0.000130001 0
++ 0.000130021 1.89m
++ 0.000130041 0
++ 0.000150834 0
++ 0.000150854 -1.89m
++ 0.000150874 0
++ 0.000171668 0
++ 0.000171688 1.89m
++ 0.000171708 0
++ 0.000192501 0
++ 0.000192521 -1.89m
++ 0.000192541 0
++ 0.0002 0 )
+
+* --- MCU-tap injection: Ipk = 0.945 mA, bipolar (farther trace, C=1.5pF) ---
+Iinj_J18 0 rJ18 PWL(
++ 0        0
++ 0.000005 0
++ 0.00000502  0.945m
++ 0.00000504  0
++ 0.000025833 0
++ 0.000025853 -0.945m
++ 0.000025873 0
++ 0.000046667 0
++ 0.000046687  0.945m
++ 0.000046707  0
++ 0.0000675   0
++ 0.00006752 -0.945m
++ 0.00006754  0
++ 0.000088334 0
++ 0.000088354 0.945m
++ 0.000088374 0
++ 0.000109167 0
++ 0.000109187 -0.945m
++ 0.000109207 0
++ 0.000130001 0
++ 0.000130021 0.945m
++ 0.000130041 0
++ 0.000150834 0
++ 0.000150854 -0.945m
++ 0.000150874 0
++ 0.000171668 0
++ 0.000171688 0.945m
++ 0.000171708 0
++ 0.000192501 0
++ 0.000192521 -0.945m
++ 0.000192541 0
++ 0.0002 0 )
+
+* ============================================================================
+.SAVE V(vJ19) V(vJ18) V(vJ20) V(vJ21) V(vJ22) V(vU3) V(vU4)
+.TRAN 2n 200u 0 2n UIC
+
+.control
+run
+set wr_vecnames
+set wr_singlescale
+wrdata vdd_ripple.dat V(vJ19) V(vJ18) V(vJ20) V(vJ21) V(vJ22) V(vU3) V(vU4)
+write vdd_ripple.raw V(vJ19) V(vJ18) V(vJ20) V(vJ21) V(vJ22) V(vU3) V(vU4)
+* in-deck pk-pk meas (steady cycles 50u..200u, skip first cycle startup)
+meas tran v19max MAX V(vJ19) FROM=50u TO=200u
+meas tran v19min MIN V(vJ19) FROM=50u TO=200u
+let pp19 = (v19max - v19min)*1000
+print pp19
+meas tran v18max MAX V(vJ18) FROM=50u TO=200u
+meas tran v18min MIN V(vJ18) FROM=50u TO=200u
+let pp18 = (v18max - v18min)*1000
+print pp18
+meas tran v20max MAX V(vJ20) FROM=50u TO=200u
+meas tran v20min MIN V(vJ20) FROM=50u TO=200u
+let pp20 = (v20max - v20min)*1000
+print pp20
+meas tran vu3max MAX V(vU3) FROM=50u TO=200u
+meas tran vu3min MIN V(vU3) FROM=50u TO=200u
+let ppu3 = (vu3max - vu3min)*1000
+print ppu3
+meas tran vu4max MAX V(vU4) FROM=50u TO=200u
+meas tran vu4min MIN V(vU4) FROM=50u TO=200u
+let ppu4 = (vu4max - vu4min)*1000
+print ppu4
+.endc
+.end

@@ -1,0 +1,17 @@
+# +3V3 VDD Ripple — Phase 4-v3 CH1 PI
+
+Steady-state window: t > 50 us (UIC charge-up excluded). Target <= 50 mV pk-pk.
+
+| IC | VDD node | ripple_mVpp | margin to 50mV |
+|----|----------|-------------|----------------|
+| J19 DRV8300 gate driver | vJ19 | 0.0297 | +49.970 mV |
+| J18 MCU AT32F421 | vJ18 | 0.0369 | +49.963 mV |
+| J20 INA186 #1 | vJ20 | 0.0224 | +49.978 mV |
+| J21 INA186 #2 | vJ21 | 0.0235 | +49.977 mV |
+| J22 INA186 #3 | vJ22 | 0.0242 | +49.976 mV |
+| U3 LM393 comparator | vU3 | 0.0320 | +49.968 mV |
+| U4 74LVC1G08 logic | vU4 | 0.0311 | +49.969 mV |
+
+**Worst case:** J18 MCU AT32F421 = 0.0369 mVpp  (+49.963 mV margin)
+
+**VERDICT: PASS** (worst 0.0369 mVpp vs 50 mVpp target)
