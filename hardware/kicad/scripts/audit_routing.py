@@ -34,9 +34,15 @@ import pcbnew
 from collections import defaultdict
 
 if len(sys.argv) < 2:
-    sys.exit("usage: audit_routing.py <board.kicad_pcb>")
+    sys.exit("usage: audit_routing.py <board.kicad_pcb> [--subsystem CH1|CH2|...]")
 
 PCB_PATH = sys.argv[1]
+# Optional --subsystem CH1 limits unrouted-net check to that subsystem's nets
+# (per §8 subsystem-scope PR methodology — CH2/3/4 nets are expected unrouted
+# when only CH1 STEP 4 PR is open).
+SUBSYSTEM_SCOPE = None
+if "--subsystem" in sys.argv:
+    SUBSYSTEM_SCOPE = sys.argv[sys.argv.index("--subsystem") + 1]
 board = pcbnew.LoadBoard(PCB_PATH)
 fails = []
 warns = []
@@ -312,6 +318,57 @@ def check_track_width():
 
 
 # ---------- check 6: plane island ----------
+def check_unrouted_nets():
+    """Check #7 (added 2026-05-26 per worker R22 catch class lesson):
+    every multi-pad net MUST have ≥1 track segment OR be plane-served.
+    Plane-served nets (GND, +VMOTOR, +V*, +3V3*) use copper pour — no
+    track requirement. All other multi-pad nets need ≥1 track.
+
+    Class lesson: worker's GetEdges() ratsnest API silently returned 0-open
+    on a board with 6 genuinely-unrouted nets (GLB/GLC gate, OTP_TRIP_N,
+    PWM_INHA/INHC/INLB). API claimed success without doing the work
+    — sibling of [[reference-sim-claimed-not-executed]]. Track-count
+    cross-check catches it regardless of API behavior.
+
+    Defense in depth — independent metric, not trusting single API result."""
+    # Plane-served net prefixes — use copper pour, no track requirement
+    PLANE_SERVED_NET_RE = re.compile(r"^(GND|BATGND|\+VMOTOR|VMOTOR|\+V|\+3V3|\+5V|V_BUCK|V5_FC|V3V3A|VDDA?)$|^(/.+_PWR_)")
+    # Build pad-count + track-count per net
+    net_pad_count = defaultdict(int)
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            n = pad.GetNetname()
+            if n and not n.lower().startswith("unconnected") and not n.startswith("Net-"):
+                net_pad_count[n] += 1
+    net_track_count = defaultdict(int)
+    for t in board.GetTracks():
+        n = t.GetNetname()
+        if n:
+            net_track_count[n] += 1
+    unrouted = []
+    skipped_out_of_scope = 0
+    for net, pcount in net_pad_count.items():
+        if pcount < 2:
+            continue  # single-pad nets (NC, isolated TP) — not a route requirement
+        if PLANE_SERVED_NET_RE.match(net):
+            continue  # plane pour, no tracks needed
+        # Subsystem-scope filter: if --subsystem CHn provided, only check
+        # nets whose name ends with that suffix (per §8 subsystem-PR methodology).
+        if SUBSYSTEM_SCOPE:
+            if not net.endswith("_" + SUBSYSTEM_SCOPE):
+                skipped_out_of_scope += 1
+                continue
+        if net_track_count.get(net, 0) == 0:
+            unrouted.append((net, pcount))
+    if SUBSYSTEM_SCOPE and skipped_out_of_scope:
+        info.append(f"UNROUTED: scoped to {SUBSYSTEM_SCOPE} nets only; {skipped_out_of_scope} non-{SUBSYSTEM_SCOPE} multi-pad nets skipped (per §8 subsystem-PR scope)")
+    if unrouted:
+        for net, pcount in unrouted[:20]:
+            fails.append(f"UNROUTED: net '{net}' has {pcount} pads but 0 tracks — net not routed")
+        if len(unrouted) > 20:
+            fails.append(f"UNROUTED: ... and {len(unrouted) - 20} more unrouted nets")
+
+
 def check_plane_island():
     """Each inner plane (In1/In3/In5) should have one connected copper region.
     Detect isolated islands by checking zone connectivity.
@@ -341,6 +398,7 @@ check_via_density()
 check_diff_pair_balance()
 check_track_width()
 check_plane_island()
+check_unrouted_nets()
 
 print(f"=== Routing compliance audit: {os.path.basename(PCB_PATH)} ===")
 total_tracks = sum(1 for t in board.GetTracks() if not isinstance(t, pcbnew.PCB_VIA))
@@ -366,4 +424,4 @@ if fails:
         print(f"  {line}")
     sys.exit(1)
 
-print("PASS — all 6 routing-compliance checks clean")
+print("PASS — all 7 routing-compliance checks clean")
