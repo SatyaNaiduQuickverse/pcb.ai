@@ -502,3 +502,57 @@ Codified by: [[feedback-pre-placement-visual-decision]] (memory) + this §8 adde
 - Skipping the §8 #4 visual verification before commit
 
 Codified by: [[feedback-move-the-obstacle-per-net-targeted]] (memory) + this §8 addendum #5. Reference source: http://100.81.21.121:8765/static/techniques.html (novapcb routing-techniques Point 2 / Rule 20).
+
+
+### Stage 3 — S5 BEC east strip (DISPATCH 2026-05-26, post-CH1-STEP-7-GUI)
+
+**Dispatch context**: per §8 adjacent-first ordering after CH1. S5 BEC east strip feeds CH1 via S5→CH1 port at (35, 65) [2mm wide]. Mirror analogs at (65,65)/(65,35)/(35,35) for CH2/3/4 inherit S5 east strip pattern.
+
+**Subsystem zone (locked per BOARD_INVARIANTS)**:
+- S5 BEC east strip (CH1 feed): **x=35-40, y=50-82** (5mm × 32mm)
+- HARD east edge x=40 (boundary with x=47-53 BEMF highway)
+
+**Components (5× buck + LDO + LC filters)**:
+- 5 buck converters delivering: +V5_FC (FC connector), +V5 (driver supply), +V9 (gate-driver high-side bootstrap supply), +3V3 (MCU/digital), +3V3A (analog clean)
+- LDO for +3V3A clean (if applicable per Phase 2d-redo)
+- LC filters per rail (inductor + caps)
+
+**7-step flow (binding per §8)**:
+
+**STEP 1 PLACE**: codify in parametric_placement.py (new BoardParameters fields if needed). Constraints:
+- Each buck switching node ≥15mm from S3 Hall (Sai-locked BILATERAL §40 — BEC switching noise vs Hall ADC drift)
+- Each buck ≥10mm from FET cluster (bec_to_fet_min_mm — BEC switching vs HS/LS commutation intermodulation)
+- LC filter ordering: inductor close to buck SW node → output cap close to subsystem output port
+- Place feedback divider close to buck FB pin (R25-equivalent)
+- 5 bucks distributed along 32mm y-extent (spacing ~6mm per buck)
+
+**STEP 2 AUDIT**: run full 58-gate master suite. Subsystem-scope where applicable (--subsystem S5). Specific gates of interest:
+- G_PP22 — n/a (S5 is not per-phase × 3 cluster type; single-instance buck per rail)
+- audit_layout_compliance — zone-constrained
+- audit_decoupling — bucks have VDD pins needing ≤3mm caps
+- audit_no_passive_island — feedback divider proximity
+- audit_per_phase_cluster_uniformity — n/a
+- audit_thermal_proximity — bucks dissipate, check ≥10mm from FETs
+- audit_sim_artifact_provenance + audit_sim_execution
+
+**STEP 3 SIMS (per sim-execution-gate 4-point proof)**:
+1. **Elmer thermal**: each buck dissipates ~0.5-1.5W at full load; 5 bucks × ~5W total → mesh + Joule heating + ambient BC; T_J ≤105°C per buck; **Stage 10 full-board re-run mandatory** (OQ-015 carry-forward)
+2. **ngspice PI** per output rail: ripple ≤50mV pk-pk at switching frequency (typically 1-2MHz for these bucks). Each rail (+V5_FC, +V5, +V9, +3V3, +3V3A) measured.
+3. **openEMS EMI**: buck switching nodes (SW pin) radiation — measure dB(uV/m) at quasi-3m or model E-field. CE/FCC envelope. Place-stage CONDITIONAL per OQ-016 (post-route binding).
+4. **Loop-L (buck SW loop)**: per buck SW node → inductor → output cap → GND return; target ≤5nH per loop (looser than CH1's ≤2nH since lower currents). Analytical OK; post-route geometric required for STEP 6.
+
+**STEP 4 ROUTE**: subsystem-only. Constraints inheriting from CH1 lessons:
+- Buck SW nodes on F.Cu (plane-ref In1.Cu GND, d=0.10mm per OQ-014 stackup lock)
+- High-current rails (+V5/+V9/+3V3) ≥0.3mm width (post-PR-#168 pad-entry-neck exemption applies)
+- LC filter inductor — through-hole or DPAK landing
+- Output traces to S5→CH1 port at (35, 65) ≤2mm wide
+
+**STEP 5 AUDIT**: re-run all 58 gates on routed board + check_ch1_clearance-equivalent for S5.
+
+**STEP 6 POST-ROUTE SIMS**: measured loop-L per buck (geometric) + re-run PI + post-route openEMS EMI.
+
+**STEP 7 PR**: per master-gate-checklist. Disclosure: any deviations from existing v2 S5 placement (worker-flag obligation per R-deviation-disclosure).
+
+**Cross-channel mirror inheritance**: S5 east → S5 west (mirror_X) → S5 north (mirror_Y) → S5 south. Re-mirror via existing scripts post-east-strip lock.
+
+**Sai's GUI session for CH1 (when he returns) is INDEPENDENT** of S5 work — S5 placement+routing doesn't depend on CH1's 7 unrouted nets. Worker can start S5 anytime after CH1 STEP 7 PR lands.
