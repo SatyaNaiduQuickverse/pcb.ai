@@ -264,6 +264,21 @@ def mechanical_anchors_from_lockfile() -> dict:
     return yaml.safe_load(open(LOCKFILE))
 
 
+# PERF: placement_forbidden_zones() is called O(10^5) times by worker's
+# bring_selected spiral search. Rebuilding zones each call costs ~38ms
+# (worker caught 2026-05-26 — 38ms × 10^5 = hours → SIGTERM). Module-level
+# memoize keyed on the params subset that affects zones.
+_PFZ_CACHE = {}
+
+def _pfz_key(p):
+    return (p.width_mm, p.height_mm, p.s6_height_mm, p.s1_height_mm,
+            p.routing_channel_x_start, p.routing_channel_x_end,
+            p.east_strip_motor_x_end, p.east_strip_logic_x_start,
+            p.mirror_x_axis, p.tlm_aux_y_start, p.tlm_aux_y_end,
+            p.batt_spine_x_start, p.batt_spine_x_end,
+            p.bemf_centerline_x_start, p.bemf_centerline_x_end)
+
+
 def placement_forbidden_zones(p: BoardParameters) -> List[Tuple[float,float,float,float,str]]:
     """Returns ALL rectangles where component placement is forbidden.
 
@@ -272,7 +287,12 @@ def placement_forbidden_zones(p: BoardParameters) -> List[Tuple[float,float,floa
       - 8 routing channel reserves (4 per-channel FET/east + 4 inter-sub-zone)
       - Mount-hole keep-out squares (axis-aligned approximation of M3 KO circle)
       - Highway corridors (TLM/AUX, +BATT spine, BEMF centerline, S2 to CHn feeds)
+
+    CACHED (module-level, keyed on params hash) — see _PFZ_CACHE.
     """
+    key = _pfz_key(p)
+    if key in _PFZ_CACHE:
+        return _PFZ_CACHE[key]
     out = []
 
     # Per-channel routing channels (8 = 4 FET/east + 4 MOTOR/LOGIC)
@@ -300,6 +320,7 @@ def placement_forbidden_zones(p: BoardParameters) -> List[Tuple[float,float,floa
     out.append((p.batt_spine_x_start, 0, p.batt_spine_x_end, 50, "+BATT/GND spine"))
     out.append((p.bemf_centerline_x_start, 50, p.bemf_centerline_x_end, 82, "BEMF return centerline"))
 
+    _PFZ_CACHE[key] = out
     return out
 
 
