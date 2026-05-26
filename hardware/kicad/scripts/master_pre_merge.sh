@@ -631,6 +631,23 @@ if [[ -f "$SCRIPTS/render_net_connectivity_graph.py" ]]; then
   python3 "$SCRIPTS/render_net_connectivity_graph.py" "$BOARD" 2>&1 | tail -1 || true
 fi
 
+# ──────────────────────────────────────────────────────────────────
+# R-sim-execution (Sai 2026-05-23 locked, wired 2026-05-26): 4-point sim proof
+# G_FLOW1/2/3 (Sai 2026-05-26 lock): 7-step flow + adjacent sim + I/O port discipline
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_sim_execution.py" ]]; then
+  run_gate "R_sim_execution" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_sim_execution.py'" true
+else
+  echo "[R_sim_execution] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+if [[ -f "$SCRIPTS/audit_subsystem_flow.py" ]]; then
+  run_gate "G_FLOW1_2_3_subsystem_flow" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_subsystem_flow.py'" true
+else
+  echo "[G_FLOW1_2_3_subsystem_flow] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
 # G_M5: assembly drawing completeness (CPL/BOM/rotation/value)
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_assembly_drawing.py" ]]; then
