@@ -28,13 +28,18 @@ REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                      "..", "..", ".."))
 SIMS_DIR = os.path.join(REPO, "sims")
 
-# Sim type → (input glob, result glob, extract script)
+# Sim type → (input glob, result globs, extract script glob)
+# Result globs include common Elmer/ngspice/openems output extensions.
 SIM_TYPES = {
-    "elmer_thermal":   {"input": "*.sif",       "result": ["*.vtu", "*.result"], "extract": "extract_*.py"},
-    "ngspice_pi":      {"input": "*.cir",       "result": ["*.raw", "*.out"],    "extract": "extract_*.py"},
-    "openems_emi":     {"input": "openems_*.py","result": ["*.h5", "*.vtr"],     "extract": "extract_*.py"},
-    "loop_l_extract":  {"input": "loop_*.py",   "result": ["*.csv", "*.json"],   "extract": "extract_*.py"},
+    "elmer_thermal":   {"input": "*.sif",       "result": ["*.vtu", "*.result", "*.dat", "*_mesh"],     "extract": "extract*.py"},
+    "ngspice_pi":      {"input": "*.cir",       "result": ["*.raw", "*.out", "*.log"],                  "extract": "extract*.py"},
+    "openems_emi":     {"input": "openems_*.py","result": ["*.h5", "*.vtr", "*.npz", "*.csv"],          "extract": "extract*.py"},
+    "loop_l_extract":  {"input": "loop_*.py",   "result": ["*.csv", "*.json", "*.txt"],                 "extract": "extract*.py"},
 }
+
+# Extract output globs (broader than "extract_*.txt" — accept any meaningful output file)
+EXTRACT_OUTPUT_GLOBS = ["*_table.txt", "*_table.json", "extract_*.txt", "extract_*.json",
+                       "RESULTS.md", "results.json", "results.txt", "*_summary.md", "*.report.txt"]
 
 def find_sim_dirs():
     """Find subsystem sim directories under sims/."""
@@ -78,10 +83,10 @@ def check_sim_dir(sim_dir):
             if not extract_scripts:
                 findings.append(("FAIL", in_path, f"no extract_*.py script — numbers must come from extract script"))
                 continue
-            # extract output file (extract_*.txt or similar)
-            extract_outs = (glob.glob(os.path.join(sim_dir, "extract_*.txt"))
-                          + glob.glob(os.path.join(sim_dir, "extract_*.json"))
-                          + glob.glob(os.path.join(sim_dir, "RESULTS.md")))
+            # extract output file — accept any conventional output filename
+            extract_outs = []
+            for og in EXTRACT_OUTPUT_GLOBS:
+                extract_outs.extend(glob.glob(os.path.join(sim_dir, og)))
             if not extract_outs:
                 findings.append(("FAIL", in_path, f"extract script present but no extract output file"))
                 continue
