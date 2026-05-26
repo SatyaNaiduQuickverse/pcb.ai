@@ -241,3 +241,27 @@ Lockfile updated [invariant-change]. Worker re-runs Stage 0 to land BAT pads.
 - **Question**: Phase 4-v2 thermal baseline was single-side, single-source (FETs only). With S5 BEC on B.Cu directly under MCU + S2 bulk caps on B.Cu under FETs, the multi-layer Stage 10 thermal sim must include all heat sources: FETs (per-channel × 4) + BEC bucks (5 rails, ~0.5W each at 80% efficiency) + LDO + bulk caps (ripple I²R).
 - **Trigger**: Stage 10 Elmer FEM re-run (post all placement done)
 - **Resolution**: build multi-layer Elmer mesh + apply all 4+5+1 = 10 heat sources; verify T_J ≤ 75°C continuous / 90°C burst FoS bounds hold; OQ-007 closes when met.
+
+### OQ-013 — SMBJ33A TVS clamps assigned wrong footprint (SMB part on SMA land)
+
+- **Raised**: 2026-05-26 (worker, CH1 placement density debug; master-confirmed)
+- **Issue**: All 12 per-channel motor-phase TVS clamps (D26/D29/D32 + CH2-4 mirrors
+  D41/44/47, D56/59/62, D71/74/77) are authored in the netlist as
+  `Diode_SMD:D_SMA`. But **SMBJ33A is a DO-214AA (SMB) package** — body ~3.6mm,
+  pad span ~3.0mm. The D_SMA (DO-214AC) land has ~1.8mm pad span — too small;
+  the SMB part will not solder reliably (insufficient pad overlap / tombstone risk).
+  The input clamp **D1** (also SMBJ33A) is correctly on `D_SMB`, confirming D_SMB
+  is the right land.
+- **Root cause**: SKiDL schematic assigned the SMA footprint to the SMBJ33A symbol
+  for the per-channel clamps (D1 was correct, so it's inconsistent authoring).
+- **Why placement surfaced it**: the over-small D_SMA courtyard masked the issue
+  until CH1 density forced exact bbox accounting; the proper D_SMB body is larger
+  and does not fit the per-phase FET cell (this PR relocates the clamps to the
+  B.Cu east MOTOR strip).
+- **Immediate fix (this PR)**: `migrate_footprints.py` value-based correction
+  re-assigns every SMBJ33A from D_SMA → D_SMB at import (same post-import lane as
+  the bulk-cap / motor-pad corrections). Idempotent for D1 (already D_SMB).
+- **Root fix (tracked here)**: correct the footprint assignment in the SKiDL
+  schematic for all SMBJ33A instances, then the migrate correction becomes a no-op.
+- **Blocks**: nothing — migrate correction unblocks CH1. Schematic fix is a
+  netlist-correctness cleanup for the next schematic rev.

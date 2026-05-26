@@ -36,6 +36,17 @@ import lockfile
 import roster as roster_mod
 from place_subsystem_ch1_v3 import reset_text_to_body
 
+# G_PP19: reserved inter-cluster routing channels are SSoT'd by the parametric
+# engine. Compute the zone list ONCE here — is_position_forbidden() rebuilds it on
+# every call (~38ms), which the spiral invokes O(10^5) times → hours. Guarded so
+# the placer still runs against pre-#142 boards/checkouts.
+try:
+    from parametric_placement import (placement_forbidden_zones as _forbidden_zones_fn,
+                                       BoardParameters as _BoardParameters)
+    _FORBIDDEN_ZONES = _forbidden_zones_fn(_BoardParameters())
+except Exception:  # engine absent → skip channel reservation (audit still gates)
+    _FORBIDDEN_ZONES = None
+
 # Footprint corrections (motor pads → ESCMotorPad, bulk caps → CP_Elec_8x6.2) are
 # applied once by migrate_footprints.py BEFORE the bring stages — an in-place
 # pcbnew swap, no kinet2pcb re-import (master+Sai 2026-05-25, path ii). Kept out
@@ -288,6 +299,11 @@ def role_place(board, refs, zones, roles, extra_keepouts=()):
         cx, cy = (bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2
         if not any(z[0] <= cx <= z[2] and z[1] <= cy <= z[3] for z in zones):
             return False
+        # G_PP19: no body may intrude the reserved inter-cluster routing channels.
+        if _FORBIDDEN_ZONES is not None:
+            for fx0, fy0, fx1, fy1, _name in _FORBIDDEN_ZONES:
+                if bbox[0] < fx1 and bbox[2] > fx0 and bbox[1] < fy1 and bbox[3] > fy0:
+                    return False
         # G17 board-edge keepout: the whole footprint (pad bbox) ≥ EDGE_MARGIN in.
         if (bbox[0] < ox0 + EDGE_MARGIN or bbox[1] < oy0 + EDGE_MARGIN or
                 bbox[2] > ox1 - EDGE_MARGIN or bbox[3] > oy1 - EDGE_MARGIN):
@@ -458,7 +474,8 @@ def role_place(board, refs, zones, roles, extra_keepouts=()):
             # rather than stretching its trace. Loop-members (FET/shunt) never flip.
             # Decoupling caps must stay on their IC's side (R25/G4) — never overflow.
             # Loop members (FET/shunt) never flip. Other aux passives may overflow.
-            can_flip = not rec.get("loop_member") and rec.get("role") != "decoupling"
+            can_flip = (not rec.get("loop_member") and rec.get("role") != "decoupling"
+                        and rec.get("relation") != "motor-clamp")
             sides = [wb, not wb] if can_flip else [wb]
             # HS FET sits to the LEFT of its motor pad (not on/above it): the B.Cu
             # LS FET stacked beneath must clear the pad's both-layer thru-via field
@@ -470,6 +487,11 @@ def role_place(board, refs, zones, roles, extra_keepouts=()):
             for side in sides:
                 if fp.IsFlipped() != side:
                     fp.Flip(fp.GetPosition(), False)
+                # Explicit orientation (e.g. TVS clamp rotated 90° so the 7.4mm body
+                # fits the ~5mm east MOTOR strip vertically) — set after the flip so
+                # the spiral's body bbox reflects it.
+                if rec.get("rotation") is not None:
+                    fp.SetOrientationDegrees(float(rec["rotation"]))
                 for dx, dy in _spiral_offsets(search_r):
                     if is_hs and not (dx <= -6.5 and abs(dy) <= 3.0):
                         continue
@@ -522,7 +544,11 @@ def role_place(board, refs, zones, roles, extra_keepouts=()):
     return errs
 
 
-_PHASE_NET_RE = re.compile(r'(?:MOTOR_|SHUNT_|BEMF_|CSA_)([ABC])(?:_|\b)|(?:GH|GL|BST)([ABC])\b')
+# NOTE \b fails after a phase letter that is followed by "_" (e.g. GHA_CH1), since
+# "_" is a word char so there is no A|_ boundary — use (?:_|\b) like the first
+# alternative, else gate-drive Rs (GHx/GLx/BSTx) never phase-tag and scatter into
+# rest_role, crowding the per-phase FET cell.
+_PHASE_NET_RE = re.compile(r'(?:MOTOR_|SHUNT_|BEMF_|CSA_)([ABC])(?:_|\b)|(?:GH|GL|BST)([ABC])(?:_|\b)')
 
 
 def _phase_of(fp):
@@ -722,8 +748,9 @@ def bring_selected(board, subsystem):
         if set(mp) == {"A", "B", "C"}:
             def _wphase(r):
                 rec = rmap.get(r, {})
-                if rec.get("role") == "cluster-anchor" or rec.get("relation") == "ina-near-shunt":
-                    return None
+                if rec.get("role") == "cluster-anchor" or rec.get("relation") in (
+                        "ina-near-shunt", "motor-clamp", "sense-clamp"):
+                    return None  # placed with the east cluster, not the west phase cell
                 fp = present.get(r)
                 return _phase_of(fp) if fp else None
             pa = [r for r in role_placed if _wphase(r) == "A"]

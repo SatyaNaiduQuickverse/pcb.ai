@@ -199,7 +199,26 @@ def derive():
             for rf, pn in net_nodes.get(net, []):
                 if rf in roles and rf != ref:
                     cands.append(rf)
-        parent = min(cands, key=lambda rf: (len(rpn[rf]), rf.startswith("C"))) if cands else None
+        # Motor-phase clamp/snubber diode: a diode whose ONLY signal net is a
+        # MOTOR_x switching node (the other pin is GND/power) is owned by the
+        # half-bridge that drives that node — anchor it to the LS FET it clamps
+        # across (B.Cu side has room), NOT a sibling 2-pin gate-bypass diode.
+        # Fewest-pins would otherwise chain D26->D24 etc. into the crowded gate
+        # cluster (no slot). Gate-bypass diodes (2 signal nets: gate N$x + MOTOR)
+        # are excluded by the len==1 test and fall through to their gate-R.
+        sig_nets = {net for net in rpn[ref].values() if net and net not in POWER}
+        mclamp_fet = None
+        if (ref.startswith("D") and len(sig_nets) == 1
+                and re.match(r"MOTOR_[ABC]_CH\d+$", next(iter(sig_nets)))):
+            mnet = next(iter(sig_nets))
+            qs = [rf for rf, pn in net_nodes.get(mnet, [])
+                  if rf in roles and rf != ref and rf.startswith("Q")]
+            ls = [q for q in qs if roles[q].get("layer") == "B.Cu"]
+            mclamp_fet = (ls or qs)[0] if qs else None
+        if mclamp_fet is not None:
+            parent = mclamp_fet
+        else:
+            parent = min(cands, key=lambda rf: (len(rpn[rf]), rf.startswith("C"))) if cands else None
         if parent is None:
             # Pure-power cap (bulk/bypass on a power rail, no signal net): anchor to
             # a roled component sharing its NON-GND power net, preferring a FET on

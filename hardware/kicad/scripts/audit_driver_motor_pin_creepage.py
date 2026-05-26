@@ -80,7 +80,10 @@ def main():
                 continue
             if MOTOR_DOMAIN_RE.match(op[5]):         # same SW domain → no rule
                 continue
-            if not (mp[4] & op[4]).any():            # different copper layers
+            # Shared copper layer? (LSET & LSET isn't SWIG-wrapped in this pcbnew;
+            # test F.Cu/B.Cu membership instead — covers SMD single-layer + thru-hole.)
+            if not ((mp[4].Contains(pcbnew.F_Cu) and op[4].Contains(pcbnew.F_Cu))
+                    or (mp[4].Contains(pcbnew.B_Cu) and op[4].Contains(pcbnew.B_Cu))):
                 continue
             d = gap(mp, op)
             if d < CREEP_MM:

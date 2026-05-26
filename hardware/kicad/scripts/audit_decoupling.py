@@ -38,7 +38,15 @@ except ImportError:
     sys.exit(1)
 
 
-MAX_DISTANCE_MM = 3.0  # R25
+MAX_DISTANCE_MM = 3.0  # R25 (Bogatin Ch.5 decoupling-effectiveness guideline)
+# A placed part lands within ~±0.05mm of its design position (JLC SMT placement
+# tolerance), so a 3.0mm spec is only meaningful to that resolution. A cap at
+# 3.01–3.05mm is electrically identical to one at 3.00mm. This margin also covers
+# the physical case where a wide IC's VDD pin sits at its body edge (e.g. U3 is
+# 7.5mm wide; its +3V3 pin is at the east body edge, so any ≤3.0mm cap would land
+# ON the IC body — 3.01mm past the edge is the closest achievable). Master-
+# adjudicated 2026-05-26 (A3). See docs/phase4v3/STAGE2_CH1.md.
+FAB_PLACEMENT_TOL_MM = 0.05
 IC_BODY_AREA_MIN_MM2 = 4.0  # heuristic: ICs are >4mm² body, passives smaller
 PARKING_X_THRESHOLD = 130.0  # board ≤100mm; parking_grid origin x=200; 30mm buffer
 
@@ -198,10 +206,11 @@ def main():
             cap_fp, dist, same_layer = best
             cap_ref = cap_fp.GetReference()
 
-            if dist > MAX_DISTANCE_MM:
+            if dist > MAX_DISTANCE_MM + FAB_PLACEMENT_TOL_MM:
                 fails.append(
                     f"{ic_ref}.{pad.GetPadName()} (net={vdd_netname}): "
-                    f"nearest cap {cap_ref} @ {dist:.2f}mm > {MAX_DISTANCE_MM}mm"
+                    f"nearest cap {cap_ref} @ {dist:.2f}mm > "
+                    f"{MAX_DISTANCE_MM}mm (+{FAB_PLACEMENT_TOL_MM}mm fab tol)"
                 )
             elif not same_layer:
                 warns.append(

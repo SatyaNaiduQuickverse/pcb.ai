@@ -545,6 +545,18 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G_PP10: gate-driver MOTOR-pin (SW-node, 27V) ↔ non-MOTOR logic-pad creepage
+# (worker + master option-1, 2026-05-26). The always-on BLOCKING gate behind the
+# placer's driver_keepouts; catches CH2/3/4 mirror regressions too.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_driver_motor_pin_creepage.py" ]]; then
+  run_gate "G_PP10_driver_motor_creepage" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_driver_motor_pin_creepage.py' '$BOARD' $STAGED_MODE" true
+else
+  echo "[G_PP10_driver_motor_creepage] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G_LEGACY_VERIFY_PLACEMENT: Phase 4-v1 Task #47 placement verifier
 # Belt-and-suspenders alongside G_PP11.
 # ──────────────────────────────────────────────────────────────────

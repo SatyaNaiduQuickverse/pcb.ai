@@ -259,10 +259,13 @@ def check_highway_reservation(inv, board, exclusion_margin_mm=0.5):
     # qualifies for same-net exemption.
     highway_net_map = {
         "+BATT/GND spine": ["+BATT", "BATGND", "GND"],
-        "S2 to CH1 +VMOTOR feed": ["+VMOTOR", "VMOTOR_CH1"],
-        "S2 to CH2 +VMOTOR feed": ["+VMOTOR", "VMOTOR_CH2"],
-        "S2 to CH3 +VMOTOR feed": ["+VMOTOR", "VMOTOR_CH3"],
-        "S2 to CH4 +VMOTOR feed": ["+VMOTOR", "VMOTOR_CH4"],
+        # The motor rail is the shared net "VMOTOR_CH" (no channel digit — the FET
+        # drains + bypass caps across all channels share it), so every VMOTOR feed
+        # corridor exempts it. "VMOTOR_CH" is a prefix of any future VMOTOR_CHn too.
+        "S2 to CH1 +VMOTOR feed": ["+VMOTOR", "VMOTOR_CH"],
+        "S2 to CH2 +VMOTOR feed": ["+VMOTOR", "VMOTOR_CH"],
+        "S2 to CH3 +VMOTOR feed": ["+VMOTOR", "VMOTOR_CH"],
+        "S2 to CH4 +VMOTOR feed": ["+VMOTOR", "VMOTOR_CH"],
         "BEMF return centerline": ["GND", "BEMF_"],
         "TLM/AUX bus strip": ["TLM_", "AUX_", "DShot_", "KILL_"],
     }

@@ -228,7 +228,17 @@ def check_symmetry(items, board_h=None, board_w=None):
     # 2026-05-26). The LS FET sits drain-aligned ~3.6mm below its HS for the
     # option-a SW-node via (collision-free; exact-under causes real clamp
     # overlaps), so all-6-FET Y-values read as 6 rows — the 3 PHASES are the 3
-    # HS-FET rows (F.Cu) at 12mm. Filter to F-side FETs.
+    # HS-FET rows (F.Cu). The HS FETs anchor to the motor pads, so the expected
+    # phase pitch == motor_pad_pitch_y (13mm post-Option-A #140) — read it from
+    # the parametric engine SSoT, never hardcode (was 12mm, stale after #140).
+    # NOTE: the engine's separate hs_fet_row_pitch=12.0 is stale/unused (ch_fet_
+    # anchors generates rows at motor_pad_pitch_y) — flagged to master.
+    try:
+        from parametric_placement import BoardParameters as _BP
+        _exp_pitch = _BP().motor_pad_pitch_y
+    except Exception:
+        _exp_pitch = 13.0
+    # Filter to F-side FETs.
     fets_hs = {ref: (d["x"], d["y"]) for ref, d in items.items()
                if ref.startswith("Q") and ref[1:].isdigit()
                and 5 <= int(ref[1:]) <= 28 and d["side"] == "F"}
@@ -244,8 +254,8 @@ def check_symmetry(items, board_h=None, board_w=None):
             continue
         deltas = [ys[i + 1] - ys[i] for i in range(len(ys) - 1)]
         for d in deltas:
-            if abs(d - 12.0) > 0.5:
-                fails.append(f"SYMMETRY: {name} HS-FET row pitch {d:.2f}mm (expected 12.00mm)")
+            if abs(d - _exp_pitch) > 0.5:
+                fails.append(f"SYMMETRY: {name} HS-FET row pitch {d:.2f}mm (expected {_exp_pitch:.2f}mm)")
                 break
     # Cross-channel mirror: CH1 vs CH2 about X=board_w/2
     for r1 in ch1:
@@ -343,11 +353,17 @@ COMPARATOR_VALUE_RE = re.compile(
     r"^(LM393|LM339|LM319|LM193|LM2901|LM2903|TL3221|TLV3201|TLV3202|MCP6541)",
     re.IGNORECASE,
 )
+# L8b (master-adjudicated 2026-05-26): single-gate logic (74-series 1G in
+# SOT-353/SC-70, e.g. 74LVC1G08) draw µA-class transient current — board-plane
+# +3V3 decoupling is sufficient, same physical justification as the L8 comparator
+# exemption. No local 100nF required (and they sit at the dense zone edge where a
+# ≤3mm same-side cap can't physically fit).
+SINGLE_GATE_LOGIC_RE = re.compile(r"^74[A-Z]+1G\d", re.IGNORECASE)
 
 
 def _is_comparator_class(fp):
     val = fp.GetValue() or ""
-    return bool(COMPARATOR_VALUE_RE.match(val))
+    return bool(COMPARATOR_VALUE_RE.match(val) or SINGLE_GATE_LOGIC_RE.match(val))
 
 
 def check_decoupling(items):
@@ -368,8 +384,22 @@ def check_decoupling(items):
         if fp is not None and _is_comparator_class(fp):
             comparator_exempt += 1
             continue
+        # VDD-net filter (master-approved G5a 2026-05-26): a decoupling cap must
+        # share the IC's VDD/VCC net — a cap on a different power rail (e.g. a
+        # VMOTOR bypass that merely sits nearby) is NOT this IC's decoupling and
+        # must not be counted (it was triggering false R25-same-side fails).
+        ic_vdd = {p.GetNetname() for p in fp.Pads()
+                  if _is_power_net(p.GetNetname())
+                  and "GND" not in (p.GetNetname() or "").upper()} if fp else set()
+
+        def _shares_vdd(cap_ref):
+            cfp = items.get(cap_ref, {}).get("fp")
+            if cfp is None or not ic_vdd:
+                return True  # no net data → fall back to proximity (legacy behaviour)
+            return bool(ic_vdd & {p.GetNetname() for p in cfp.Pads()})
+
         nearby_any = [c for c in caps
-                      if math.hypot(c[1] - x, c[2] - y) <= 3.0]
+                      if math.hypot(c[1] - x, c[2] - y) <= 3.0 and _shares_vdd(c[0])]
         if not nearby_any:
             no_cap.append((ref, x, y))
             continue

@@ -225,6 +225,7 @@ The following audits were added in PRs #112-#130 with smoke-test on Stage 1 + wo
 - audit_antenna_structure.py (G_R6) — aggressor cumulative length λ/4
 - audit_fos_cap_ripple.py (G_FoS4) — cap ripple-rating vs RMS × FoS
 - audit_bom_lcsc.py (G_M4) — LCSC stock + part-number presence
+- audit_driver_motor_pin_creepage.py (G_PP10) — gate-driver MOTOR-pin (SW-node, 27V) ↔ non-MOTOR logic-pad creepage ≥0.6mm same-layer (IPC-2221 B-grade); enforces the east MOTOR/LOGIC domain split, catches CH2/3/4 mirror regressions
 
 
 ## G_M7-M14 mount-hole + pad-edge audits (added 2026-05-26)

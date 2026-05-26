@@ -47,7 +47,7 @@ def resolve_lib(fp_name):
     return str(Path(hits[0]).parent) if hits else None
 
 
-def build_targets():
+def build_targets(board_path=None):
     """ref -> target bare footprint name, for every ref whose footprint changes."""
     targets = dict(CAP_TARGET)
     # Anchors whose lockfile footprint differs from the imported one: motor pads
@@ -55,6 +55,18 @@ def build_targets():
     for ref, a in lockfile.load_anchors().items():
         if a.get("category") in ("motor_pads", "connectors") and a.get("footprint"):
             targets[ref] = a["footprint"]
+    # OQ-013: the SMBJ33A TVS clamps (motor-phase D26/29/32 + CH2-4 mirrors, input
+    # D1) were authored as Diode_SMD:D_SMA — but SMBJ33A is a DO-214AA (SMB) part;
+    # SMB pads (~3.0mm span) do not fit D_SMA's undersized ~1.8mm pads (won't solder
+    # reliably). Correct DO-214AA = D_SMB. Value-based so every instance is caught.
+    # Root fix belongs in the SKiDL schematic (tracked OQ-013); this is the same
+    # post-import correction lane as the bulk caps / motor pads above.
+    if board_path:
+        b = pcbnew.LoadBoard(board_path)
+        for fp in b.GetFootprints():
+            if (fp.GetValue() or "") == "SMBJ33A" and \
+                    fp.GetFPID().GetLibItemName() != "D_SMB":
+                targets[fp.GetReference()] = "D_SMB"
     return targets
 
 
@@ -73,23 +85,29 @@ def swap_one(board_path, ref, target):
     if new is None:
         return f"ERR:FootprintLoad {target}"
     nickname = "pcbai" if lib == PCBAI_LIB else Path(lib).stem
-    new.SetFPID(pcbnew.LIB_ID(nickname, target))
-    new.SetReference(ref)
-    new.SetValue(fp.GetValue())
-    new.SetPosition(fp.GetPosition())
-    if fp.IsFlipped():
-        new.Flip(fp.GetPosition(), False)
-    new.SetOrientation(fp.GetOrientation())
+    # Snapshot the old placement + nets before mutating the board.
+    pos, orient, flipped = fp.GetPosition(), fp.GetOrientation(), fp.IsFlipped()
+    val = fp.GetValue()
     old_nets = {}
     for p in fp.Pads():
         old_nets.setdefault(p.GetPadName(), p.GetNet())
+    new.SetFPID(pcbnew.LIB_ID(nickname, target))
+    new.SetReference(ref)
+    new.SetValue(val)
+    # Add to the board BEFORE Flip(): pcbnew segfaults flipping a board-less
+    # footprint. Only triggers for parts already on B.Cu (e.g. the flipped TVS
+    # clamp D26); the non-flipped instances skipped this branch and masked it.
+    board.Remove(fp)
+    board.Add(new)
+    new.SetPosition(pos)
+    if flipped:
+        new.Flip(pos, False)
+    new.SetOrientation(orient)
     fallback = next(iter(old_nets.values()), None)
     for p in new.Pads():
         net = old_nets.get(p.GetPadName(), fallback)
         if net is not None:
             p.SetNet(net)
-    board.Remove(fp)
-    board.Add(new)
     pcbnew.SaveBoard(board_path, board)
     return "swapped"
 
@@ -109,10 +127,11 @@ def main():
         print(swap_one(args.board, args.ref, args.target))
         return 0
 
-    targets = build_targets()
+    targets = build_targets(args.inp)
     print(f"footprint targets: {len(targets)} refs "
           f"({sum(1 for r in targets if r.startswith('TP'))} motor pads + "
-          f"{sum(1 for r in targets if r.startswith('C'))} caps)")
+          f"{sum(1 for r in targets if r.startswith('C'))} caps + "
+          f"{sum(1 for r, t in targets.items() if t == 'D_SMB')} SMBJ33A→D_SMB)")
     if args.report:
         for r, t in sorted(targets.items()):
             print(f"  {r} → {t}")
