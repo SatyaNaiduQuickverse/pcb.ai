@@ -427,3 +427,27 @@ Physics: 3-phase BLDC is sequential (not paralleled phases) → no current-shari
 - ✗ Identical SW-trace polylines NOT required (re-scoped)
 
 **CH2/3/4 implication**: cross-channel mirror symmetry (CH2 = mirror_X(CH1) etc) UNCHANGED. Per-phase intra-channel asymmetric routing is acceptable on each channel individually.
+
+
+### Stage 2 — CH1 STEP 4 ROUTE — addendum 2026-05-26 #4 (pre-placement visual-decision gate)
+
+**Sai-locked rule 2026-05-26** (after J18/J19 via-capacity escalation surfaced the need): BEFORE any placement shift to relieve routing density, master+worker MUST perform pre-decision visual verification:
+
+1. **Zoom-render the problem area** — `kicad-cli pcb export svg --layers F.Cu,B.Cu` or `render_pr_visual.py --zone-zoom`, 300+ DPI
+2. **Identify space available WITHIN designated subsystem zone** — never propose moves outside the zone per [[reference-board-invariants-zone-hard-edges]]
+3. **Propose specific Δxy** — concrete numbers, not vague
+4. **Mock up + screenshot the proposed state** — same DPI as before
+5. **Visually verify the move actually helps**:
+   - Corridor/escape ring widens?
+   - Via-capacity-saturated pads have more escape room?
+   - Gate-R distances still ≤5mm (R23 no-passive-island)?
+   - Decoupling distances still ≤3mm (R25)?
+   - Per-phase cluster pitch still uniform (G_PP22)?
+   - No NEW collisions introduced?
+6. **THEN commit** — codify in parametric_placement.py, re-verify all 58 gates, re-route
+
+**Without visual verification**: placement changes can shift problem corridor to another (whack-a-mole), or fix one constraint while breaking another. Pre-decision visualization is cheap (minutes); post-commit re-route + re-audit + re-mirror is expensive (hours).
+
+**Sai's broader principle**: "stay within designated area, take some space [inside the zone]" — use the zone's internal space, don't escape it.
+
+Codified by: [[feedback-pre-placement-visual-decision]] (memory) + this §8 addendum.
