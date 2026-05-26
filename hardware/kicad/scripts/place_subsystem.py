@@ -127,6 +127,32 @@ def _pad_bbox(fp):
     return (min(xs), min(ys), max(xs), max(ys))
 
 
+def _body_bbox(fp):
+    """Component BODY envelope (x0,y0,x1,y1 mm) for collision — the courtyard, else
+    silk, else pad bbox. Unlike _pad_bbox this includes the package body, so parts
+    with small pads but large bodies (SOD-323 diodes, LEDs, SOIC ICs) don't overlap
+    each other's bodies while their pads clear (G_PP11 / Sai 2026-05-26 catch)."""
+    cxs, cys, sxs, sys_ = [], [], [], []
+    for d in fp.GraphicalItems():
+        if not isinstance(d, pcbnew.PCB_SHAPE):
+            continue
+        lyr = d.GetLayer()
+        bb = d.GetBoundingBox()
+        if lyr in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
+            cxs += [bb.GetLeft()/1e6, bb.GetRight()/1e6]
+            cys += [bb.GetTop()/1e6, bb.GetBottom()/1e6]
+        elif lyr in (pcbnew.F_SilkS, pcbnew.B_SilkS):
+            sxs += [bb.GetLeft()/1e6, bb.GetRight()/1e6]
+            sys_ += [bb.GetTop()/1e6, bb.GetBottom()/1e6]
+    if cxs:
+        return (min(cxs), min(cys), max(cxs), max(cys))
+    pb = _pad_bbox(fp)
+    if sxs:  # union silk with pads (silk alone can miss pad extent)
+        return (min(min(sxs), pb[0]), min(min(sys_), pb[1]),
+                max(max(sxs), pb[2]), max(max(sys_), pb[3]))
+    return pb
+
+
 def _layers(fp):
     """Which copper sides a footprint actually occupies, from its pad layer sets.
     A part with a thru-hole / thermal-via pad (e.g. the MCU's exposed-pad thermal
@@ -234,7 +260,7 @@ def role_place(board, refs, zones, roles, extra_keepouts=()):
         if r not in refs:             # foundation + already-brought + parked
             x = fp.GetPosition().x / 1e6
             if -2 <= x <= 102:        # only on-board obstacles matter
-                bb = _pad_bbox(fp)
+                bb = _body_bbox(fp)
                 # Fiducials / mech marks: their ~1mm copper dot + silk refdes text
                 # extend past the tiny pad bbox, so a passive can land under the silk
                 # (G5 SILK-ON-PAD: FID silk on Cxx.pad1). Reserve a generous keepout
@@ -251,6 +277,9 @@ def role_place(board, refs, zones, roles, extra_keepouts=()):
     motor_exempt = {r for r in refs
                     if (fpx := board.FindFootprintByReference(r)) is not None
                     and _is_motor_adjacent(fpx)}
+    # 0.6mm creepage halos around the gate driver's MOTOR (SW-node) pads — filled
+    # after Phase A places the driver (so its pads are at final position).
+    driver_keepouts = []
 
     def fits(bbox, want_back, motor_ok=True):
         # Layer-aware: F.Cu and B.Cu components share the board outline but not
@@ -272,6 +301,13 @@ def role_place(board, refs, zones, roles, extra_keepouts=()):
         if not motor_ok:
             for mx0, my0, mx1, my1 in motor_keepouts:
                 if not (bbox[2] <= mx0 or mx1 <= bbox[0] or bbox[3] <= my0 or my1 <= bbox[1]):
+                    return False
+            # G_PP10 / master option-1 (2026-05-26): non-MOTOR-domain pads must
+            # clear the driver's MOTOR (SW-node, 27V) pins by 0.6mm creepage —
+            # IPC-2221 B-grade for the SW↔logic domain gap. Defense-in-depth that
+            # enforces the east MOTOR/LOGIC sub-zone split on every iteration.
+            for dx0, dy0, dx1, dy1 in driver_keepouts:
+                if not (bbox[2] <= dx0 or dx1 <= bbox[0] or bbox[3] <= dy0 or dy1 <= bbox[1]):
                     return False
         # Phase-replication look-ahead: when placing a reference phase, avoid spots
         # whose +pitch translations (the B/C copies) would land on foundation —
@@ -312,7 +348,7 @@ def role_place(board, refs, zones, roles, extra_keepouts=()):
         # reset_text_to_body hides refs on R/C/D/TP; small inductors/others (e.g.
         # 0201 L11) keep visible refs that land on neighbour pads (SILK-ON-PAD).
         # Hide the ref on any small passive (pad-bbox < 3mm) the helper missed.
-        bb = _pad_bbox(fp)
+        bb = _body_bbox(fp)
         if max(bb[2] - bb[0], bb[3] - bb[1]) < 3.0:
             rf = fp.Reference()
             if rf is not None:
@@ -336,22 +372,45 @@ def role_place(board, refs, zones, roles, extra_keepouts=()):
             fp.Flip(fp.GetPosition(), False)
         for dx, dy in _spiral_offsets(8.0):
             fp.SetPosition(pcbnew.VECTOR2I(int((base[0]+dx)*1e6), int((base[1]+dy)*1e6)))
-            bb = _pad_bbox(fp)
+            bb = _body_bbox(fp)
             if fits(bb, wb, motor_ok=(r in motor_exempt)):
                 place_fp_at(fp, base[0]+dx, base[1]+dy, wb)
                 _hf, _hb = _layers(fp)
-                placed[r] = (_pad_bbox(fp), _hf, _hb)
+                placed[r] = (_body_bbox(fp), _hf, _hb)
                 break
         else:
             errs.append(f"role_place: no slot for cluster-anchor {r}")
+
+    # Driver MOTOR-pin creepage halos (G_PP10): now the gate driver is placed,
+    # reserve a 0.6mm halo around each of its MOTOR_x (SW-node) pads so Phase-B
+    # non-MOTOR passives can't seat within IPC-2221 creepage of 27V SW pins.
+    CREEP = 0.6
+    for dr in [x for x in refs if roles[x].get("relation") == "gate-driver"]:
+        dfp = board.FindFootprintByReference(dr)
+        if dfp is None:
+            continue
+        for pad in dfp.Pads():
+            n = pad.GetNetname() or ""
+            if re.match(r"MOTOR_[ABC]_CH\d+$", n):
+                c = pad.GetPosition(); sz = pad.GetSize()
+                hx, hy = sz.x / 2e6 + CREEP, sz.y / 2e6 + CREEP
+                driver_keepouts.append((c.x/1e6 - hx, c.y/1e6 - hy,
+                                        c.x/1e6 + hx, c.y/1e6 + hy))
 
     # Phase B: passives, resolving parent first (iterate until stable).
     # Tightest constraint first: decoupling (≤3mm of a VDD pin) must claim the
     # pin-adjacent slots before looser cluster-aux/bulk caps crowd them out.
     _bprio = {"decoupling": 0, "cluster-member": 1, "cluster-aux": 2}
+    # Loop members (HS/LS FETs, shunts) are the LARGE bodies of the switching cell
+    # — place them BEFORE the small gate clamps/resistors so they claim their spot
+    # and the clamps then seat NEXT TO them (body-clear), not on top. Otherwise
+    # ref-order puts D-clamps before Q-FETs and the big FET can't fit (G_PP11).
+    def _bkey(x):
+        rec = roles[x]
+        return (0 if rec.get("loop_member") else 1,
+                _bprio[rec["role"]], _ref_sort_key(x))
     pending = sorted(
-        [x for x in refs if roles[x].get("role") in _bprio],
-        key=lambda x: (_bprio[roles[x]["role"]], _ref_sort_key(x)))
+        [x for x in refs if roles[x].get("role") in _bprio], key=_bkey)
     progress = True
     while pending and progress:
         progress = False
@@ -416,10 +475,10 @@ def role_place(board, refs, zones, roles, extra_keepouts=()):
                         continue
                     cx, cy = pcx + dx, pcy + dy
                     fp.SetPosition(pcbnew.VECTOR2I(int(cx * 1e6), int(cy * 1e6)))
-                    bb = _pad_bbox(fp)
+                    bb = _body_bbox(fp)
                     if fits(bb, side, motor_ok=(r in motor_exempt)):
                         place_fp_at(fp, cx, cy, side)
-                        _hf, _hb = _layers(fp); placed[r] = (_pad_bbox(fp), _hf, _hb)
+                        _hf, _hb = _layers(fp); placed[r] = (_body_bbox(fp), _hf, _hb)
                         done = True
                         break
                 if done:
@@ -444,10 +503,10 @@ def role_place(board, refs, zones, roles, extra_keepouts=()):
                         xx = z[0] + 1
                         while xx <= z[2] - 1:
                             fp.SetPosition(pcbnew.VECTOR2I(int(xx*1e6), int(yy*1e6)))
-                            bb = _pad_bbox(fp)
+                            bb = _body_bbox(fp)
                             if fits(bb, side, motor_ok=(r in motor_exempt)):
                                 place_fp_at(fp, xx, yy, side)
-                                _hf, _hb = _layers(fp); placed[r] = (_pad_bbox(fp), _hf, _hb)
+                                _hf, _hb = _layers(fp); placed[r] = (_body_bbox(fp), _hf, _hb)
                                 done = True
                                 break
                             xx += step
@@ -673,29 +732,40 @@ def bring_selected(board, subsystem):
             if pa and pbc:
                 z = zones[0]
                 yspan = max(p[1] for p in mp.values()) - min(p[1] for p in mp.values())
-                sub = (z[0], z[1], min(z[2], 22.0), z[3] - yspan)
+                # Cap the reference band 2mm short of the full phase pitch so the
+                # 3 replicated clusters leave an inter-phase GAP (else adjacent
+                # clusters abut at the 12mm seam → cross-phase body overlaps).
+                sub = (z[0], z[1], min(z[2], 22.0), z[3] - yspan - 0.0)
                 # EAST control (MCU/DRV/INA + decoupling) first, so phase-A's west
                 # cluster — and therefore its replicated B/C copies — avoid them.
                 # (Otherwise the HS-FET offsets toward the empty east band and the
                 # replicated FET lands on the driver.)
                 errs += role_place(board, rest_role, zones, {r: rmap[r] for r in rest_role})
-                # Phantom keep-outs: NON-CH1, NON-motor-pad foundation in the FET
-                # strip, translated BACK by the B/C phase offsets, so the reference
-                # phase A avoids spots whose replicated copies would land on it.
-                # (Only effective if such foundation is NOT inside the FET column —
-                # a probe pad at the column x makes both the reference AND phase C
-                # unplaceable, which must be resolved by moving the pad.)
+                # Phantom keep-outs: EVERY on-board obstacle that is NOT one of the
+                # phase parts being placed/replicated (foundation + the already-
+                # placed east control J19/J18/INA + S6 + other channels), BODY-bbox,
+                # translated BACK by the B/C phase offsets — so the reference phase A
+                # avoids any spot whose replicated B/C copy would land on it (e.g. a
+                # phase-B gate-R copy hitting the driver J19). Motor pads excluded
+                # (FETs belong beside them). No x-filter: a phantom only rejects a
+                # candidate if it actually falls in the sub-zone.
                 ch1_role = set(role_placed)
                 offs = [(mp[p][0] - mp["A"][0], mp[p][1] - mp["A"][1]) for p in ("B", "C")]
+                # Targeted: foundation in the FET-strip x-band + the shared east
+                # anchors (driver/MCU, whose bodies reach the strip) — NOT every
+                # board obstacle (that over-constrains the reference cluster).
+                drv_mcu = {x for x in role_placed
+                           if roles[x].get("relation") in ("gate-driver",)
+                           or (roles[x].get("role") == "cluster-anchor" and x not in pa and x not in pbc)}
                 phantoms = []
                 for fp in board.GetFootprints():
                     r = fp.GetReference()
-                    if r in ch1_role or r in MOTOR_TP_REFS:
+                    if fp.GetPosition().x / 1e6 >= 130:
                         continue
-                    fx = fp.GetPosition().x / 1e6
-                    if fx >= 130 or not (sub[0] <= fx <= sub[2]):
+                    is_found = r not in ch1_role and r not in MOTOR_TP_REFS
+                    if not (is_found or r in drv_mcu):
                         continue
-                    bb = _pad_bbox(fp)
+                    bb = _body_bbox(fp)
                     for dx, dy in offs:
                         phantoms.append((bb[0] - dx, bb[1] - dy, bb[2] - dx, bb[3] - dy))
                 errs += role_place(board, pa, [sub], {r: rmap[r] for r in pa},
