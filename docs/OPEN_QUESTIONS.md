@@ -335,7 +335,7 @@ EMI marked **STAGE-3 conditional PASS, post-route STEP 6 EMI re-sim mandatory** 
 2. Approve post-route STEP 6 EMI re-sim mandatory
 
 
-## OQ-017 — Inner-layer SW escape on In4 (CH1 routing geometry)
+## OQ-017 — Inner-layer SW escape on In4 (CH1 routing geometry) — scope clarified by OQ-019 2026-05-26
 
 **Raised**: 2026-05-26 by worker STEP 4 CH1 routing. Naive hand-route of SW node FAILS (32 clearance violations) because SW pads are at FET WEST column x=5.55, motor pad TP is at EAST x=15, with VMOTOR_CH drain + shunt pads at x=11.25 BETWEEN them — SW cannot escape east on F.Cu/B.Cu only without crossing opposite-polarity pads. Gate pad N$9 also in SW column.
 
@@ -383,4 +383,37 @@ B.Cu LS pads ref'd by In5 at d=0.335mm (prepreg+In6+core) → effective bilatera
 Recommend external x86 for Phase 7 — same toolchain, no cloud dependency, deterministic.
 
 **Status**: BLOCKING for Phase 7 entry. Non-blocking for Phase 4-v3 STEP 4-6 (subsystem-scope sufficient).
+
+
+## OQ-019 — R19 / OQ-017 SW-symmetry scope clarification (commutation loop vs trace polyline)
+
+**Raised**: 2026-05-26 by worker STEP 4 CH1 routing — R19 pure-transform of per-phase routes was geometrically infeasible at 13mm phase pitch on this placement density. Per-phase routing footprint spans ~15mm in y, but phase pitch is 13mm → translating Phase-A routing +13mm overlaps neighbor band by ~2mm. Transform attempt caused +273 real inter-phase clearance overlaps. Worker correctly identified this as a binding rule that's over-constrained vs physics need + escalated rather than band-aiding ([[feedback-redo-not-mitigate]]).
+
+**Master adjudication (2026-05-26)**:
+
+R19 / OQ-017 SW-symmetry binding is re-scoped to **commutation loop symmetry**, not full SW-trace polyline identity.
+
+| Scope | Required | Verification |
+|---|---|---|
+| FET-cluster placement geometry symmetric | YES | G_PP22 ([[PR #166]]) |
+| SW commutation loop-L identical per phase | YES | measured ≤2nH + A=B=C to 4 decimals at FET-cluster |
+| SW outward trace polyline identity | **NO** (re-scoped 2026-05-26) | n/a — Freerouter per-phase asymmetric OK |
+
+**Physics rationale**:
+- Loop-L is bounded by the COMMUTATION loop (HS-source → SW-via-cluster → LS-drain → GND return). The loop CLOSES at the FET cluster, BEFORE any SW trace extends outward.
+- Symmetric commutation loop-L requires symmetric FET cluster + via cluster + GND-return discipline (all 3 satisfied by G_PP22 + parametric placement + worker's minimal-set return-via per OQ-017).
+- SW outward trace polyline mismatch produces different per-phase switching transient + per-phase EMI signature, but:
+  * 3-phase BLDC is SEQUENTIAL (not paralleled) — no current-sharing concern
+  * BEMF blanking tolerates per-phase switching transient delta
+  * EMI compliance is measured CUMULATIVELY at integrate stage (CE/FCC envelope), not per-phase
+
+**Trade-off avoided**: widening hs_fet_row_pitch from 13 → 15mm would cost ~12% board area + propagate to CH2/3/4 (re-placement, re-sim, re-route) for sub-percent EMI/sim gain. Physics doesn't require it.
+
+**Cross-channel symmetry PRESERVED**: CH2/3/4 mirror_X/mirror_Y of CH1 still works (4× saving). Bigger win preserved.
+
+**Binding gate update**: STEP 6 measured loop-L per phase is the R19 numerical proof. A=B=C to 4 decimals at FET-cluster commutation loop = R19 satisfied regardless of asymmetric outward routing.
+
+**Memory**: [[feedback-r19-loop-vs-trace-symmetry]] saved so this isn't re-litigated.
+
+**Status**: RESOLVED — worker proceeds with clean Freerouter base (option a per worker recommendation).
 
