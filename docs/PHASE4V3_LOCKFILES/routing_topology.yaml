@@ -304,7 +304,7 @@ components:
   R73: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U4", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
   R74: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U4", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
   R75: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R73", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
-  R76: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D37", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R76: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 8, same_layer_as_parent: true}
   TH1: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U3", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
   U3: {zone_hint: [28.0, 74.0], tier: 3, role: "cluster-anchor", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "logic-near-mcu", max_distance_mm: 8, same_layer_as_parent: true}
   U4: {zone_hint: [28.0, 60.0], tier: 3, role: "cluster-anchor", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "logic-near-mcu", max_distance_mm: 8, same_layer_as_parent: true}
