@@ -203,6 +203,9 @@ TODO; build synthetic test before relying on them as hard gates:
 - audit_sim_artifact_provenance.py (R-sim-provenance) — sim inputs/results/RESULTS.md must cite git-tracked paths only; /tmp/ citations FAIL. Added 2026-05-26 after worker caught CH1 placement living only in /tmp/ch1_152.kicad_pcb (STEP-3 sims would be unreproducible if /tmp wiped).
 - audit_per_phase_cluster_uniformity.py (G_PP22) — transformable per-phase cluster pitch must be uniform within 0.5mm; FAIL not WARN. Added 2026-05-26 after worker caught J22 class lesson: sign typo in parametric_placement.py (motor['TP21'][1] - 1 instead of + 1) placed J22 at 2mm off uniform Δ13mm, passed all 56 existing gates as WARN-tolerance, surfaced only when STEP-4 R19 pure-transform attempted. Validates against pre-fix (FAIL spread=2.000mm) + post-fix (PASS spread=0.000mm) boards in escworker/local/. Per-phase clusters covered: HS_FETs, LS_FETs, Boot_caps, Gate_R_HS, Gate_R_LS, Shunts, INAs, Dividers — 8 clusters × 3 instances each.
 
+- audit_stackup_layers.py (G_M16) — verifies 10 enabled copper layers (F.Cu + In1-In8 + B.Cu) post Phase 4a-restack-10L upgrade. Added 2026-05-26 PR #180. Validates against canonical board layer count.
+- audit_power_drc.py (G_PWR_DRC) — Pi-only-no-swap custom DRC focused on power nets (+VMOTOR, MOTOR_x, SHUNT_x, +V5/+V9/+3V3, VDD decoupling). Track widths + pad-track clearance (5mm window, <2GB memory) + plane integrity. Catches catastrophic clearance class early. Added 2026-05-26 PR #183. Complementary to kicad-cli pcb drc (which OOMs on Pi).
+
 ## Pre-existing audits (Phase 4-v2 era, no synthetic test):
 
 - audit_3d_model_coverage.py — verifies 3D model attached to every fp (assembly visualization)
