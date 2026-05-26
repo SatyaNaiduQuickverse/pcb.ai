@@ -630,3 +630,61 @@ Other STEP 2-7 unchanged from prior dispatch (PR #174). Worker resume with corre
 **If 10L doesn't fully resolve** (worst case): fallback to Sai GUI session on residual nets (was the original plan for 8L).
 
 **Expected outcome (high confidence)**: 10L resolves CH1 STEP 4 fully without GUI session. Per Howard Johnson + capacity math, +50% routing capacity is sufficient for the 7-net residual which couldn't fit in 8L.
+
+
+### §8 addendum #6 — DRC scheduling + Pi-safe full-board DRC (Sai 2026-05-26 lock)
+
+Sai 2026-05-26 question 'should we run this drc after power routing' →
+locked answer: **YES, full-board DRC at 3 checkpoints, Pi-safe.**
+
+**3-checkpoint DRC schedule**:
+
+| Stage | DRC scope | Tool | Pi-feasibility |
+|---|---|---|---|
+| **Per-subsystem PR** (current) | Subsystem-scope clearance + track widths | audit_routing.py + check_*_clearance.py | ✅ runs today on Pi, 15-30 min |
+| **Power-DRC checkpoint** (NEW — after all subsystem POWER routes done, mid-Phase-4-v3) | Full-board, power-nets only | audit_power_drc.py (Pi-only-no-swap, NEW G_PWR_DRC gate) | ✅ runs on Pi unmodified, 2-5 min |
+| **Stage 10 final integration** (NEW — all subsystems integrated, pre-Phase-7) | Full-board, all nets | kicad-cli pcb drc (needs Pi swap; or external workstation if available) | needs 16-32GB swap file overnight (Path A) |
+| **Phase 7 fab-prep** | Full-board + DFM | kicad-cli pcb drc (swap) + JLC online DFM | needs swap + JLC DFM at order |
+
+**Why power-DRC checkpoint matters**:
+- Power nets carry 280A continuous / 400A peak — clearance violation = arc/melt/fire risk
+- Power routes lock early; fixing later forces signal re-route cascade
+- Per [[feedback-redo-not-mitigate]]: catch root issue at cheapest fix point
+- audit_power_drc.py provides bounded-memory Pi-only custom DRC focused on power-net safety
+
+**Pi-safe full-board DRC procedure (Stage 10 + Phase 7)**:
+
+Sai 2026-05-26: "remember there is other stuff going on in this pi too. at any cost dont harm that". So swap file is **manual operation only**, NEVER auto-enabled:
+
+```bash
+# Step 1: Verify other work is paused (worker session checkpointed,
+# novapcb session paused if running, no active CPU/RAM-heavy jobs)
+free -h && top -n1 | head -10
+
+# Step 2: Create swap file (one-time, 16GB safe on current 19GB free disk)
+sudo dd if=/dev/zero of=/swap_16G bs=1M count=16384
+sudo chmod 600 /swap_16G
+sudo mkswap /swap_16G
+
+# Step 3: Enable swap (ONLY before DRC run; never on boot)
+sudo swapon /swap_16G
+
+# Step 4: Run DRC (overnight if needed)
+kicad-cli pcb drc --output drc_full.rpt hardware/kicad/pcbai_fpv4in1.kicad_pcb
+
+# Step 5: DISABLE swap after DRC (free up disk + memory subsystem)
+sudo swapoff /swap_16G
+
+# Step 6 (optional): Delete swap file to reclaim disk
+sudo rm /swap_16G
+```
+
+**NEVER add swap to /etc/fstab** — would auto-mount on boot, interfering with normal Pi operation.
+
+**Coordinate with**:
+- Worker session: pause kicad/pcbnew ops during master DRC
+- novapcb session: pause if active (per [[project-shared-machine]] serialization)
+- nova-coord daemon: keep running (small footprint, port 8766/8765)
+- Background http server: keep running (small footprint, port 8080)
+
+**Codified by**: this §8 addendum #6 + audit_power_drc.py + procedural note above. Master/worker MUST follow Pi-safe procedure when running Stage 10 or Phase 7 DRC.

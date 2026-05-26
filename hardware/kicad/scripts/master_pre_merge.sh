@@ -671,6 +671,17 @@ else
   echo "[G_M16_stackup_layers] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
 fi
 
+# G_PWR_DRC power-net custom DRC (Sai 2026-05-26 — Pi-only, no kicad-cli OOM
+# path). Catches catastrophic power-net clearance violations early (280A
+# continuous = arc/fire risk). Complementary to subsystem-scope DRC.
+# Runs ~2-5 min on full-board Pi. Memory bounded <2GB via 5mm window pre-filter.
+if [[ -f "$SCRIPTS/audit_power_drc.py" ]]; then
+  run_gate "G_PWR_DRC_power_net_drc" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_power_drc.py' '$BOARD'" true
+else
+  echo "[G_PWR_DRC_power_net_drc] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
 # WARN-tolerance was the bug — this is binary FAIL. Catches sign-typo class.
 if [[ -f "$SCRIPTS/audit_per_phase_cluster_uniformity.py" ]]; then
   run_gate "G_PP22_per_phase_cluster_uniformity" \
