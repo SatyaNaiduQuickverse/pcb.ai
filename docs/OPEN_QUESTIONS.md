@@ -227,3 +227,17 @@ Lockfile updated [invariant-change]. Worker re-runs Stage 0 to land BAT pads.
 - **Impact**: at worst, slight INA noise / settling-time degradation. Not power-supply-rejection-ratio sensitive enough to be a CH1 PR blocker. Sai-acceptable for first fab; tighten in commercial rev.
 - **Resolution**: NEXT schematic rev — add 3× 100nF X7R caps to J20.4 / J21.4 / J22.4 → GND, ≤3mm same-layer. Also extend G4 to handle Connector_Generic with pin-NUMBER convention (pin 4 = V+ on INA186).
 - **Blocks**: nothing immediate (CH1 PR can proceed). Future commercial fab freeze should address.
+
+### OQ-010 — B.Cu component-density vs F.Cu balance (post bilateral)
+
+- **Raised**: 2026-05-26 (per docs/BILATERAL_PLACEMENT.md)
+- **Question**: With S2 bulk caps + S5 BEC + LS-FETs + LS-decoupling + LEDs on B.Cu, does B.Cu density exceed F.Cu? If so, what gets pulled back to F.Cu?
+- **Trigger**: Stage 9 (S2 + S5 brought) — measure per-side component bbox sum
+- **Resolution rule**: if B.Cu density > 60%, pull status LEDs back to F.Cu (lowest electrical impact). If still >55%, revisit per-channel decoupling split.
+
+### OQ-011 — Multi-layer thermal sim must include BEC heat sources
+
+- **Raised**: 2026-05-26 (per docs/BILATERAL_PLACEMENT.md, extends OQ-007)
+- **Question**: Phase 4-v2 thermal baseline was single-side, single-source (FETs only). With S5 BEC on B.Cu directly under MCU + S2 bulk caps on B.Cu under FETs, the multi-layer Stage 10 thermal sim must include all heat sources: FETs (per-channel × 4) + BEC bucks (5 rails, ~0.5W each at 80% efficiency) + LDO + bulk caps (ripple I²R).
+- **Trigger**: Stage 10 Elmer FEM re-run (post all placement done)
+- **Resolution**: build multi-layer Elmer mesh + apply all 4+5+1 = 10 heat sources; verify T_J ≤ 75°C continuous / 90°C burst FoS bounds hold; OQ-007 closes when met.
