@@ -38,12 +38,12 @@ sim at Stage 10 (OQ-007) validates the strategy.
 
 | Subsystem | x_min | y_min | x_max | y_max | Function |
 |---|---|---|---|---|---|
-| S1 battery input | 0 | 84 | 100 | 100 | bottom edge — BAT_P/BAT_N solder pads + NTC + TVS (swapped 2026-05-26 with S6 per Sai mechanical revamp) |
-| S6 connectors | 0 | 0 | 100 | 16 | top edge — J14 FC + J12 AUX + USBLC6 ESDs + LDO (swapped 2026-05-26 with S1) |
-| CH1 (channel A) | 0 | 48 | 35 | 84 | NW — FET cluster + DRV + MCU + INA |
-| CH2 (channel B) | 65 | 48 | 100 | 84 | NE — mirror_X(CH1) |
-| CH3 (channel C) | 65 | 16 | 100 | 52 | SE — mirror_X(CH4) |
-| CH4 (channel D) | 0 | 16 | 35 | 52 | SW — bottom-pair template |
+| S1 battery input | 0 | 86 | 100 | 100 | bottom edge — BAT_P/BAT_N solder pads + NTC + TVS (swapped 2026-05-26 with S6 per Sai mechanical revamp) |
+| S6 connectors | 0 | 0 | 100 | 14 | top edge — J14 FC + J12 AUX + USBLC6 ESDs + LDO (swapped 2026-05-26 with S1) |
+| CH1 (channel A) | 0 | 50 | 35 | 86 | NW — FET cluster + DRV + MCU + INA |
+| CH2 (channel B) | 65 | 50 | 100 | 86 | NE — mirror_X(CH1) |
+| CH3 (channel C) | 65 | 14 | 100 | 50 | SE — mirror_X(CH4) |
+| CH4 (channel D) | 0 | 14 | 35 | 50 | SW — bottom-pair template |
 | S2 bulk caps | 40 | 40 | 60 | 60 | central — 4× polymer caps low-ESR |
 | S3 supervisor+Hall | 40 | 18 | 60 | 40 | central spine — TL431 + Hall |
 | S5 BEC east strip | 35 | 50 | 40 | 82 | east of CH1 spine — 5mm BEC bus (CH1/CH2 feed) |
@@ -103,7 +103,7 @@ Run `python3 hardware/kicad/scripts/compute_board_invariant_hash.py --write`
 to compute and write.
 
 ```
-BOARD_INVARIANT_HASH = ed1cdaebe30a73d54dd0e4047496a862a1a136798cc8eacaffa809233617ddba
+BOARD_INVARIANT_HASH = e4bfcd00a4189d5bd0e1571e52e9cceeddda1170f4c2eac42bfb8747b1547640
 ```
 
 ## Audit gate
