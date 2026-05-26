@@ -747,3 +747,46 @@ For EACH subsystem (CH1 → S5 → S2 → S3 → S1 → S6 → CH2/3/4):
 **Cascade rule** (NEW lock): subsystem N+1 power routing does NOT start until subsystem N's STEP 5 power-routed sims PASS. Enforces sequential validation.
 
 Codified by: this §8 addendum #7 + audit_power_drc.py (G_PWR_DRC) + [[feedback-sim-execution-gate]] 4-point proof per sim.
+
+
+### §8 addendum #8 — Stage 0 SCOPE CLARIFICATION (worker R22 catch 2026-05-27)
+
+**Original Stage 0 dispatch** (PR #180) assumed canonical had placed channels. Worker R22'd during STEP 0.5 (loop-L re-extract crashed on parked FETs at x=310 off-board).
+
+**Clarification**: origin/master canonical is PLACEMENT-INCOMPLETE (58 on-board / 515 parked; ALL 28 FETs + all channel passives parked). CH1-CH4 = 0 on-board. The CH1 v9 routed work (loop-L 0.1953nH PASS) lives on branch `phase4v3-stage2-ch1 @908ad5e`, NEVER committed to canonical.
+
+**SCOPE LOCK**:
+
+| Step | Scope | Status |
+|---|---|---|
+| **0.1 Backup canonical** | Board-global (one-time) | ✅ done branch phase4v3-stage0-10L-migration |
+| **0.2 setup_board.py 10L apply** | Board-global (stackup foundation) | ✅ done |
+| **0.3 G_M16 audit verify 10 layers** | Board-global | ✅ done |
+| **0.4 Layer-index map docs** | Board-global reference (`docs/phase4v3/STAGE0_10L_LAYER_MAP.md`) | ✅ done |
+| **0.5 Loop-L re-extract** | DEFERRED → happens in each subsystem's STEP 5 (power-routed sim) | REFRAMED |
+| **0.6 4-sim re-run** | DEFERRED → happens in each subsystem's STEP 5 + STEP 7 (post-route EMI) | REFRAMED |
+| **0.7 Re-route 7 stuck CH1 nets** | DEFERRED → happens in CH1 STEP 4 ROUTE POWER + STEP 6 ROUTE SIGNALS on 10L | REFRAMED |
+| **0.8 Re-run all 59 gates** | DEFERRED → happens at each subsystem's STEP 7 PR open | REFRAMED |
+
+**Why this is right**:
+- Loop-L migration-invariance PROVEN: FET relative pad geom identical (dx=4.988mm both 8L/10L); In1 GND ref @0.10mm OQ-014 UNCHANGED; single-via partial L=0.739nH identical → 0.1953nH WILL hold once channels placed on 10L.
+- Per [[feedback-power-first-per-subsystem]] cascade rule: subsystem N+1 power routing waits for subsystem N STEP 5 PASS. The 0.5-0.8 actions are PER-SUBSYSTEM, not board-global.
+- Per [[reference-park-then-bring-in-pattern]]: incremental placement brings subsystem fresh; works from empty/parked starting state.
+- CH1 v9 routed branch (with 7 stuck nets) is SUPERSEDED by 10L re-route (more capacity per Howard Johnson). Worker's CH1 stage2 WIP preserved as reference but not promoted.
+
+**Cascade ordering on 10L** (per §8 #7 + adjacent-first):
+
+1. **Merge 10L stackup foundation to master** (PR-pending: branch `phase4v3-stage0-10L-migration`)
+2. **CH1 STEP 1 PLACE** on 10L canonical (re-run parametric_placement.py — same dx=4.988mm FET geom, same J22 fix from PR #166)
+3. CH1 STEP 2 AUDIT (G_PP22 + 58-gate)
+4. CH1 STEP 3 SIM (placement-stage analytical)
+5. **CH1 STEP 4 ROUTE POWER** on 10L (no signals — +VMOTOR/MOTOR_x/SHUNT_x/+V5/+V9/+3V3/VDD decoupling)
+6. **CH1 STEP 5 SIM POWER-ROUTED** (loop-L re-extract → expect 0.1953nH per migration-invariance proof + ngspice PI + Elmer thermal + audit_power_drc) — ITERATE FAIL
+7. **CH1 STEP 6 ROUTE SIGNALS** on 10L (PWM/BEMF/CSA/ADC/SWD/KILL — using In2 + In8 extra capacity from +50% on 10L → should route 12/12 + 0-viol without HDI/ILP escalation)
+8. CH1 STEP 7 SIM SIGNAL-ROUTED (openEMS post-route EMI)
+9. **CH1 STEP 7 PR open** → master review → land
+10. Cascade: S5 BEC → S2 → S3 → S1 → CH2/3/4 mirrors → Stage 10 integrate
+
+**No HDI/ILP/12L escalation expected** (10L +50% routing capacity sufficient per Howard Johnson). If 10L STILL insufficient on CH1 STEP 6, escalate per deep research options. NEVER GUI fallback per [[feedback-no-gui-session-autonomous-only]].
+
+Codified by: this §8 addendum #8 + worker R22 catch + [[feedback-power-first-per-subsystem]] cascade discipline.
