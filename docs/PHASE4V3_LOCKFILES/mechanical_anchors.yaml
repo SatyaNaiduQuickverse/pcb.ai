@@ -52,11 +52,11 @@ fiducials:
   # Original FID5 (85,50) overlapped east motor column TP26/TP33 (x=84.87) directly.
   # Fix: shift fid X away from motor columns; all neighbor distances re-verified ≥40mm,
   # all ≥6mm from board edge, motor-pad clearance ≥3mm.
-  - {ref: FID1, pos: [8.00,  50.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}  # was (15,50); 7.13mm to TP19/TP40
-  - {ref: FID2, pos: [92.00, 50.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}  # was (90,50); 7.13mm to TP26/TP33
+  - {ref: FID1, pos: [3.00,  50.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}  # was (15,50); 7.13mm to TP19/TP40
+  - {ref: FID2, pos: [97.00, 50.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}  # was (90,50); 7.13mm to TP26/TP33
   - {ref: FID3, pos: [50.00, 85.00], layer: F.Cu, rotation: 0,   footprint: Fiducial_1mm_Mask2mm}
-  - {ref: FID4, pos: [8.00,  50.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}  # was (15,50); paired with FID1
-  - {ref: FID5, pos: [92.00, 50.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}  # was (85,50); paired with FID2 (B.Cu via cluster of motor pads cleared)
+  - {ref: FID4, pos: [3.00,  50.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}  # was (15,50); paired with FID1
+  - {ref: FID5, pos: [97.00, 50.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}  # was (85,50); paired with FID2 (B.Cu via cluster of motor pads cleared)
   - {ref: FID6, pos: [50.00, 15.00], layer: B.Cu, rotation: 180, footprint: Fiducial_1mm_Mask2mm}
 
 connectors:
@@ -193,7 +193,7 @@ test_points:
   # NEW (6, 89.5): center 6mm from x=0 edge (pad radius 2mm → 4mm bbox-to-edge clearance ≥ G17 4mm),
   # 6.18mm from H1 (5,95) KO center (≥4mm M3 KO), inside S1 (y86-100), 5.5mm to BAT_P (45,95).
   # Lesson codified in NEW G_M14 audit (this PR): every pad+pad_size must have bbox ≥ edge_clearance from board outline.
-  - {ref: TP2,  pos: [6.00,  91.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_fc_gnd}
+  - {ref: TP2,  pos: [10.00, 90.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_fc_gnd}
   - {ref: TP3,  pos: [47.00, 74.50], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_pi5_plus}
   - {ref: TP5,  pos: [72.00, 93.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D4.0mm, role: pad_v5_ai_plus}
   - {ref: TP7,  pos: [15.00, 92.00], layer: B.Cu, rotation: 180, footprint: TestPoint_Pad_D3.0mm, role: pad_v9_vtx1_plus}
