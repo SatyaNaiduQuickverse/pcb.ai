@@ -204,3 +204,24 @@ TODO; build synthetic test before relying on them as hard gates:
 - audit_3d_model_coverage.py — verifies 3D model attached to every fp (assembly visualization)
 - audit_meta.py — RULES_MANIFEST.md ↔ scripts consistency
 - audit_routing_system.py — methodology hash drift detection
+
+
+## Batch-4/5/6 audits + parser-fix iteration (no synthetic test fixture yet)
+
+The following audits were added in PRs #112-#130 with smoke-test on Stage 1 + worker CH1 boards (not synthetic ground-truth comparison — pending Phase 2):
+
+- audit_anchor_pitch.py (G_PP8) — per-column same-role uniform pitch
+- audit_polarity_direction.py (G_PP9) — same-class polarized fp rotation axis
+- audit_zone_tile_continuity.py (G_Z1) — primary subsystem zone overlap detection
+- audit_assembly_drawing.py (G_M5) — fp Value + rotation + attribute presence
+- audit_sim_mesh_validity.py (G_S2) — Elmer mesh node/element count
+- audit_sim_result_sanity.py (G_S3) — T/I/V/P range plausibility
+- audit_stub_length.py (G_R2) — Howard Johnson HSDD §6 stub limits
+- audit_crosstalk_spacing.py (G_R4) — aggressor-victim spacing per Bogatin §10
+- audit_fos_cap_voltage.py (G_FoS3) — type-keyed cap voltage derating
+- audit_panel_fit.py (G_M6) — JLC single-board envelope
+- audit_diff_pair_z0.py (G_R1) — trace width vs Z0 spec
+- audit_return_path.py (G_R3) — signal layer ↔ ref plane pour
+- audit_antenna_structure.py (G_R6) — aggressor cumulative length λ/4
+- audit_fos_cap_ripple.py (G_FoS4) — cap ripple-rating vs RMS × FoS
+- audit_bom_lcsc.py (G_M4) — LCSC stock + part-number presence
