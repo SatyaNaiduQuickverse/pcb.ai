@@ -688,3 +688,62 @@ sudo rm /swap_16G
 - Background http server: keep running (small footprint, port 8080)
 
 **Codified by**: this §8 addendum #6 + audit_power_drc.py + procedural note above. Master/worker MUST follow Pi-safe procedure when running Stage 10 or Phase 7 DRC.
+
+
+### §8 addendum #7 — Power-FIRST per-subsystem methodology (Sai 2026-05-26 lock)
+
+**Sai directive 2026-05-26**: "do one thing first finish power routing then we will do this.. about power too do subsystem by subsystem and with sims and iters"
+
+**Refined per-subsystem 7-step flow** (replaces ad-hoc sequencing):
+
+For EACH subsystem (CH1 → S5 → S2 → S3 → S1 → S6 → CH2/3/4):
+
+1. **PLACE** — components positioned per parametric SSoT + §8 #4 visual gate
+2. **AUDIT** — 58-gate master suite, subsystem-scope
+3. **SIM (placement-stage)** — analytical proxies + early-warning (HPWL, density, decoupling)
+4. **ROUTE POWER ONLY** (NEW lock 2026-05-26) — high-current + power-rail nets first:
+   - +VMOTOR / BATGND / +BATT_FUSED
+   - MOTOR_x per phase (commutation loop)
+   - SHUNT_x sense Kelvin pair
+   - +V5 / +V9 / +3V3 / +3V3A (BEC outputs to subsystem)
+   - VDD decoupling caps to ICs (R25 ≤3mm)
+   - GND-return-vias per OQ-017 Bogatin discipline
+   - **NO signal nets yet** (PWM, BEMF, ADC, SWD, KILL all deferred)
+5. **SIM (power-routed)** — geometric loop-L, ngspice PI, Elmer thermal, audit_power_drc.py
+   - Per [[feedback-sim-execution-gate]] 4-point proof per sim
+   - Iterate placement/routing if any sim FAIL
+6. **ROUTE SIGNALS** — PWM/BEMF/CSA/ADC/SWD/KILL on remaining capacity
+7. **SIM (signal-routed)** — openEMS post-route EMI, BEMF coupling ≤-40dB
+8. **PR open** — STEP 7 PR per locked acceptance gate
+
+**Why power-first**:
+- Power nets are CATASTROPHIC class (280A, EMC, thermal, loop-L) — fixing them late forces cascade
+- Power geometry is critical input to all sims (loop-L, thermal, PI all power-net-dependent)
+- Signal nets route AROUND already-laid power — much easier than vice versa
+- Per [[feedback-redo-not-mitigate]]: catch power issues at the cheap fix point
+- Per [[feedback-physics-as-compass]]: derive from how the board actually works (power = current path; signals = control)
+
+**Cumulative milestone**: Once **all 9 subsystems have power routed + sim-validated**, master notifies Sai. Then:
+- Run G_PWR_DRC across full board (Pi-safe, audit_power_drc.py per §8 #6)
+- Run incremental Stage 10 thermal (full-board with all 10 heat sources, OQ-015 fix applied)
+- Sai green-lights signal routing across all subsystems
+- Continue per-subsystem signal routing + post-route EMI sim
+- Stage 10 final integration + full-board DRC (Pi swap procedure per §8 #6)
+- Phase 7 fab-prep
+
+**Per-subsystem sim list** (STEP 5 power-routed):
+
+| Subsystem | Power sims required |
+|---|---|
+| CH1/CH2/CH3/CH4 | loop-L per phase (FET-cluster) + ngspice PI on +VMOTOR + Elmer thermal per FET + audit_power_drc |
+| S1 (battery input) | rev-pol FET I²R thermal + +VMOTOR plane integrity + audit_power_drc |
+| S2 (bulk caps) | ripple sim (4-channel staggered PWM) + bulk cap ESL/ESR per cap + audit_power_drc |
+| S3 (supervisor + Hall) | Hall + VDD decoupling + comparator hysteresis + audit_power_drc |
+| S5 (BEC) | per-buck switching loop-L + per-rail PI ripple + Elmer thermal per buck + audit_power_drc |
+| S6 (connectors) | mainly current-density + connector pad solder + audit_power_drc |
+
+**Per-subsystem iterate rule**: If any STEP 5 power-routed sim FAILS, iterate placement OR routing OR (last resort) escalate to master/Sai. Don't proceed to signal routing on broken power.
+
+**Cascade rule** (NEW lock): subsystem N+1 power routing does NOT start until subsystem N's STEP 5 power-routed sims PASS. Enforces sequential validation.
+
+Codified by: this §8 addendum #7 + audit_power_drc.py (G_PWR_DRC) + [[feedback-sim-execution-gate]] 4-point proof per sim.
