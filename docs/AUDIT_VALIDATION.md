@@ -268,3 +268,32 @@ Context: G_PP11 closed the audit-suite gap that allowed verify_placement.py's bb
 Also Sai-adjudicated 2026-05-26 batch 2.5: G6 highway_reservation now SAME-NET EXEMPT — a same-net component pad inside its highway is the intended electrical tap (e.g., VMOTOR bypass cap in VMOTOR feed corridor), not a routing violation.
 - audit_routing.py check_unrouted_nets (added 2026-05-26) — 7th check on audit_routing.py: every multi-pad non-plane-served net MUST have ≥1 track segment. Class lesson: worker's GetEdges() ratsnest API silently returned 0-open on v2b board with 6 genuinely-unrouted nets (GLB/GLC gate, OTP_TRIP_N, PWM_INHA/INHC/INLB). API claimed success without doing the work (sibling of [[reference-sim-claimed-not-executed]]). Track-count cross-check catches it regardless of API behavior. Optional `--subsystem CHn` arg scopes check to subsystem PRs per §8. Validated against worker's pre-J22-fix v2b board: catches 28 unrouted CH1 nets including all 6 of worker's R22 catch.
 - audit_routing.py check_track_width pad-entry-neck exemption (added 2026-05-26) — exemption for bounded neck (≤2mm length) ending on pad with min-dim < class-min. IPC fab convention: 0.5mm pad cannot accept 1.0mm trace; necked entry is geometric pad constraint, not trace choice. Per [[feedback-physics-as-compass]]: 0.54mm × 2mm tap carrying mA tap current is current-density-safe (J ≈ 5 A/mm² << IPC 30 A/mm² 35°C-rise limit, 1oz Cu). Recorded as INFO with pad ref for audit trail — not silent skip. Validated on worker v2b: 33 legitimate pad-entry-necks exempted (boot cap C59, divider R61, V5_FC J19 etc), 89 non-neck width violations remain visible.
+
+
+## G_SHUNT_FET_OVERLAP / G_SW_GND_VIA / G_HDI_VIA_IN_PAD — orphan-gate wiring (2026-05-27, master R26)
+
+These three audits were committed (PRs #194 / #198 / #207) but NEVER wired into
+`master_pre_merge.sh` — caught by G_META1 orphan detection (3 ORPHANED). Wired
+2026-05-27 as BLOCKING gates per [[feedback-audit-coverage-not-count]] ("gates
+that don't run are vanity") + [[feedback-codify-not-patch]]. Two of the three
+gained `--parked-exempt` support so `master_pre_merge.sh --staged` skips parked
+(x≥130mm) components, mirroring G4/G5/G6.
+
+| Gate | Script | Validates | PR origin | Staged mode |
+|---|---|---|---|---|
+| G_SHUNT_FET_OVERLAP | audit_shunt_fet_source_overlap.py | High-current shunt body bbox overlaps its LS-FET source pad ≥1.5mm² (16-via 0.6mm array per IPC-2152, ~96A continuous; PLACEMENT_GLOBAL_PLAN §8#9). Shunt id = R-ref + 2512 footprint + SHUNT_*_TOP_CHn net membership. | #194 | `--parked-exempt` → skip shunts at x≥130 (FET pair also parked, R27) |
+| G_SW_GND_VIA | audit_sw_gnd_return_pair.py | Every SW commutation via (MOTOR_*_CHn through-via) has a co-located GND-return through-via — Mode A per-via ≤0.5mm (isolated/pair clusters), Mode B cluster-centroid ≤1.5mm (≥3-via clusters). Commutation-loop-L + EMI ringing at 70A (Howard Johnson HSDD + Bogatin SI §11.5; OQ-017). | #198 | `--parked-exempt` → skip SW vias at x≥130 (parked-channel return network off-board) |
+| G_HDI_VIA_IN_PAD | audit_hdi_via_in_pad.py | Any HDI microvia (≤0.15mm drill or VIATYPE_MICROVIA) inside an SMD pad must be on the J18/J19 QFN whitelist — cost-scope guard for the HDI fab process. Vacuous-PASS when no HDI vias present. | #207 | none (board-wide whitelist check; whitelist applies to all channels) |
+
+**Validation 2026-05-27** on staged CH1 board (`phase4v3-stage1-ch1-on-10L`,
+SHA e5ddb23 — CH1 brought, CH2/3/4/S* parked at x≥130):
+
+| Gate | no flag | `--parked-exempt` | Notes |
+|---|---|---|---|
+| G_SHUNT_FET_OVERLAP | FAIL (9 parked CH2/3/4 shunts at x=205-290) | **PASS** — 3 CH1 shunts overlap=9.0mm², 9 parked skipped | parked-exemption resolves the staged false-FAIL exactly as designed |
+| G_SW_GND_VIA | FAIL (2) | **FAIL (2)** — both are on-board CH1 isolated SW vias @ (18,54)+(18,82), nearest GND via 0.8/0.9mm > 0.5mm Mode A limit | NOT a parked artifact: these are real STEP-6-in-progress fanout vias (22/33 signals routed) lacking a ≤0.5mm GND return. Gate correctly catches incomplete CH1 routing. To clear: worker adds a GND through-via within 0.5mm of each, OR completes STEP-6 routing of these nets. NOT to be masked by widening the threshold. |
+| G_HDI_VIA_IN_PAD | PASS (vacuous — 0 HDI vias yet) | n/a | board-wide; no staged handling needed |
+
+G_META1 after wiring: **62 wired / 0 orphaned** (was 59/3). G_D3 doc-sync: all
+3 now present in this file. Synthetic ground-truth fixtures (per R32) are
+VALIDATION-TODO — currently real-board smoke-test only.
