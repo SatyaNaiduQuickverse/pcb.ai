@@ -39,13 +39,26 @@ per IPC-2152 — geometrically impossible.
 Exit 0 PASS, 1 FAIL, 2 USAGE.
 
 Usage:
-  python3 audit_shunt_fet_source_overlap.py <board.kicad_pcb>
+  python3 audit_shunt_fet_source_overlap.py <board.kicad_pcb> [--parked-exempt]
+
+--parked-exempt (2026-05-27, master R26 G_META1 wiring):
+  On a STAGED board (e.g. CH1 brought, CH2/3/4 parked off-board at x≥130),
+  skip any shunt whose body centre x ≥ PARKING_X_THRESHOLD (130mm). Parked
+  shunts can't overlap their FET source pads because both are parked off-board
+  by design (park-then-bring-in R27). Mirrors the pattern in audit_decoupling.py
+  so master_pre_merge.sh can propagate --staged → --parked-exempt uniformly.
 """
 
 import re
 import sys
 from pathlib import Path
 from collections import defaultdict
+
+# --parked-exempt: skip shunts (and thus their FET pairs) parked off-board.
+# Mirrors audit_decoupling.py PARKED_EXEMPT pattern (2026-05-26). board path is
+# argv[1]; the flag is scanned in argv[2:] so it never collides with the board.
+PARKING_X_THRESHOLD = 130.0  # board ≤100mm; parking_grid origin x≥200; 30mm buffer
+PARKED_EXEMPT = "--parked-exempt" in sys.argv[2:]
 
 # Refdes patterns. Original default included R56, but worker 2026-05-27
 # clarified R56/R77/R113/R149 (per-channel) are 10K CSA-C FILTERS in 0402,
@@ -164,7 +177,10 @@ def main():
     print(f"=== Shunt-FET source-pad overlap: {Path(pcb_path).name} ===\n")
     print(f"R26 lock 2026-05-27 (STEP-5 SHUNT ampacity): every high-current")
     print(f"shunt MUST overlap LS FET source pad >= {MIN_OVERLAP_MM2}mm²")
-    print(f"(16-via 0.6mm array per IPC-2152, ~96A continuous).\n")
+    print(f"(16-via 0.6mm array per IPC-2152, ~96A continuous).")
+    if PARKED_EXEMPT:
+        print(f"--parked-exempt: shunts at x ≥ {PARKING_X_THRESHOLD}mm skipped (parked off-board).")
+    print()
 
     board = pcbnew.LoadBoard(pcb_path)
     mm = 1_000_000.0
@@ -204,12 +220,23 @@ def main():
                 return True
         return False
 
-    shunts = [
-        fp for ref, fp in fp_by_ref.items()
-        if SHUNT_REF_PATTERN.match(ref)
-        and SHUNT_FOOTPRINT_HINT in _fpid_str(fp)
-        and _has_top_net(fp)
-    ]
+    def _is_parked(fp):
+        # --parked-exempt: shunt centre x ≥ threshold ⇒ off-board parked.
+        if not PARKED_EXEMPT:
+            return False
+        return (fp.GetPosition().x / mm) >= PARKING_X_THRESHOLD
+
+    parked_skipped = 0
+    shunts = []
+    for ref, fp in fp_by_ref.items():
+        if not (SHUNT_REF_PATTERN.match(ref)
+                and SHUNT_FOOTPRINT_HINT in _fpid_str(fp)
+                and _has_top_net(fp)):
+            continue
+        if _is_parked(fp):
+            parked_skipped += 1
+            continue  # parked off-board; FET pair also parked (R27)
+        shunts.append(fp)
     if not shunts:
         print(f"INFO: no shunts matched pattern {SHUNT_REF_PATTERN.pattern}")
         print(f"      (pattern covers R56/57/58/59 + optional _CHn suffix)")
@@ -270,7 +297,8 @@ def main():
 
     # Report
     print(f"Shunts evaluated: {len(shunts)} "
-          f"(PASS={len(passes)}, FAIL={len(fails)}, SKIP={len(skipped)})\n")
+          f"(PASS={len(passes)}, FAIL={len(fails)}, SKIP={len(skipped)}"
+          f"{f', PARKED-SKIP={parked_skipped}' if PARKED_EXEMPT else ''})\n")
 
     if skipped:
         print(f"SKIP ({len(skipped)}):")

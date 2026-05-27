@@ -77,6 +77,15 @@ import pcbnew
 SW_NET_PATTERN = re.compile(r"^MOTOR_[ABC]_CH[1-4]$")
 GND_NET_NAME = "GND"
 
+# --parked-exempt: skip SW vias parked off-board on a STAGED board
+# (CH2/3/4/S* parked at x≥130 per park-then-bring-in R27). Mirrors
+# audit_decoupling.py PARKED_EXEMPT pattern (2026-05-26). The board path is
+# argv[1]; flag scanned in argv[2:] so it never collides with the board arg.
+# Added 2026-05-27 (master R26 G_META1 wiring) so master_pre_merge.sh can
+# propagate --staged → --parked-exempt to this gate uniformly.
+PARKING_X_THRESHOLD = 130.0  # board ≤100mm; parking_grid origin x≥200; 30mm buffer
+PARKED_EXEMPT = "--parked-exempt" in sys.argv[2:]
+
 # Cluster geometry
 CLUSTER_DISTANCE_MM = 1.5     # SW vias within this distance form a cluster
 CLUSTER_MIN_SIZE = 3          # Mode B threshold
@@ -96,9 +105,12 @@ def dist(a, b):
 
 
 def collect_vias(board):
-    """Return (sw_vias_by_net, gnd_vias) as lists of (x_mm, y_mm)."""
+    """Return (sw_vias_by_net, gnd_vias, parked_sw_skipped) — SW/GND via
+    positions in (x_mm, y_mm); parked_sw_skipped counts SW vias dropped by
+    --parked-exempt (x ≥ PARKING_X_THRESHOLD)."""
     sw_by_net = {}
     gnd = []
+    parked_sw_skipped = 0
     for trk in board.GetTracks():
         if not isinstance(trk, pcbnew.PCB_VIA):
             continue
@@ -109,10 +121,15 @@ def collect_vias(board):
         pos = trk.GetPosition()
         p = (to_mm(pos.x), to_mm(pos.y))
         if SW_NET_PATTERN.match(netn):
+            # --parked-exempt: parked-channel SW vias have no on-board GND
+            # return obligation yet (their FET/return network is off-board).
+            if PARKED_EXEMPT and p[0] >= PARKING_X_THRESHOLD:
+                parked_sw_skipped += 1
+                continue
             sw_by_net.setdefault(netn, []).append(p)
         elif netn == GND_NET_NAME:
             gnd.append(p)
-    return sw_by_net, gnd
+    return sw_by_net, gnd, parked_sw_skipped
 
 
 def cluster_vias(vias, max_intra=CLUSTER_DISTANCE_MM):
@@ -165,11 +182,14 @@ def nearest_gnd_via(pt, gnd_vias):
 # ─── MAIN AUDIT ──────────────────────────────────────────────────────────────
 def audit(board_path):
     board = pcbnew.LoadBoard(board_path)
-    sw_by_net, gnd_vias = collect_vias(board)
+    sw_by_net, gnd_vias, parked_sw_skipped = collect_vias(board)
 
     print(f"audit_sw_gnd_return_pair.py — G_SW_GND_VIA gate")
     print(f"Board: {board_path}")
     print(f"GND through-vias: {len(gnd_vias)}")
+    if PARKED_EXEMPT:
+        print(f"--parked-exempt: {parked_sw_skipped} SW via(s) at x ≥ "
+              f"{PARKING_X_THRESHOLD}mm skipped (parked off-board)")
     print()
 
     if not sw_by_net:
@@ -245,7 +265,11 @@ def audit(board_path):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        sys.stderr.write("USAGE: audit_sw_gnd_return_pair.py <path/to/board.kicad_pcb>\n")
+    # argv[1] = board path; optional --parked-exempt flag handled at module
+    # scope (PARKED_EXEMPT). Reject if board path missing.
+    if len(sys.argv) < 2:
+        sys.stderr.write(
+            "USAGE: audit_sw_gnd_return_pair.py <path/to/board.kicad_pcb> "
+            "[--parked-exempt]\n")
         sys.exit(2)
     sys.exit(audit(sys.argv[1]))

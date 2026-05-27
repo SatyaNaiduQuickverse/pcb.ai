@@ -773,6 +773,48 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G_SHUNT_FET_OVERLAP: §8#9 shunt-FET source pad overlap (PR #194)
+# High-current shunt body MUST overlap its LS-FET source pad ≥1.5mm²
+# (16-via 0.6mm array per IPC-2152, ~96A continuous). Staged mode skips
+# parked shunts (x≥130) whose FET pair is also parked off-board (R27).
+# Wired 2026-05-27 (master R26 G_META1 audit-integrity fix).
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_shunt_fet_source_overlap.py" ]]; then
+  run_gate "G_SHUNT_FET_OVERLAP" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_shunt_fet_source_overlap.py' '$BOARD' $STAGED_MODE" true
+else
+  echo "[G_SHUNT_FET_OVERLAP] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP + 1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_SW_GND_VIA: SW commutation via ↔ GND-return via pairing (PR #198)
+# Every SW (MOTOR_*_CHn) via needs a co-located GND through-via for clean
+# commutation-loop inductance + EMI ringing prevention at 70A switching.
+# Staged mode skips parked-channel SW vias (x≥130). Wired 2026-05-27
+# (master R26 G_META1 audit-integrity fix).
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_sw_gnd_return_pair.py" ]]; then
+  run_gate "G_SW_GND_VIA" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_sw_gnd_return_pair.py' '$BOARD' $STAGED_MODE" true
+else
+  echo "[G_SW_GND_VIA] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP + 1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_HDI_VIA_IN_PAD: HDI via-in-pad cost-scope whitelist (PR #207)
+# Any HDI microvia (≤0.15mm drill) in an SMD pad must be on the J18/J19
+# QFN whitelist (cost envelope). Board-wide whitelist check — no staged
+# mode (vacuous-pass when no HDI vias). Wired 2026-05-27 (master R26
+# G_META1 audit-integrity fix).
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_hdi_via_in_pad.py" ]]; then
+  run_gate "G_HDI_VIA_IN_PAD" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_hdi_via_in_pad.py' '$BOARD'" true
+else
+  echo "[G_HDI_VIA_IN_PAD] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP + 1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G15: Tier 5 signal highway length match
 # ──────────────────────────────────────────────────────────────────
 if [[ -f "$SCRIPTS/audit_length_match.py" ]]; then
