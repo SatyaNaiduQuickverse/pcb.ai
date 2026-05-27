@@ -810,3 +810,18 @@ Codified by: this §8 addendum #8 + worker R22 catch + [[feedback-power-first-pe
 **Symmetry inheritance:** when CH1 shunt placement updates to comply, CH2/3/4 mirror specs MUST receive the same coordinate shift via lockfile update — preserves R19/OQ-019 [[feedback-symmetry-preserves-work]].
 
 **Per [[feedback-codify-not-patch]]:** this rule joins R25 (decoupling), R23 (passive island), R19 (loop-L symmetry) as a placement discipline.
+
+### §8 addendum #10 — Layer-capacity vs pin-escape-density diagnostic (BINDING, 2026-05-28)
+
+**Trigger**: CH1 STEP-6 on 10L plateaued at 24/30 (worker proved the cap robust across 4 router configs); the J18/J19 wall was originally mis-diagnosed as layer-capacity (→ motivated 8L→10L) but is actually QFN escape-field saturation, fixed by HDI via-in-pad not by layers. Full correction: docs/DEEP_RESEARCH_2026-05-26_J18_J19_ESCAPE.md "DIAGNOSIS CORRECTION 2026-05-28".
+
+**Rule (applies to CH2/3/4 cascade + S1/S2/S3/S5/S6 + future SKUs):**
+
+Before escalating layer count to solve any routing wall, FIRST classify the wall:
+1. Run the **single-net isolation test** on the stuck nets (route each alone on the bare board).
+2. **Fail in isolation at a fine-pitch IC (QFN/BGA ≤0.5 mm pitch)** → pin-ESCAPE-DENSITY problem → fix with **HDI via-in-pad / dog-bone fanout** (adds escape room at the pins). More layers will NOT help (nets can't reach them).
+3. **Route fine in isolation but blocked only by congestion** → layer-CAPACITY problem → more layers / re-place for channel relief is valid.
+
+Layer count and escape density are independent levers. Do not reach for the expensive board-wide lever (more layers) to fix a localised pin-ring problem.
+
+Per [[reference-qfn-pin-escape-bottleneck]] + [[feedback-root-cause-not-symptom]] (diagnose the real root before escalating).
