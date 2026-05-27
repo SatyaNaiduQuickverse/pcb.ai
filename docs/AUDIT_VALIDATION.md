@@ -297,3 +297,102 @@ SHA e5ddb23 — CH1 brought, CH2/3/4/S* parked at x≥130):
 G_META1 after wiring: **62 wired / 0 orphaned** (was 59/3). G_D3 doc-sync: all
 3 now present in this file. Synthetic ground-truth fixtures (per R32) are
 VALIDATION-TODO — currently real-board smoke-test only.
+
+
+## G_M17 stackup-dielectric + 3 sim-honesty fixes — independent-audit blindspots (2026-05-27)
+
+An independent audit found 4 structural blindspots our gates missed. All 4
+closed in branch `master-gate-hardening-stackup-injection`:
+
+### 1. No `(stackup)` block — G_M17 (`audit_stackup_dielectric.py`) + `inject_stackup.py`
+
+**Gap**: The board carried the 10-copper-LAYER stack (the `(layers ...)` block,
+checked by G_M16) but had NO `(setup (stackup ...))` block. The OQ-014
+load-bearing F.Cu→In1.Cu = 0.10mm prepreg (the SW commutation loop-L plane
+reference; STEP-6 0.1953nH/phase) existed only as a human comment in a layer
+descriptor — never as a fabricable definition. JLC would build a DEFAULT 1.6mm
+10L dielectric split → the 0.10mm reference NOT guaranteed → loop-L assumption
+silently breaks at fab. G_M16 counts copper layers; it says nothing about the
+dielectric BETWEEN them.
+
+**Fix (root-cause)**: `hardware/kicad/scripts/inject_stackup.py` — idempotently
+injects the LOCKED 10L dielectric stack (docs/BOARD_INVARIANTS.md lines 15-30,
+OQ-014) as a `(setup (stackup ...))` block: 10 copper + 9 dielectric + 6
+technical layers, KiCad-9 grammar, content-neutral (strips any existing stackup
+first, mirrors setup_board.py `_strip_*` pattern). Worker runs it on the routed
+board as CH1-closure Step F.
+
+**Fix (recurrence-prevention)**: G_M17 `audit_stackup_dielectric.py` — BLOCKING
+gate wired into `master_pre_merge.sh` (right after G_M16). FAILS if the board
+lacks a `(stackup)` block OR F.Cu→In1.Cu dielectric ≠ 0.10mm (±0.005). G_META1
+orphan count after wiring: **63 wired / 0 orphaned**.
+
+**Validation 2026-05-27** on worker board `phase4v3-stage1-ch1-on-10L`
+(`pcbai_fpv4in1.kicad_pcb`, git-show to /tmp; 783 tracks / 217 vias / 573 fps):
+
+| Step | Result |
+|---|---|
+| inject_stackup self-test: parse | ✅ pcbnew LoadBoard parses; `GetCopperLayerCount()==10` unchanged |
+| inject_stackup self-test: content-neutral | ✅ tracks 783→783, vias 217→217, fps 573→573; diff = +127 lines (stackup only), 0 removed |
+| inject_stackup self-test: KiCad round-trip | ✅ SaveBoard retains stackup; `dielectric 1` = Prepreg 0.1mm |
+| inject_stackup self-test: idempotent re-run | ✅ strips 1, re-adds 1; exactly 1 stackup block; same byte size |
+| G_M17 on board WITHOUT stackup | ✅ FAIL (exit 1) "board has NO (stackup) block" |
+| G_M17 on board AFTER injection | ✅ PASS (exit 0) "F.Cu→In1.Cu = 0.1mm" |
+
+Copper+dielectric total = 1.435mm (BOARD_INVARIANTS per-pair table; JLC's 1.6mm
+"standard" board adds soldermask + fab tolerance to reach 1.6mm nominal).
+Synthetic-fixture validation per R32: VALIDATION-TODO (real-board smoke-test
+only so far).
+
+### 2. Loop-L sim used PLANNED n_sw_vias, not actual (`sims/phase4v3/ch1_loop_l/loop_extract.py`)
+
+**Gap**: `loop_extract.py` computed `n_sw_vias = min(n_fit, 25)` (a planned
+fittable-area estimate, ~16) EVEN WHEN run on a ROUTED board that actually had
+only 5-6 SW vias per phase. It validated against INTENT, not reality. The
+committed `loop_l_table.csv` reported `n_sw_vias=16` for all 3 phases — but the
+routed board has 5/5/6.
+
+**Fix**: the script now auto-detects stage (board has vias → ROUTED) and COUNTS
+the actual SW vias on each phase's net (`MOTOR_x_CH1`) from real geometry. With
+fewer vias the via-cluster term `L_via_cluster = L_via_single / N` is HIGHER
+(honest). New CSV column `n_sw_vias_source` ∈ {actual, planned}; every phase
+prints `n_sw_vias: actual=N (counted from board ...)`. Placement-only boards
+(0 vias) still fall back to the planned estimate, so-labelled.
+
+**Validation** on worker routed board: reports `actual=5 / actual=5 / actual=6`
+(A/B/C), NOT 16. L_loop rises to ~0.30nH (from the worker's 0.1953nH) — still
+PASS < 2nH because plane-dominated, but the number now reflects reality.
+(`loop_l_table.csv` is a worker result artifact regenerated from the canonical
+board — not committed by master; only the corrected script is.)
+
+### 3. `extract_sim_verdicts.py` scanned only `sims/phase4v3/` (empty of CH1 on master)
+
+**Gap**: CH1 sims live on the worker branch; on master `sims/phase4v3/` has no
+CH1 loop results, so the verdict extractor verified nothing for CH1. This is now
+SURFACED honestly: with the loop sim dir present but no result CSV on master, the
+extractor reports `NO_NUMERIC_RESULT` (exit 1) for `ch1_loop_l` — the truthful
+state (no canonical CH1 result on master to verify against) rather than a silent
+pass. The fix is interlocked with #4. (`extract_sim_verdicts.py` is a post-batch
+utility, NOT wired into `master_pre_merge.sh` and NOT in G_META1 scope, so it
+does not block merges.)
+
+### 4. `has_conditional_pass()` keyword loophole
+
+**Gap**: A sim with NO numeric result PASSED (as CONDITIONAL_PASS) purely on a
+doc-keyword match ("CONDITIONAL PASS" in RESULTS.md, or a RESOLVED OQ in
+OPEN_QUESTIONS.md). Prose alone shipped green — the [[reference-sim-claimed-not-
+executed]] class.
+
+**Fix**: a conditional pass is now ONLY a master DOWNGRADE of a real NUMERIC
+raw-FAIL, never a way to manufacture a pass from nothing. With NO numeric result,
+the verdict is `NO_NUMERIC_RESULT` (non-passing, counted as failure for the exit
+code) regardless of any conditional keyword. `has_conditional_pass()` docstring
+scoped accordingly.
+
+**Validation** (synthetic fixtures):
+
+| Fixture | Has number? | Conditional keyword? | Verdict | Exit |
+|---|---|---|---|---|
+| keyword-only RESULTS.md, no CSV | no | yes | **NO_NUMERIC_RESULT** (blocks) | 1 |
+| numeric FAIL (L=3.5nH) + keyword | yes (3.5) | yes | CONDITIONAL_PASS (downgrade preserved) | — |
+| clean numeric PASS (L=0.3nH) | yes (0.3) | — | PASS | 0 |

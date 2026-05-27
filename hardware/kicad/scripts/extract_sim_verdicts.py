@@ -45,7 +45,12 @@ def has_conditional_pass(sim_dir):
     Two sources: (1) sim's own RESULTS.md, (2) docs/OPEN_QUESTIONS.md resolved
     OQ with same sim-key — master adjudication takes precedence over worker's
     honest raw FAIL when physics justifies it (e.g., loop-L free-space FAIL vs
-    plane-referenced PASS after stackup-dielectric lock)."""
+    plane-referenced PASS after stackup-dielectric lock).
+
+    SCOPE (audit 2026-05-27 loophole fix): this flag ONLY downgrades a NUMERIC
+    raw-FAIL to CONDITIONAL_PASS. It does NOT manufacture a pass when there is
+    NO numeric result — a sim with no number records NO_NUMERIC_RESULT
+    (non-passing) regardless of any conditional keyword. See main()."""
     for fp in glob.glob(os.path.join(sim_dir, "RESULTS.md")):
         text = open(fp).read()
         if re.search(r"CONDITIONAL\s+PASS|STAGE-?3\s+CONDITIONAL", text, re.IGNORECASE):
@@ -142,12 +147,22 @@ def main():
             verdicts[entry] = {"status": "PENDING", "value": None, "key": key}
             print(f"  ⏳ {entry}: NO RESULT YET (sim still running or extract not complete)")
             continue
-        if val is None and conditional:
-            # OQ-014/016 placement-stage CONDITIONAL PASS — geometric bound not
-            # well-posed at placement; post-route STEP 6 re-sim mandatory.
-            verdicts[entry] = {"status": "CONDITIONAL_PASS", "value": None, "key": key,
-                              "note": "placement-stage; post-route STEP-6 re-sim mandatory (OQ-014/016)"}
-            print(f"  🟡 {entry}: CONDITIONAL PASS (placement-stage; OQ-014/016 post-route re-sim required)")
+        if val is None:
+            # CONDITIONAL-PASS-KEYWORD LOOPHOLE FIX (independent audit 2026-05-27):
+            # Previously, a sim with NO numeric result PASSED (as CONDITIONAL_PASS)
+            # purely on a doc-keyword match ("CONDITIONAL PASS" in RESULTS.md, or a
+            # RESOLVED OQ in OPEN_QUESTIONS.md). That let a sim with zero numbers
+            # ship green on prose alone — exactly the [[reference-sim-claimed-not-
+            # executed]] class. A conditional pass is a master DOWNGRADE of a real
+            # numeric FAIL, NOT a way to manufacture a pass from nothing. So with
+            # NO numeric result we record NO_NUMERIC_RESULT (a NON-passing status,
+            # counted as failed) even if the conditional keyword is present.
+            verdicts[entry] = {"status": "NO_NUMERIC_RESULT", "value": None, "key": key,
+                              "note": "conditional-pass keyword present but NO numeric result — "
+                                      "keyword alone does NOT pass (audit 2026-05-27); "
+                                      "produce an actual numeric result that meets threshold"}
+            print(f"  ❌ {entry}: NO_NUMERIC_RESULT — conditional-pass keyword found but the sim "
+                  f"produced no extractable numeric value. Keyword alone does NOT pass.")
             continue
 
         thresh = THRESHOLDS[key]["max"]
@@ -176,13 +191,17 @@ def main():
     pending = sum(1 for v in verdicts.values() if v["status"] == "PENDING")
     passed = sum(1 for v in verdicts.values() if v["status"] == "PASS")
     failed = sum(1 for v in verdicts.values() if v["status"] == "FAIL")
-    print(f"  Pending: {pending}  Passed: {passed}  Failed: {failed}")
+    # NO_NUMERIC_RESULT (conditional-keyword-without-number) is NON-passing and
+    # counts as a failure for the exit code (audit 2026-05-27 loophole fix).
+    no_numeric = sum(1 for v in verdicts.values() if v["status"] == "NO_NUMERIC_RESULT")
+    print(f"  Pending: {pending}  Passed: {passed}  Failed: {failed}  "
+          f"No-numeric-result: {no_numeric}")
 
     out_path = os.path.join(sims_base, "verdicts_summary.json")
     json.dump(verdicts, open(out_path, "w"), indent=2)
     print(f"  Summary: {out_path}")
 
-    return 1 if failed > 0 else 0
+    return 1 if (failed > 0 or no_numeric > 0) else 0
 
 if __name__ == "__main__":
     sys.exit(main())

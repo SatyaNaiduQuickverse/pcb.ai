@@ -676,6 +676,19 @@ else
   echo "[G_M16_stackup_layers] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
 fi
 
+# G_M17 stackup DIELECTRIC presence + lock (2026-05-27 independent-audit catch).
+# G_M16 counts copper LAYERS; G_M17 verifies the board actually carries a
+# (stackup) block AND the F.Cu→In1.Cu dielectric == 0.10mm (OQ-014 loop-L
+# plane-reference LOCK). Without this the dielectric was a comment, never a
+# fabricable definition → JLC default split → loop-L assumption breaks silently.
+# FIX path: hardware/kicad/scripts/inject_stackup.py.
+if [[ -f "$SCRIPTS/audit_stackup_dielectric.py" ]]; then
+  run_gate "G_M17_stackup_dielectric" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_stackup_dielectric.py' '$BOARD'" true
+else
+  echo "[G_M17_stackup_dielectric] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
 # G_PWR_DRC power-net custom DRC (Sai 2026-05-26 — Pi-only, no kicad-cli OOM
 # path). Catches catastrophic power-net clearance violations early (280A
 # continuous = arc/fire risk). Complementary to subsystem-scope DRC.
