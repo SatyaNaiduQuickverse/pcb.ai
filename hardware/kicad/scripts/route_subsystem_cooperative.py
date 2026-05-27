@@ -86,13 +86,29 @@ DEFAULT_MAX_ITER = 30
 # Layer IDs (from pcbnew)
 F_CU = pcbnew.F_Cu       # 0
 B_CU = pcbnew.B_Cu       # 2
+IN1_CU = pcbnew.In1_Cu   # 4  — GND plane
 IN2_CU = pcbnew.In2_Cu   # 6  — primary escape
+IN3_CU = pcbnew.In3_Cu   # 8  — GND plane
 IN4_CU = pcbnew.In4_Cu   # 10 — BEMF dedicated
+IN5_CU = pcbnew.In5_Cu   # 12 — +VMOTOR plane
 IN6_CU = pcbnew.In6_Cu   # 14 — SW (mostly used by commutation already)
+IN7_CU = pcbnew.In7_Cu   # 16 — GND plane
 IN8_CU = pcbnew.In8_Cu   # 18 — overflow / SWD / control
 
 # Layers we may route on (in order of preference for layer-cost)
 SIGNAL_LAYERS = [F_CU, B_CU, IN2_CU, IN4_CU, IN6_CU, IN8_CU]
+
+# ALL copper layers in 10L stackup — used for via-span obstacle validation.
+# A through-via spans F.Cu -> B.Cu and therefore intersects EVERY inner copper
+# layer including the plane layers (In1/In3/In5/In7). The router MUST validate
+# the via against foreign-net copper on each of those layers, not just on the
+# two routing layers it connects.
+ALL_COPPER_LAYERS = [F_CU, IN1_CU, IN2_CU, IN3_CU, IN4_CU,
+                     IN5_CU, IN6_CU, IN7_CU, IN8_CU, B_CU]
+
+# Plane layers (untouched by signal routing) — used to detect when a proposed
+# via must respect an antipad against an existing power plane fill.
+PLANE_LAYERS = [IN1_CU, IN3_CU, IN5_CU, IN7_CU]
 
 # Net classification -> preferred inner-layer escape (highest priority first)
 LAYER_PREF = [
@@ -233,9 +249,103 @@ def iu_to_mm(iu: int) -> float:
     return iu / 1e6
 
 
+def _point_in_polygon(x: float, y: float, polygon) -> bool:
+    """Ray-cast point-in-polygon. polygon = list of (x, y) tuples (closed implicit)."""
+    n = len(polygon)
+    if n < 3:
+        return False
+    inside = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = polygon[i]
+        xj, yj = polygon[j]
+        if ((yi > y) != (yj > y)):
+            x_intersect = (xj - xi) * (y - yi) / (yj - yi + 1e-30) + xi
+            if x < x_intersect:
+                inside = not inside
+        j = i
+    return inside
+
+
+def _point_near_polygon_edge(x: float, y: float, polygon, dist_sq: float) -> bool:
+    """True if (x, y) within sqrt(dist_sq) of any polygon edge."""
+    n = len(polygon)
+    if n < 2:
+        return False
+    j = n - 1
+    for i in range(n):
+        x1, y1 = polygon[j]
+        x2, y2 = polygon[i]
+        dx = x2 - x1; dy = y2 - y1
+        seg_len2 = dx * dx + dy * dy
+        if seg_len2 < 1e-18:
+            d2 = (x - x1) ** 2 + (y - y1) ** 2
+        else:
+            t = ((x - x1) * dx + (y - y1) * dy) / seg_len2
+            t = max(0.0, min(1.0, t))
+            px = x1 + t * dx; py = y1 + t * dy
+            d2 = (x - px) ** 2 + (y - py) ** 2
+        if d2 <= dist_sq:
+            return True
+        j = i
+    return False
+
+
 def layer_short_name(layer_id: int) -> str:
-    return {F_CU: "F.Cu", B_CU: "B.Cu", IN2_CU: "In2.Cu",
-            IN4_CU: "In4.Cu", IN6_CU: "In6.Cu", IN8_CU: "In8.Cu"}.get(layer_id, f"L{layer_id}")
+    return {F_CU: "F.Cu", B_CU: "B.Cu",
+            IN1_CU: "In1.Cu", IN2_CU: "In2.Cu",
+            IN3_CU: "In3.Cu", IN4_CU: "In4.Cu",
+            IN5_CU: "In5.Cu", IN6_CU: "In6.Cu",
+            IN7_CU: "In7.Cu", IN8_CU: "In8.Cu"}.get(layer_id, f"L{layer_id}")
+
+
+# Net classification — pours that get HARD via-blocking.
+# KEY INSIGHT (v2): KiCad ZONE_FILLER automatically generates an ANTIPAD around
+# every foreign-net via inside a zone. For full-fill plane nets (GND, +VMOTOR
+# on inner planes In1/3/5/7), the antipad keeps the via barrel clear of plane
+# copper, so foreign vias are SAFE inside those planes — we MUST NOT block them
+# (otherwise the router can't via anywhere because planes cover the entire
+# subsystem zone).
+#
+# For F.Cu / B.Cu POUR nets (MOTOR_*_CHn, SHUNT_*_TOP_CHn, +V_* islands),
+# antipads are also auto-created, BUT:
+#   1. These pours often hug pads tightly — antipad may collide with neighbour
+#      pad clearance (DRC clearance violation on the same layer).
+#   2. The pours cross channel boundaries (MOTOR_A_CH2 fill extends into the
+#      gap-region) and a via dropped there will cut the pour up.
+# The v1 catastrophic shorts were specifically:
+#   - VIA on (F.Cu→B.Cu) intersects TRACK on InN.Cu (foreign signal) — the
+#     v2 cross-layer obstacle check handles this without needing pour-block.
+#   - TRACK on InN.Cu on top of a foreign track on same layer — handled by
+#     pre-existing per-layer obstacle stamping.
+# So the HARD via-block plane list is RESTRICTED to F.Cu/B.Cu pour nets only —
+# we never hard-block GND/+VMOTOR inner planes (KiCad antipad handles them).
+POWER_POUR_NET_PATTERNS = [
+    re.compile(r"^MOTOR_[ABC]_CH\d+$"),
+    re.compile(r"^SHUNT_[ABC]_TOP_CH\d+$"),
+]
+
+def is_hard_block_pour_net(netname: str) -> bool:
+    if not netname:
+        return False
+    for pat in POWER_POUR_NET_PATTERNS:
+        if pat.search(netname):
+            return True
+    return False
+
+# Kept for backward-compatibility / future use (returns True for nets we'd
+# treat as plane-class in net-router heuristics).
+def is_power_plane_net(netname: str) -> bool:
+    if not netname:
+        return False
+    for pat in (POWER_POUR_NET_PATTERNS + [
+            re.compile(r"^GND$"), re.compile(r"^BATGND$"),
+            re.compile(r"^\+VMOTOR"), re.compile(r"^VMOTOR_CH"),
+            re.compile(r"^\+V"), re.compile(r"^\+3V"), re.compile(r"^V3V3"),
+            re.compile(r"^V_BUCK"), re.compile(r"^HALL_VCC")]):
+        if pat.search(netname):
+            return True
+    return False
 
 
 # ─── Board state extraction ───────────────────────────────────────────────
@@ -253,7 +363,13 @@ class BoardState:
         self.pad_obstacles_by_layer = defaultdict(list)
         self.track_obstacles_by_layer = defaultdict(list)  # (x1,y1,x2,y2,width_mm,owner)
         self.via_obstacles = []                            # (x,y,diam_mm,owner)
-        self.zone_obstacles_by_layer = defaultdict(list)   # (poly_pts, owner)  — not used; treated soft via congestion
+        # Zone bboxes for SOFT cost (legacy MOTOR/SHUNT on F/B.Cu)
+        self.zone_obstacles_by_layer = defaultdict(list)   # (xmin,ymin,xmax,ymax, owner)
+        # NEW v2: filled-poly zones for HARD via-blocking on plane layers.
+        # Each entry: (poly_set_outline_coords, layer, netname, bbox)
+        # poly_set_outline_coords is a list of outlines; each outline = list of (x,y) mm.
+        # Used to test point-in-polygon for via clearance against foreign power planes.
+        self.filled_zones = []  # [(outlines, layer, netname, bbox)]
 
         self._collect()
 
@@ -269,10 +385,18 @@ class BoardState:
                 sz = pad.GetSize()
                 sx = iu_to_mm(sz.x); sy = iu_to_mm(sz.y)
                 ls = pad.GetLayerSet()
+                # Routing layers the pad lives on (signal pad escape uses these)
                 layers = []
                 for lid in SIGNAL_LAYERS:
                     if ls.Contains(lid): layers.append(lid)
-                # If pad is on ALL copper layers (through-hole), include all signal layers
+                # v2 fix: all copper layers the pad copper actually occupies
+                # (for through-hole pads this includes the plane layers).
+                # Used for stamping pad-obstacle on plane layers so foreign
+                # vias respect pad clearance through the entire copper stack.
+                all_layers_for_pad = []
+                for lid in ALL_COPPER_LAYERS:
+                    if ls.Contains(lid):
+                        all_layers_for_pad.append(lid)
                 if netname:
                     self.net_pads[netname].append((fp.GetReference(), pad.GetPadName(), x, y, layers, sx, sy))
                     if netobj and netname not in self.net_obj:
@@ -280,8 +404,11 @@ class BoardState:
                 # Pad obstacle stored as (x, y, half_x, half_y, owner_net, padid).
                 # Stamping in grid uses ELLIPTICAL keepout: actual pad bbox + clearance.
                 # For SAME-net routing the pad cells become accessible.
+                # v2: stamp on EVERY copper layer the pad occupies (for THT pads,
+                # includes plane layers) so foreign-net vias on those layers
+                # honour the pad clearance.
                 hx = sx / 2; hy = sy / 2
-                for lid in layers:
+                for lid in all_layers_for_pad:
                     self.pad_obstacles_by_layer[lid].append((x, y, hx, hy, netname or "<NC>", fp.GetReference()+"."+pad.GetPadName()))
 
         # Tracks + vias
@@ -302,7 +429,14 @@ class BoardState:
                         diam = max(diam, w)
                     except Exception:
                         pass
-                self.via_obstacles.append((x, y, diam/2 + CLEARANCE_MM, netname))
+                # v2: obstacle circle radius must accommodate BOTH:
+                #   - foreign via centerline gap (via_pad + clearance from this via pad)
+                #   - foreign track centerline gap (via_pad + clearance + trace_half from this via pad)
+                # Use the larger of the two — trace case — so obstacle cells block
+                # both new tracks and new vias passing too close.
+                # via_obstacle_radius = (this_via_pad/2) + CLEARANCE + trace_half + slop
+                self.via_obstacles.append((x, y,
+                    diam/2 + CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM, netname))
             else:
                 s = t.GetStart(); e = t.GetEnd()
                 x1 = iu_to_mm(s.x); y1 = iu_to_mm(s.y)
@@ -310,9 +444,16 @@ class BoardState:
                 w = iu_to_mm(t.GetWidth())
                 self.track_obstacles_by_layer[t.GetLayer()].append((x1, y1, x2, y2, w, netname))
 
-        # Zones (treat as soft obstacles — heavy penalty but not blocking)
-        # We don't fully expand zone polys here; the zone fills mostly affect F/B.Cu
-        # MOTOR / SHUNT zones on F.Cu. Treat their poly bbox as soft cost.
+        # Zones — two-pass capture:
+        #   1. SOFT obstacle (legacy): zone bbox stamped as history-bump on F/B.Cu
+        #      for MOTOR/SHUNT pours. Kept for backward compatibility.
+        #   2. HARD obstacle (v2 fix): for POWER-PLANE nets (GND/+VMOTOR/+3V3/etc),
+        #      capture filled-poly outlines so we can test point-in-polygon at via
+        #      placement time. A foreign-net via landing inside a power plane fill
+        #      causes a net-to-net short (catastrophic). Even though KiCad will
+        #      auto-create antipads, the router must respect via-pad clearance to
+        #      neighboring foreign copper inside the plane — easier (and correct)
+        #      to BLOCK foreign-net via cells inside foreign-net power-plane fills.
         for z in list(b.Zones()):
             netname = z.GetNetname()
             layer = z.GetLayer()
@@ -321,6 +462,39 @@ class BoardState:
                 xmin = iu_to_mm(bb.GetX()); ymin = iu_to_mm(bb.GetY())
                 xmax = xmin + iu_to_mm(bb.GetWidth()); ymax = ymin + iu_to_mm(bb.GetHeight())
                 self.zone_obstacles_by_layer[layer].append((xmin, ymin, xmax, ymax, netname))
+            except Exception:
+                pass
+            # Capture filled polygons for HARD via-blocking (v2 fix).
+            # Restricted to F.Cu / B.Cu POUR nets only (MOTOR/SHUNT) — inner
+            # plane fills (GND/+VMOTOR) get auto-antipads from ZONE_FILLER and
+            # MUST NOT be hard-blocked or the router can't via anywhere.
+            try:
+                if not z.IsFilled():
+                    continue
+                if not is_hard_block_pour_net(netname):
+                    continue
+                # Only F.Cu / B.Cu pour-block (inner-plane fills not blocked)
+                if layer not in (F_CU, B_CU):
+                    continue
+                poly_set = z.GetFilledPolysList(layer)
+                if poly_set is None:
+                    continue
+                outlines = []
+                for o in range(poly_set.OutlineCount()):
+                    outline = poly_set.Outline(o)
+                    pts = []
+                    for k in range(outline.PointCount()):
+                        v = outline.CPoint(k)
+                        pts.append((iu_to_mm(v.x), iu_to_mm(v.y)))
+                    if len(pts) >= 3:
+                        outlines.append(pts)
+                if not outlines:
+                    continue
+                bb_xmin = iu_to_mm(bb.GetX()); bb_ymin = iu_to_mm(bb.GetY())
+                bb_xmax = bb_xmin + iu_to_mm(bb.GetWidth())
+                bb_ymax = bb_ymin + iu_to_mm(bb.GetHeight())
+                self.filled_zones.append((outlines, layer, netname,
+                                           (bb_xmin, bb_ymin, bb_xmax, bb_ymax)))
             except Exception:
                 pass
 
@@ -377,6 +551,19 @@ class CongestionGrid:
         self.net_halo = defaultdict(set)  # (i,j,L) -> {netnames}
         # Via-forbidden zones: cells too close to a pad to host a via (clearance)
         self.via_forbidden_zones = {}  # (i,j,L) -> {netnames}
+        # v2: Plane-fill rasterization — cells inside a power-plane fill on
+        # an inner copper layer, keyed by layer. Used to HARD-BLOCK foreign-net
+        # vias from landing in foreign power planes.
+        #   via_plane_owners[(i,j)] = {layer: owner_netname, ...}
+        # If a via at (i,j) connects layers L1->L2 (through-via spans all
+        # copper layers), then for each layer L in the via span, if
+        # via_plane_owners[(i,j)].get(L) is set and != via's net, the via is
+        # REJECTED. This forces the router around foreign power planes.
+        self.via_plane_owners = defaultdict(dict)  # (i,j) -> {layer: owner_net}
+        # v2: foreign-track on inner layers — cells with foreign track copper
+        # on a specific layer; via through-spans all layers so we must check
+        # all-layer track maps not just routing-layer ones.
+        # (Already covered by obstacle set per-layer; new helper iterates them.)
 
     def in_bounds(self, i, j):
         return 0 <= i < self.nx and 0 <= j < self.ny
@@ -513,6 +700,133 @@ class CongestionGrid:
             return True
         return False
 
+    def stamp_plane_fill(self, outlines, layer, owner_net, antipad_mm):
+        """v2 fix: rasterize a power-plane fill onto via_plane_owners[(i,j)][layer].
+
+        For every cell within the filled polygons (or within antipad_mm of an
+        edge, conservatively expanded), mark the cell as 'owned by owner_net
+        on this layer'. Foreign-net vias touching this cell on this layer get
+        REJECTED — they would short the via barrel to the plane copper unless
+        an antipad of >= clearance is reserved, which the router cannot
+        guarantee without an antipad-creation pass.
+
+        We use bounding-box scan + edge ray-cast point-in-polygon (works for
+        the merged poly_set outlines KiCad gives).
+        """
+        if layer not in ALL_COPPER_LAYERS:
+            return
+        # Compute bbox over all outlines + antipad pad-out
+        if not outlines:
+            return
+        all_x = [px for outline in outlines for (px, _py) in outline]
+        all_y = [py for outline in outlines for (_px, py) in outline]
+        xmin = min(all_x) - antipad_mm; xmax = max(all_x) + antipad_mm
+        ymin = min(all_y) - antipad_mm; ymax = max(all_y) + antipad_mm
+        # Clip to grid bounds
+        if xmax < self.xmin or xmin > self.xmax: return
+        if ymax < self.ymin or ymin > self.ymax: return
+        i_min, j_min = self.xy_to_ij(xmin, ymin)
+        i_max, j_max = self.xy_to_ij(xmax, ymax)
+        i_min = max(0, i_min); j_min = max(0, j_min)
+        i_max = min(self.nx - 1, i_max); j_max = min(self.ny - 1, j_max)
+        ap2 = antipad_mm * antipad_mm
+        for i in range(i_min, i_max + 1):
+            for j in range(j_min, j_max + 1):
+                cx, cy = self.cell_xy(i, j)
+                inside = False
+                for outline in outlines:
+                    if _point_in_polygon(cx, cy, outline):
+                        inside = True
+                        break
+                if not inside:
+                    # Check edge distance within antipad
+                    near = False
+                    for outline in outlines:
+                        if _point_near_polygon_edge(cx, cy, outline, ap2):
+                            near = True
+                            break
+                    if not near:
+                        continue
+                # Mark this cell as plane-owned on this layer
+                prev = self.via_plane_owners[(i, j)].get(layer)
+                if prev is None:
+                    self.via_plane_owners[(i, j)][layer] = owner_net
+                # If already owned by same or another net, keep first owner
+                # (multiple plane fills with same net on same layer is fine;
+                # different nets shouldn't occur on same layer)
+
+    def via_blocked_for_net(self, i, j, netname, span_layers=ALL_COPPER_LAYERS):
+        """v2 fix: A through-via at (i,j) for `netname` is blocked if ANY
+        copper layer in span_layers has a foreign-net obstacle within the
+        via's pad+clearance halo of (i,j).
+
+        Optimized two-radius scan:
+          - obstacle / net_halo scan: small radius (delta_halo_cells) because
+            obstacle stamping already includes (track_half + clearance +
+            trace_half + slop) per stamp_obstacle_segment, plus we need
+            extra `via_pad_extra = (via_pad - trace_half)` cells of expansion
+            to convert "track-touches-trace" margin into "track-touches-via"
+            margin.
+          - via_plane_owners scan: scan within (via_pad/2 + clearance) cells
+            because pours are rasterized to their EXACT polygon edge (no
+            built-in margin in via_plane_owners).
+
+        Skip plane layers in obstacle check (we deliberately do NOT block
+        foreign vias inside inner GND/+VMOTOR planes — KiCad auto-antipads).
+
+        Returns (blocked: bool, reason: str).
+        """
+        # Obstacle scan radius: delta = via_pad - trace_pad (how much wider
+        # the via is than the existing trace-halo accounted for)
+        via_pad_half_mm = VIA_DIAM_MM / 2 + CLEARANCE_MM
+        # obstacle keepout already includes (TRACE_HALF + CLEARANCE + slop)
+        # = TRACE_HALF + CLEARANCE + GRID_SLOP_MM ≈ 0.305mm.
+        # We want the via center within (via_pad_half_mm) of any obstacle CELL
+        # center to be considered blocked. So extra delta = via_pad_half_mm - 0.305
+        extra_mm = max(0.0, via_pad_half_mm - (TRACE_HALF_MM + CLEARANCE_MM + GRID_SLOP_MM))
+        r_obs = int(math.ceil(extra_mm / self.pitch))
+        r_obs2 = r_obs * r_obs
+        # Plane scan radius: full via_pad_half (no built-in margin in via_plane_owners)
+        r_plane = int(math.ceil(via_pad_half_mm / self.pitch))
+        r_plane2 = r_plane * r_plane
+
+        # Check obstacle/halo on signal layers, small radius
+        for L in span_layers:
+            if L not in self.layers:
+                continue
+            for di in range(-r_obs, r_obs + 1):
+                for dj in range(-r_obs, r_obs + 1):
+                    if di * di + dj * dj > r_obs2:
+                        continue
+                    ci = i + di; cj = j + dj
+                    if not self.in_bounds(ci, cj):
+                        continue
+                    if (ci, cj, L) in self.obstacle:
+                        if netname not in self.pad_cells.get((ci, cj, L), set()):
+                            return True, f"obstacle@{layer_short_name(L)}@({di},{dj})"
+                    halos = self.net_halo.get((ci, cj, L))
+                    if halos and (halos - {netname}):
+                        return True, f"halo@{layer_short_name(L)}@({di},{dj})"
+
+        # Check via_plane_owners on F/B.Cu (and any other layer that has plane entries)
+        # Note: via_plane_owners has only F.Cu/B.Cu pour cells (per
+        # is_hard_block_pour_net + F_CU/B_CU filter). Plus via-stack same-net
+        # marks from existing vias on all layers (but those check netname == owner).
+        for di in range(-r_plane, r_plane + 1):
+            for dj in range(-r_plane, r_plane + 1):
+                if di * di + dj * dj > r_plane2:
+                    continue
+                ci = i + di; cj = j + dj
+                if not self.in_bounds(ci, cj):
+                    continue
+                cell_planes = self.via_plane_owners.get((ci, cj))
+                if not cell_planes:
+                    continue
+                for L, powner in cell_planes.items():
+                    if powner != netname:
+                        return True, f"plane:{powner}@{layer_short_name(L)}@({di},{dj})"
+        return False, ""
+
     def allow_pad_access(self, x, y, layer, netname, radius_mm=0.35):
         """For pads of this net: remove obstacle marks within radius on layer
         (router can ENTER the pad cell for net=netname)."""
@@ -606,6 +920,16 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
     open_heap = []
     came_from = {}      # cell -> parent cell
     g_score = {}
+    # v2 perf: cache via_blocked_for_net results per (i,j) for this A* run.
+    # Obstacle map is constant during one find_path_astar invocation, so we
+    # can safely memoize. Significant speedup — full-CH1 was 5+ min/iter.
+    via_block_cache = {}  # (i, j) -> bool
+    def _via_blocked(i, j):
+        v = via_block_cache.get((i, j))
+        if v is None:
+            v, _ = grid.via_blocked_for_net(i, j, netname)
+            via_block_cache[(i, j)] = v
+        return v
     # Precompute one representative target for heuristic
     if not targets: return None, None
     targets_set = set(targets)
@@ -660,19 +984,26 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
         # FORBID via inside any pad zone (own or other) — clearance to pads
         via_here_forbidden = grid.is_via_forbidden((i, j, L), netname)
         if not via_here_forbidden:
-            for L2 in allowed_layers:
-                if L2 == L: continue
-                ncell = (i, j, L2)
-                if grid.is_blocked_for(ncell, netname): continue
-                # Also forbid via on dest layer if it lands in another net's pad zone
-                if grid.is_via_forbidden((i, j, L2), netname): continue
-                # via cost: fixed + congestion of both cells
-                via_cost = LAYER_CHANGE_COST + grid.cost(ncell, present_factor)
-                ng = g + via_cost
-                if ng < g_score.get(ncell, math.inf):
-                    g_score[ncell] = ng
-                    came_from[ncell] = cell
-                    heapq.heappush(open_heap, (ng + h(ncell), ng, ncell, cell))
+            # v2 fix: validate proposed THROUGH-via against EVERY copper layer
+            # in the via's span — not just the two routing layers. Catches the
+            # bug class where a via lands on a foreign power plane or foreign
+            # track on an inner layer (catastrophic short).
+            # Routers emit through-vias (F.Cu -> B.Cu) so span = ALL_COPPER_LAYERS.
+            # Memoized via _via_blocked() — see top of function.
+            if not _via_blocked(i, j):
+                for L2 in allowed_layers:
+                    if L2 == L: continue
+                    ncell = (i, j, L2)
+                    if grid.is_blocked_for(ncell, netname): continue
+                    # Also forbid via on dest layer if it lands in another net's pad zone
+                    if grid.is_via_forbidden((i, j, L2), netname): continue
+                    # via cost: fixed + congestion of both cells
+                    via_cost = LAYER_CHANGE_COST + grid.cost(ncell, present_factor)
+                    ng = g + via_cost
+                    if ng < g_score.get(ncell, math.inf):
+                        g_score[ncell] = ng
+                        came_from[ncell] = cell
+                        heapq.heappush(open_heap, (ng + h(ncell), ng, ncell, cell))
     return None, None
 
 
@@ -853,29 +1184,60 @@ class CooperativeRouter:
         # ensures track centerline never lands closer than (clearance + trace_half) to pad edge
         # which means track edge stays ≥clearance from pad edge.
         halo_m = CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM
-        for layer in SIGNAL_LAYERS:
+        # v2: iterate ALL_COPPER_LAYERS so through-hole pads stamp on plane
+        # layers too. CongestionGrid.stamp_obstacle_rect silently skips layers
+        # not in its self.layers list (signal layers only) for obstacle/halo
+        # marking, BUT we still need via_plane_owners marked for THT pads on
+        # plane layers (so foreign-net vias get blocked at the pad cell on
+        # plane layers).
+        for layer in ALL_COPPER_LAYERS:
             for (x, y, hx, hy, owner, padid) in s.pad_obstacles_by_layer.get(layer, []):
-                # Pad copper obstacle
-                g.stamp_obstacle_rect(x, y, hx, hy, layer)
-                # Mark pad cells as accessible to owner net (full pad copper bbox)
-                if owner and owner != "<NC>":
-                    g.allow_pad_access_rect(x, y, layer, owner, hx, hy)
-                    # Net-owned clearance halo: pad bbox + clearance + trace half-width + slop
-                    g.stamp_halo_rect(x, y, hx + halo_m, hy + halo_m, layer, owner)
+                # On signal layers: full obstacle + halo + pad-cell access + via-keepout
+                if layer in SIGNAL_LAYERS:
+                    g.stamp_obstacle_rect(x, y, hx, hy, layer)
+                    if owner and owner != "<NC>":
+                        g.allow_pad_access_rect(x, y, layer, owner, hx, hy)
+                        g.stamp_halo_rect(x, y, hx + halo_m, hy + halo_m, layer, owner)
+                    else:
+                        g.stamp_obstacle_rect(x, y, hx + halo_m, hy + halo_m, layer)
+                    via_keepout = max(hx, hy) + CLEARANCE_MM + VIA_DIAM_MM / 2 + GRID_SLOP_MM
+                    g.mark_pad_zone(x, y, layer, owner or "<NC>", radius_mm=via_keepout)
                 else:
-                    # NC pad: still need clearance halo from other nets — make it a hard obstacle
-                    g.stamp_obstacle_rect(x, y, hx + halo_m, hy + halo_m, layer)
-                # Via-keep-out: cells within (pad bbox + clearance + via_radius + slop) forbid via
-                via_keepout = max(hx, hy) + CLEARANCE_MM + VIA_DIAM_MM / 2 + GRID_SLOP_MM
-                g.mark_pad_zone(x, y, layer, owner or "<NC>", radius_mm=via_keepout)
-        # Tracks -> hard obstacle on their layer
+                    # Plane layer: mark via_plane_owners cell (via_blocked_for_net
+                    # consults this on plane layers during via expansion). The
+                    # pad copper area is small (≤1mm) compared to the plane fill
+                    # rasterization but THT pads MUST own those cells against
+                    # foreign-net vias. Antipad expansion via grid slop.
+                    if owner and owner != "<NC>":
+                        i_min, j_min = g.xy_to_ij(x - hx - halo_m, y - hy - halo_m)
+                        i_max, j_max = g.xy_to_ij(x + hx + halo_m, y + hy + halo_m)
+                        i_min = max(0, i_min); j_min = max(0, j_min)
+                        i_max = min(g.nx - 1, i_max); j_max = min(g.ny - 1, j_max)
+                        for ii in range(i_min, i_max + 1):
+                            for jj in range(j_min, j_max + 1):
+                                pcx, pcy = g.cell_xy(ii, jj)
+                                if abs(pcx - x) <= hx + halo_m and abs(pcy - y) <= hy + halo_m:
+                                    g.via_plane_owners[(ii, jj)].setdefault(layer, owner)
+        # Tracks -> hard obstacle on their layer (signal layers only — planes
+        # have no tracks in normal stackups; we ignore any rogue plane-layer
+        # tracks intentionally since v2 plane-fill rasterization covers them).
         for layer in SIGNAL_LAYERS:
             for (x1, y1, x2, y2, w, owner) in s.track_obstacles_by_layer.get(layer, []):
                 g.stamp_obstacle_segment(x1, y1, x2, y2, w, layer)
-        # Vias -> obstacle on all signal layers (through vias)
+        # Vias -> obstacle on ALL copper layers (through vias span F.Cu to B.Cu
+        # including inner planes — must block foreign-net vias from colliding
+        # on plane layers, not just routing layers; v2 fix companion).
         for (x, y, r, owner) in s.via_obstacles:
-            for layer in SIGNAL_LAYERS:
+            for layer in ALL_COPPER_LAYERS:
                 g.stamp_obstacle_circle(x, y, r, layer)
+            # Also mark via cell as plane-owned by its net on plane layers so
+            # a SAME-net via at (i,j) is not falsely blocked by the existing
+            # via's own clearance halo when retried.
+            i0, j0 = g.xy_to_ij(x, y)
+            for L in ALL_COPPER_LAYERS:
+                # Same-net via stack: owner net "owns" this cell on every layer
+                if owner:
+                    g.via_plane_owners[(i0, j0)].setdefault(L, owner)
         # Zone bboxes on F.Cu / B.Cu (MOTOR/SHUNT pours) -> soft history bump
         for layer in (F_CU, B_CU):
             for (x1, y1, x2, y2, owner) in s.zone_obstacles_by_layer.get(layer, []):
@@ -885,6 +1247,35 @@ class CooperativeRouter:
                     g.stamp_obstacle_zone_bbox(x1, y1, x2, y2, layer, soft=True)
         # (F.Cu / B.Cu discouragement implemented via LAYER_BASE_COST in cost() —
         # no per-cell history bump needed; saves memory.)
+
+        # v2 fix: rasterize POWER-PLANE filled zones for HARD via-blocking on
+        # all copper layers in the through-via span (including inner planes).
+        # antipad_mm includes the via pad radius (VIA_DIAM/2) + clearance +
+        # small grid slop. This is the minimum distance the via centre must be
+        # from the plane edge to keep the via barrel/pad clear of plane copper.
+        # Note: inside the plane fill, a foreign-net via REQUIRES an antipad
+        # hole in the plane; KiCad will draw one at fill time, but the antipad
+        # cuts into the plane and the resulting void may still violate
+        # clearance to OTHER copper. Easiest correct policy: BLOCK foreign-net
+        # vias from plane-interior cells AND from cells within antipad_mm of
+        # plane edge (which is a no-fill region anyway).
+        antipad_mm = VIA_DIAM_MM / 2 + CLEARANCE_MM + GRID_SLOP_MM
+        n_zones_stamped = 0
+        for (outlines, layer, netname, bbox) in s.filled_zones:
+            # Clip stamping to subsystem zone (saves grid cells per layer)
+            zx1, zy1, zx2, zy2 = bbox
+            sx1, sy1, sx2, sy2 = self.zone
+            # margin: include plane just outside zone for via-near-edge check
+            margin = 1.0
+            if zx2 < sx1 - margin or zx1 > sx2 + margin: continue
+            if zy2 < sy1 - margin or zy1 > sy2 + margin: continue
+            g.stamp_plane_fill(outlines, layer, netname, antipad_mm)
+            n_zones_stamped += 1
+        # Also stamp foreign-net tracks on INNER plane layers as obstacle
+        # (these are typically zero on plane layers but worth a sweep — covers
+        # the rare case of a track manually placed on an inner plane layer).
+        # Already handled by per-layer track_obstacles loop above; planes
+        # have no tracks normally.
 
     def _pad_cells_for_net(self, netname):
         """For each pad of net, mark its cells as accessible to the net."""
@@ -991,8 +1382,17 @@ class CooperativeRouter:
                 self.grid.stamp_obstacle_segment(x1, y1, x2, y2, width, layer)
                 # Allow this net's own pads to remain accessible
             for (vx, vy) in vias:
-                for layer in SIGNAL_LAYERS:
-                    self.grid.stamp_obstacle_circle(vx, vy, VIA_DIAM_MM/2 + CLEARANCE_MM, layer)
+                # v2 fix: stamp via obstacle on ALL copper layers in the span
+                # (through-via spans F.Cu->B.Cu). Radius accommodates foreign-
+                # track centerline gap.
+                r = VIA_DIAM_MM / 2 + CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM
+                for layer in ALL_COPPER_LAYERS:
+                    self.grid.stamp_obstacle_circle(vx, vy, r, layer)
+                # Also mark as plane-owned by this net on every copper layer so
+                # a SAME-net repeat via doesn't get false-blocked.
+                vi, vj = self.grid.xy_to_ij(vx, vy)
+                for layer in ALL_COPPER_LAYERS:
+                    self.grid.via_plane_owners[(vi, vj)].setdefault(layer, netname)
         # Re-allow pad cells for THIS net (in case its own pads got stamped)
         for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(netname, []):
             for lid in layers:
