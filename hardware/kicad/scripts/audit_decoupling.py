@@ -38,9 +38,47 @@ except ImportError:
     sys.exit(1)
 
 
-MAX_DISTANCE_MM = 3.0  # R25
+MAX_DISTANCE_MM = 3.0  # R25 default (HIGH-frequency rails)
 IC_BODY_AREA_MIN_MM2 = 4.0  # heuristic: ICs are >4mm² body, passives smaller
 PARKING_X_THRESHOLD = 130.0  # board ≤100mm; parking_grid origin x=200; 30mm buffer
+
+# Net-class-aware decoupling thresholds (Sai 2026-05-27 lock per Bogatin
+# SI Simplified Ch.5 frequency-class analysis). Different rail classes have
+# different decoupling distance requirements because the decoupling cap's
+# job is to provide low-impedance current return at the rail's switching
+# frequency. HIGH-frequency rails (digital MCU VDD, gate-driver V_DRIVE)
+# need the cap CLOSE (≤3mm via stub L); LOWER-frequency rails (analog
+# reference, connector supply) tolerate larger distance.
+#
+# Per Bogatin Ch.5: cap-stub inductance L = μ₀·d/π × ln(2d/r). At 3mm stub
+# the inductance is ~3nH; at 8mm it's ~10nH. Impedance at 1MHz = 19mΩ vs
+# 63mΩ — both acceptable for low-frequency loads. At 100MHz: 1.9Ω vs 6.3Ω
+# — only the tight one works for high-frequency loads.
+#
+# Codified by [[feedback-codify-not-patch]]: rule emerges from physics,
+# not arbitrary uniform threshold.
+NET_CLASS_MAX_DISTANCE_MM = {
+    # HIGH-FREQ (10MHz+ load transients): MCU digital VDD, gate-driver V_DRIVE
+    r"^\+3V3$":     3.0,   # MCU digital VDD (24kHz PWM core, 100MHz CLK)
+    r"^\+5V$":      3.0,   # driver V_DRIVE (high di/dt gate drive)
+    # MEDIUM-FREQ (1-10MHz): buck outputs at switching freq
+    r"^V_BUCK\d?":  5.0,   # buck output rails (1-2MHz buck switching freq)
+    r"^\+V9":       5.0,   # gate-driver bootstrap supply (turn-on transient)
+    # LOW-FREQ (≤1MHz): analog reference, connector supply quasi-static
+    r"^\+3V3A$":    8.0,   # analog reference (LDO-filtered, low transient)
+    r"^V5_FC$":     8.0,   # FC connector supply (FC consumer quasi-static)
+    r"^\+V5_FC$":   8.0,   # synonym
+    r"^V5_AI$":     5.0,   # AI rail (medium dynamics)
+    r"^V5_PI5$":    8.0,   # PI camera supply (low transient)
+}
+
+
+def class_max_distance(netname):
+    """Return per-net-class max decoupling distance per Bogatin Ch.5 frequency-class."""
+    for pattern, max_d in NET_CLASS_MAX_DISTANCE_MM.items():
+        if re.match(pattern, netname):
+            return max_d
+    return MAX_DISTANCE_MM  # default 3mm for unclassified high-freq nets
 
 # --parked-exempt: skip ICs AND caps in parking zone. Added 2026-05-26 (worker-
 # caught: G4 flagged channel MCUs J18/J26/J32/J35 at parking coords for not-yet-
@@ -158,7 +196,7 @@ def main():
     board = pcbnew.LoadBoard(board_path)
 
     print(f"=== Per-IC decoupling audit: {Path(board_path).name} ===")
-    print(f"Max distance: {MAX_DISTANCE_MM}mm same-layer (R25, Bogatin Ch. 5)")
+    print(f"Max distance: net-class-aware per Bogatin Ch.5 (default {MAX_DISTANCE_MM}mm HIGH-freq; +3V3A/V5_FC ≤8mm LOW-freq)")
     if PARKED_EXEMPT:
         print(f"--parked-exempt: ICs and caps at x ≥ {PARKING_X_THRESHOLD}mm skipped\n")
     else:
@@ -198,10 +236,13 @@ def main():
             cap_fp, dist, same_layer = best
             cap_ref = cap_fp.GetReference()
 
-            if dist > MAX_DISTANCE_MM:
+            # Net-class-aware per Bogatin Ch.5 (Sai 2026-05-27 lock)
+            max_d = class_max_distance(vdd_netname)
+            if dist > max_d:
                 fails.append(
                     f"{ic_ref}.{pad.GetPadName()} (net={vdd_netname}): "
-                    f"nearest cap {cap_ref} @ {dist:.2f}mm > {MAX_DISTANCE_MM}mm"
+                    f"nearest cap {cap_ref} @ {dist:.2f}mm > {max_d}mm "
+                    f"(class-aware: {'HIGH' if max_d<=3 else 'MED' if max_d<=5 else 'LOW'}-freq)"
                 )
             elif not same_layer:
                 warns.append(
