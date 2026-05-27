@@ -128,11 +128,27 @@ PER_REF_EAST_EDGE = {
 # Body stays inside CH1 west column (x=5..12), no collision with east passives.
 #
 # Format: ref -> {pos:(x,y,mm), rotation:degrees, layer:str}
+# R22 CATCH #2 (worker 2026-05-27, after PR #197 had subagent bug):
+# PR #197 subagent wrote CURRENT pre-fix positions @ rot=0° (which DON'T put pad-1
+# over EP — at rot=0° pad-1 is offset +2.25mm in X for 2512 footprint). The §8#9
+# CORRECT positions put pad-1 OVER FET source EP. For 2512 at rot=270° pad-1 is
+# offset −2.962mm in Y from body center, so body center = EP + (0, +2.962).
+#
+# ALSO R22 CATCH #1 (worker 2026-05-27 pre-PR #197): subagent in PR #196 added
+# 'B.Cu flip + direct copper merge' enhancement on top of PR #195 original spec.
+# But R_2512 body (6.3×3.2) + W-PDFN-8 (6×5) both on B.Cu = 8.6mm² body overlap
+# on SAME copper side = DFM-impossible. REVERTED to original PR #195 spec:
+# F.Cu shunt + B.Cu FET EP (opposite layers, bodies don't collide) + 16-via array.
+#
+# See: [[reference-parametric-placement-desync-trap]] + [[feedback-coord-pr-must-simulate-placement]]
 SHUNT_ANCHORS = {
-    # CH1 — Q6/Q8/Q10 LS FETs anchored at (8.4, 58.4|71.4|84.4) per R1-transplant
-    'R57': {'pos': (8.400, 58.400), 'rotation': 0.0, 'layer': 'F.Cu'},  # over Q6 source EP (phase A)
-    'R58': {'pos': (8.400, 71.400), 'rotation': 0.0, 'layer': 'F.Cu'},  # over Q8 source EP (phase B)
-    'R59': {'pos': (8.400, 84.400), 'rotation': 0.0, 'layer': 'F.Cu'},  # over Q10 source EP (phase C)
+    # CH1 — Q6/Q8/Q10 LS FETs at (8.4, 58.4|71.4|84.4) B.Cu rot=180° per R1-transplant.
+    # R57/58/59 KEEP F.Cu (opposite layer, no body collision) + rot=270° + Y+2.962 offset
+    # so pad-1 (SHUNT_x_TOP) lands at FET source EP center. 16 × 0.6mm/0.3mm via array
+    # in ~3×3mm overlap region transfers ~96A continuous IPC-2152 (R17 spec 70A = 37% margin).
+    'R57': {'pos': (8.400, 61.362), 'rotation': 270.0, 'layer': 'F.Cu'},  # pad-1 over Q6 EP @ (8.4, 58.4) B.Cu (phase A)
+    'R58': {'pos': (8.400, 74.362), 'rotation': 270.0, 'layer': 'F.Cu'},  # pad-1 over Q8 EP @ (8.4, 71.4) B.Cu (phase B)
+    'R59': {'pos': (8.400, 87.362), 'rotation': 270.0, 'layer': 'F.Cu'},  # pad-1 over Q10 EP @ (8.4, 84.4) B.Cu (phase C)
 }
 
 # Override default PER_REF_EAST_EDGE for shunts that are now anchored — anchor
