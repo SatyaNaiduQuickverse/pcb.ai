@@ -6,7 +6,11 @@
 
 **Algorithm**: Pathfinder-style (McMurchie + Ebeling 1995) cooperative ripup-reroute maze router on a 3D cell grid (x, y, layer). Solves the greedy-A* self-congestion problem identified in [[reference-cascading-escape-needs-negotiated-routing]].
 
-**Status**: v3 operational. Master-verified on `phase4v3-stage1-ch1-on-10L` @ 9eed5ae.
+**Status**: v5 operational (per-net-class layer-preference cost bias). Master-verified on `phase4v3-stage1-ch1-on-10L` @ e5ddb23 + pre-STEP-6 fresh-board synthetic.
+- v5 (this PR): per-net-class layer-preference cost multiplier — codifies OQ-016 (BEMF→In4) + OQ-017 (SW→In6) + PR #192 (overflow→In8). On fresh-board 9-net test: PWM_INHC migrated from In8.Cu (v4) to In2.Cu (v5, 16 tracks); SWDIO migrated from In2.Cu (v4) to In8.Cu (v5, 13 tracks). Zero DRC delta vs baseline. 80.5s vs 97.5s = 17% faster (preferred layers reach goal in fewer A* expansions).
+- v4: --no-rip-routed flag (multi-pass safety)
+- v3: PARTIAL-state + post-commit verify
+- v2: full-stack via validation (catches plane shorts)
 - 100% routed (1/1) on isolated multi-pad subset (BEMF_A_CH1, 4 pads, ratsnest=0)
 - 12/16 fully routed on full dense J18/J19 set (same as v2 — no regression)
 - 0 SHORTS delta, 0 DRC delta, 7/8 multi-pad nets verified 1-island
@@ -32,8 +36,9 @@ For iteration in 1..N:
   For each unrouted net:
     Build MST of pads (greedy nearest)
     For each MST edge:
-      A* search on grid with cost = LAYER_BASE + present_factor*present + history
+      A* search on grid with cost = LAYER_BASE * layer_pref_mult(net,L) + present_factor*present + history
       Allow via-change between configured signal layers (LAYER_PREF per net pattern)
+      v5: per-net-class layer-preference cost bias (BEMF→In4 0.5x, In8 2.0x etc.)
       Validate diagonal moves (axis-cells must also be passable)
     If routed: commit (stamp obstacles, increment present_count)
     Else: increment fail_count, queue for next pass
@@ -92,7 +97,13 @@ python3 hardware/kicad/scripts/route_subsystem_cooperative.py \
   [--seed-nets NET1,NET2,...] \
   [--report routed.csv] \
   [--no-rip-routed]  # v4: multi-pass preserve
+  [--no-layer-pref]  # v5: disable per-net-class layer bias (debug only)
 ```
+
+**Layer-preference bias** is ON by default (v5). Per-net-class layer cost
+multipliers steer each net to its spec'd escape layer (BEMF→In4, PWM/CSA→In2,
+SWD/GH/GL/BST→In8, etc.). See "v5 fix history" below for the spec table.
+Pass `--no-layer-pref` only for debugging (forces v4 equal-cost behaviour).
 
 ### Auto-detect mode (default)
 
@@ -152,6 +163,130 @@ python3 hardware/kicad/scripts/audit_power_drc.py <output.kicad_pcb>
 # 3. Per-net connectivity: every routed target net has 1 island (use union-find
 #    over pad positions + track endpoints)
 ```
+
+## v5 fix history (2026-05-27 — per-net-class layer-preference cost bias)
+
+**Worker R22 finding (CH1 STEP-6 c-reapproach commit e5ddb23)**: signal
+tracks distributed unevenly across routing layers despite OQ-016/OQ-017/PR #192
+spec mandating dedicated layers:
+
+| Layer | CH1-zone tracks | Spec'd role |
+|-------|------------------|-------------|
+| F.Cu  | 184 (31 nets)    | Pad fanout stubs (saturated) |
+| In2.Cu | 206 (16 nets)   | PRIMARY signal escape (saturated) |
+| In4.Cu | **0**          | **OQ-016 BEMF dedicated (UNUSED)** |
+| In6.Cu | **0**          | **OQ-017 SW escape (UNUSED)** |
+| In8.Cu | 108 (13 nets)  | Overflow / SWD / control |
+
+**Root cause**: v4's `LAYER_PREF` dict was consulted only by `inner_layers_for()`
+which restricted the A* allowed-layer SET, but the cost function (`cost()` ->
+`LAYER_BASE_COST.get(L, 1.0)`) had FLAT 1.0x base cost across all signal
+inner layers. Within an allowed layer set like `[IN4_CU, IN2_CU]` for BEMF
+nets, the router chose whichever layer was locally less congested at that
+moment — under load this meant In2 (the always-allowed escape layer) kept
+attracting nets even when In4 was completely empty.
+
+11 residual nets failed on CH1 STEP-6 because corridor congestion on In2/F.Cu
+saturated rather than spilling to the spec-dedicated empty layers.
+
+### v5 fix
+
+`LAYER_PREF` now consulted **twice** per net:
+1. `inner_layers_for(net)` — unchanged, restricts allowed-layer set.
+2. **NEW** `layer_pref_cost_mult(net, layer)` — returns per-net cost multiplier
+   applied to `LAYER_BASE_COST` in `cost()`:
+   - Rank 0 in net's preference list -> 0.5x (strong preference)
+   - Rank 1                          -> 1.0x (neutral)
+   - Rank 2                          -> 1.5x (mild discourage)
+   - Rank ≥3 / layer not in list     -> 2.0x (strong discourage)
+   - F.Cu / B.Cu                     -> 1.0x (already handled via LAYER_BASE=4.0)
+
+Wired into `CongestionGrid.cost()` which now takes optional `netname` parameter.
+A* call sites in `find_path_astar()` pass netname so the cost reflects the
+specific net's layer-allocation spec.
+
+**CLI flag**: `--no-layer-pref` disables (default ON). Toggle for debugging
+or for proving the bias is the active mechanism.
+
+**Spec table** (codifies dispatch + OQ-016 + OQ-017 + PR #191/#192):
+
+| Net pattern                  | Preference (first = strongest) |
+|------------------------------|--------------------------------|
+| `BEMF_[ABC]_CH\d+`            | In4, In2 (OQ-016 dedicated)   |
+| `PWM_(INH[ABC]\|INL[ABC])_CH\d+` | In2, In8 (SI-critical)     |
+| `CSA_[ABC]_OUT_CH\d+`         | In2, In8 (analog SI)          |
+| `CSA_MAX_CH\d+`               | In2, In8                       |
+| `SW(DIO\|CLK)_CH\d+`          | In8, In2 (debug low-pri)      |
+| `NRST_CH\d+`                  | In8, In2                       |
+| `BOOT0_CH\d+`                 | In8, In2                       |
+| `LED_GPIO_CH\d+`              | In8, In2                       |
+| `(I\|OTP)_TRIP_N_CH\d+`       | In8, In2                       |
+| `KILL_(LOCAL\|RAIL\|LED_NODE)_(N_)?CH\d+` | In8, In2          |
+| `VREF_(I_TRIP\|OTP)_CH\d+`    | In8, In2                       |
+| `GH[ABC]_CH\d+`               | In8, In2 (gate-drive short)   |
+| `GL[ABC]_CH\d+`               | In8, In2                       |
+| `BST[ABC]_CH\d+`              | In8, In2 (bootstrap short)    |
+| `VMOTOR_CH\d+`                | In8 (PR #191 dual-use)        |
+| `MOTOR_[ABC]_CH\d+`           | In6, F.Cu, B.Cu (OQ-017 SW)   |
+| (any other classified)        | unbiased (1.0x)               |
+| (unclassified net)            | unbiased (1.0x)               |
+
+### v5 validation results (2026-05-27)
+
+**Test A: fresh-board (commit 0100ea9, pre-STEP-6) — 9 representative nets**
+- Routing yield: 8/9 routed (both v5 ON and v5 OFF baseline — same QFN-escape
+  bottleneck blocks BEMF_B J18.10→C75.1 regardless of layer)
+- Wall-clock: v5 ON = 80.5s, v5 OFF = 97.5s (17% faster — preferred-layer
+  expansions reach goal sooner)
+- DRC delta: **0 new violations, 0 new shorts** (153=153 shorting items, all
+  pre-existing on CH2/3/4 from prior PRs)
+- Layer migration (the key proof):
+  | Net | v4 (no pref) | v5 (pref ON) | Spec |
+  |-----|--------------|--------------|------|
+  | PWM_INHC_CH1 | In8.Cu (9 tk) | **In2.Cu (16 tk)** | In2 |
+  | SWDIO_CH1    | In2.Cu (8 tk) | **In8.Cu (13 tk)** | In8 |
+  | BEMF_A/C     | In4.Cu        | In4.Cu (same)      | In4 |
+  | GHA/GHB      | In8.Cu        | In8.Cu (same)      | In8 |
+  | PWM_INLA     | In2.Cu        | In2.Cu             | In2 |
+
+**Test B: worker e5ddb23 residual (7 nets, --no-rip-routed) — corner case**
+- Routing yield: 0/7 routed (both v5 ON and v5 OFF) — confirms residual
+  unrouted nets are blocked by QFN pad-fanout corner cases (J18.6, J18.10),
+  not layer-allocation. Layer-pref applies once a path is searchable; if
+  the source pad's escape grid is already obstructed it can't help.
+- DRC delta: 0 (153=153 shorting items)
+
+**Verdict**: v5 PASSES validation. No regression, demonstrated correct
+spec-following layer choice on routable nets. Residual unrouted nets are
+out of scope for layer-preference (separate QFN-escape root cause per
+[[reference-qfn-pin-escape-bottleneck]]).
+
+### When v5 helps (use cases)
+
+- **Fresh subsystem routing** (e.g. CH2/3/4 from-scratch): layer-pref steers
+  each net-class to its spec'd layer without manual `--seed-nets` per layer.
+- **Spec compliance**: regulators / EMC reviewers can grep for "BEMF on In4"
+  and find it codified at the router, not in a comment somewhere.
+- **Spillover behaviour**: when preferred layer's local cells are congested
+  (present > 1), the 0.5x bias still loses to a free non-preferred cell
+  (0.5 + present_factor*1 = 1.5 > 1.0 + 0) — so the router fills preferred
+  first, then SPILLS to the next-preferred layer. Exactly the OQ-016/OQ-017
+  intent.
+
+### When v5 does NOT help
+
+- **QFN escape bottleneck**: layer-pref can't help if the pad's fanout grid
+  is obstructed. Use [[reference-cascading-escape-needs-negotiated-routing]]
+  ripup recipes + Freerouter R34 supplement on those specific stuck pad-pairs.
+- **Single-allowed-layer nets**: nets with only one viable layer (e.g.
+  short-hop F.Cu→F.Cu within same QFN) — bias is moot when the set is `{F.Cu}`.
+
+### v5 reusability
+
+- CH2/3/4 routing: identical net-class patterns hold (BEMF_*_CH2 etc.),
+  so layer-pref applies as-is per channel mirror.
+- Future subsystem routing (S3 supervisor, S5 BEC): add patterns to
+  `LAYER_PREF` for any new net-class. Existing classes inherit v5 bias.
 
 ## v4 fix history (2026-05-27 — --no-rip-routed cross-pass interference fix)
 

@@ -115,12 +115,46 @@ ALL_COPPER_LAYERS = [F_CU, IN1_CU, IN2_CU, IN3_CU, IN4_CU,
 # via must respect an antipad against an existing power plane fill.
 PLANE_LAYERS = [IN1_CU, IN3_CU, IN5_CU, IN7_CU]
 
-# Net classification -> preferred inner-layer escape (highest priority first)
+# Net classification -> preferred inner-layer escape (highest priority first).
+#
+# v5 (2026-05-27, master R26 NARROW FIX per worker R22 layer-underutilization
+# finding): this dict is now consulted twice per net:
+#   (1) inner_layers_for() — RESTRICTS the A* allowed-layer set (unchanged).
+#       For BEMF the router will NOT plan vias into In8/In6/etc, only
+#       In4 + In2 (plus F.Cu/B.Cu always-allowed for pad fanout stubs).
+#   (2) layer_pref_cost_mult() — BIASES the A* per-cell cost so the FIRST
+#       layer in the list is HALF the cost of the second, etc. This is the
+#       v5 fix: without (2), allowed layers had equal base-cost (1.0) and
+#       the router picked whichever layer had the lower congestion at the
+#       moment, which on CH1 STEP-6 meant In2 saturated while In4 stayed
+#       completely empty (worker R22 measured 0 tracks on In4/In6 in the
+#       CH1 signal region while In2/In8 held 163/82 tracks respectively).
+#
+# Multipliers (applied to LAYER_BASE_COST in cost()):
+#   index 0 (top preference) -> 0.5x  (router strongly prefers this layer)
+#   index 1                  -> 1.0x  (neutral — same as no preference)
+#   index 2                  -> 1.5x  (mild discouragement)
+#   index ≥3                 -> 2.0x  (strong discouragement)
+#   layer NOT in the list    -> 2.0x  (would only be reached via F.Cu/B.Cu
+#                                       which is also discouraged at 4.0x base)
+# These multipliers are tuned so a preferred-but-mildly-congested layer
+# (0.5 * 1.0 + 1.0 * present=1) = 1.5 beats a non-preferred uncongested layer
+# (1.0 * 1.0 + 0) = 1.0 only when present>1, i.e. it takes ONE other route on
+# the non-preferred layer before preference dominates. This is the desired
+# behaviour: fill the preferred layer FIRST, then spill to the next one.
 LAYER_PREF = [
+    # OQ-016: BEMF analog gets dedicated In4 (sandwiched by In3+In5 GND/+VMOTOR
+    # plane shields → low cross-talk). In2 fallback if In4 corridor blocked.
     (re.compile(r"^BEMF_[ABC]_CH\d+$"), [IN4_CU, IN2_CU]),
+    # PWM gate-drive inputs: SI-critical short-edge digital — primary In2,
+    # spillover to In8 (overflow layer).
     (re.compile(r"^PWM_(IN[HL][ABC])_CH\d+$"), [IN2_CU, IN8_CU]),
+    # CSA op-amp outputs (analog SI): primary In2 (paired w/ BEMF on quiet
+    # layer concept), spillover to In8.
     (re.compile(r"^CSA_[ABC]_OUT_CH\d+$"), [IN2_CU, IN8_CU]),
     (re.compile(r"^CSA_MAX_CH\d+$"), [IN2_CU, IN8_CU]),
+    # SWD/NRST/BOOT0: low-priority debug — push to overflow In8 to leave
+    # In2/In4 for SI-critical analog. In2 fallback only if In8 jammed.
     (re.compile(r"^SW(DIO|CLK)_CH\d+$"), [IN8_CU, IN2_CU]),
     (re.compile(r"^NRST_CH\d+$"), [IN8_CU, IN2_CU]),
     (re.compile(r"^BOOT0_CH\d+$"), [IN8_CU, IN2_CU]),
@@ -128,11 +162,65 @@ LAYER_PREF = [
     (re.compile(r"^(I|OTP)_TRIP_N_CH\d+$"), [IN8_CU, IN2_CU]),
     (re.compile(r"^KILL_(LOCAL|RAIL|LED_NODE)_(N_)?CH\d+$"), [IN8_CU, IN2_CU]),
     (re.compile(r"^VREF_(I_TRIP|OTP)_CH\d+$"), [IN8_CU, IN2_CU]),
+    # Gate-drive (GH*/GL*) + bootstrap (BST*): SHORT hops local to driver IC.
+    # In8 primary keeps them off the SI-critical analog layer.
     (re.compile(r"^GH[ABC]_CH\d+$"), [IN8_CU, IN2_CU]),
     (re.compile(r"^GL[ABC]_CH\d+$"), [IN8_CU, IN2_CU]),
     (re.compile(r"^BST[ABC]_CH\d+$"), [IN8_CU, IN2_CU]),
+    # v5: VMOTOR per-channel and SW (MOTOR) — typically routed by upstream
+    # power passes, but if any straggler slips through, bias to the spec'd
+    # layer per PR #191 / OQ-017.
+    (re.compile(r"^VMOTOR_CH\d+$"), [IN8_CU]),                   # PR #191 dual-use
+    (re.compile(r"^MOTOR_[ABC]_CH\d+$"), [IN6_CU, F_CU, B_CU]),  # OQ-017 SW escape
 ]
 DEFAULT_INNER_LAYERS = [IN8_CU, IN2_CU]  # fallback
+
+# v5: per-net layer-preference cost multipliers (applied on top of
+# LAYER_BASE_COST when --layer-pref is enabled). Module-level so unit
+# testable. Index N in the LAYER_PREF list -> multiplier from this table;
+# layer NOT in any preference list for this net -> LAYER_PREF_MULT_OTHER.
+LAYER_PREF_MULT = [0.5, 1.0, 1.5, 2.0]   # indexable by rank within net's pref list
+LAYER_PREF_MULT_OTHER = 2.0              # layer not in the net's pref list
+
+# Per-net cache of (layer -> multiplier). Populated lazily by
+# layer_pref_cost_mult(). Cleared at router init (test isolation). The
+# mapping is deterministic per net-name and per LAYER_PREF table so safe
+# to cache for the lifetime of one router instance.
+_LAYER_PREF_CACHE: dict = {}
+
+
+def layer_pref_cost_mult(net_name: str, layer: int) -> float:
+    """Return cost multiplier for `layer` when routing `net_name`.
+
+    Returns 1.0 (no bias) if net matches no LAYER_PREF entry (i.e. uses the
+    DEFAULT_INNER_LAYERS fallback). For an explicitly classified net,
+    returns the indexed multiplier from LAYER_PREF_MULT (rank 0 = 0.5x,
+    rank 1 = 1.0x, etc.) or LAYER_PREF_MULT_OTHER for layers not in the
+    preference list.
+
+    Always returns 1.0 for F.Cu / B.Cu — they have their own discouragement
+    via LAYER_BASE_COST=4.0; we don't want to double-penalize the pad-fanout
+    stubs since those are only ~0.5mm.
+    """
+    if layer in (F_CU, B_CU):
+        return 1.0
+    cached = _LAYER_PREF_CACHE.get(net_name)
+    if cached is None:
+        cached = {}
+        matched = False
+        for pat, layers in LAYER_PREF:
+            if pat.match(net_name):
+                matched = True
+                for rank, L in enumerate(layers):
+                    mult = LAYER_PREF_MULT[min(rank, len(LAYER_PREF_MULT) - 1)]
+                    cached[L] = mult
+                break
+        cached['__matched__'] = matched
+        _LAYER_PREF_CACHE[net_name] = cached
+    if not cached.get('__matched__', False):
+        return 1.0  # unclassified net: no bias
+    mult = cached.get(layer)
+    return mult if mult is not None else LAYER_PREF_MULT_OTHER
 
 # Priority bucket (lower=route earlier). High-fanin / SI-critical first.
 def net_priority(net_name: str) -> int:
@@ -538,12 +626,21 @@ class CongestionGrid:
       - history: accumulated congestion penalty from past iterations
     """
 
-    def __init__(self, zone_bbox, pitch_mm, layers):
+    def __init__(self, zone_bbox, pitch_mm, layers, layer_pref_enabled=True):
         self.xmin, self.ymin, self.xmax, self.ymax = zone_bbox
         self.pitch = pitch_mm
         self.layers = list(layers)
         self.nx = int(math.ceil((self.xmax - self.xmin) / pitch_mm)) + 1
         self.ny = int(math.ceil((self.ymax - self.ymin) / pitch_mm)) + 1
+        # v5 (2026-05-27): per-net layer-preference cost biasing.
+        # When True (default), cost() multiplies LAYER_BASE_COST by a
+        # net-class-specific multiplier so the router prefers each net's
+        # spec'd escape layer (e.g. BEMF -> In4) even when an alternative
+        # allowed layer (e.g. In2) is locally less congested. Worker R22
+        # measured In4/In6 completely empty while In2 saturated at 163
+        # tracks — root cause was equal layer-cost across allowed set.
+        # Set False to revert to v4 cost behaviour (debugging only).
+        self.layer_pref_enabled = layer_pref_enabled
         # dicts keyed by (i,j,L). Absent => default 0 / False.
         self.obstacle = set()     # (i,j,L) -> blocked for ALL nets (pad copper, track core)
         self.present = defaultdict(int)   # (i,j,L) -> count of nets routing here this iter
@@ -863,10 +960,22 @@ class CongestionGrid:
             return True
         return False
 
-    def cost(self, cell, present_factor):
-        """Soft cost: layer_base + present_factor*present + history."""
+    def cost(self, cell, present_factor, netname=None):
+        """Soft cost: (layer_base * layer_pref_mult) + present_factor*present + history.
+
+        v5: layer-preference cost multiplier applies a per-net bias so the
+        net's TOP preferred layer (LAYER_PREF[0]) costs ~half a non-preferred
+        layer's base. Net-classified-but-not-listed layers and non-classified
+        nets get multiplier 1.0 (current v4 behaviour).
+
+        netname=None preserves the v4 cost (used as fallback for callers we
+        haven't updated and for the layer-pref-disabled CLI mode — gated by
+        self.layer_pref_enabled at the caller).
+        """
         i, j, L = cell
         base = LAYER_BASE_COST.get(L, 1.0)
+        if netname is not None and self.layer_pref_enabled:
+            base *= layer_pref_cost_mult(netname, L)
         pres = self.present.get(cell, 0)
         hist = self.history.get(cell, 0.0)
         return base + present_factor * pres + hist
@@ -980,7 +1089,8 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
                 if grid.is_blocked_for((i + di, j, L), netname): continue
                 if grid.is_blocked_for((i, j + dj, L), netname): continue
             step = grid.pitch * (math.sqrt(2) if (di and dj) else 1.0)
-            ng = g + step * grid.cost(ncell, present_factor)
+            # v5: pass netname so cost() can apply per-net-class layer bias
+            ng = g + step * grid.cost(ncell, present_factor, netname)
             if ng < g_score.get(ncell, math.inf):
                 g_score[ncell] = ng
                 came_from[ncell] = cell
@@ -1003,7 +1113,8 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
                     # Also forbid via on dest layer if it lands in another net's pad zone
                     if grid.is_via_forbidden((i, j, L2), netname): continue
                     # via cost: fixed + congestion of both cells
-                    via_cost = LAYER_CHANGE_COST + grid.cost(ncell, present_factor)
+                    # v5: pass netname so cost() can apply per-net-class layer bias
+                    via_cost = LAYER_CHANGE_COST + grid.cost(ncell, present_factor, netname)
                     ng = g + via_cost
                     if ng < g_score.get(ncell, math.inf):
                         g_score[ncell] = ng
@@ -1141,7 +1252,8 @@ def remove_from_board(board, items):
 class CooperativeRouter:
 
     def __init__(self, board, subsystem_name, grid_pitch=DEFAULT_GRID_PITCH,
-                 seed_nets=None, verbose=True, no_rip_routed=False):
+                 seed_nets=None, verbose=True, no_rip_routed=False,
+                 layer_pref_enabled=True):
         self.board = board
         self.subsystem = subsystem_name
         self.zone = SUBSYSTEM_ZONES[subsystem_name]
@@ -1172,8 +1284,18 @@ class CooperativeRouter:
             if nn:
                 self.preserved_nets.add(nn)
 
+        # v5: clear module-level layer-pref cache for test isolation (multiple
+        # CooperativeRouter instances in one process see fresh classifier state).
+        _LAYER_PREF_CACHE.clear()
+        self.layer_pref_enabled = layer_pref_enabled
         self.state = BoardState(board, self.zone)
-        self.grid = CongestionGrid(self.zone, grid_pitch, SIGNAL_LAYERS)
+        self.grid = CongestionGrid(self.zone, grid_pitch, SIGNAL_LAYERS,
+                                    layer_pref_enabled=layer_pref_enabled)
+        if self.verbose:
+            print(f"[coop] layer-pref-bias: {'ON' if layer_pref_enabled else 'OFF'}"
+                  f" (v5 per-net-class layer cost multiplier; "
+                  f"BEMF→In4, PWM/CSA→In2, SWD/GH/GL/BST→In8, etc.)",
+                  flush=True)
         self._stamp_obstacles()
 
         # Per-net committed routes: net -> (path_cells, added_items)
@@ -2034,6 +2156,14 @@ def main():
     ap.add_argument("--no-rip-routed", action="store_true",
                     help="Treat pre-existing routed nets as immovable; never "
                          "rip them and never re-attempt them (multi-pass safety)")
+    # v5 (2026-05-27): per-net-class layer-preference cost biasing. ON by
+    # default — codifies OQ-016 (BEMF→In4) + OQ-017 (SW→In6) + PR #192
+    # (overflow→In8) at router cost-function level. Without this flag,
+    # worker R22 measured In4/In6 completely unused while In2/In8 saturated
+    # at 163/82 tracks (CH1 STEP-6 c-reapproach). Disable for debugging only.
+    ap.add_argument("--no-layer-pref", action="store_true",
+                    help="DISABLE v5 per-net-class layer-preference bias "
+                         "(debug only — equivalent to v4 cost behaviour)")
     args = ap.parse_args()
 
     board = pcbnew.LoadBoard(args.board)
@@ -2043,7 +2173,8 @@ def main():
                                 grid_pitch=args.grid_pitch,
                                 seed_nets=seed,
                                 verbose=not args.quiet,
-                                no_rip_routed=args.no_rip_routed)
+                                no_rip_routed=args.no_rip_routed,
+                                layer_pref_enabled=not args.no_layer_pref)
     unrouted = router.run(max_iter=args.max_iterations)
 
     pcbnew.SaveBoard(args.output, board)
