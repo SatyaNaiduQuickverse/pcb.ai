@@ -169,6 +169,13 @@ def main():
         # component (180 - orig). Vertical pads (90°/270°) unchanged.
         orig_orient = partner.GetOrientation().AsDegrees()
         fp.SetOrientationDegrees((180 - orig_orient) % 360)
+        # Layer inheritance: CH2 partner MUST live on the same layer as its CH1
+        # source (R23 symmetry + §8 #9 shunt-overlap require same-layer pair).
+        # Without this, CH1 R57 on B.Cu would still leave CH2 R93 on F.Cu after
+        # mirror (audit bbox-XY is layer-blind, so passes — but R23/G_SHUNT
+        # intent is for shunt-FET copper merge, not cross-layer via-only).
+        if fp.IsFlipped() != partner.IsFlipped():
+            fp.Flip(fp.GetPosition(), False)
         reset_text_to_body(fp)
         moved += 1
     if skipped_non_ch_only:

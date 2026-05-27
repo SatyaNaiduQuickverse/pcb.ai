@@ -93,6 +93,43 @@ PER_REF_EAST_EDGE = {
     'R56': 33.0,   # 2512 shunt; safer to keep east-edge bounded
 }
 
+# ─── SHUNT OVERLAP ANCHORS (PLACEMENT_GLOBAL_PLAN §8 addendum #9, lock 2026-05-27) ───
+# Per worker STEP-5 SHUNT ampacity finding: high-current shunts MUST physically
+# overlap LS FET source pad with ≥1.5mm² overlap area for the 16-via 0.6mm pitch
+# array (~96A continuous per IPC-2152), since bridge-trace at 0.85mm gap can never
+# carry 70A continuous (needs ~4mm width per IPC-2152, geometrically impossible).
+#
+# Coords derived (PR #197, master subagent 2026-05-27):
+#   Each shunt center is offset by +2.962mm in Y from its LS FET source pad
+#   center (=shunt pad-1 SHUNT-TOP-side center after 270° rotation). Shunt is
+#   moved to B.Cu (same layer as LS FET) so its bbox overlap with FET source EP
+#   becomes direct copper merge — no via array necessary across layers, though
+#   the GND pad-2 still stitches to GND plane via the 16-via 0.6mm array
+#   audited by G_SW_GND_VIA (see PR #196).
+#
+# Body shape: 2512 chip (6.5mm x 3.2mm). At rotation 270°:
+#   - pad-1 (SHUNT_*_TOP_CHn) at (cx, cy - 2.962)
+#   - pad-2 (GND)             at (cx, cy + 2.962)
+#   - body bbox y-extent: cy-4.65 .. cy+4.65 mm
+# Body stays inside CH1 zone (y=50..89), no collision with VMOTOR feed corridor
+# at y=47..53. Same-layer body bbox overlap with LS FET (Q6/Q8/Q10) is INTENTIONAL
+# (per §8 addendum #9) and exempted in BBOX_OVERLAP_EXEMPT.txt.
+#
+# Format: ref -> {pos:(x,y,mm), rotation:degrees, layer:str}
+SHUNT_ANCHORS = {
+    # CH1 — Q6/Q8/Q10 LS FETs are at (30, {54,66,78}) per IC_ANCHORS above
+    'R57': {'pos': (30.000, 56.962), 'rotation': 270.0, 'layer': 'B.Cu'},  # over Q6 source (phase A)
+    'R58': {'pos': (30.000, 68.962), 'rotation': 270.0, 'layer': 'B.Cu'},  # over Q8 source (phase B)
+    'R59': {'pos': (30.000, 80.962), 'rotation': 270.0, 'layer': 'B.Cu'},  # over Q10 source (phase C)
+}
+
+# Override default PER_REF_EAST_EDGE for shunts that are now anchored — anchor
+# logic takes precedence over east-edge validate, but keep an entry so the
+# fallback spiral knows not to push them east.
+PER_REF_EAST_EDGE['R57'] = 33.0
+PER_REF_EAST_EDGE['R58'] = 33.0
+PER_REF_EAST_EDGE['R59'] = 33.0
+
 
 def get_ch1_refs(board, zone):
     """Identify CH1 components — three classification paths (master 2026-05-24
@@ -332,11 +369,40 @@ def main():
         placed += 1
     print(f"IC anchors placed: {placed}")
 
+    # Place SHUNT_ANCHORS (PLACEMENT_GLOBAL_PLAN §8 addendum #9 enforcement).
+    # These shunts MUST overlap LS-FET source pads ≥1.5mm² — explicit anchor
+    # coords (with layer + rotation) override the spiral placer's default
+    # "spiral from parent IC pin" which cannot satisfy the overlap requirement.
+    shunts_placed = 0
+    for ref, spec in SHUNT_ANCHORS.items():
+        if ref not in ch1_refs: continue
+        fp = board.FindFootprintByReference(ref)
+        if fp is None: continue
+        x, y = spec['pos']
+        rot = spec['rotation']
+        layer = spec['layer']
+        # Move to B.Cu if requested and currently on F.Cu (Flip() rotates 180°)
+        want_back = (layer == 'B.Cu')
+        if fp.IsFlipped() != want_back:
+            fp.Flip(fp.GetPosition(), False)
+        fp.SetOrientationDegrees(rot)
+        fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
+        reset_text_to_body(fp)
+        placed_centers.append((x, y, fp.GetLayer()))
+        for pb in fp_pad_bboxes(fp):
+            placed_pad_bxs.append(pb)
+        shunts_placed += 1
+        print(f"  SHUNT anchor {ref} → ({x:.3f},{y:.3f}) rot={rot}° {layer} (§8#9 overlap)")
+    if shunts_placed:
+        print(f"Shunt overlap anchors placed: {shunts_placed} (§8 addendum #9)")
+
     # Two-pass passive placement:
     #  Pass A: motor TPs + motor-sense-net components first (no TP keepout yet,
     #          they ARE the sense topology)
     #  Pass B: non-sense components last (with TP keepout active)
-    all_passives = sorted(ch1_refs - set(IC_ANCHORS.keys()))
+    # SHUNT_ANCHORS already placed deterministically above (§8 #9 overlap) —
+    # exclude from spiral search to preserve the overlap anchor.
+    all_passives = sorted(ch1_refs - set(IC_ANCHORS.keys()) - set(SHUNT_ANCHORS.keys()))
     tp_refs = [r for r in all_passives if r.startswith('TP')]
     sense_refs = [r for r in all_passives
                   if r not in tp_refs
