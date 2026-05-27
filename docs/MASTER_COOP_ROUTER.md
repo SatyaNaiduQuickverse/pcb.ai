@@ -6,9 +6,11 @@
 
 **Algorithm**: Pathfinder-style (McMurchie + Ebeling 1995) cooperative ripup-reroute maze router on a 3D cell grid (x, y, layer). Solves the greedy-A* self-congestion problem identified in [[reference-cascading-escape-needs-negotiated-routing]].
 
-**Status**: v2 operational. Master-verified on `phase4v3-stage1-ch1-on-10L` @ 9eed5ae.
-- 100% routed (2/2) on isolated subset, ZERO new DRC violations (verified)
-- See "v2 fix history" section below for v1 bug and v2 correction
+**Status**: v3 operational. Master-verified on `phase4v3-stage1-ch1-on-10L` @ 9eed5ae.
+- 100% routed (1/1) on isolated multi-pad subset (BEMF_A_CH1, 4 pads, ratsnest=0)
+- 12/16 fully routed on full dense J18/J19 set (same as v2 — no regression)
+- 0 SHORTS delta, 0 DRC delta, 7/8 multi-pad nets verified 1-island
+- See "v3 fix history" + "v2 fix history" sections below
 
 ## Why
 
@@ -119,6 +121,88 @@ python3 hardware/kicad/scripts/audit_power_drc.py <output.kicad_pcb>
 # 3. Per-net connectivity: every routed target net has 1 island (use union-find
 #    over pad positions + track endpoints)
 ```
+
+## v3 fix history (2026-05-27 — multi-pad MST completion safety net)
+
+**Worker R22 catch on v2 (PR #203)**: claim — "for 4-pad nets (BEMF_A/B/C,
+BOOT0, KILL_RAIL_N, etc), router connects ONE pad-to-pad edge then reports
+'routed=1/1', but ratsnest>0 (net SPLIT)". Master investigation:
+
+- v2's `route_one_net_mst` correctly iterates N-1 MST edges for N pads and
+  returns `(paths, False)` if ANY edge fails. `commit_net` is NOT called on
+  failure → no tracks added → DRC + router-report agree on "UNROUTED".
+- Concrete test on `9eed5ae`: BEMF_A_CH1 (4 pads) under v2 dense run reaches
+  status ROUTED after 4 iterations with 3 MST edges, ratsnest=0 (verified
+  via union-find on track endpoints + pad bboxes).
+- v2 dense outcome (16-net target): 12/16 fully routed, BEMF_B_CH1 +
+  PWM_INHC + SWDIO + PWM_INLB unrouted. NO multi-pad net was silently SPLIT.
+
+So the literal "1 edge then report routed=1/1" claim does not reproduce.
+HOWEVER, the underlying concern is valid: v2 had NO post-MST connectivity
+verification — if a future bug caused MST to claim success without all pads
+linking (e.g. grid-snap rounding pulling a track endpoint outside pad bbox,
+or a multi-pad with coincident-position pads creating MST degeneracy), v2
+would silently ship a split net.
+
+### v3 fixes
+
+1. **Explicit PARTIAL status + diagnostic** (`route_one_net_mst` return type):
+   Now returns `(paths, status, failed_pairs)` where status is
+   `'ROUTED' | 'PARTIAL' | 'FAILED'` and `failed_pairs` lists pad-label
+   pairs whose A* failed. PARTIAL routes are NOT committed (preserves v2's
+   all-or-nothing routing guarantee — the partial routes would lock in and
+   block their own subsequent MST attempts). The pad-pair diagnostic
+   persists across iterations via `self.partial_pairs[netname]`, so the
+   final report tells the worker WHICH specific pair was the blocker —
+   actionable next-step info for hand-routing.
+
+2. **Post-MST connectivity verification** (`verify_net_connectivity`):
+   After every `commit_net` of status=='ROUTED' net, builds a union-find
+   over the board's pads + tracks + vias for that net. If the result is
+   >1 island, the net is RIPPED + re-queued with fail_count bump, and the
+   inter-island pad-pair is recorded as diagnostic. Uses union-find (not
+   `GetRatsnestForNet`) because the SWIG binding for `RN_NET *` exposes
+   no methods — the Python-only object cannot be iterated or counted.
+
+3. **Termination condition**: `if not unrouted` was insufficient — now
+   requires `not unrouted AND not self.partial_pairs` to avoid breaking
+   out of the iteration loop while leaving open diagnostic markers.
+
+4. **Final report extensions**:
+   - Summary line: `full={N} partial={K} unrouted={M}` (was just
+     `routed={N+K}`)
+   - CSV report adds `partial_pairs` column with `pa->pb;pa2->pb2` for
+     each partial net
+   - Exit code 1 if ANY net is partial OR unrouted (was: only if unrouted)
+
+5. **Unused helper `route_pad_pair` retained**: not currently called (the
+   PARTIAL rollback semantics make per-pair repair unnecessary), but kept
+   for future enhancement where partial-commit + selective-repair becomes
+   viable (e.g. when a future net-ordering heuristic ensures siblings
+   route in a way that doesn't self-block).
+
+### v3 validation results (2026-05-27)
+
+Worker board `phase4v3-stage1-ch1-on-10L` @ 9eed5ae. Baseline DRC after
+refill: 552 violations, 153 shorts, 499 unconnected items.
+
+| Run | Routed (full) | Routed (partial) | Unrouted | DRC delta | SHORTS delta | Multi-pad verify |
+|---|---|---|---|---|---|---|
+| BEMF_A_CH1 only (seed) | 1/1 | 0 | 0 | 0 | 0 | 1/1 1-island |
+| Dense 16-net | 12/16 | 0 | 4 | 0 | 0 | 7/8 1-island* |
+
+*BEMF_B_CH1 is in the 4 unrouted set; v3 reports `J18.10 -> C75.1` as the
+specific failed pad-pair (actionable for worker hand-routing). v2 reported
+the same outcome but without the pad-pair diagnostic.
+
+### Known limit (fixed v3 in spirit; remains a routing capacity issue)
+
+The MST-completion safety net does not improve routing CAPACITY (same
+12/16 on dense as v2). The remaining unrouted nets are pin-escape
+bottlenecks per [[reference-qfn-pin-escape-bottleneck]]; their fix
+requires multi-net joint A* (future v4) or smaller grid pitch (Phase 7
+x86 per [[feedback-pi-shared-system-protect]]). v3 adds DIAGNOSTIC and
+DEFENSE-IN-DEPTH but not capacity.
 
 ## v2 fix history (2026-05-27)
 
