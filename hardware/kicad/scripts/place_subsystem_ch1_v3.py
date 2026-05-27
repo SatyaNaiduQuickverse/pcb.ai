@@ -99,33 +99,48 @@ PER_REF_EAST_EDGE = {
 # array (~96A continuous per IPC-2152), since bridge-trace at 0.85mm gap can never
 # carry 70A continuous (needs ~4mm width per IPC-2152, geometrically impossible).
 #
-# Coords derived (PR #197, master subagent 2026-05-27):
-#   Each shunt center is offset by +2.962mm in Y from its LS FET source pad
-#   center (=shunt pad-1 SHUNT-TOP-side center after 270° rotation). Shunt is
-#   moved to B.Cu (same layer as LS FET) so its bbox overlap with FET source EP
-#   becomes direct copper merge — no via array necessary across layers, though
-#   the GND pad-2 still stitches to GND plane via the 16-via 0.6mm array
-#   audited by G_SW_GND_VIA (see PR #196).
+# ─── R22 WRONG-BASE CATCH 2026-05-27 (PR #197) ───────────────────────────────
+# An earlier sub-agent (PR #196 SHUNT_ANCHORS draft) computed shunt coords using
+# parametric_placement.py module's numerical positions (Q6 @ (30, 54)). The
+# canonical R1-transplant placement on phase4v3-stage1-ch1-on-10L branch has
+# Q6 @ (8.4, 58.4) on B.Cu (180°) — completely different base. Worker R22
+# caught this before any board damage.
 #
-# Body shape: 2512 chip (6.5mm x 3.2mm). At rotation 270°:
-#   - pad-1 (SHUNT_*_TOP_CHn) at (cx, cy - 2.962)
-#   - pad-2 (GND)             at (cx, cy + 2.962)
-#   - body bbox y-extent: cy-4.65 .. cy+4.65 mm
-# Body stays inside CH1 zone (y=50..89), no collision with VMOTOR feed corridor
-# at y=47..53. Same-layer body bbox overlap with LS FET (Q6/Q8/Q10) is INTENTIONAL
-# (per §8 addendum #9) and exempted in BBOX_OVERLAP_EXEMPT.txt.
+# Lesson codified: parametric_placement.py is the ALGORITHM SSoT but NOT the
+# coord-truth SSoT once placement is baked. Always extract from live .kicad_pcb.
+# See: [[reference-parametric-placement-desync-trap]] +
+#      docs/MASTER_PARAMETRIC_DESYNC.md (3-way verification pattern).
+#
+# ─── CORRECTED COORDS (extracted from origin/phase4v3-stage1-ch1-on-10L) ─────
+# CH1 LS FETs (validated R1-transplant, B.Cu, rotation=180°):
+#   Q6  @ (8.400, 58.400)  source pad-9 @ (8.400, 58.400) net SHUNT_A_TOP_CH1
+#   Q8  @ (8.400, 71.400)  source pad-9 @ (8.400, 71.400) net SHUNT_B_TOP_CH1
+#   Q10 @ (8.400, 84.400)  source pad-9 @ (8.400, 84.400) net SHUNT_C_TOP_CH1
+# Y-pitch = 13mm (not 12mm). Row-x = 8.4 (not 30).
+#
+# Shunt body (2512: 6.5×3.2mm). Worker per-via approach: R57/58/59 on F.Cu
+# rotation=0° centered on (8.4, Y_LS) — opposite-layer overlap of FET source
+# pad-9 (EP, 3×3mm) is direct via-array stitching at the same (X,Y). G_SW_GND_VIA
+# (PR #198) audits the via-array adequacy.
+#
+# Worker pad layout (rotation=0°): pad-1 (SHUNT_*_TOP) west @ x=cx-2.962,
+# pad-2 (GND) east @ x=cx+2.962. Body bbox: cx±3.25, cy±1.6mm.
+# Body stays inside CH1 west column (x=5..12), no collision with east passives.
 #
 # Format: ref -> {pos:(x,y,mm), rotation:degrees, layer:str}
 SHUNT_ANCHORS = {
-    # CH1 — Q6/Q8/Q10 LS FETs are at (30, {54,66,78}) per IC_ANCHORS above
-    'R57': {'pos': (30.000, 56.962), 'rotation': 270.0, 'layer': 'B.Cu'},  # over Q6 source (phase A)
-    'R58': {'pos': (30.000, 68.962), 'rotation': 270.0, 'layer': 'B.Cu'},  # over Q8 source (phase B)
-    'R59': {'pos': (30.000, 80.962), 'rotation': 270.0, 'layer': 'B.Cu'},  # over Q10 source (phase C)
+    # CH1 — Q6/Q8/Q10 LS FETs anchored at (8.4, 58.4|71.4|84.4) per R1-transplant
+    'R57': {'pos': (8.400, 58.400), 'rotation': 0.0, 'layer': 'F.Cu'},  # over Q6 source EP (phase A)
+    'R58': {'pos': (8.400, 71.400), 'rotation': 0.0, 'layer': 'F.Cu'},  # over Q8 source EP (phase B)
+    'R59': {'pos': (8.400, 84.400), 'rotation': 0.0, 'layer': 'F.Cu'},  # over Q10 source EP (phase C)
 }
 
 # Override default PER_REF_EAST_EDGE for shunts that are now anchored — anchor
 # logic takes precedence over east-edge validate, but keep an entry so the
 # fallback spiral knows not to push them east.
+# NOTE 2026-05-27: shunts are now anchored at x=8.4 (west column), so the 33.0
+# east-edge bound becomes irrelevant for placement; kept for sanity bound if
+# anchor logic is bypassed.
 PER_REF_EAST_EDGE['R57'] = 33.0
 PER_REF_EAST_EDGE['R58'] = 33.0
 PER_REF_EAST_EDGE['R59'] = 33.0
