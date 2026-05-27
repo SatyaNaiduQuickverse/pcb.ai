@@ -48,7 +48,12 @@ Usage:
   python3 route_subsystem_cooperative.py <board.kicad_pcb> \
     --subsystem CH1 \
     --output <routed.kicad_pcb> \
-    [--max-iterations 30] [--grid-pitch 0.1] [--seed-nets <comma-list>]
+    [--max-iterations 30] [--grid-pitch 0.1] [--seed-nets <comma-list>] \
+    [--no-rip-routed]
+
+  --no-rip-routed (v4 2026-05-27): pre-existing routed nets (≥1 track/via in
+  input board) treated as immovable. Use in multi-pass workflows where pass
+  N+1 must preserve pass N's routes. Default OFF (back-compat single-pass).
 
 Exit 0 if all target nets routed, 1 if any unrouted (with diagnostics).
 
@@ -1136,12 +1141,36 @@ def remove_from_board(board, items):
 class CooperativeRouter:
 
     def __init__(self, board, subsystem_name, grid_pitch=DEFAULT_GRID_PITCH,
-                 seed_nets=None, verbose=True):
+                 seed_nets=None, verbose=True, no_rip_routed=False):
         self.board = board
         self.subsystem = subsystem_name
         self.zone = SUBSYSTEM_ZONES[subsystem_name]
         self.grid_pitch = grid_pitch
         self.verbose = verbose
+        # v4 (2026-05-27): --no-rip-routed flag. When True, nets that already
+        # had ≥1 track/via in the input board at load time are treated as
+        # IMMOVABLE pre-existing routing. They:
+        #   - are excluded from self.nets (never re-attempted)
+        #   - are never selected as ripup candidates
+        #   - are never force-ripped in plateau recovery
+        #   - their tracks/vias contribute hard-obstacle cost (already true via
+        #     _stamp_obstacles which stamps every track/via from board state)
+        # Use case: multi-pass workflows where pass N+1 must preserve pass N's
+        # work. Without this flag, cooperative ripup may rip cross-session
+        # routes because it has no concept of "pre-existing immutable".
+        # Worker discovery 2026-05-27 (CH1 STEP-6 (c) re-approach): pass 2's
+        # local net-by-net cooperative ripped BEMF_C from pass 1's result.
+        self.no_rip_routed = no_rip_routed
+
+        # v4: snapshot pre-existing routed nets BEFORE we touch the board.
+        # A net is "preserved" if it has ≥1 track or via in the input board.
+        # We snapshot net NAMES (strings) because netcodes can theoretically
+        # be re-issued by KiCad on board mutation.
+        self.preserved_nets = set()
+        for t in board.GetTracks():
+            nn = t.GetNetname()
+            if nn:
+                self.preserved_nets.add(nn)
 
         self.state = BoardState(board, self.zone)
         self.grid = CongestionGrid(self.zone, grid_pitch, SIGNAL_LAYERS)
@@ -1155,6 +1184,18 @@ class CooperativeRouter:
             self.nets = [n for n in seed_nets if n in self.state.net_pads]
         else:
             self.nets = self.state.routable_nets()
+        # v4: if --no-rip-routed, drop any preserved nets from the target list
+        # so we don't even attempt to re-route them. Their existing tracks
+        # remain as hard obstacles via the _stamp_obstacles call above.
+        if self.no_rip_routed:
+            skipped = [n for n in self.nets if n in self.preserved_nets]
+            self.nets = [n for n in self.nets if n not in self.preserved_nets]
+            if self.verbose:
+                print(f"[coop] --no-rip-routed: {len(self.preserved_nets)} pre-existing "
+                      f"routed nets snapshotted (immovable); "
+                      f"{len(skipped)} dropped from target list"
+                      + (f": {skipped[:10]}{'...' if len(skipped)>10 else ''}"
+                         if skipped else ""), flush=True)
         # Filter to nets with pads on F/B/inner — all should be fine
         self.nets.sort(key=lambda n: (net_priority(n), -len(self.state.net_pads[n]), n))
 
@@ -1626,8 +1667,19 @@ class CooperativeRouter:
             self.grid.pad_cells[cell].add(netname)
 
     def rip_net(self, netname):
-        """Remove a net's committed tracks/vias and obstacles."""
+        """Remove a net's committed tracks/vias and obstacles.
+
+        v4: --no-rip-routed defensively refuses to rip any net in
+        preserved_nets (pre-existing routed nets). Returns silently to
+        keep callers compatible. Belt-and-suspenders alongside the
+        candidate-selection filters; protects against future code paths
+        that bypass the selection layer.
+        """
         if netname not in self.committed: return
+        if self.no_rip_routed and netname in self.preserved_nets:
+            self.log(f"  [coop] refusing to rip preserved net {netname} "
+                     f"(--no-rip-routed)")
+            return
         cells, added = self.committed[netname]
         remove_from_board(self.board, added)
         # Rebuild obstacle map cleanly (cheap path: blow away cell-based obstacles and re-stamp from non-committed state).
@@ -1898,16 +1950,24 @@ class CooperativeRouter:
                     self._rebuild_grid()
                 # If selective ripup found nothing AND we're stuck, force-rip random-3
                 # (avoids local minima)
+                # v4: --no-rip-routed excludes preserved_nets from the random pool.
                 elif plateau_count >= 2 and self.committed:
                     import random
                     random.seed(it)
-                    cand = random.sample(list(self.committed.keys()),
-                                         min(3, len(self.committed)))
-                    self.log(f"  plateau force-rip 3 random nets: {cand}")
-                    for nn in cand:
-                        self.rip_net(nn)
-                        unrouted.append(nn)
-                    self._rebuild_grid()
+                    if self.no_rip_routed:
+                        pool = [n for n in self.committed.keys()
+                                if n not in self.preserved_nets]
+                    else:
+                        pool = list(self.committed.keys())
+                    if pool:
+                        cand = random.sample(pool, min(3, len(pool)))
+                        self.log(f"  plateau force-rip 3 random nets: {cand}")
+                        for nn in cand:
+                            self.rip_net(nn)
+                            unrouted.append(nn)
+                        self._rebuild_grid()
+                    else:
+                        self.log(f"  plateau but no rippable nets (all preserved)")
 
         elapsed = time.monotonic() - self.start_time
         # v3: fully-connected = committed AND no open partial pairs
@@ -1926,8 +1986,13 @@ class CooperativeRouter:
         return unrouted
 
     def _select_ripup_candidates(self, failed_nets, k=3):
-        """Find committed nets that pass near failed-net pads — likely blockers."""
-        # For each failed net, find committed nets whose paths come within 1mm of any failed-net pad
+        """Find committed nets that pass near failed-net pads — likely blockers.
+
+        v4: when --no-rip-routed is set, preserved_nets are excluded from
+        ripup candidates. They are never in self.committed (we never commit
+        a preserved net — they're treated as pre-existing obstacles), but
+        defensive double-check here in case future code paths commit them.
+        """
         scores = defaultdict(int)
         for fnn in failed_nets:
             for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(fnn, []):
@@ -1938,6 +2003,8 @@ class CooperativeRouter:
                 R = int(1.5 / self.grid.pitch)
                 for cnn, (cells, _) in self.committed.items():
                     if cnn == fnn: continue
+                    if self.no_rip_routed and cnn in self.preserved_nets:
+                        continue  # v4: never rip a pre-existing routed net
                     for ci, cj, cL in cells:
                         if abs(ci - fi) <= R and abs(cj - fj) <= R:
                             scores[cnn] += 1
@@ -1959,6 +2026,14 @@ def main():
     ap.add_argument("--seed-nets", help="Comma-list of net names to route (default: auto-detect)")
     ap.add_argument("--report", help="Optional CSV report file for routed/unrouted nets + metrics")
     ap.add_argument("--quiet", action="store_true")
+    # v4 (2026-05-27): --no-rip-routed protects pre-existing tracks/vias from
+    # being torn down by cooperative ripup-reroute. Use in multi-pass workflows
+    # where a later pass must preserve an earlier pass's routes (e.g. CH1
+    # STEP-6 dense-first then local-by-local; CH2/3/4 mirror cycles).
+    # Default OFF for backward compatibility (single-pass fresh-board runs).
+    ap.add_argument("--no-rip-routed", action="store_true",
+                    help="Treat pre-existing routed nets as immovable; never "
+                         "rip them and never re-attempt them (multi-pass safety)")
     args = ap.parse_args()
 
     board = pcbnew.LoadBoard(args.board)
@@ -1967,7 +2042,8 @@ def main():
     router = CooperativeRouter(board, args.subsystem,
                                 grid_pitch=args.grid_pitch,
                                 seed_nets=seed,
-                                verbose=not args.quiet)
+                                verbose=not args.quiet,
+                                no_rip_routed=args.no_rip_routed)
     unrouted = router.run(max_iter=args.max_iterations)
 
     pcbnew.SaveBoard(args.output, board)

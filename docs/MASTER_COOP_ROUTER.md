@@ -90,7 +90,8 @@ python3 hardware/kicad/scripts/route_subsystem_cooperative.py \
   --max-iterations 25 \
   [--grid-pitch 0.1] \
   [--seed-nets NET1,NET2,...] \
-  [--report routed.csv]
+  [--report routed.csv] \
+  [--no-rip-routed]  # v4: multi-pass preserve
 ```
 
 ### Auto-detect mode (default)
@@ -104,6 +105,36 @@ With `--seed-nets net1,net2,...`, router targets the explicit list — useful fo
 - Re-routing a specific set after a partial run
 - Routing stragglers after main batch
 - Testing on isolated nets to debug obstacle stamping
+
+### Multi-pass mode (v4 — `--no-rip-routed`)
+
+In multi-pass workflows where pass N+1 must preserve pass N's routes (e.g.
+CH1 STEP-6 dense-J18-first then local-by-local; CH2/3/4 mirror cycles),
+pass `--no-rip-routed` to pass 2+. Effect:
+
+- Pre-existing routed nets (≥1 track/via in input board at load time) are
+  snapshotted into `preserved_nets` set.
+- Preserved nets are **dropped from target list** (never re-attempted, even
+  if explicitly seeded — they're left alone).
+- Preserved nets are **never selected as ripup candidates** (selective ripup
+  + plateau force-rip both exclude them).
+- `rip_net()` has a defensive guard refusing to rip preserved nets even if
+  called directly.
+- Pre-existing tracks remain as **hard obstacles** to new routes (same
+  `_stamp_obstacles` path as before — no algorithm change there).
+
+**Use case rationale** (worker discovery 2026-05-27 CH1 STEP-6 (c) re-approach):
+pass 1 cooperative routed BEMF_C; pass 2 local net-by-net ran cooperative
+ripup and **ripped BEMF_C** because cooperative-ripup treats ALL routes
+(including pass 1's) as session-mutable. `--no-rip-routed` is the explicit
+mark-as-immovable mechanism.
+
+**Tradeoff**: new route success rate may be lower because the router has
+fewer degrees of freedom — preserved nets cannot move out of the way. Where
+it would have ripped a blocker, it now reports FAILED. Hand-route or
+re-place if pass 2+ plateaus too low.
+
+**Default OFF** for backward compatibility with single-pass fresh-board runs.
 
 ## Validation gate (per [[feedback-sim-execution-gate]] discipline)
 
@@ -121,6 +152,96 @@ python3 hardware/kicad/scripts/audit_power_drc.py <output.kicad_pcb>
 # 3. Per-net connectivity: every routed target net has 1 island (use union-find
 #    over pad positions + track endpoints)
 ```
+
+## v4 fix history (2026-05-27 — --no-rip-routed cross-pass interference fix)
+
+**Worker discovery on v3 (commit e5ddb23, CH1 STEP-6 (c) re-approach)**: ran
+cooperative router in two sequential passes:
+- Pass 1 (dense-J18 cooperative, 17 nets): routed 11/17 including BEMF_C_CH1
+- Pass 2 (local gate/boot net-by-net, 13 nets): routed 9/13 BUT **RIPPED
+  BEMF_C_CH1 from pass 1's result**
+
+**Root cause**: cooperative ripup-reroute treats ALL existing routes as
+session-mutable. Pass 2's congestion-blocker scoring (`_select_ripup_candidates`)
+finds pass 1's BEMF_C tracks near pass 2's failed pad cells → rips them →
+can't re-route because original conditions don't apply (different seed_nets,
+different congestion landscape).
+
+The bug is fundamental to cooperative ripup: it assumes all routes are
+session-owned. Multi-pass workflows need an explicit way to mark pass-N
+nets as immovable for pass N+1+.
+
+### v4 fix
+
+`--no-rip-routed` CLI flag (default OFF for back-compat). When set:
+
+1. **Snapshot at init**: walk `board.GetTracks()` immediately, snapshot
+   every net name with ≥1 track or via into `self.preserved_nets` (string
+   set; netcodes can theoretically be re-issued by KiCad on mutation).
+
+2. **Drop preserved nets from target list**: even if user explicitly passes
+   them in `--seed-nets`, they are excluded — the flag overrides intent
+   (consistent with "immovable" semantics). Logged at startup:
+   `[coop] --no-rip-routed: N pre-existing routed nets snapshotted; K dropped`
+
+3. **Ripup-candidate exclusion**: `_select_ripup_candidates` skips any net
+   in preserved_nets. (They wouldn't normally enter `self.committed` —
+   defensive belt-and-suspenders.)
+
+4. **Force-rip pool exclusion**: plateau-recovery's random-3 force-rip
+   pool excludes preserved_nets. Logs `"plateau but no rippable nets (all preserved)"`
+   if the pool is empty.
+
+5. **`rip_net()` defensive guard**: if called directly on a preserved net,
+   logs refusal and returns early. Covers any future code path that
+   bypasses the candidate-selection layer.
+
+Pre-existing tracks/vias remain as **hard obstacles** to new routes (the
+existing `_stamp_obstacles` already stamps every track/via from board
+state — no algorithm change needed for that path).
+
+### v4 validation results (2026-05-27)
+
+Input: `phase4v3-stage1-ch1-on-10L @ e5ddb23` (22/33 CH1 signals routed,
+32 nets total with tracks/vias in CH1 region).
+
+Test A — `--no-rip-routed` snapshot + drop:
+- Input: 32 pre-existing routed nets
+- Log: `[coop] --no-rip-routed: 32 pre-existing routed nets snapshotted (immovable)`
+- With `--seed-nets BEMF_C_CH1,LED_GPIO_CH1`: BEMF_C dropped (preserved),
+  LED_GPIO retained as target
+- After 5 iterations: LED_GPIO unrouted (corridor saturation, expected),
+  **0 ripups**, BEMF_C unchanged
+
+Test B — preserved-net identity post-run:
+- All 32 preserved nets: track+via count IDENTICAL pre/post
+- Per-net union-find island count IDENTICAL pre/post (0 splits introduced)
+- Zone fill: tracks=566 vias=217 zones=17 IDENTICAL pre/post
+- kicad-cli DRC: violations 549 → 549 (delta 0); unconnected 499 → 499 (delta 0)
+- Breakdown: clearance 77, courtyards_overlap 105, drill_out_of_range 66,
+  shorting_items 147, solder_mask_bridge 154 — ALL IDENTICAL
+
+The flag works exactly as specified: no preserved net ripped, no new shorts,
+no new DRC violations. New route attempt may fail (tradeoff for the
+constraint), but preserved work is bit-exactly retained.
+
+### When to use `--no-rip-routed`
+
+- **Pass 2+ of any multi-pass cooperative run** (CH1 STEP-6 c-re-approach
+  pattern; CH2/3/4 mirror cycles using same dense-first-then-local pattern)
+- **Touch-up runs after hand-routing** — when worker hand-routes some
+  stragglers and wants the router to try one more pass on residuals without
+  rewriting hand-work
+- **Post-merge incremental** — once a PR merges with N nets routed,
+  subsequent routing PRs should use `--no-rip-routed` to avoid disturbing
+  merged baseline
+
+### When NOT to use
+
+- Pass 1 of a fresh routing batch (no pre-existing routes to preserve)
+- When you explicitly want the router to optimize globally (rip + reroute
+  everything together)
+- When pass 1's routes are known-bad and you want them displaced
 
 ## v3 fix history (2026-05-27 — multi-pad MST completion safety net)
 
