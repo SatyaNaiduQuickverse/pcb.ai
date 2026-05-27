@@ -94,6 +94,36 @@
 - **Status**: proposed
 - **Sim cross-check**: pending master review
 
+### L10 — 24/30 plateau = missing GLOBAL routing phase (greedy detailed-only paints into corners)
+
+- **Date**: 2026-05-28
+- **Pattern**: routing a dense subsystem with a detailed-only router (greedy MST + per-edge A* / cooperative PathFinder, `route_subsystem_cooperative.py` v1→v8) and NO global capacity-planning phase
+- **Observation**: CH1 signal routing plateaued at **24/30** on 10L, robust across 4 router configurations (`--no-rip-routed` / full cooperative ripup 97-rips-45-iters / single-net isolation / moved-placement). Early nets consumed the shared J18/J19 escape-via room; nets ~25–30 had no escape that does not short neighbors.
+- **Root cause** (physics + algorithm): the canonical VLSI flow is GLOBAL routing (assign nets to capacity-limited regions, detect overflow cheaply) → DETAILED routing (exact tracks inside a region). Our router has ONLY the detailed phase, so it spends a shared scarce escape-via resource on whichever nets come first (fail_count+priority order = arbitrary w.r.t. resource contention). PathFinder negotiates *redistribution when slack exists* but cannot manufacture capacity that is absent — so it oscillates and plateaus. (Sherwani: maze routing is order-dependent and needs global pre-planning. DEEP_RESEARCH_2026-05-28 §1.2.)
+- **Cost adjustment**: add the missing phases (ROUTING_METHODOLOGY §0b): Phase A capacity + escape pre-check (deterministic demand/supply ledger, verdict ROUTABLE/NEEDS-HDI/INFEASIBLE up front), Phase B global plan with doors + topology-before-geometry + via-slot pre-assignment, with FoS-on-routing-process (doors filled ≤75–80%, never 100%). Demote the cooperative router to the Phase-C region filler. Cost model: planner reserves escape slots for most-constrained nets first; overflow resolved at region level (microseconds) not by ripping copper.
+- **Status**: proposed
+- **Sim cross-check**: pending — validated against the T1–T9 ground-truth suite (esp. T3 greedy-trap + T4/T5 escape-feasibility boundary) per `docs/ROUTING_ENGINE_DESIGN_2026-05-28.md` before the engine touches the real board.
+
+### L11 — Corner geometry is a LOCAL high-current concern, not a global rule
+
+- **Date**: 2026-05-28
+- **Pattern**: applying (or proposing) a board-wide chamfer/curve/rounding rule to "fix" 90° corners on signal traces
+- **Observation**: the "90°-corner radiates / must be rounded" belief drives cosmetic global geometry rules that add complexity for no electrical benefit at our edge rates
+- **Root cause** (physics): per Howard Johnson *HSDD*, the right-angle reflection/radiation effect is negligible above ~tens of ps rise times; our PWM/DShot/BEMF nets are sub-MHz to low-MHz, far below the threshold where a 90° corner matters electrically. The corner effects that DO matter are mechanical/manufacturing (acid-trap at acute angles; drill breakout + thermal-cycle crack at the trace-to-pad neck; current-crowding at ~100A motor-trace inside corners) — all LOCAL and targeted.
+- **Cost adjustment** (ROUTING_METHODOLOGY §5b geometry policy): NO global chamfer/curve rule (rejected). DEFAULT octilinear (45°) — simplest manufacturable, never creates acute angles by construction. GATE: reject any interior angle <90° (acid-trap class). TEARDROPS at every pad/via junction (IPC-standard stress + current-crowding relief). LOCAL 45° chamfer/fillet on high-current corners ONLY, sim-driven (current-density flags crowding). Router + hand touch-ups call the same `geometry_primitives.py` library.
+- **Status**: proposed
+- **Sim cross-check**: pending — local fillet placement gated by current-density sim on motor-phase traces (Brooks *PCB Currents*); acute-angle gate is a deterministic geometric check.
+
+### L12 — Factor of Safety EVERYWHERE / no cut-to-cut (Sai 2026-05-28)
+
+- **Date**: 2026-05-28
+- **Pattern**: sizing any routing quantity (trace width, clearance, via current, annular ring, impedance, loop-L, thermal, creepage, OR corridor/door fill) to its raw limit / fab minimum
+- **Observation**: Sai mandate — "very important", "no cut-to-cut". The design target must never be the raw limit; routing to the exact fab minimum or filling a corridor to 100% leaves zero margin and is the cut-to-cut that produced the 24/30 corner-paint plateau (corridor filled to capacity → no slack for later nets or negotiation).
+- **Root cause** (physics + process): every physical limit has process/measurement/registration variance. Sizing AT the limit means ~50% of parts violate after normal process drift. FoS converts a brittle point target into a robust band. The routing PROCESS itself needs a FoS (doors/corridors ≤75–80% fill) — overflow-at-capacity is a planning failure (ISPD-2008: any overflow is strictly inferior).
+- **Cost adjustment** (ROUTING_METHODOLOGY §5c FoS table + `routing_topology.yaml` `factor_of_safety:` + `global_capacity_headroom:`): every physical quantity declares a FoS — limit÷FoS (ceilings) / requirement×FoS (floors). Aligns with implemented gates: ampacity 1.5× cont / 1.2× burst (G_FoS2), via current 1.5× (audit_via_current_capacity), thermal 25% cont / 10% burst (G_FoS1), cap voltage 1.4×/1.5× (G_FoS3), pin current 1.5× (G_FoS5), clearance above-fab-min, impedance ±10% band, routing-process fill ≤0.75–0.80. Planned FoS meta-gate: flag any physical quantity sized to raw limit (G_META1 analogue for safety) — described as planned, not yet scripted.
+- **Status**: proposed
+- **Sim cross-check**: thermal/ampacity FoS already gated by the implemented audit_fos_* suite; routing-process headroom validated by T3 (greedy-trap) in the T1–T9 suite where a 100%-fill plan fails and an ≤80%-fill plan succeeds.
+
 ---
 
 ## Lesson template for new entries
@@ -129,5 +159,5 @@ A lesson can be `retired` if later evidence shows the pattern was a false positi
 ## ROUTING_LESSONS_HASH
 
 ```
-ROUTING_LESSONS_HASH = 653191193df439c6ea8e62f2d25f38424658c43b7cb8f843cc540146a3bf7d02
+ROUTING_LESSONS_HASH = 4424015d88c739fdeaca5ec7e2113018d06efc69e7abd0ca7a62473858f99cfb
 ```
