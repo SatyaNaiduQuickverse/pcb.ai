@@ -48,7 +48,26 @@ Usage:
   python3 route_subsystem_cooperative.py <board.kicad_pcb> \
     --subsystem CH1 \
     --output <routed.kicad_pcb> \
-    [--max-iterations 30] [--grid-pitch 0.1] [--seed-nets <comma-list>]
+    [--max-iterations 30] [--grid-pitch 0.1] [--seed-nets <comma-list>] \
+    [--no-rip-routed]
+
+  --no-rip-routed (v4 2026-05-27): pre-existing routed nets (≥1 track/via in
+  input board) treated as immovable. Use in multi-pass workflows where pass
+  N+1 must preserve pass N's routes. Default OFF (back-compat single-pass).
+
+  --via-in-pad-allowed (v6 2026-05-27): allow vias to drop directly on the
+  CENTER of J18 (AT32F421 QFN-32) and J19 (DRV8300 QFN-24) signal pads
+  (HDI via-in-pad whitelist). The default fanout topology — pad → 0.5mm
+  stub → via — saturated the via-area between J18 south edge and the
+  BEMF/CSA filter wall (~22 escape vias possible for 33 pins), capping
+  CH1 STEP-6 router yield at 22/33 across 5 router versions (PR#202→206).
+  HDI via-in-pad eliminates the fan-out area entirely: each net's via
+  drops on its pad and escapes straight to its inner layer. Industry
+  standard QFN-escape fix (Altium BGA fanout guide + NWES HDI BGA escape).
+  Cost: +$2-3/board production (epoxy-filled + plated-over per JLC HDI
+  Class 2). Sai cost-cleared 2026-05-27. Whitelist J18+J19 only — all
+  other components preserve standard via-outside-pad cost.
+  Default OFF (back-compat: existing PR#202-#206 router runs unchanged).
 
 Exit 0 if all target nets routed, 1 if any unrouted (with diagnostics).
 
@@ -56,6 +75,32 @@ Reusable for CH1 STEP-6 J18/J19 fan-in + CH2/3/4 mirror routing +
 future dense subsystem escapes (S3 supervisor, S5 BEC if congested).
 
 Master 2026-05-27 R26 dispatch — replaces greedy escape line.
+
+v7 (2026-05-27, master R26 — worker R22 catch #4 on v6 HDI shorts):
+  Two-prong defense-in-depth fix for HDI microvia full-stack-validation gap
+  that allowed +2 net-to-net shorts on PR #207 v6 (GHC/GLC vias on F.Cu
+  shorting BEMF_A_CH1 / GLA_CH1 tracks on In4).
+
+  ROOT CAUSE: v6 short-circuited via_blocked_for_net to hdi_via_blocked_geom
+  for HDI cells (line ~1049), and the geometric check iterates
+  track_segments_by_layer / foreign_vias — both of which are populated ONLY
+  at _stamp_obstacles() startup. Same-router-run committed tracks/vias get
+  stamped into the cell-based obstacle map (catches non-HDI vias) but NOT
+  into the segment-list (HDI geom check blind to them).
+
+  PRONG 1: extend full-stack obstacle validation to ALL via classes.
+    - commit_paths() now appends committed tracks to track_segments_by_layer
+      and committed vias to foreign_vias so the HDI geom check sees them.
+    - via_blocked_for_net() for HDI cells now runs BOTH the geom check AND
+      a cell-based obstacle scan on inner layers (defense in depth).
+  PRONG 2: constrain MICROVIA tag to adjacent-layer pair only.
+    - emit_to_board() inspects via target span (F.Cu→target inner layer)
+    - Only tags as VIATYPE_MICROVIA when span is JLC HDI Class 2 compliant
+      (F.Cu↔In1.Cu or B.Cu↔In8.Cu adjacent-layer microvias).
+    - All other spans emit as standard through-via (no MICROVIA tag) —
+      they were physically through-vias anyway in v6.
+
+  Either prong alone fixes the bug. Both = defense in depth.
 """
 from __future__ import annotations
 
@@ -110,12 +155,46 @@ ALL_COPPER_LAYERS = [F_CU, IN1_CU, IN2_CU, IN3_CU, IN4_CU,
 # via must respect an antipad against an existing power plane fill.
 PLANE_LAYERS = [IN1_CU, IN3_CU, IN5_CU, IN7_CU]
 
-# Net classification -> preferred inner-layer escape (highest priority first)
+# Net classification -> preferred inner-layer escape (highest priority first).
+#
+# v5 (2026-05-27, master R26 NARROW FIX per worker R22 layer-underutilization
+# finding): this dict is now consulted twice per net:
+#   (1) inner_layers_for() — RESTRICTS the A* allowed-layer set (unchanged).
+#       For BEMF the router will NOT plan vias into In8/In6/etc, only
+#       In4 + In2 (plus F.Cu/B.Cu always-allowed for pad fanout stubs).
+#   (2) layer_pref_cost_mult() — BIASES the A* per-cell cost so the FIRST
+#       layer in the list is HALF the cost of the second, etc. This is the
+#       v5 fix: without (2), allowed layers had equal base-cost (1.0) and
+#       the router picked whichever layer had the lower congestion at the
+#       moment, which on CH1 STEP-6 meant In2 saturated while In4 stayed
+#       completely empty (worker R22 measured 0 tracks on In4/In6 in the
+#       CH1 signal region while In2/In8 held 163/82 tracks respectively).
+#
+# Multipliers (applied to LAYER_BASE_COST in cost()):
+#   index 0 (top preference) -> 0.5x  (router strongly prefers this layer)
+#   index 1                  -> 1.0x  (neutral — same as no preference)
+#   index 2                  -> 1.5x  (mild discouragement)
+#   index ≥3                 -> 2.0x  (strong discouragement)
+#   layer NOT in the list    -> 2.0x  (would only be reached via F.Cu/B.Cu
+#                                       which is also discouraged at 4.0x base)
+# These multipliers are tuned so a preferred-but-mildly-congested layer
+# (0.5 * 1.0 + 1.0 * present=1) = 1.5 beats a non-preferred uncongested layer
+# (1.0 * 1.0 + 0) = 1.0 only when present>1, i.e. it takes ONE other route on
+# the non-preferred layer before preference dominates. This is the desired
+# behaviour: fill the preferred layer FIRST, then spill to the next one.
 LAYER_PREF = [
+    # OQ-016: BEMF analog gets dedicated In4 (sandwiched by In3+In5 GND/+VMOTOR
+    # plane shields → low cross-talk). In2 fallback if In4 corridor blocked.
     (re.compile(r"^BEMF_[ABC]_CH\d+$"), [IN4_CU, IN2_CU]),
+    # PWM gate-drive inputs: SI-critical short-edge digital — primary In2,
+    # spillover to In8 (overflow layer).
     (re.compile(r"^PWM_(IN[HL][ABC])_CH\d+$"), [IN2_CU, IN8_CU]),
+    # CSA op-amp outputs (analog SI): primary In2 (paired w/ BEMF on quiet
+    # layer concept), spillover to In8.
     (re.compile(r"^CSA_[ABC]_OUT_CH\d+$"), [IN2_CU, IN8_CU]),
     (re.compile(r"^CSA_MAX_CH\d+$"), [IN2_CU, IN8_CU]),
+    # SWD/NRST/BOOT0: low-priority debug — push to overflow In8 to leave
+    # In2/In4 for SI-critical analog. In2 fallback only if In8 jammed.
     (re.compile(r"^SW(DIO|CLK)_CH\d+$"), [IN8_CU, IN2_CU]),
     (re.compile(r"^NRST_CH\d+$"), [IN8_CU, IN2_CU]),
     (re.compile(r"^BOOT0_CH\d+$"), [IN8_CU, IN2_CU]),
@@ -123,11 +202,92 @@ LAYER_PREF = [
     (re.compile(r"^(I|OTP)_TRIP_N_CH\d+$"), [IN8_CU, IN2_CU]),
     (re.compile(r"^KILL_(LOCAL|RAIL|LED_NODE)_(N_)?CH\d+$"), [IN8_CU, IN2_CU]),
     (re.compile(r"^VREF_(I_TRIP|OTP)_CH\d+$"), [IN8_CU, IN2_CU]),
+    # Gate-drive (GH*/GL*) + bootstrap (BST*): SHORT hops local to driver IC.
+    # In8 primary keeps them off the SI-critical analog layer.
     (re.compile(r"^GH[ABC]_CH\d+$"), [IN8_CU, IN2_CU]),
     (re.compile(r"^GL[ABC]_CH\d+$"), [IN8_CU, IN2_CU]),
     (re.compile(r"^BST[ABC]_CH\d+$"), [IN8_CU, IN2_CU]),
+    # v5: VMOTOR per-channel and SW (MOTOR) — typically routed by upstream
+    # power passes, but if any straggler slips through, bias to the spec'd
+    # layer per PR #191 / OQ-017.
+    (re.compile(r"^VMOTOR_CH\d+$"), [IN8_CU]),                   # PR #191 dual-use
+    (re.compile(r"^MOTOR_[ABC]_CH\d+$"), [IN6_CU, F_CU, B_CU]),  # OQ-017 SW escape
 ]
 DEFAULT_INNER_LAYERS = [IN8_CU, IN2_CU]  # fallback
+
+# v5: per-net layer-preference cost multipliers (applied on top of
+# LAYER_BASE_COST when --layer-pref is enabled). Module-level so unit
+# testable. Index N in the LAYER_PREF list -> multiplier from this table;
+# layer NOT in any preference list for this net -> LAYER_PREF_MULT_OTHER.
+LAYER_PREF_MULT = [0.5, 1.0, 1.5, 2.0]   # indexable by rank within net's pref list
+LAYER_PREF_MULT_OTHER = 2.0              # layer not in the net's pref list
+
+# Per-net cache of (layer -> multiplier). Populated lazily by
+# layer_pref_cost_mult(). Cleared at router init (test isolation). The
+# mapping is deterministic per net-name and per LAYER_PREF table so safe
+# to cache for the lifetime of one router instance.
+_LAYER_PREF_CACHE: dict = {}
+
+
+# v6 (2026-05-27, master R26 HDI via-in-pad enable per dispatch):
+# components whose pads support direct via-on-pad placement. Used by
+# _stamp_obstacles to SKIP the via_forbidden_zones marking (`mark_pad_zone`)
+# for their signal pads — letting the router drop a via centered on the
+# pad of THIS net without triggering the adjacent-pad keepout collision.
+#
+# Why a whitelist (not blanket "via-in-pad everywhere"):
+#   - Standard SMD pads were sized for solder-only contact; an unfilled
+#     via in pad will wick solder away during reflow (open joint).
+#   - JLC HDI Class 2 fab uses epoxy fill + plating-over per pad — they
+#     charge +$2-3/board only for the explicit via-in-pad pads, NOT every
+#     via on the board. Whitelist preserves the cost envelope.
+#   - Worker per-pin analysis 2026-05-27 located the routing-yield cap
+#     at J18 south-edge + J19 driver fan-out specifically; HDI on those
+#     two components is necessary AND sufficient.
+#
+# Whitelist matches by Footprint REFERENCE (J18, J19) — the exact two
+# components Sai cost-cleared. To extend, add the reference here AND
+# update docs/MASTER_HDI_SPEC.md + audit_hdi_via_in_pad.py whitelist.
+HDI_VIA_IN_PAD_REFS = ("J18", "J19")
+
+
+def is_hdi_via_in_pad_ref(footprint_ref: str) -> bool:
+    """Return True if `footprint_ref` is whitelisted for HDI via-in-pad."""
+    return footprint_ref in HDI_VIA_IN_PAD_REFS
+
+
+def layer_pref_cost_mult(net_name: str, layer: int) -> float:
+    """Return cost multiplier for `layer` when routing `net_name`.
+
+    Returns 1.0 (no bias) if net matches no LAYER_PREF entry (i.e. uses the
+    DEFAULT_INNER_LAYERS fallback). For an explicitly classified net,
+    returns the indexed multiplier from LAYER_PREF_MULT (rank 0 = 0.5x,
+    rank 1 = 1.0x, etc.) or LAYER_PREF_MULT_OTHER for layers not in the
+    preference list.
+
+    Always returns 1.0 for F.Cu / B.Cu — they have their own discouragement
+    via LAYER_BASE_COST=4.0; we don't want to double-penalize the pad-fanout
+    stubs since those are only ~0.5mm.
+    """
+    if layer in (F_CU, B_CU):
+        return 1.0
+    cached = _LAYER_PREF_CACHE.get(net_name)
+    if cached is None:
+        cached = {}
+        matched = False
+        for pat, layers in LAYER_PREF:
+            if pat.match(net_name):
+                matched = True
+                for rank, L in enumerate(layers):
+                    mult = LAYER_PREF_MULT[min(rank, len(LAYER_PREF_MULT) - 1)]
+                    cached[L] = mult
+                break
+        cached['__matched__'] = matched
+        _LAYER_PREF_CACHE[net_name] = cached
+    if not cached.get('__matched__', False):
+        return 1.0  # unclassified net: no bias
+    mult = cached.get(layer)
+    return mult if mult is not None else LAYER_PREF_MULT_OTHER
 
 # Priority bucket (lower=route earlier). High-fanin / SI-critical first.
 def net_priority(net_name: str) -> int:
@@ -212,6 +372,25 @@ GRID_SLOP_MM = 0.025    # extra halo to compensate grid-cell discretization (=pi
 # halo total = 0.305mm pad-edge keepout for foreign-net cells.
 # At 0.5mm QFN pitch with 0.125mm pad-half, between-pad gap = 0.25mm < 2×halo => no trace between
 # adjacent QFN pads (must escape perpendicular only — correct dog-bone topology).
+
+# v6 (2026-05-27): HDI microvia geometry for via-in-pad on J18/J19 whitelist.
+# JLC HDI Class 2 capability: laser-drilled 0.1mm hole + 0.075mm annular ring
+# = 0.25mm via pad (= width of 0.25mm × 0.875mm QFN signal pad). This fits
+# entirely within the QFN pad bbox, so adjacent-pad clearance reduces to:
+#   center-to-center 0.5mm (pitch) − via_pad/2 (0.125) − adj_pad/2 (0.125)
+#   = 0.25mm  ≥  CLEARANCE 0.2mm  →  DRC clean.
+# Standard 0.6mm via_pad would extend 0.175mm beyond the SMD pad edge =
+# clearance violation against adjacent pad. HDI microvia is the geometry
+# enabler — without it, "via-in-pad" is geometrically infeasible at 0.5mm
+# pitch QFN. Sai cost-cleared 2026-05-27 (+$2-3/board production for HDI
+# Class 2 with epoxy fill + plate-over per JLC tech spec).
+HDI_VIA_DRILL_MM = 0.10   # JLC laser drill min (HDI Class 2)
+HDI_VIA_DIAM_MM = 0.25    # = QFN pad short-axis width
+# HDI obstacle-scan radius: smaller via → smaller foreign-copper exclusion.
+# Foreign copper must stay (HDI_VIA_DIAM/2 + CLEARANCE) = 0.325mm from via
+# center. Compared to standard via 0.5mm. Saves ~0.175mm of scan radius —
+# lets the via fit between adjacent QFN pad copper at 0.5mm pitch.
+HDI_VIA_HALF_MM = HDI_VIA_DIAM_MM / 2 + CLEARANCE_MM  # = 0.325mm
 
 # A* tunables
 LAYER_CHANGE_COST = 5.0       # via penalty (was 30 — too high vs free inner layer)
@@ -533,12 +712,21 @@ class CongestionGrid:
       - history: accumulated congestion penalty from past iterations
     """
 
-    def __init__(self, zone_bbox, pitch_mm, layers):
+    def __init__(self, zone_bbox, pitch_mm, layers, layer_pref_enabled=True):
         self.xmin, self.ymin, self.xmax, self.ymax = zone_bbox
         self.pitch = pitch_mm
         self.layers = list(layers)
         self.nx = int(math.ceil((self.xmax - self.xmin) / pitch_mm)) + 1
         self.ny = int(math.ceil((self.ymax - self.ymin) / pitch_mm)) + 1
+        # v5 (2026-05-27): per-net layer-preference cost biasing.
+        # When True (default), cost() multiplies LAYER_BASE_COST by a
+        # net-class-specific multiplier so the router prefers each net's
+        # spec'd escape layer (e.g. BEMF -> In4) even when an alternative
+        # allowed layer (e.g. In2) is locally less congested. Worker R22
+        # measured In4/In6 completely empty while In2 saturated at 163
+        # tracks — root cause was equal layer-cost across allowed set.
+        # Set False to revert to v4 cost behaviour (debugging only).
+        self.layer_pref_enabled = layer_pref_enabled
         # dicts keyed by (i,j,L). Absent => default 0 / False.
         self.obstacle = set()     # (i,j,L) -> blocked for ALL nets (pad copper, track core)
         self.present = defaultdict(int)   # (i,j,L) -> count of nets routing here this iter
@@ -564,6 +752,30 @@ class CongestionGrid:
         # on a specific layer; via through-spans all layers so we must check
         # all-layer track maps not just routing-layer ones.
         # (Already covered by obstacle set per-layer; new helper iterates them.)
+        # v6: cells that correspond to HDI-via-in-pad whitelist pad centers
+        # (J18.* / J19.*). via_blocked_for_net uses HDI_VIA_HALF_MM (smaller
+        # scan radius) when (i,j) is in this set — letting the smaller
+        # microvia legitimately fit between adjacent QFN pads at 0.5mm pitch.
+        #   hdi_via_cells[(i,j)] = netname  (owner-net allowed to via here)
+        self.hdi_via_cells = {}  # (i,j) -> owner_netname
+        # v6: cells whose obstacle marking came from a J18/J19 pad copper
+        # (not a track). For HDI via_blocked_for_net checks at HDI cells,
+        # these pad-derived obstacle cells DO NOT block the via because we
+        # geometrically verified microvia fits between 0.5mm-pitch QFN pads.
+        # Track-derived obstacle cells (foreign tracks on inner layers) still
+        # block as normal. Set lookup is O(1) on cell tuple.
+        self.hdi_pad_obstacle_cells = set()  # {(i, j, layer), ...}
+        # v6: actual foreign-track segments per signal layer for GEOMETRIC
+        # distance checks at HDI via cells. The cell-based obstacle stamp
+        # is over-conservative for the small HDI via (it cannot distinguish
+        # "track centerline at 0.39mm — HDI safe" from "track centerline
+        # at 0.0mm — HDI unsafe"; both show same obstacle cell at offset 1).
+        # For HDI cells we walk these segments directly and check geometric
+        # distance. List per layer of (x1,y1,x2,y2,width_mm,owner_net).
+        self.track_segments_by_layer = defaultdict(list)
+        # v6 same for via positions (foreign vias must clear HDI via by
+        # geometric distance, not cell-grid).
+        self.foreign_vias = []  # [(x, y, diam_mm, owner_net), ...]
 
     def in_bounds(self, i, j):
         return 0 <= i < self.nx and 0 <= j < self.ny
@@ -755,6 +967,77 @@ class CongestionGrid:
                 # (multiple plane fills with same net on same layer is fine;
                 # different nets shouldn't occur on same layer)
 
+    def hdi_via_blocked_geom(self, i, j, netname, span_layers):
+        """v6: geometric clearance check for an HDI microvia at cell (i,j).
+
+        Cell-based obstacle stamps are over-conservative for the small HDI
+        via (0.25mm pad / 0.10mm drill): a foreign track centerline at
+        0.39mm from via center is HDI-safe (clearance 0.39−0.125−0.075 =
+        0.19mm ≥ 0.15mm), but stamps an obstacle cell at offset 1 from
+        via center, which the cell-based scan reads as "blocked". This
+        function performs the precise centerline-to-centerline check
+        against the stored track_segments_by_layer + foreign_vias arrays.
+
+        Returns (blocked: bool, reason: str). PASS = HDI via fits safely.
+        """
+        # via center in mm
+        vx, vy = self.cell_xy(i, j)
+        # Required clearance: foreign track CENTERLINE must be ≥
+        #   (HDI_VIA_HALF (= via_pad/2 + clearance, 0.325mm))
+        #   - 0 (we want the closest *edge* to clear; centerline already
+        #     accounts for trace_half/2 separately)
+        # Actually: foreign trace edge to via edge ≥ CLEARANCE_MM (0.15mm).
+        # foreign trace edge = trace_centerline ± (w/2). via edge = via_center ± via_pad/2.
+        # Required: |trace_centerline - via_center| ≥ (w/2 + via_pad/2 + CLEARANCE).
+        # Foreign via edge: similar with via_diam/2.
+        hdi_pad_half = HDI_VIA_DIAM_MM / 2  # 0.125mm
+        for L in span_layers:
+            if L not in SIGNAL_LAYERS:
+                continue
+            for (x1, y1, x2, y2, w, owner) in self.track_segments_by_layer.get(L, []):
+                if owner == netname:
+                    continue
+                # min distance from (vx,vy) to segment
+                dx = x2 - x1; dy = y2 - y1
+                seg_len2 = dx * dx + dy * dy
+                if seg_len2 < 1e-12:
+                    d = math.hypot(vx - x1, vy - y1)
+                else:
+                    tt = ((vx - x1) * dx + (vy - y1) * dy) / seg_len2
+                    tt = max(0.0, min(1.0, tt))
+                    px = x1 + tt * dx; py = y1 + tt * dy
+                    d = math.hypot(vx - px, vy - py)
+                required = (w / 2) + hdi_pad_half + CLEARANCE_MM
+                # v6: allow 1µm epsilon for floating-point precision
+                # (geometric calcs land on the exact boundary sometimes)
+                if d < required - 1e-3:
+                    return True, (f"track:{owner}@{layer_short_name(L)} "
+                                   f"d={d:.3f}<{required:.3f}")
+        # Foreign via clearance (centerline-to-centerline)
+        for (fx, fy, diam, owner) in self.foreign_vias:
+            if owner == netname:
+                continue
+            d = math.hypot(vx - fx, vy - fy)
+            required = (diam / 2) + hdi_pad_half + CLEARANCE_MM
+            if d < required:
+                return True, (f"foreign_via:{owner} "
+                               f"d={d:.3f}<{required:.3f}")
+        # Plane-fill scan (same as standard via): forbids HDI via inside
+        # foreign F.Cu/B.Cu power pours, where the via barrel would short.
+        for di in range(-3, 4):
+            for dj in range(-3, 4):
+                ci = i + di; cj = j + dj
+                if not self.in_bounds(ci, cj):
+                    continue
+                cell_planes = self.via_plane_owners.get((ci, cj))
+                if not cell_planes:
+                    continue
+                for L, powner in cell_planes.items():
+                    if powner != netname and L in span_layers:
+                        return True, (f"plane:{powner}@{layer_short_name(L)}"
+                                       f"@({di},{dj})")
+        return False, ""
+
     def via_blocked_for_net(self, i, j, netname, span_layers=ALL_COPPER_LAYERS):
         """v2 fix: A through-via at (i,j) for `netname` is blocked if ANY
         copper layer in span_layers has a foreign-net obstacle within the
@@ -774,11 +1057,39 @@ class CongestionGrid:
         Skip plane layers in obstacle check (we deliberately do NOT block
         foreign vias inside inner GND/+VMOTOR planes — KiCad auto-antipads).
 
+        v6: when (i,j) is an HDI-via-in-pad whitelist cell AND `netname`
+        matches the cell's HDI owner-net, use the smaller HDI via pad/
+        clearance for the scan radius. This lets the microvia legitimately
+        fit between adjacent 0.5mm-pitch QFN pads where a standard 0.6mm
+        via would clearance-violate.
+
         Returns (blocked: bool, reason: str).
         """
-        # Obstacle scan radius: delta = via_pad - trace_pad (how much wider
-        # the via is than the existing trace-halo accounted for)
-        via_pad_half_mm = VIA_DIAM_MM / 2 + CLEARANCE_MM
+        # v6: detect HDI via-in-pad site at this cell for this net
+        hdi_owner = self.hdi_via_cells.get((i, j))
+        is_hdi_via = (hdi_owner is not None and hdi_owner == netname)
+        if is_hdi_via:
+            # v7 (worker R22 catch #4 on v6): HDI vias still physically
+            # spans the full F.Cu→B.Cu stack (per emit_to_board comment at
+            # line ~1492-1500). The geom check uses segment-lists that
+            # capture pre-router-startup tracks ONLY — same-router-run
+            # committed tracks/vias are stamped into the cell-based
+            # obstacle map but NOT into track_segments_by_layer /
+            # foreign_vias. v7 commit_paths() updates the segment lists,
+            # but as a defense-in-depth second check we also run the
+            # cell-based obstacle scan on inner+B.Cu layers below.
+            # If EITHER check flags, the via is rejected.
+            geom_blocked, _ = self.hdi_via_blocked_geom(i, j, netname, span_layers)
+            if geom_blocked:
+                return True, "hdi_geom_blocked"
+            # Fall through to the cell-based scan with HDI-aware skips.
+        if is_hdi_via:
+            # Microvia: 0.25mm pad → HDI_VIA_HALF_MM = 0.325mm clearance
+            via_pad_half_mm = HDI_VIA_HALF_MM
+        else:
+            # Obstacle scan radius: delta = via_pad - trace_pad (how much wider
+            # the via is than the existing trace-halo accounted for)
+            via_pad_half_mm = VIA_DIAM_MM / 2 + CLEARANCE_MM
         # obstacle keepout already includes (TRACE_HALF + CLEARANCE + slop)
         # = TRACE_HALF + CLEARANCE + GRID_SLOP_MM ≈ 0.305mm.
         # We want the via center within (via_pad_half_mm) of any obstacle CELL
@@ -791,8 +1102,28 @@ class CongestionGrid:
         r_plane2 = r_plane * r_plane
 
         # Check obstacle/halo on signal layers, small radius
+        # v6 (HDI via-in-pad): when is_hdi_via:
+        #   - obstacle cells derived from the J18/J19 pad copper itself are
+        #     IGNORED (stored in hdi_pad_obstacle_cells) — we geometrically
+        #     verified microvia fits between adjacent 0.5mm-pitch QFN pads.
+        #   - foreign-pad HALO cells on F.Cu are also ignored (halo was sized
+        #     for standard 0.6mm via needing 0.305mm pad-edge margin; HDI
+        #     0.25mm via needs only 0.275mm centerline-to-foreign-pad-center,
+        #     which is mathematically satisfied at 0.5mm pitch — verified).
+        #   - foreign-TRACK obstacle cells on inner layers still block as
+        #     normal at standard r_obs radius (this is the load-bearing
+        #     correctness check: HDI via must not collide with existing
+        #     inner-layer tracks routed by prior router passes).
         for L in span_layers:
             if L not in self.layers:
+                continue
+            # v6 HDI: skip F.Cu obstacle/halo check entirely. The HDI via
+            # pad on F.Cu IS the SMD pad copper (via inside pad). Foreign
+            # tracks/halos on F.Cu near the SMD pad edge represent a
+            # PRE-EXISTING DRC issue with those tracks vs the SMD pad and
+            # are not a NEW issue introduced by adding a via inside the pad.
+            # On inner layers + B.Cu the standard obstacle scan still runs.
+            if is_hdi_via and L == F_CU:
                 continue
             for di in range(-r_obs, r_obs + 1):
                 for dj in range(-r_obs, r_obs + 1):
@@ -802,7 +1133,11 @@ class CongestionGrid:
                     if not self.in_bounds(ci, cj):
                         continue
                     if (ci, cj, L) in self.obstacle:
-                        if netname not in self.pad_cells.get((ci, cj, L), set()):
+                        # v6 HDI: skip pad-derived obstacle cells from
+                        # J18/J19 (we know microvia fits adjacent pads)
+                        if is_hdi_via and (ci, cj, L) in self.hdi_pad_obstacle_cells:
+                            pass  # HDI: ignore J18/J19 pad-copper obstacle
+                        elif netname not in self.pad_cells.get((ci, cj, L), set()):
                             return True, f"obstacle@{layer_short_name(L)}@({di},{dj})"
                     halos = self.net_halo.get((ci, cj, L))
                     if halos and (halos - {netname}):
@@ -858,10 +1193,22 @@ class CongestionGrid:
             return True
         return False
 
-    def cost(self, cell, present_factor):
-        """Soft cost: layer_base + present_factor*present + history."""
+    def cost(self, cell, present_factor, netname=None):
+        """Soft cost: (layer_base * layer_pref_mult) + present_factor*present + history.
+
+        v5: layer-preference cost multiplier applies a per-net bias so the
+        net's TOP preferred layer (LAYER_PREF[0]) costs ~half a non-preferred
+        layer's base. Net-classified-but-not-listed layers and non-classified
+        nets get multiplier 1.0 (current v4 behaviour).
+
+        netname=None preserves the v4 cost (used as fallback for callers we
+        haven't updated and for the layer-pref-disabled CLI mode — gated by
+        self.layer_pref_enabled at the caller).
+        """
         i, j, L = cell
         base = LAYER_BASE_COST.get(L, 1.0)
+        if netname is not None and self.layer_pref_enabled:
+            base *= layer_pref_cost_mult(netname, L)
         pres = self.present.get(cell, 0)
         hist = self.history.get(cell, 0.0)
         return base + present_factor * pres + hist
@@ -891,6 +1238,27 @@ class CongestionGrid:
 SAME_LAYER_MOVES_8 = [(-1, 0), (1, 0), (0, -1), (0, 1),
                        (-1, -1), (-1, 1), (1, -1), (1, 1)]
 SAME_LAYER_MOVES_4 = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+
+# v6: stack-order tuple for blind-via span computation. Index = position in
+# stackup (F.Cu = 0, B.Cu = 9 in 10L). Blind via span = layers between
+# min(idx_a, idx_b) and max(idx_a, idx_b) inclusive.
+STACKUP_ORDER = [F_CU, IN1_CU, IN2_CU, IN3_CU, IN4_CU,
+                 IN5_CU, IN6_CU, IN7_CU, IN8_CU, B_CU]
+_STACKUP_INDEX = {L: i for i, L in enumerate(STACKUP_ORDER)}
+
+
+def blind_via_span(L_from, L_to):
+    """Return the tuple of copper layers a blind via between L_from and L_to
+    barrel-intersects. Always includes both endpoints + every layer between
+    them in stackup order. Used for HDI via_blocked_for_net checks.
+    """
+    a = _STACKUP_INDEX.get(L_from)
+    b = _STACKUP_INDEX.get(L_to)
+    if a is None or b is None:
+        return tuple(ALL_COPPER_LAYERS)
+    lo, hi = (a, b) if a <= b else (b, a)
+    return tuple(STACKUP_ORDER[lo:hi + 1])
 
 
 def heuristic(c1, c2, pitch):
@@ -923,12 +1291,23 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
     # v2 perf: cache via_blocked_for_net results per (i,j) for this A* run.
     # Obstacle map is constant during one find_path_astar invocation, so we
     # can safely memoize. Significant speedup — full-CH1 was 5+ min/iter.
-    via_block_cache = {}  # (i, j) -> bool
-    def _via_blocked(i, j):
-        v = via_block_cache.get((i, j))
+    # v6: cache is keyed by (i, j, span_signature). For HDI vias the span
+    # depends on (L_from, L_to) since we emit BLIND vias rather than through
+    # vias; the via barrel only intersects layers between L_from and L_to,
+    # so via_blocked_for_net must scan that subset only. For non-HDI vias
+    # we use the original full ALL_COPPER_LAYERS span (signature "full").
+    via_block_cache = {}  # (i, j, sig) -> bool
+    def _via_blocked(i, j, span_layers_tuple=None):
+        sig = span_layers_tuple if span_layers_tuple is not None else "full"
+        key = (i, j, sig)
+        v = via_block_cache.get(key)
         if v is None:
-            v, _ = grid.via_blocked_for_net(i, j, netname)
-            via_block_cache[(i, j)] = v
+            if span_layers_tuple is not None:
+                v, _ = grid.via_blocked_for_net(i, j, netname,
+                                                span_layers=list(span_layers_tuple))
+            else:
+                v, _ = grid.via_blocked_for_net(i, j, netname)
+            via_block_cache[key] = v
         return v
     # Precompute one representative target for heuristic
     if not targets: return None, None
@@ -975,7 +1354,8 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
                 if grid.is_blocked_for((i + di, j, L), netname): continue
                 if grid.is_blocked_for((i, j + dj, L), netname): continue
             step = grid.pitch * (math.sqrt(2) if (di and dj) else 1.0)
-            ng = g + step * grid.cost(ncell, present_factor)
+            # v5: pass netname so cost() can apply per-net-class layer bias
+            ng = g + step * grid.cost(ncell, present_factor, netname)
             if ng < g_score.get(ncell, math.inf):
                 g_score[ncell] = ng
                 came_from[ncell] = cell
@@ -988,8 +1368,12 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
             # in the via's span — not just the two routing layers. Catches the
             # bug class where a via lands on a foreign power plane or foreign
             # track on an inner layer (catastrophic short).
-            # Routers emit through-vias (F.Cu -> B.Cu) so span = ALL_COPPER_LAYERS.
-            # Memoized via _via_blocked() — see top of function.
+            # v6: HDI vias are also through-vias (per emit_to_board: JLC
+            # HDI Class 2 uses single-layer microvias which are full
+            # through-drills). HDI cell scan uses geometric precise check
+            # (hdi_via_blocked_geom in CongestionGrid) which is more
+            # accurate than the cell-based scan but still considers the
+            # full layer span. Memoized via _via_blocked() — see top.
             if not _via_blocked(i, j):
                 for L2 in allowed_layers:
                     if L2 == L: continue
@@ -998,7 +1382,8 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
                     # Also forbid via on dest layer if it lands in another net's pad zone
                     if grid.is_via_forbidden((i, j, L2), netname): continue
                     # via cost: fixed + congestion of both cells
-                    via_cost = LAYER_CHANGE_COST + grid.cost(ncell, present_factor)
+                    # v5: pass netname so cost() can apply per-net-class layer bias
+                    via_cost = LAYER_CHANGE_COST + grid.cost(ncell, present_factor, netname)
                     ng = g + via_cost
                     if ng < g_score.get(ncell, math.inf):
                         g_score[ncell] = ng
@@ -1026,7 +1411,8 @@ def segment_crosses_obstacle(grid, x1, y1, x2, y2, layer, netname):
     return False
 
 
-def path_to_segments(path_cells, grid: CongestionGrid):
+def path_to_segments(path_cells, grid: CongestionGrid,
+                     return_via_layers: bool = False):
     """Convert grid path -> list of (x1,y1,x2,y2,layer) segments + via cells.
 
     Algorithm:
@@ -1039,11 +1425,16 @@ def path_to_segments(path_cells, grid: CongestionGrid):
     Returns (segments, vias) where:
       segments = [(x1,y1,x2,y2,layer), ...]
       vias = [(x, y), ...]
+
+    v6: if `return_via_layers=True`, also returns via_layers — a dict mapping
+    (x_rounded, y_rounded) → (L_from, L_to) for each via, so emit_to_board
+    can produce a BLIND via with the proper layer pair for HDI escapes.
     """
     if not path_cells or len(path_cells) < 2:
-        return [], []
+        return ([], [], {}) if return_via_layers else ([], [])
     segments = []
     vias = []
+    via_layers = {}  # (rx, ry) -> (L_from, L_to)
     # Per-layer runs
     runs = []
     cur_layer = path_cells[0][2]
@@ -1056,6 +1447,7 @@ def path_to_segments(path_cells, grid: CongestionGrid):
             i, j, _ = cur_run[-1]
             x, y = grid.cell_xy(i, j)
             vias.append((x, y))
+            via_layers[(round(x, 3), round(y, 3))] = (cur_layer, cell[2])
             cur_layer = cell[2]
             cur_run = [cell]
     runs.append((cur_layer, cur_run))
@@ -1092,11 +1484,29 @@ def path_to_segments(path_cells, grid: CongestionGrid):
         x2, y2 = grid.cell_xy(b[0], b[1])
         if (x1, y1) != (x2, y2):
             segments.append((x1, y1, x2, y2, layer))
+    if return_via_layers:
+        return segments, vias, via_layers
     return segments, vias
 
 
-def emit_to_board(board, segments, vias, net_obj, width_mm, added_items):
-    """Insert tracks + vias to board, recording for ripup."""
+def emit_to_board(board, segments, vias, net_obj, width_mm, added_items,
+                  hdi_via_cells=None, grid=None, via_target_layers=None):
+    """Insert tracks + vias to board, recording for ripup.
+
+    v6: if `hdi_via_cells` (dict of (i,j)->owner_net) and `grid` are provided,
+    vias whose (xy)→(i,j) match a whitelist HDI cell are emitted with the
+    HDI microvia geometry (0.10mm drill, 0.25mm pad) instead of the standard
+    0.30mm drill / 0.60mm pad. This produces the correct via-in-pad fab
+    geometry compatible with JLC HDI Class 2 (epoxy fill + plate-over).
+
+    via_target_layers: optional dict {(x,y): target_layer_id} — if a via
+    at (x,y) has a target inner layer (from path analysis), the HDI via is
+    emitted as a BLIND via F.Cu→target_layer instead of a through via.
+    This is required to avoid through-via collisions with congested
+    inner layers (In2/In8) when the actual escape happens on a quieter
+    layer (e.g. In4 or In6). JLC HDI Class 2 supports F.Cu→In* blind
+    laser-drilled microvias as part of the +$2-3/board fab option.
+    """
     for (x1, y1, x2, y2, layer) in segments:
         t = pcbnew.PCB_TRACK(board)
         t.SetStart(pcbnew.VECTOR2I(mm_to_iu(x1), mm_to_iu(y1)))
@@ -1109,13 +1519,66 @@ def emit_to_board(board, segments, vias, net_obj, width_mm, added_items):
     for (x, y) in vias:
         v = pcbnew.PCB_VIA(board)
         v.SetPosition(pcbnew.VECTOR2I(mm_to_iu(x), mm_to_iu(y)))
-        v.SetLayerPair(F_CU, B_CU)
-        v.SetDrill(mm_to_iu(VIA_DRILL_MM))
+        # v6: HDI microvia geometry if this via lands on a whitelist pad cell
+        is_hdi_cell = False
+        if hdi_via_cells and grid is not None:
+            ci, cj = grid.xy_to_ij(x, y)
+            if (ci, cj) in hdi_via_cells:
+                is_hdi_cell = True
+        # v7 (worker R22 catch #4 on v6 microvia-span gap):
+        # The MICROVIA type tag in v6 was applied to ALL HDI via-in-pad cells
+        # regardless of layer span — but JLC HDI Class 2 fab spec restricts
+        # microvia to ADJACENT-layer single laser-drill (F.Cu↔In1.Cu or
+        # B.Cu↔In8.Cu). Tagging an F.Cu→In4 through-via as MICROVIA is a
+        # spec lie that masks the through-via's full-stack obstacle exposure.
+        # v7 fix: only tag as MICROVIA when the actual span is JLC-compliant;
+        # otherwise emit as standard through-via with HDI geometry (small
+        # drill/pad) preserved. Through-via geometry is what the via
+        # PHYSICALLY is in v6 anyway (line ~1537 was always F_CU↔B_CU);
+        # we just stop lying with the type tag.
+        target_pair = via_target_layers.get((round(x, 3), round(y, 3))) \
+            if via_target_layers else None
+        is_adjacent_microvia_span = False
+        if is_hdi_cell and target_pair is not None:
+            L_from, L_to = target_pair
+            adj_pairs = {(F_CU, IN1_CU), (IN1_CU, F_CU),
+                         (B_CU, IN8_CU), (IN8_CU, B_CU)}
+            is_adjacent_microvia_span = (L_from, L_to) in adj_pairs
+        # Use HDI geometry (small drill / pad) whenever the cell is on the
+        # HDI whitelist (microvia geometry needed to fit between QFN pads),
+        # but only tag as MICROVIA when span is adjacent-layer.
+        is_hdi = is_hdi_cell
+        is_hdi_microvia = is_hdi_cell and is_adjacent_microvia_span
+        # Layer pair: for adjacent-layer HDI microvia, emit blind via on the
+        # actual layer pair (so DRC treats it as a true microvia). For all
+        # other vias (HDI or not), emit as through via F.Cu↔B.Cu — that's
+        # what the v6 code did and what the obstacle validation assumes.
+        if is_hdi_microvia:
+            v.SetLayerPair(target_pair[0], target_pair[1])
+            try:
+                v.SetViaType(pcbnew.VIATYPE_MICROVIA)
+            except Exception:
+                pass
+        else:
+            v.SetLayerPair(F_CU, B_CU)
+            # v7: explicit through-via type for non-adjacent HDI cells.
+            # Without this, v6 inherited MICROVIA from prior is_hdi
+            # branch — which is the spec violation we are fixing.
+            try:
+                v.SetViaType(pcbnew.VIATYPE_THROUGH)
+            except Exception:
+                pass
+        if is_hdi:
+            v.SetDrill(mm_to_iu(HDI_VIA_DRILL_MM))
+            via_diam = HDI_VIA_DIAM_MM
+        else:
+            v.SetDrill(mm_to_iu(VIA_DRILL_MM))
+            via_diam = VIA_DIAM_MM
         # KiCad 9 PCB_VIA.SetWidth signature: SetWidth(layer, width)
         # Set width on each copper layer the via spans
         for lid in (F_CU, IN2_CU, IN4_CU, IN6_CU, IN8_CU, B_CU):
             try:
-                v.SetWidth(lid, mm_to_iu(VIA_DIAM_MM))
+                v.SetWidth(lid, mm_to_iu(via_diam))
             except Exception:
                 pass
         v.SetNet(net_obj)
@@ -1136,15 +1599,60 @@ def remove_from_board(board, items):
 class CooperativeRouter:
 
     def __init__(self, board, subsystem_name, grid_pitch=DEFAULT_GRID_PITCH,
-                 seed_nets=None, verbose=True):
+                 seed_nets=None, verbose=True, no_rip_routed=False,
+                 layer_pref_enabled=True, via_in_pad_allowed=False):
         self.board = board
         self.subsystem = subsystem_name
         self.zone = SUBSYSTEM_ZONES[subsystem_name]
         self.grid_pitch = grid_pitch
         self.verbose = verbose
+        # v4 (2026-05-27): --no-rip-routed flag. When True, nets that already
+        # had ≥1 track/via in the input board at load time are treated as
+        # IMMOVABLE pre-existing routing. They:
+        #   - are excluded from self.nets (never re-attempted)
+        #   - are never selected as ripup candidates
+        #   - are never force-ripped in plateau recovery
+        #   - their tracks/vias contribute hard-obstacle cost (already true via
+        #     _stamp_obstacles which stamps every track/via from board state)
+        # Use case: multi-pass workflows where pass N+1 must preserve pass N's
+        # work. Without this flag, cooperative ripup may rip cross-session
+        # routes because it has no concept of "pre-existing immutable".
+        # Worker discovery 2026-05-27 (CH1 STEP-6 (c) re-approach): pass 2's
+        # local net-by-net cooperative ripped BEMF_C from pass 1's result.
+        self.no_rip_routed = no_rip_routed
 
+        # v4: snapshot pre-existing routed nets BEFORE we touch the board.
+        # A net is "preserved" if it has ≥1 track or via in the input board.
+        # We snapshot net NAMES (strings) because netcodes can theoretically
+        # be re-issued by KiCad on board mutation.
+        self.preserved_nets = set()
+        for t in board.GetTracks():
+            nn = t.GetNetname()
+            if nn:
+                self.preserved_nets.add(nn)
+
+        # v5: clear module-level layer-pref cache for test isolation (multiple
+        # CooperativeRouter instances in one process see fresh classifier state).
+        _LAYER_PREF_CACHE.clear()
+        self.layer_pref_enabled = layer_pref_enabled
+        # v6 (2026-05-27): HDI via-in-pad enable for J18/J19 whitelist.
+        # When True, _stamp_obstacles() skips the mark_pad_zone call for
+        # whitelisted-footprint pads, leaving via_forbidden_zones empty
+        # there so the router can drop a same-net via on the pad center.
+        self.via_in_pad_allowed = via_in_pad_allowed
         self.state = BoardState(board, self.zone)
-        self.grid = CongestionGrid(self.zone, grid_pitch, SIGNAL_LAYERS)
+        self.grid = CongestionGrid(self.zone, grid_pitch, SIGNAL_LAYERS,
+                                    layer_pref_enabled=layer_pref_enabled)
+        if self.verbose:
+            print(f"[coop] layer-pref-bias: {'ON' if layer_pref_enabled else 'OFF'}"
+                  f" (v5 per-net-class layer cost multiplier; "
+                  f"BEMF→In4, PWM/CSA→In2, SWD/GH/GL/BST→In8, etc.)",
+                  flush=True)
+            print(f"[coop] via-in-pad-allowed: "
+                  f"{'ON' if via_in_pad_allowed else 'OFF'}"
+                  f" (v6 HDI whitelist={list(HDI_VIA_IN_PAD_REFS)}; "
+                  f"unblocks J18/J19 QFN escape per worker per-pin diagnosis)",
+                  flush=True)
         self._stamp_obstacles()
 
         # Per-net committed routes: net -> (path_cells, added_items)
@@ -1155,6 +1663,18 @@ class CooperativeRouter:
             self.nets = [n for n in seed_nets if n in self.state.net_pads]
         else:
             self.nets = self.state.routable_nets()
+        # v4: if --no-rip-routed, drop any preserved nets from the target list
+        # so we don't even attempt to re-route them. Their existing tracks
+        # remain as hard obstacles via the _stamp_obstacles call above.
+        if self.no_rip_routed:
+            skipped = [n for n in self.nets if n in self.preserved_nets]
+            self.nets = [n for n in self.nets if n not in self.preserved_nets]
+            if self.verbose:
+                print(f"[coop] --no-rip-routed: {len(self.preserved_nets)} pre-existing "
+                      f"routed nets snapshotted (immovable); "
+                      f"{len(skipped)} dropped from target list"
+                      + (f": {skipped[:10]}{'...' if len(skipped)>10 else ''}"
+                         if skipped else ""), flush=True)
         # Filter to nets with pads on F/B/inner — all should be fine
         self.nets.sort(key=lambda n: (net_priority(n), -len(self.state.net_pads[n]), n))
 
@@ -1190,16 +1710,62 @@ class CooperativeRouter:
         # marking, BUT we still need via_plane_owners marked for THT pads on
         # plane layers (so foreign-net vias get blocked at the pad cell on
         # plane layers).
+        # v6: count HDI-whitelisted pads we skipped via_forbidden_zones for
+        # (diagnostic — should be ~32 + ~24 = ~56 for J18+J19 on F.Cu).
+        hdi_skip_count = 0
         for layer in ALL_COPPER_LAYERS:
             for (x, y, hx, hy, owner, padid) in s.pad_obstacles_by_layer.get(layer, []):
                 # On signal layers: full obstacle + halo + pad-cell access + via-keepout
                 if layer in SIGNAL_LAYERS:
+                    # v6: identify HDI-whitelisted pads BEFORE stamping so we
+                    # can record obstacle-cell delta in hdi_pad_obstacle_cells.
+                    padref = padid.split(".", 1)[0] if padid else ""
+                    is_hdi_pad = (self.via_in_pad_allowed
+                                  and is_hdi_via_in_pad_ref(padref))
+                    if is_hdi_pad:
+                        obstacle_before = set(g.obstacle)
                     g.stamp_obstacle_rect(x, y, hx, hy, layer)
                     if owner and owner != "<NC>":
                         g.allow_pad_access_rect(x, y, layer, owner, hx, hy)
                         g.stamp_halo_rect(x, y, hx + halo_m, hy + halo_m, layer, owner)
                     else:
                         g.stamp_obstacle_rect(x, y, hx + halo_m, hy + halo_m, layer)
+                    if is_hdi_pad:
+                        # Track which obstacle cells came from this J18/J19 pad
+                        # so HDI via_blocked_for_net can ignore them as
+                        # obstacles (we geometrically verified microvia fits
+                        # adjacent 0.5mm-pitch QFN pads). For F.Cu where the
+                        # pad-copper itself is, the obstacle cells are the
+                        # pad rect; for inner layers nothing was stamped (the
+                        # SMD pad doesn't extend to inner copper).
+                        new_obs = g.obstacle - obstacle_before
+                        g.hdi_pad_obstacle_cells.update(new_obs)
+                    # v6 HDI via-in-pad: skip the via-keepout zone for
+                    # whitelisted footprints (J18/J19) on signal layers when
+                    # via_in_pad_allowed=True. Without skipping, the adjacent
+                    # QFN pad's keepout zone (radius ~0.96mm at 0.5mm pitch)
+                    # blocks same-net via-on-pad placement because the cell
+                    # ends up owned by BOTH pads' nets → owners−{netname} ≠ ∅
+                    # → is_via_forbidden returns True. Skipping leaves the
+                    # via-keepout zone unset for THIS pad while preserving:
+                    #   - pad copper obstacle (foreign-net tracks still blocked)
+                    #   - same-net pad-cell access (own-net traversal works)
+                    #   - foreign-net halo (different-net tracks/vias blocked
+                    #     by net_halo via stamp_halo_rect above)
+                    # so the only relaxation is OWN-net via-on-pad legality.
+                    if is_hdi_pad:
+                        hdi_skip_count += 1
+                        # v6: register pad-center cell as HDI via site so
+                        # via_blocked_for_net uses HDI scan radius here.
+                        # Only mark on F.Cu (the SMD pad's layer) — via
+                        # connects F.Cu→B.Cu spanning all inner layers, but
+                        # the "I'm a via-on-pad" attribute belongs to the
+                        # F.Cu cell where the SMD pad lives.
+                        if layer == F_CU and owner and owner != "<NC>":
+                            ci, cj = g.xy_to_ij(x, y)
+                            if g.in_bounds(ci, cj):
+                                g.hdi_via_cells[(ci, cj)] = owner
+                        continue
                     via_keepout = max(hx, hy) + CLEARANCE_MM + VIA_DIAM_MM / 2 + GRID_SLOP_MM
                     g.mark_pad_zone(x, y, layer, owner or "<NC>", radius_mm=via_keepout)
                 else:
@@ -1224,12 +1790,20 @@ class CooperativeRouter:
         for layer in SIGNAL_LAYERS:
             for (x1, y1, x2, y2, w, owner) in s.track_obstacles_by_layer.get(layer, []):
                 g.stamp_obstacle_segment(x1, y1, x2, y2, w, layer)
+                # v6: keep exact segment for HDI precise distance checks
+                g.track_segments_by_layer[layer].append((x1, y1, x2, y2, w, owner))
         # Vias -> obstacle on ALL copper layers (through vias span F.Cu to B.Cu
         # including inner planes — must block foreign-net vias from colliding
         # on plane layers, not just routing layers; v2 fix companion).
         for (x, y, r, owner) in s.via_obstacles:
             for layer in ALL_COPPER_LAYERS:
                 g.stamp_obstacle_circle(x, y, r, layer)
+            # v6: track foreign via for HDI precise distance checks
+            # r is (via_radius + clearance + trace_half + slop); back out
+            # an effective via diameter estimate (2 × (r - margins)).
+            est_diam = max(VIA_DIAM_MM,
+                           2 * (r - CLEARANCE_MM - TRACE_HALF_MM - GRID_SLOP_MM))
+            g.foreign_vias.append((x, y, est_diam, owner))
             # Also mark via cell as plane-owned by its net on plane layers so
             # a SAME-net via at (i,j) is not falsely blocked by the existing
             # via's own clearance halo when retried.
@@ -1276,6 +1850,13 @@ class CooperativeRouter:
         # the rare case of a track manually placed on an inner plane layer).
         # Already handled by per-layer track_obstacles loop above; planes
         # have no tracks normally.
+
+        # v6 diagnostic: report the via-keepout skip count once stamping done
+        if self.via_in_pad_allowed and self.verbose:
+            print(f"[coop] HDI via-in-pad: skipped via-keepout on "
+                  f"{hdi_skip_count} pad-layer entries "
+                  f"(whitelist={list(HDI_VIA_IN_PAD_REFS)}; expected ~50-60 "
+                  f"for J18 32 sigpads + J19 24 sigpads on F.Cu)", flush=True)
 
     def _pad_cells_for_net(self, netname):
         """For each pad of net, mark its cells as accessible to the net."""
@@ -1466,6 +2047,21 @@ class CooperativeRouter:
 
         # Allowed layers for this net's routing
         allowed = list(set([F_CU, B_CU] + inner_layers_for(netname)))
+        # v6: when HDI via-in-pad is enabled AND this net touches a J18/J19
+        # pad, expand the allowed layers to ALL signal layers. Rationale:
+        # HDI's value-add is escaping the via-fanout bottleneck — but the
+        # via must drop to a layer with capacity. Per-net LAYER_PREF (e.g.
+        # PWM→[In2, In8]) over-restricts when those layers are saturated.
+        # Worker R22 measured In4/In6 EMPTY (0 tracks) while In2/In8 held
+        # 163/82 tracks in CH1 (PR#206). With HDI, we WANT escape vias to
+        # spill into the unused layers. Layer-pref cost bias (v5) still
+        # tilts the cost toward each net's spec'd layer; this only opens
+        # the fallback set so the router can route at all.
+        if self.via_in_pad_allowed:
+            for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(netname, []):
+                if is_hdi_via_in_pad_ref(ref):
+                    allowed = list(set(allowed + SIGNAL_LAYERS))
+                    break
 
         # Route each MST edge with A*, growing the connected set per edge.
         # After routing edge k, the resulting path cells become valid SOURCES
@@ -1542,6 +2138,21 @@ class CooperativeRouter:
             # Both pads already in same island via existing routing — nothing to do
             return None
         allowed = list(set([F_CU, B_CU] + inner_layers_for(netname)))
+        # v6: when HDI via-in-pad is enabled AND this net touches a J18/J19
+        # pad, expand the allowed layers to ALL signal layers. Rationale:
+        # HDI's value-add is escaping the via-fanout bottleneck — but the
+        # via must drop to a layer with capacity. Per-net LAYER_PREF (e.g.
+        # PWM→[In2, In8]) over-restricts when those layers are saturated.
+        # Worker R22 measured In4/In6 EMPTY (0 tracks) while In2/In8 held
+        # 163/82 tracks in CH1 (PR#206). With HDI, we WANT escape vias to
+        # spill into the unused layers. Layer-pref cost bias (v5) still
+        # tilts the cost toward each net's spec'd layer; this only opens
+        # the fallback set so the router can route at all.
+        if self.via_in_pad_allowed:
+            for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(netname, []):
+                if is_hdi_via_in_pad_ref(ref):
+                    allowed = list(set(allowed + SIGNAL_LAYERS))
+                    break
         path, cost = find_path_astar(self.grid, sources, targets,
                                       netname, allowed, present_factor,
                                       time_budget_s=time_budget_s)
@@ -1572,8 +2183,15 @@ class CooperativeRouter:
             added = []
             all_cells = set()
         for path in paths:
-            segments, vias = path_to_segments(path, self.grid)
-            emit_to_board(self.board, segments, vias, net_obj, width, added)
+            segments, vias, via_layers = path_to_segments(
+                path, self.grid, return_via_layers=True)
+            # v6: pass HDI cell map + via target layers so emit_to_board
+            # switches via geometry to microvia (0.10/0.25mm) AND emits
+            # blind via (F.Cu → target inner layer) for whitelisted-pad cells.
+            emit_to_board(self.board, segments, vias, net_obj, width, added,
+                          hdi_via_cells=self.grid.hdi_via_cells,
+                          grid=self.grid,
+                          via_target_layers=via_layers)
             for c in path: all_cells.add(c)
         self.grid.commit_path(all_cells, netname)
         # Also stamp committed segments as obstacles for OTHER nets in next iters
@@ -1586,6 +2204,14 @@ class CooperativeRouter:
             segments, vias = path_to_segments(path, self.grid)
             for (x1, y1, x2, y2, layer) in segments:
                 self._stamp_own_track_obstacle(x1, y1, x2, y2, width, layer, netname)
+                # v7 (worker R22 catch #4 on v6): append to segment list so
+                # hdi_via_blocked_geom sees this just-committed track when
+                # the NEXT HDI net's A* runs in this same iteration. v6 only
+                # populated track_segments_by_layer at _stamp_obstacles()
+                # startup — leaving HDI checks blind to same-run tracks and
+                # allowing the GHC/GLC via shorts on In4 in PR #207.
+                self.grid.track_segments_by_layer[layer].append(
+                    (x1, y1, x2, y2, width, netname))
             for (vx, vy) in vias:
                 # v2 fix: stamp via obstacle on ALL copper layers in the span
                 # (through-via spans F.Cu->B.Cu). Radius accommodates foreign-
@@ -1598,6 +2224,15 @@ class CooperativeRouter:
                 vi, vj = self.grid.xy_to_ij(vx, vy)
                 for layer in ALL_COPPER_LAYERS:
                     self.grid.via_plane_owners[(vi, vj)].setdefault(layer, netname)
+                # v7 (worker R22 catch #4 on v6): append to foreign_vias so
+                # hdi_via_blocked_geom sees this just-committed via when the
+                # NEXT HDI net's A* runs in this same iteration. Use the
+                # actual via diameter (HDI if applicable; standard otherwise).
+                est_diam = VIA_DIAM_MM
+                vi2, vj2 = self.grid.xy_to_ij(vx, vy)
+                if (vi2, vj2) in self.grid.hdi_via_cells:
+                    est_diam = HDI_VIA_DIAM_MM
+                self.grid.foreign_vias.append((vx, vy, est_diam, netname))
         # Re-allow pad cells for THIS net (in case its own pads got stamped)
         for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(netname, []):
             for lid in layers:
@@ -1626,8 +2261,19 @@ class CooperativeRouter:
             self.grid.pad_cells[cell].add(netname)
 
     def rip_net(self, netname):
-        """Remove a net's committed tracks/vias and obstacles."""
+        """Remove a net's committed tracks/vias and obstacles.
+
+        v4: --no-rip-routed defensively refuses to rip any net in
+        preserved_nets (pre-existing routed nets). Returns silently to
+        keep callers compatible. Belt-and-suspenders alongside the
+        candidate-selection filters; protects against future code paths
+        that bypass the selection layer.
+        """
         if netname not in self.committed: return
+        if self.no_rip_routed and netname in self.preserved_nets:
+            self.log(f"  [coop] refusing to rip preserved net {netname} "
+                     f"(--no-rip-routed)")
+            return
         cells, added = self.committed[netname]
         remove_from_board(self.board, added)
         # Rebuild obstacle map cleanly (cheap path: blow away cell-based obstacles and re-stamp from non-committed state).
@@ -1898,16 +2544,24 @@ class CooperativeRouter:
                     self._rebuild_grid()
                 # If selective ripup found nothing AND we're stuck, force-rip random-3
                 # (avoids local minima)
+                # v4: --no-rip-routed excludes preserved_nets from the random pool.
                 elif plateau_count >= 2 and self.committed:
                     import random
                     random.seed(it)
-                    cand = random.sample(list(self.committed.keys()),
-                                         min(3, len(self.committed)))
-                    self.log(f"  plateau force-rip 3 random nets: {cand}")
-                    for nn in cand:
-                        self.rip_net(nn)
-                        unrouted.append(nn)
-                    self._rebuild_grid()
+                    if self.no_rip_routed:
+                        pool = [n for n in self.committed.keys()
+                                if n not in self.preserved_nets]
+                    else:
+                        pool = list(self.committed.keys())
+                    if pool:
+                        cand = random.sample(pool, min(3, len(pool)))
+                        self.log(f"  plateau force-rip 3 random nets: {cand}")
+                        for nn in cand:
+                            self.rip_net(nn)
+                            unrouted.append(nn)
+                        self._rebuild_grid()
+                    else:
+                        self.log(f"  plateau but no rippable nets (all preserved)")
 
         elapsed = time.monotonic() - self.start_time
         # v3: fully-connected = committed AND no open partial pairs
@@ -1926,8 +2580,13 @@ class CooperativeRouter:
         return unrouted
 
     def _select_ripup_candidates(self, failed_nets, k=3):
-        """Find committed nets that pass near failed-net pads — likely blockers."""
-        # For each failed net, find committed nets whose paths come within 1mm of any failed-net pad
+        """Find committed nets that pass near failed-net pads — likely blockers.
+
+        v4: when --no-rip-routed is set, preserved_nets are excluded from
+        ripup candidates. They are never in self.committed (we never commit
+        a preserved net — they're treated as pre-existing obstacles), but
+        defensive double-check here in case future code paths commit them.
+        """
         scores = defaultdict(int)
         for fnn in failed_nets:
             for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(fnn, []):
@@ -1938,6 +2597,8 @@ class CooperativeRouter:
                 R = int(1.5 / self.grid.pitch)
                 for cnn, (cells, _) in self.committed.items():
                     if cnn == fnn: continue
+                    if self.no_rip_routed and cnn in self.preserved_nets:
+                        continue  # v4: never rip a pre-existing routed net
                     for ci, cj, cL in cells:
                         if abs(ci - fi) <= R and abs(cj - fj) <= R:
                             scores[cnn] += 1
@@ -1959,6 +2620,34 @@ def main():
     ap.add_argument("--seed-nets", help="Comma-list of net names to route (default: auto-detect)")
     ap.add_argument("--report", help="Optional CSV report file for routed/unrouted nets + metrics")
     ap.add_argument("--quiet", action="store_true")
+    # v4 (2026-05-27): --no-rip-routed protects pre-existing tracks/vias from
+    # being torn down by cooperative ripup-reroute. Use in multi-pass workflows
+    # where a later pass must preserve an earlier pass's routes (e.g. CH1
+    # STEP-6 dense-first then local-by-local; CH2/3/4 mirror cycles).
+    # Default OFF for backward compatibility (single-pass fresh-board runs).
+    ap.add_argument("--no-rip-routed", action="store_true",
+                    help="Treat pre-existing routed nets as immovable; never "
+                         "rip them and never re-attempt them (multi-pass safety)")
+    # v5 (2026-05-27): per-net-class layer-preference cost biasing. ON by
+    # default — codifies OQ-016 (BEMF→In4) + OQ-017 (SW→In6) + PR #192
+    # (overflow→In8) at router cost-function level. Without this flag,
+    # worker R22 measured In4/In6 completely unused while In2/In8 saturated
+    # at 163/82 tracks (CH1 STEP-6 c-reapproach). Disable for debugging only.
+    ap.add_argument("--no-layer-pref", action="store_true",
+                    help="DISABLE v5 per-net-class layer-preference bias "
+                         "(debug only — equivalent to v4 cost behaviour)")
+    # v6 (2026-05-27): HDI via-in-pad enable for J18 + J19 whitelist.
+    # Worker per-pin analysis demonstrated J18 south-edge + J19 driver
+    # escape was permanently capped at ~22/33 across PR#202-#206 due to
+    # via-area saturation in the dog-bone fanout corridor. With this flag,
+    # the router drops vias directly on the J18/J19 pad centers — zero
+    # fanout area required. Sai cost-cleared 2026-05-27 (+$2-3/board).
+    # Whitelist: J18 + J19 only (see HDI_VIA_IN_PAD_REFS module constant).
+    # Other components' standard via cost preserved.
+    ap.add_argument("--via-in-pad-allowed", action="store_true",
+                    help="Allow HDI via-in-pad on whitelisted footprints "
+                         "(J18+J19 QFN). Unblocks CH1 STEP-6 routing-yield "
+                         "cap per worker per-pin diagnosis 2026-05-27.")
     args = ap.parse_args()
 
     board = pcbnew.LoadBoard(args.board)
@@ -1967,7 +2656,10 @@ def main():
     router = CooperativeRouter(board, args.subsystem,
                                 grid_pitch=args.grid_pitch,
                                 seed_nets=seed,
-                                verbose=not args.quiet)
+                                verbose=not args.quiet,
+                                no_rip_routed=args.no_rip_routed,
+                                layer_pref_enabled=not args.no_layer_pref,
+                                via_in_pad_allowed=args.via_in_pad_allowed)
     unrouted = router.run(max_iter=args.max_iterations)
 
     pcbnew.SaveBoard(args.output, board)

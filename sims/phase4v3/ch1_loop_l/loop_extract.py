@@ -18,14 +18,28 @@ The HS-on-F.Cu / LS-on-B.Cu topology (Sai BILATERAL_PLACEMENT.md) is meant to
 collapse this loop to a short vertical loop through the SW-node via cluster.
 Target: L_loop <= 2 nH/phase.
 
-STAGE
------
-This board has ZERO routed tracks and ZERO vias (placement-only, pre-route).
-So this is the PLACEMENT-STAGE loop estimate, computed from:
-  - real FET package + pad XY (from board),
-  - real board thickness (1.6mm, from board general/thickness),
-  - the PLANNED SW-node via cluster (N parallel vias in the SW-pad overlap region).
-Final value is confirmed post-route in STEP 6. This is stated in RESULTS.md.
+STAGE — ACTUAL vs PLANNED via count (independent-audit fix 2026-05-27)
+---------------------------------------------------------------------
+This script auto-detects the board stage from REAL via geometry:
+
+  ROUTED stage (board has SW vias): n_sw_vias is COUNTED from the board — the
+    number of vias actually on each phase's SW net (MOTOR_x_CH1). The reported
+    L_via_cluster (and therefore L_loop) reflects the ACTUAL routed reality.
+    A routed board with FEWER vias than planned gives a HIGHER (honest) L.
+
+  PLACEMENT-ONLY stage (board has 0 SW vias): n_sw_vias falls back to the
+    PLANNED fittable count (clamped to the 50-via/pair budget). This is the
+    pre-route estimate and is labelled "planned" in the output + CSV.
+
+WHY THIS FIX EXISTS
+-------------------
+An independent audit (2026-05-27) caught that this script used a PLANNED
+n_sw_vias (~16, from a fittable-area estimate clamped to 25) EVEN WHEN run on a
+"ROUTED" board that actually had only 5-6 SW vias per phase. It validated against
+INTENT, not REALITY. The loop-L verdict on this board is plane-dominated (the
+L_plane term is via-count-independent), so the verdict number barely moves — but
+the n_sw_vias column was a lie, and the via-cluster contribution was understated.
+Now the count is honest: actual when routed, planned (so-labelled) when not.
 
 PHYSICS / FORMULAS
 ------------------
@@ -63,30 +77,24 @@ the placement geometry fixes:
     the project G3 loop-area audit (audit_loop_area.py).
 
 (2b) PLANE-REFERENCED model (the multilayer reality the BILATERAL topology relies
-    on): the stackup is F.Cu / In1=GND / In2 / In3=+VMOTOR / In4 / In5=GND / In6 /
-    B.Cu (docs/BOARD_INVARIANTS.md). The commutation return does NOT close through a
-    ~6mm air loop -- it closes through the In1.Cu GND plane just below F.Cu (and the
-    +VMOTOR feed references In3.Cu). For a trace of length l and width w over a return
-    plane at dielectric height d, the loop inductance is the parallel-plate term:
+    on): the commutation return closes through the In1.Cu GND plane just below F.Cu
+    at the OQ-014 LOCKED F.Cu->In1.Cu prepreg d=0.10mm (docs/BOARD_INVARIANTS.md).
+    For a trace of length l and width w over a return plane at dielectric height d:
         L_plane = mu0 * d * l / w
-    BUT d (F.Cu -> In1.Cu dielectric) is NOT defined anywhere in the board or repo
-    (no stackup block; thicknesses are set at fab). We therefore DO NOT fabricate d;
-    we report L_plane as a function of d for the documented JLC 8L/1.6mm range and
-    flag it as the post-route / post-stackup-lock value. (See RESULTS.md.)
+    This term is INDEPENDENT of the SW via count.
 
-(3) Total loop inductance. We report the GEOMETRY-ONLY upper bound (the value that
-    depends ONLY on placed XY + board thickness, both pulled from the board) as the
-    placement-stage L_loop:
-        L_loop = L_via_cluster + L_rect       (free-space, no plane credit)
-    This is deliberately the WORST case -- it is the number the 2nH target is judged
-    against at PLACEMENT stage, before any return plane / via cluster exists.
+(3) Total loop inductance:
+        L_loop = L_via_cluster + L_plane    (plane-referenced; PHYSICAL verdict basis)
+    Free-space no-plane worst case (documented, not verdicted):
+        L_loop_freespace = L_via_cluster + L_rect
 
 All mu0 = 4*pi*1e-7 H/m. Geometry constants are pulled from the board, not assumed.
 
 OUTPUT
 ------
 loop_l_table.csv:
-  phase, HS, LS, loop_area_mm2, n_sw_vias, L_loop_nH, margin_to_2nH
+  phase, HS, LS, loop_area_mm2, n_sw_vias, n_sw_vias_source, L_loop_nH,
+  L_loop_freespace_nH, margin_to_2nH
 """
 
 import csv
@@ -104,17 +112,16 @@ OUT_CSV = Path(__file__).resolve().parent / "loop_l_table.csv"
 MU0 = 4.0 * math.pi * 1e-7  # H/m
 TARGET_NH = 2.0
 
-# --- Planned SW-node via cluster (placement stage; board has no vias yet) ---
+# --- PLANNED SW-node via cluster (placement-stage fallback ONLY) ---
 # BILATERAL_PLACEMENT.md line 68: "~50 vias per FET pair" (Sai G_R5, 1.5x FoS 100A).
-# The SW node is ONE side of the pair; the other parallel set is the source/GND
-# return. We size the SW-node via count to what physically fits the SW pad cluster
-# (left-edge pads, x~5.55) at a JLC-buildable pitch, and clamp to the 50-via budget.
+# Used ONLY when the board has 0 SW vias (placement-only). On a routed board the
+# count is taken from REAL geometry (see count_actual_sw_vias).
 VIA_DRILL_MM = 0.3       # JLC standard via drill (dispatch's 0.3mm reference)
 VIA_PITCH_MM = 0.6       # via pitch (drill + annular + clearance, JLC 6/6 capable)
+PLANNED_VIA_CAP = 25     # half of 50/pair budget -> SW side
+
 
 # Conductor effective radius for the planar loop term: 3oz outer copper on F/B.Cu.
-# Effective round-wire radius of a wide flat trace a ~ (w_trace + t)/2pi *e ...; we
-# use a = half the SW-pad short dimension as a geometric, conductor-tied value.
 def trace_eff_radius_m(pad_short_mm):
     # round-wire equivalent radius of a flat strip of width pad_short: a ~ 0.2235*(w+t)
     # (standard strip->wire GMD approx, Paul); t(3oz)=0.105mm.
@@ -160,6 +167,27 @@ def pads_on_net(fp, net):
     return out
 
 
+def count_actual_sw_vias(board, sw_net):
+    """Count REAL vias on the SW net (MOTOR_x_CHn) on the board. This is the
+    actual routed-reality SW-node via count — the audit-fix core."""
+    n = 0
+    for t in board.GetTracks():
+        if isinstance(t, pcbnew.PCB_VIA) and t.GetNetname() == sw_net:
+            n += 1
+    return n
+
+
+def planned_sw_vias(hs_sw):
+    """Placement-stage fallback: fittable via count over the HS SW-pad cluster
+    bbox at JLC-buildable pitch, clamped to the 50-via/pair budget half."""
+    xs = [p["x"] for p in hs_sw]
+    ys = [p["y"] for p in hs_sw]
+    cluster_w = max(max(xs) - min(xs), VIA_PITCH_MM)
+    cluster_h = max(max(ys) - min(ys), VIA_PITCH_MM)
+    n_fit = max(1, int(cluster_w / VIA_PITCH_MM)) * max(1, int(cluster_h / VIA_PITCH_MM))
+    return min(n_fit, PLANNED_VIA_CAP)
+
+
 def bbox(pads):
     xs = [p["x"] for p in pads]
     ys = [p["y"] for p in pads]
@@ -174,14 +202,16 @@ def centroid(pads):
 
 
 def main():
-    if not Path(BOARD_PATH).exists():
-        print(f"FAIL: board not found: {BOARD_PATH}")
+    board_path = sys.argv[1] if len(sys.argv) > 1 else BOARD_PATH
+    if not Path(board_path).exists():
+        print(f"FAIL: board not found: {board_path}")
         sys.exit(1)
 
-    board = pcbnew.LoadBoard(BOARD_PATH)
+    board = pcbnew.LoadBoard(board_path)
     thickness_mm = board.GetDesignSettings().GetBoardThickness() / 1e6
-    n_tracks = sum(1 for t in board.Tracks() if t.GetClass() == 'PCB_TRACK')
-    n_vias = sum(1 for t in board.Tracks() if t.GetClass() == 'PCB_VIA')
+    n_tracks = sum(1 for t in board.GetTracks() if isinstance(t, pcbnew.PCB_TRACK))
+    n_vias = sum(1 for t in board.GetTracks() if isinstance(t, pcbnew.PCB_VIA))
+    routed = n_vias > 0
 
     phases = {
         "A": ("Q5", "Q6", "MOTOR_A_CH1", "VMOTOR_CH", "SHUNT_A_TOP_CH1"),
@@ -189,9 +219,9 @@ def main():
         "C": ("Q9", "Q10", "MOTOR_C_CH1", "VMOTOR_CH", "SHUNT_C_TOP_CH1"),
     }
 
-    print(f"=== HS-LS commutation loop inductance — CH1, board {Path(BOARD_PATH).name} ===")
+    print(f"=== HS-LS commutation loop inductance — CH1, board {Path(board_path).name} ===")
     print(f"Board thickness (from board): {thickness_mm:.3f} mm  | tracks={n_tracks} vias={n_vias}")
-    print(f"Stage: {'PLACEMENT-ONLY (no routing/vias on board)' if n_vias == 0 and n_tracks == 0 else 'ROUTED'}")
+    print(f"Stage: {'ROUTED (SW via count taken from REAL board geometry)' if routed else 'PLACEMENT-ONLY (no vias on board; n_sw_vias = PLANNED estimate)'}")
     print(f"Target: L_loop <= {TARGET_NH} nH/phase\n")
 
     rows = []
@@ -213,27 +243,23 @@ def main():
         hs_src = pads_on_net(hs_fp, srcnet)  # HS source = VMOTOR
         ls_sh = pads_on_net(ls_fp, shnet)    # LS source = shunt/GND return
 
-        # --- SW-node via cluster: planned N vias fitting the SW-pad cluster ---
-        # The vias stitch F.Cu HS-SW copper to B.Cu LS-SW copper. The fittable
-        # count is bounded by the SW-pad cluster footprint area / via cell area,
-        # clamped to the 50-via/pair budget (BILATERAL line 68). The SW node gets
-        # roughly half the budget (other half is the source/GND parallel set).
-        hx0, hx1, hy0, hy1 = bbox(hs_sw)
-        # include the big drain EP (pad 9) extent already in bbox; usable stitch
-        # region ~ the HS SW-pad cluster footprint
-        cluster_w = max(hx1 - hx0, VIA_PITCH_MM)
-        cluster_h = max(hy1 - hy0, VIA_PITCH_MM)
-        n_fit = max(1, int(cluster_w / VIA_PITCH_MM)) * max(1, int(cluster_h / VIA_PITCH_MM))
-        n_sw_vias = min(n_fit, 25)  # half of 50/pair budget -> SW side
-        L_via_cluster = L_via_single / n_sw_vias
+        # --- SW-node via count: ACTUAL from board (routed) or PLANNED (placement) ---
+        actual = count_actual_sw_vias(board, swnet)
+        if routed and actual > 0:
+            n_sw_vias = actual
+            via_source = "actual"
+        else:
+            n_sw_vias = planned_sw_vias(hs_sw)
+            via_source = "planned"
+        # honest reporting line (independent-audit requirement)
+        print(f"    n_sw_vias: {via_source}={n_sw_vias} "
+              f"(counted from board net '{swnet}'={actual}; planned-fit={planned_sw_vias(hs_sw)})")
+        L_via_cluster = L_via_single / max(1, n_sw_vias)
 
         # --- planar rectangular loop term ---
-        # loop "length" l = lateral SW run: HS-SW centroid -> LS-SW centroid.
         hcx, hcy = centroid(hs_sw)
         lcx, lcy = centroid(ls_sw)
         l_run_mm = math.hypot(lcx - hcx, lcy - hcy)
-        # loop "width" w = drain(SW)-to-source(VMOTOR/shunt) span = package conduction width.
-        # Use HS SW-side x to VMOTOR-side x (the current path width across the FET).
         sxs = [p["x"] for p in (hs_src + ls_sh)]
         swxs = [p["x"] for p in (hs_sw + ls_sw)]
         w_span_mm = abs(sum(sxs) / len(sxs) - sum(swxs) / len(swxs))
@@ -242,25 +268,21 @@ def main():
         L_rect = rect_loop_inductance_nH(w_span_mm * 1e-3, l_run_mm * 1e-3, a_m)
 
         # Plane-referenced term L_plane(d) = mu0*d*l/w. d = OQ-014 LOCKED F.Cu->In1.Cu
-        # prepreg = 0.10mm (BOARD_INVARIANTS.md stackup; was the "UNCONFIRMED" range, now
-        # pinned). The In1.Cu GND plane is filled directly under the F.Cu SW node, so the
-        # commutation-loop return is plane-referenced — this is the PHYSICAL loop-L for the
-        # routed board (free-space below is the no-plane worst case, documented not verdicted).
+        # prepreg = 0.10mm. INDEPENDENT of via count.
         D_PREPREG_M = 0.10e-3  # OQ-014 LOCK
         L_plane = MU0 * D_PREPREG_M * (l_run_mm * 1e-3) / (w_span_mm * 1e-3) * 1e9
-        L_loop_plane = L_via_cluster + L_plane  # plane-referenced commutation loop-L @ d=0.10mm
-        # documented JLC range endpoints (sensitivity), not the verdict basis:
+        L_loop_plane = L_via_cluster + L_plane
         d_lo, d_hi = 0.0762e-3, 0.21e-3
         Lpl_lo = L_via_cluster + MU0 * d_lo * (l_run_mm * 1e-3) / (w_span_mm * 1e-3) * 1e9
         Lpl_hi = L_via_cluster + MU0 * d_hi * (l_run_mm * 1e-3) / (w_span_mm * 1e-3) * 1e9
 
         # planar XY enclosed loop area (G3 convention, shoelace on the 4 path nodes)
         nodes = [
-            (hcx, hcy),                                  # HS SW (via entry, F.Cu)
-            (lcx, lcy),                                  # LS SW (via exit, B.Cu)
-            (sum(p["x"] for p in ls_sh) / len(ls_sh),    # LS source/shunt
+            (hcx, hcy),
+            (lcx, lcy),
+            (sum(p["x"] for p in ls_sh) / len(ls_sh),
              sum(p["y"] for p in ls_sh) / len(ls_sh)),
-            (sum(p["x"] for p in hs_src) / len(hs_src),  # HS source/VMOTOR
+            (sum(p["x"] for p in hs_src) / len(hs_src),
              sum(p["y"] for p in hs_src) / len(hs_src)),
         ]
         area = 0.0
@@ -270,14 +292,14 @@ def main():
             area += x1 * y2 - x2 * y1
         loop_area = abs(area) / 2.0
 
-        L_loop_freespace = L_via_cluster + L_rect           # no-plane worst case (documented)
-        L_loop = L_loop_plane                                # PHYSICAL verdict basis (plane-referenced @ OQ-014 d=0.10mm)
+        L_loop_freespace = L_via_cluster + L_rect
+        L_loop = L_loop_plane
         margin = TARGET_NH - L_loop
         verdict = "PASS" if L_loop <= TARGET_NH else "FAIL"
 
         print(f"  Phase {ph}: HS={hs}(F.Cu) LS={ls}(B.Cu)")
         print(f"    SW run l={l_run_mm:.3f}mm  width w={w_span_mm:.3f}mm  a_eff={a_m*1e3:.4f}mm")
-        print(f"    n_sw_vias(planned)={n_sw_vias}  L_via_cluster={L_via_cluster:.4f}nH  L_rect(free-space)={L_rect:.4f}nH")
+        print(f"    n_sw_vias({via_source})={n_sw_vias}  L_via_cluster={L_via_cluster:.4f}nH  L_rect(free-space)={L_rect:.4f}nH")
         print(f"    loop_area(XY proj)={loop_area:.2f}mm^2")
         print(f"    [plane-referenced @ OQ-014 d=0.10mm — PHYSICAL] L_loop = {L_loop:.4f} nH  "
               f"margin={margin:+.4f}nH -> {verdict}")
@@ -288,6 +310,7 @@ def main():
                 phase=ph, HS=hs, LS=ls,
                 loop_area_mm2=round(loop_area, 3),
                 n_sw_vias=n_sw_vias,
+                n_sw_vias_source=via_source,
                 L_loop_nH=round(L_loop, 4),
                 L_loop_freespace_nH=round(L_loop_freespace, 4),
                 margin_to_2nH=round(margin, 4),
@@ -298,7 +321,8 @@ def main():
         w = csv.DictWriter(
             f,
             fieldnames=["phase", "HS", "LS", "loop_area_mm2", "n_sw_vias",
-                        "L_loop_nH", "L_loop_freespace_nH", "margin_to_2nH"],
+                        "n_sw_vias_source", "L_loop_nH", "L_loop_freespace_nH",
+                        "margin_to_2nH"],
         )
         w.writeheader()
         for r in rows:

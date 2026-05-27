@@ -93,6 +93,81 @@ PER_REF_EAST_EDGE = {
     'R56': 33.0,   # 2512 shunt; safer to keep east-edge bounded
 }
 
+# ─── SHUNT OVERLAP ANCHORS (PLACEMENT_GLOBAL_PLAN §8 addendum #9, lock 2026-05-27) ───
+# Per worker STEP-5 SHUNT ampacity finding: high-current shunts MUST physically
+# overlap LS FET source pad with ≥1.5mm² overlap area for the 16-via 0.6mm pitch
+# array (~96A continuous per IPC-2152), since bridge-trace at 0.85mm gap can never
+# carry 70A continuous (needs ~4mm width per IPC-2152, geometrically impossible).
+#
+# ─── R22 WRONG-BASE CATCH 2026-05-27 (PR #197) ───────────────────────────────
+# An earlier sub-agent (PR #196 SHUNT_ANCHORS draft) computed shunt coords using
+# parametric_placement.py module's numerical positions (Q6 @ (30, 54)). The
+# canonical R1-transplant placement on phase4v3-stage1-ch1-on-10L branch has
+# Q6 @ (8.4, 58.4) on B.Cu (180°) — completely different base. Worker R22
+# caught this before any board damage.
+#
+# Lesson codified: parametric_placement.py is the ALGORITHM SSoT but NOT the
+# coord-truth SSoT once placement is baked. Always extract from live .kicad_pcb.
+# See: [[reference-parametric-placement-desync-trap]] +
+#      docs/MASTER_PARAMETRIC_DESYNC.md (3-way verification pattern).
+#
+# ─── CORRECTED COORDS (extracted from origin/phase4v3-stage1-ch1-on-10L) ─────
+# CH1 LS FETs (validated R1-transplant, B.Cu, rotation=180°):
+#   Q6  @ (8.400, 58.400)  source pad-9 @ (8.400, 58.400) net SHUNT_A_TOP_CH1
+#   Q8  @ (8.400, 71.400)  source pad-9 @ (8.400, 71.400) net SHUNT_B_TOP_CH1
+#   Q10 @ (8.400, 84.400)  source pad-9 @ (8.400, 84.400) net SHUNT_C_TOP_CH1
+# Y-pitch = 13mm (not 12mm). Row-x = 8.4 (not 30).
+#
+# Shunt body (2512: 6.5×3.2mm). Worker per-via approach: R57/58/59 on F.Cu
+# rotation=0° centered on (8.4, Y_LS) — opposite-layer overlap of FET source
+# pad-9 (EP, 3×3mm) is direct via-array stitching at the same (X,Y). G_SW_GND_VIA
+# (PR #198) audits the via-array adequacy.
+#
+# Worker pad layout (rotation=0°): pad-1 (SHUNT_*_TOP) west @ x=cx-2.962,
+# pad-2 (GND) east @ x=cx+2.962. Body bbox: cx±3.25, cy±1.6mm.
+# Body stays inside CH1 west column (x=5..12), no collision with east passives.
+#
+# Format: ref -> {pos:(x,y,mm), rotation:degrees, layer:str}
+# R22 CATCH #2 (worker 2026-05-27, after PR #197 had subagent bug):
+# PR #197 subagent wrote CURRENT pre-fix positions @ rot=0° (which DON'T put pad-1
+# over EP — at rot=0° pad-1 is offset +2.25mm in X for 2512 footprint). The §8#9
+# CORRECT positions put pad-1 OVER FET source EP. For 2512 at rot=270° pad-1 is
+# offset −2.962mm in Y from body center, so body center = EP + (0, +2.962).
+#
+# ALSO R22 CATCH #1 (worker 2026-05-27 pre-PR #197): subagent in PR #196 added
+# 'B.Cu flip + direct copper merge' enhancement on top of PR #195 original spec.
+# But R_2512 body (6.3×3.2) + W-PDFN-8 (6×5) both on B.Cu = 8.6mm² body overlap
+# on SAME copper side = DFM-impossible. REVERTED to original PR #195 spec:
+# F.Cu shunt + B.Cu FET EP (opposite layers, bodies don't collide) + 16-via array.
+#
+# See: [[reference-parametric-placement-desync-trap]] + [[feedback-coord-pr-must-simulate-placement]]
+SHUNT_ANCHORS = {
+    # CH1 — Q6/Q8/Q10 LS FETs at (8.4, 58.4|71.4|84.4) B.Cu rot=180° per R1-transplant.
+    # R57/58/59 STAY at (8.4, 58.4|71.4|84.4) F.Cu rot=0° (current R1-transplant positions).
+    # WORKER R22 catch 2026-05-27 (third master-subagent over-reach in single cycle):
+    # G_SHUNT_FET_OVERLAP gate (#194) measures BODY-bbox overlap ≥1.5mm² threshold;
+    # at rot=0° body-overlap is 9.00mm² (6× margin) — PASSES. Previous PR #199 "moved"
+    # to rot=270° was my over-interpretation requiring pad-1 over EP, NOT in actual §8#9
+    # rule text. Reverted here to stay-put + additive 16-via array approach (worker
+    # extends F.Cu pad-1 copper over EP + 16 × 0.3mm-drill vias at 0.75mm pitch in 9mm²
+    # overlap = 88A continuous IPC-2152 = 26% margin over R17 70A spec).
+    # See: [[reference-parametric-placement-desync-trap]] + [[feedback-coord-pr-must-simulate-placement]]
+    # Both reference memories codified during this 3-catch cycle.
+    'R57': {'pos': (8.400, 58.400), 'rotation': 0.0, 'layer': 'F.Cu'},  # body 9mm² over Q6 EP B.Cu (phase A)
+    'R58': {'pos': (8.400, 71.400), 'rotation': 0.0, 'layer': 'F.Cu'},  # body 9mm² over Q8 EP B.Cu (phase B)
+    'R59': {'pos': (8.400, 84.400), 'rotation': 0.0, 'layer': 'F.Cu'},  # body 9mm² over Q10 EP B.Cu (phase C)
+}
+
+# Override default PER_REF_EAST_EDGE for shunts that are now anchored — anchor
+# logic takes precedence over east-edge validate, but keep an entry so the
+# fallback spiral knows not to push them east.
+# NOTE 2026-05-27: shunts are now anchored at x=8.4 (west column), so the 33.0
+# east-edge bound becomes irrelevant for placement; kept for sanity bound if
+# anchor logic is bypassed.
+PER_REF_EAST_EDGE['R57'] = 33.0
+PER_REF_EAST_EDGE['R58'] = 33.0
+PER_REF_EAST_EDGE['R59'] = 33.0
+
 
 def get_ch1_refs(board, zone):
     """Identify CH1 components — three classification paths (master 2026-05-24
@@ -332,11 +407,40 @@ def main():
         placed += 1
     print(f"IC anchors placed: {placed}")
 
+    # Place SHUNT_ANCHORS (PLACEMENT_GLOBAL_PLAN §8 addendum #9 enforcement).
+    # These shunts MUST overlap LS-FET source pads ≥1.5mm² — explicit anchor
+    # coords (with layer + rotation) override the spiral placer's default
+    # "spiral from parent IC pin" which cannot satisfy the overlap requirement.
+    shunts_placed = 0
+    for ref, spec in SHUNT_ANCHORS.items():
+        if ref not in ch1_refs: continue
+        fp = board.FindFootprintByReference(ref)
+        if fp is None: continue
+        x, y = spec['pos']
+        rot = spec['rotation']
+        layer = spec['layer']
+        # Move to B.Cu if requested and currently on F.Cu (Flip() rotates 180°)
+        want_back = (layer == 'B.Cu')
+        if fp.IsFlipped() != want_back:
+            fp.Flip(fp.GetPosition(), False)
+        fp.SetOrientationDegrees(rot)
+        fp.SetPosition(pcbnew.VECTOR2I(int(x * 1e6), int(y * 1e6)))
+        reset_text_to_body(fp)
+        placed_centers.append((x, y, fp.GetLayer()))
+        for pb in fp_pad_bboxes(fp):
+            placed_pad_bxs.append(pb)
+        shunts_placed += 1
+        print(f"  SHUNT anchor {ref} → ({x:.3f},{y:.3f}) rot={rot}° {layer} (§8#9 overlap)")
+    if shunts_placed:
+        print(f"Shunt overlap anchors placed: {shunts_placed} (§8 addendum #9)")
+
     # Two-pass passive placement:
     #  Pass A: motor TPs + motor-sense-net components first (no TP keepout yet,
     #          they ARE the sense topology)
     #  Pass B: non-sense components last (with TP keepout active)
-    all_passives = sorted(ch1_refs - set(IC_ANCHORS.keys()))
+    # SHUNT_ANCHORS already placed deterministically above (§8 #9 overlap) —
+    # exclude from spiral search to preserve the overlap anchor.
+    all_passives = sorted(ch1_refs - set(IC_ANCHORS.keys()) - set(SHUNT_ANCHORS.keys()))
     tp_refs = [r for r in all_passives if r.startswith('TP')]
     sense_refs = [r for r in all_passives
                   if r not in tp_refs

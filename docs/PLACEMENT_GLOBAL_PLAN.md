@@ -790,3 +790,23 @@ Codified by: this §8 addendum #7 + audit_power_drc.py (G_PWR_DRC) + [[feedback-
 **No HDI/ILP/12L escalation expected** (10L +50% routing capacity sufficient per Howard Johnson). If 10L STILL insufficient on CH1 STEP 6, escalate per deep research options. NEVER GUI fallback per [[feedback-no-gui-session-autonomous-only]].
 
 Codified by: this §8 addendum #8 + worker R22 catch + [[feedback-power-first-per-subsystem]] cascade discipline.
+
+### §8 addendum #9 — Shunt-FET source pad overlap rule (lock 2026-05-27, worker STEP-5 SHUNT ampacity finding)
+
+**Trigger:** Worker R26 STEP-5 verdict 2026-05-27 found CH1 SHUNT high-current path catastrophically under-ampacity: Q.9 source → R57.1 connection was 1×0.6mm via + 0.4mm F.Cu trace, blocked from via-array by FET drain pads at 0.85mm gap, with bridge trace requiring ~4mm width per IPC-2152 (10°C rise, 1oz, 70A) — geometrically impossible in the gap.
+
+**Rule (BINDING for all subsequent placement PRs):**
+
+> Every high-current shunt (R56/57/58/59 + per-channel mirrors, anything carrying ≥10A continuous on its sense-leg) MUST physically overlap the LS FET source pad of the phase it senses, with ≥1.5mm² overlap area (sufficient for 16-via array at 0.6mm pitch transferring ≥96A continuous per IPC-2152).
+
+**Audit gate:** `audit_shunt_fet_source_overlap.py` (added 2026-05-27) enforces; runs as part of master_pre_merge gate suite for any placement PR touching shunts.
+
+**Rationale:**
+- R17 spec: 70A continuous / 100A burst-10s per channel
+- IPC-2152 (1oz, 10°C rise): 70A needs 4mm trace; 16 × 0.6mm vias = ~96A continuous
+- Bridge trace between shunt and FET source pad is geometrically infeasible at typical 0.85mm-2mm clearance — only pad-to-pad via array works
+- VESC + premium ESC reference designs all use shunt-source overlap (industry standard per [[feedback-anchor-on-most-capable-reference]])
+
+**Symmetry inheritance:** when CH1 shunt placement updates to comply, CH2/3/4 mirror specs MUST receive the same coordinate shift via lockfile update — preserves R19/OQ-019 [[feedback-symmetry-preserves-work]].
+
+**Per [[feedback-codify-not-patch]]:** this rule joins R25 (decoupling), R23 (passive island), R19 (loop-L symmetry) as a placement discipline.

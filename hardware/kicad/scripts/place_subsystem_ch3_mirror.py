@@ -135,6 +135,11 @@ def main():
         # Y-mirror: orient inverts vertical component → new = -orig
         orig = partner.GetOrientation().AsDegrees()
         fp.SetOrientationDegrees((-orig) % 360)
+        # Layer inheritance — see CH2 mirror script. R23 symmetry + §8 #9 shunt
+        # overlap require the CH3 partner to live on the same layer as its CH2
+        # source (B.Cu for shunts R129/R130/R131).
+        if fp.IsFlipped() != partner.IsFlipped():
+            fp.Flip(fp.GetPosition(), False)
         reset_text_to_body(fp)
         moved += 1
 

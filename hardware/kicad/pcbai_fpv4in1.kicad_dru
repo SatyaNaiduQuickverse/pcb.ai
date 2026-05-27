@@ -71,3 +71,76 @@
 
 # Future per-class rules (placeholder for HV creepage, diff-pair gap, etc):
 
+# === HDI via-in-pad (J18/J19 QFN escape) ===
+# Master 2026-05-27 R26 HDI dispatch. Worker per-pin analysis showed CH1
+# STEP-6 capped at 22/33 due to via-area saturation in the standard dog-bone
+# fanout corridor between J18 south edge and BEMF/CSA filter wall. HDI via-
+# in-pad on J18 (AT32F421 QFN-32, 0.5mm pitch) + J19 (DRV8300 QFN-24,
+# 0.5mm pitch) drops vias directly under pin pads, eliminating the fan-out
+# area entirely. Sai cost-cleared 2026-05-27: +$2-3/board JLC HDI Class 2
+# (epoxy-filled, plate-over). Whitelist J18 + J19 only — other components
+# preserve standard via cost.
+#
+# JLC HDI Class 2 capability per public tech spec (verified):
+#   - Laser-drilled microvia: drill 0.10mm, pad 0.25mm (= QFN pad width)
+#   - Blind via (F.Cu → InN.Cu): laser-drilled, max depth = 0.4mm prepreg
+#   - Epoxy-filled + plate-over: required for via-in-pad (no solder wicking)
+#
+# DRU constraints below RELAX standard board rules for HDI-class vias only:
+#   - via_diameter min 0.25mm (vs board 0.5mm) for via type microvia/blind
+#   - hole_size min 0.10mm (vs board 0.30mm) for same
+#   - annular_width min 0.075mm (vs board 0.10mm) for same
+#   - hole_clearance min 0.10mm (vs board 0.25mm) for same — HDI hole-to-pad
+#
+# Standard vias outside J18/J19 still bound by base rules (unchanged).
+# Uses == (exact-string comparison) per [[reference-kicad-dru-libeval-crash]]:
+# KiCad 9.0.2 libeval crashes on =~ regex; only == is safe headless.
+# A.Type returns one of "via", "track", "pad", etc. For via type we also
+# need to distinguish through vs microvia vs blind/buried; KiCad's
+# A.ViaType returns 'Through', 'BlindBuried', or 'Microvia'.
+
+# HDI vias are identified by drill ≤ 0.15mm (microvia/laser-drilled regime).
+# All standard board vias use drill ≥ 0.20mm. Per JLC HDI Class 2 spec, our
+# HDI microvia drill is exactly 0.10mm. The condition A.Hole <= 0.15mm
+# captures HDI vias without needing a via-type token (which KiCad 9.0.2
+# DRU expression language may not expose). Property names verified against
+# /usr/share/kicad/demos/vme-wren/vme-wren.kicad_dru pattern.
+
+(rule "HDI via diameter"
+  (constraint via_diameter (min 0.25mm))
+  (condition "A.Type == 'via' && A.Hole <= 0.15mm"))
+
+(rule "HDI via hole size"
+  (constraint hole_size (min 0.10mm))
+  (condition "A.Type == 'via' && A.Hole <= 0.15mm"))
+
+(rule "HDI via annular width"
+  (constraint annular_width (min 0.075mm))
+  (condition "A.Type == 'via' && A.Hole <= 0.15mm"))
+
+(rule "HDI via hole clearance"
+  (constraint hole_clearance (min 0.10mm))
+  (condition "A.Type == 'via' && A.Hole <= 0.15mm"))
+
+# Standard vias (not HDI) MUST keep board-min geometry. Board-level
+# min_via_diameter was lowered to 0.25mm to admit HDI (KiCad rule-pick
+# semantics: takes most-restrictive of all applicable constraints). To
+# preserve the board std minimum on non-HDI vias (≥0.20mm drill), this
+# rule enforces 0.50mm diameter + 0.30mm hole + 0.10mm annular on them.
+
+(rule "Standard via diameter (non-HDI)"
+  (constraint via_diameter (min 0.50mm))
+  (condition "A.Type == 'via' && A.Hole > 0.15mm"))
+
+(rule "Standard via hole size (non-HDI)"
+  (constraint hole_size (min 0.30mm))
+  (condition "A.Type == 'via' && A.Hole > 0.15mm"))
+
+(rule "Standard via annular width (non-HDI)"
+  (constraint annular_width (min 0.10mm))
+  (condition "A.Type == 'via' && A.Hole > 0.15mm"))
+
+(rule "Standard via hole clearance (non-HDI)"
+  (constraint hole_clearance (min 0.25mm))
+  (condition "A.Type == 'via' && A.Hole > 0.15mm"))
+

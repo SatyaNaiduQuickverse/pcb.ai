@@ -6,7 +6,16 @@
 
 **Algorithm**: Pathfinder-style (McMurchie + Ebeling 1995) cooperative ripup-reroute maze router on a 3D cell grid (x, y, layer). Solves the greedy-A* self-congestion problem identified in [[reference-cascading-escape-needs-negotiated-routing]].
 
-**Status**: v3 operational. Master-verified on `phase4v3-stage1-ch1-on-10L` @ 9eed5ae.
+**Status**: v7 operational (HDI micro-via full-stack validation + L1-L2 span constraint). Master-verified on `phase4v3-stage1-ch1-on-10L` @ e5ddb23 + pre-STEP-6 fresh-board synthetic (`9eed5ae`).
+- v7 (this PR — worker R22 catch #4 on v6 HDI shorts): two-prong defense-in-depth fix for the micro-via full-stack-validation gap that allowed +2 net-to-net shorts on PR #207 v6 (GHC/GLC HDI vias shorting BEMF_A_CH1 / GLA_CH1 tracks on In4).
+  - **Prong 1**: extend full-stack obstacle validation (PR #203's #0 fix) to ALL via classes including HDI micro-via barrels. `commit_net()` now appends just-committed tracks to `track_segments_by_layer` and vias to `foreign_vias` so the HDI geometric check sees same-router-run copper (v6 only populated these at `_stamp_obstacles()` startup → blind to same-pass routing). `via_blocked_for_net()` for HDI cells now runs the geom check AND falls through to the cell-based inner+B.Cu obstacle scan (was an early-return that bypassed the cell scan).
+  - **Prong 2**: constrain `VIATYPE_MICROVIA` tag to JLC-compliant adjacent-layer pairs only (F.Cu↔In1.Cu or B.Cu↔In8.Cu). `emit_to_board()` inspects each via's actual span; non-adjacent spans (F.Cu→In2/In4/etc — which is what all our QFN escapes physically are) emit as standard through-vias with HDI geometry preserved but no MICROVIA tag. Stops the spec-lie that masked through-via full-stack exposure.
+  - Full-scope validation (clean board `9eed5ae`, full 30-net CH1 auto-detect, `--via-in-pad-allowed --no-rip-routed --max-iterations 12`, zone-refill + kicad-cli DRC with `.kicad_dru` sidecar): **SHORTS DELTA = 0** (147=147 global, 0=0 CH1-zone — v6 was +2, CATASTROPHIC gate PASS). Routed 24/30 (= v6 on same board, no yield regression). DRC delta +15 ALL non-short (clearance +8 mostly 0.0093mm grid-quantization near-misses; isolated_copper +6 = VMOTOR plane-fill slivers at board corner (2,2); holes_co_located +1 = same-net duplicate via). 11 HDI vias, 0 tagged MICROVIA, 0 non-adjacent micro-via spans. `audit_hdi_via_in_pad` PASS.
+- v6: HDI via-in-pad enable for J18/J19 QFN whitelist (PR #207). Microvia geometry (0.10mm drill / 0.25mm pad) on whitelist pad cells; `--via-in-pad-allowed` flag; `.kicad_dru` HDI rules keyed on `A.Hole <= 0.15mm`. **Superseded by v7 for the micro-via validation path** (v6 emitted +2 shorts on clean board).
+- v5: per-net-class layer-preference cost multiplier — codifies OQ-016 (BEMF→In4) + OQ-017 (SW→In6) + PR #192 (overflow→In8). On fresh-board 9-net test: PWM_INHC migrated from In8.Cu (v4) to In2.Cu (v5, 16 tracks); SWDIO migrated from In2.Cu (v4) to In8.Cu (v5, 13 tracks). Zero DRC delta vs baseline. 80.5s vs 97.5s = 17% faster (preferred layers reach goal in fewer A* expansions).
+- v4: --no-rip-routed flag (multi-pass safety)
+- v3: PARTIAL-state + post-commit verify
+- v2: full-stack via validation (catches plane shorts)
 - 100% routed (1/1) on isolated multi-pad subset (BEMF_A_CH1, 4 pads, ratsnest=0)
 - 12/16 fully routed on full dense J18/J19 set (same as v2 — no regression)
 - 0 SHORTS delta, 0 DRC delta, 7/8 multi-pad nets verified 1-island
@@ -32,8 +41,9 @@ For iteration in 1..N:
   For each unrouted net:
     Build MST of pads (greedy nearest)
     For each MST edge:
-      A* search on grid with cost = LAYER_BASE + present_factor*present + history
+      A* search on grid with cost = LAYER_BASE * layer_pref_mult(net,L) + present_factor*present + history
       Allow via-change between configured signal layers (LAYER_PREF per net pattern)
+      v5: per-net-class layer-preference cost bias (BEMF→In4 0.5x, In8 2.0x etc.)
       Validate diagonal moves (axis-cells must also be passable)
     If routed: commit (stamp obstacles, increment present_count)
     Else: increment fail_count, queue for next pass
@@ -90,8 +100,15 @@ python3 hardware/kicad/scripts/route_subsystem_cooperative.py \
   --max-iterations 25 \
   [--grid-pitch 0.1] \
   [--seed-nets NET1,NET2,...] \
-  [--report routed.csv]
+  [--report routed.csv] \
+  [--no-rip-routed]  # v4: multi-pass preserve
+  [--no-layer-pref]  # v5: disable per-net-class layer bias (debug only)
 ```
+
+**Layer-preference bias** is ON by default (v5). Per-net-class layer cost
+multipliers steer each net to its spec'd escape layer (BEMF→In4, PWM/CSA→In2,
+SWD/GH/GL/BST→In8, etc.). See "v5 fix history" below for the spec table.
+Pass `--no-layer-pref` only for debugging (forces v4 equal-cost behaviour).
 
 ### Auto-detect mode (default)
 
@@ -104,6 +121,36 @@ With `--seed-nets net1,net2,...`, router targets the explicit list — useful fo
 - Re-routing a specific set after a partial run
 - Routing stragglers after main batch
 - Testing on isolated nets to debug obstacle stamping
+
+### Multi-pass mode (v4 — `--no-rip-routed`)
+
+In multi-pass workflows where pass N+1 must preserve pass N's routes (e.g.
+CH1 STEP-6 dense-J18-first then local-by-local; CH2/3/4 mirror cycles),
+pass `--no-rip-routed` to pass 2+. Effect:
+
+- Pre-existing routed nets (≥1 track/via in input board at load time) are
+  snapshotted into `preserved_nets` set.
+- Preserved nets are **dropped from target list** (never re-attempted, even
+  if explicitly seeded — they're left alone).
+- Preserved nets are **never selected as ripup candidates** (selective ripup
+  + plateau force-rip both exclude them).
+- `rip_net()` has a defensive guard refusing to rip preserved nets even if
+  called directly.
+- Pre-existing tracks remain as **hard obstacles** to new routes (same
+  `_stamp_obstacles` path as before — no algorithm change there).
+
+**Use case rationale** (worker discovery 2026-05-27 CH1 STEP-6 (c) re-approach):
+pass 1 cooperative routed BEMF_C; pass 2 local net-by-net ran cooperative
+ripup and **ripped BEMF_C** because cooperative-ripup treats ALL routes
+(including pass 1's) as session-mutable. `--no-rip-routed` is the explicit
+mark-as-immovable mechanism.
+
+**Tradeoff**: new route success rate may be lower because the router has
+fewer degrees of freedom — preserved nets cannot move out of the way. Where
+it would have ripped a blocker, it now reports FAILED. Hand-route or
+re-place if pass 2+ plateaus too low.
+
+**Default OFF** for backward compatibility with single-pass fresh-board runs.
 
 ## Validation gate (per [[feedback-sim-execution-gate]] discipline)
 
@@ -121,6 +168,220 @@ python3 hardware/kicad/scripts/audit_power_drc.py <output.kicad_pcb>
 # 3. Per-net connectivity: every routed target net has 1 island (use union-find
 #    over pad positions + track endpoints)
 ```
+
+## v5 fix history (2026-05-27 — per-net-class layer-preference cost bias)
+
+**Worker R22 finding (CH1 STEP-6 c-reapproach commit e5ddb23)**: signal
+tracks distributed unevenly across routing layers despite OQ-016/OQ-017/PR #192
+spec mandating dedicated layers:
+
+| Layer | CH1-zone tracks | Spec'd role |
+|-------|------------------|-------------|
+| F.Cu  | 184 (31 nets)    | Pad fanout stubs (saturated) |
+| In2.Cu | 206 (16 nets)   | PRIMARY signal escape (saturated) |
+| In4.Cu | **0**          | **OQ-016 BEMF dedicated (UNUSED)** |
+| In6.Cu | **0**          | **OQ-017 SW escape (UNUSED)** |
+| In8.Cu | 108 (13 nets)  | Overflow / SWD / control |
+
+**Root cause**: v4's `LAYER_PREF` dict was consulted only by `inner_layers_for()`
+which restricted the A* allowed-layer SET, but the cost function (`cost()` ->
+`LAYER_BASE_COST.get(L, 1.0)`) had FLAT 1.0x base cost across all signal
+inner layers. Within an allowed layer set like `[IN4_CU, IN2_CU]` for BEMF
+nets, the router chose whichever layer was locally less congested at that
+moment — under load this meant In2 (the always-allowed escape layer) kept
+attracting nets even when In4 was completely empty.
+
+11 residual nets failed on CH1 STEP-6 because corridor congestion on In2/F.Cu
+saturated rather than spilling to the spec-dedicated empty layers.
+
+### v5 fix
+
+`LAYER_PREF` now consulted **twice** per net:
+1. `inner_layers_for(net)` — unchanged, restricts allowed-layer set.
+2. **NEW** `layer_pref_cost_mult(net, layer)` — returns per-net cost multiplier
+   applied to `LAYER_BASE_COST` in `cost()`:
+   - Rank 0 in net's preference list -> 0.5x (strong preference)
+   - Rank 1                          -> 1.0x (neutral)
+   - Rank 2                          -> 1.5x (mild discourage)
+   - Rank ≥3 / layer not in list     -> 2.0x (strong discourage)
+   - F.Cu / B.Cu                     -> 1.0x (already handled via LAYER_BASE=4.0)
+
+Wired into `CongestionGrid.cost()` which now takes optional `netname` parameter.
+A* call sites in `find_path_astar()` pass netname so the cost reflects the
+specific net's layer-allocation spec.
+
+**CLI flag**: `--no-layer-pref` disables (default ON). Toggle for debugging
+or for proving the bias is the active mechanism.
+
+**Spec table** (codifies dispatch + OQ-016 + OQ-017 + PR #191/#192):
+
+| Net pattern                  | Preference (first = strongest) |
+|------------------------------|--------------------------------|
+| `BEMF_[ABC]_CH\d+`            | In4, In2 (OQ-016 dedicated)   |
+| `PWM_(INH[ABC]\|INL[ABC])_CH\d+` | In2, In8 (SI-critical)     |
+| `CSA_[ABC]_OUT_CH\d+`         | In2, In8 (analog SI)          |
+| `CSA_MAX_CH\d+`               | In2, In8                       |
+| `SW(DIO\|CLK)_CH\d+`          | In8, In2 (debug low-pri)      |
+| `NRST_CH\d+`                  | In8, In2                       |
+| `BOOT0_CH\d+`                 | In8, In2                       |
+| `LED_GPIO_CH\d+`              | In8, In2                       |
+| `(I\|OTP)_TRIP_N_CH\d+`       | In8, In2                       |
+| `KILL_(LOCAL\|RAIL\|LED_NODE)_(N_)?CH\d+` | In8, In2          |
+| `VREF_(I_TRIP\|OTP)_CH\d+`    | In8, In2                       |
+| `GH[ABC]_CH\d+`               | In8, In2 (gate-drive short)   |
+| `GL[ABC]_CH\d+`               | In8, In2                       |
+| `BST[ABC]_CH\d+`              | In8, In2 (bootstrap short)    |
+| `VMOTOR_CH\d+`                | In8 (PR #191 dual-use)        |
+| `MOTOR_[ABC]_CH\d+`           | In6, F.Cu, B.Cu (OQ-017 SW)   |
+| (any other classified)        | unbiased (1.0x)               |
+| (unclassified net)            | unbiased (1.0x)               |
+
+### v5 validation results (2026-05-27)
+
+**Test A: fresh-board (commit 0100ea9, pre-STEP-6) — 9 representative nets**
+- Routing yield: 8/9 routed (both v5 ON and v5 OFF baseline — same QFN-escape
+  bottleneck blocks BEMF_B J18.10→C75.1 regardless of layer)
+- Wall-clock: v5 ON = 80.5s, v5 OFF = 97.5s (17% faster — preferred-layer
+  expansions reach goal sooner)
+- DRC delta: **0 new violations, 0 new shorts** (153=153 shorting items, all
+  pre-existing on CH2/3/4 from prior PRs)
+- Layer migration (the key proof):
+  | Net | v4 (no pref) | v5 (pref ON) | Spec |
+  |-----|--------------|--------------|------|
+  | PWM_INHC_CH1 | In8.Cu (9 tk) | **In2.Cu (16 tk)** | In2 |
+  | SWDIO_CH1    | In2.Cu (8 tk) | **In8.Cu (13 tk)** | In8 |
+  | BEMF_A/C     | In4.Cu        | In4.Cu (same)      | In4 |
+  | GHA/GHB      | In8.Cu        | In8.Cu (same)      | In8 |
+  | PWM_INLA     | In2.Cu        | In2.Cu             | In2 |
+
+**Test B: worker e5ddb23 residual (7 nets, --no-rip-routed) — corner case**
+- Routing yield: 0/7 routed (both v5 ON and v5 OFF) — confirms residual
+  unrouted nets are blocked by QFN pad-fanout corner cases (J18.6, J18.10),
+  not layer-allocation. Layer-pref applies once a path is searchable; if
+  the source pad's escape grid is already obstructed it can't help.
+- DRC delta: 0 (153=153 shorting items)
+
+**Verdict**: v5 PASSES validation. No regression, demonstrated correct
+spec-following layer choice on routable nets. Residual unrouted nets are
+out of scope for layer-preference (separate QFN-escape root cause per
+[[reference-qfn-pin-escape-bottleneck]]).
+
+### When v5 helps (use cases)
+
+- **Fresh subsystem routing** (e.g. CH2/3/4 from-scratch): layer-pref steers
+  each net-class to its spec'd layer without manual `--seed-nets` per layer.
+- **Spec compliance**: regulators / EMC reviewers can grep for "BEMF on In4"
+  and find it codified at the router, not in a comment somewhere.
+- **Spillover behaviour**: when preferred layer's local cells are congested
+  (present > 1), the 0.5x bias still loses to a free non-preferred cell
+  (0.5 + present_factor*1 = 1.5 > 1.0 + 0) — so the router fills preferred
+  first, then SPILLS to the next-preferred layer. Exactly the OQ-016/OQ-017
+  intent.
+
+### When v5 does NOT help
+
+- **QFN escape bottleneck**: layer-pref can't help if the pad's fanout grid
+  is obstructed. Use [[reference-cascading-escape-needs-negotiated-routing]]
+  ripup recipes + Freerouter R34 supplement on those specific stuck pad-pairs.
+- **Single-allowed-layer nets**: nets with only one viable layer (e.g.
+  short-hop F.Cu→F.Cu within same QFN) — bias is moot when the set is `{F.Cu}`.
+
+### v5 reusability
+
+- CH2/3/4 routing: identical net-class patterns hold (BEMF_*_CH2 etc.),
+  so layer-pref applies as-is per channel mirror.
+- Future subsystem routing (S3 supervisor, S5 BEC): add patterns to
+  `LAYER_PREF` for any new net-class. Existing classes inherit v5 bias.
+
+## v4 fix history (2026-05-27 — --no-rip-routed cross-pass interference fix)
+
+**Worker discovery on v3 (commit e5ddb23, CH1 STEP-6 (c) re-approach)**: ran
+cooperative router in two sequential passes:
+- Pass 1 (dense-J18 cooperative, 17 nets): routed 11/17 including BEMF_C_CH1
+- Pass 2 (local gate/boot net-by-net, 13 nets): routed 9/13 BUT **RIPPED
+  BEMF_C_CH1 from pass 1's result**
+
+**Root cause**: cooperative ripup-reroute treats ALL existing routes as
+session-mutable. Pass 2's congestion-blocker scoring (`_select_ripup_candidates`)
+finds pass 1's BEMF_C tracks near pass 2's failed pad cells → rips them →
+can't re-route because original conditions don't apply (different seed_nets,
+different congestion landscape).
+
+The bug is fundamental to cooperative ripup: it assumes all routes are
+session-owned. Multi-pass workflows need an explicit way to mark pass-N
+nets as immovable for pass N+1+.
+
+### v4 fix
+
+`--no-rip-routed` CLI flag (default OFF for back-compat). When set:
+
+1. **Snapshot at init**: walk `board.GetTracks()` immediately, snapshot
+   every net name with ≥1 track or via into `self.preserved_nets` (string
+   set; netcodes can theoretically be re-issued by KiCad on mutation).
+
+2. **Drop preserved nets from target list**: even if user explicitly passes
+   them in `--seed-nets`, they are excluded — the flag overrides intent
+   (consistent with "immovable" semantics). Logged at startup:
+   `[coop] --no-rip-routed: N pre-existing routed nets snapshotted; K dropped`
+
+3. **Ripup-candidate exclusion**: `_select_ripup_candidates` skips any net
+   in preserved_nets. (They wouldn't normally enter `self.committed` —
+   defensive belt-and-suspenders.)
+
+4. **Force-rip pool exclusion**: plateau-recovery's random-3 force-rip
+   pool excludes preserved_nets. Logs `"plateau but no rippable nets (all preserved)"`
+   if the pool is empty.
+
+5. **`rip_net()` defensive guard**: if called directly on a preserved net,
+   logs refusal and returns early. Covers any future code path that
+   bypasses the candidate-selection layer.
+
+Pre-existing tracks/vias remain as **hard obstacles** to new routes (the
+existing `_stamp_obstacles` already stamps every track/via from board
+state — no algorithm change needed for that path).
+
+### v4 validation results (2026-05-27)
+
+Input: `phase4v3-stage1-ch1-on-10L @ e5ddb23` (22/33 CH1 signals routed,
+32 nets total with tracks/vias in CH1 region).
+
+Test A — `--no-rip-routed` snapshot + drop:
+- Input: 32 pre-existing routed nets
+- Log: `[coop] --no-rip-routed: 32 pre-existing routed nets snapshotted (immovable)`
+- With `--seed-nets BEMF_C_CH1,LED_GPIO_CH1`: BEMF_C dropped (preserved),
+  LED_GPIO retained as target
+- After 5 iterations: LED_GPIO unrouted (corridor saturation, expected),
+  **0 ripups**, BEMF_C unchanged
+
+Test B — preserved-net identity post-run:
+- All 32 preserved nets: track+via count IDENTICAL pre/post
+- Per-net union-find island count IDENTICAL pre/post (0 splits introduced)
+- Zone fill: tracks=566 vias=217 zones=17 IDENTICAL pre/post
+- kicad-cli DRC: violations 549 → 549 (delta 0); unconnected 499 → 499 (delta 0)
+- Breakdown: clearance 77, courtyards_overlap 105, drill_out_of_range 66,
+  shorting_items 147, solder_mask_bridge 154 — ALL IDENTICAL
+
+The flag works exactly as specified: no preserved net ripped, no new shorts,
+no new DRC violations. New route attempt may fail (tradeoff for the
+constraint), but preserved work is bit-exactly retained.
+
+### When to use `--no-rip-routed`
+
+- **Pass 2+ of any multi-pass cooperative run** (CH1 STEP-6 c-re-approach
+  pattern; CH2/3/4 mirror cycles using same dense-first-then-local pattern)
+- **Touch-up runs after hand-routing** — when worker hand-routes some
+  stragglers and wants the router to try one more pass on residuals without
+  rewriting hand-work
+- **Post-merge incremental** — once a PR merges with N nets routed,
+  subsequent routing PRs should use `--no-rip-routed` to avoid disturbing
+  merged baseline
+
+### When NOT to use
+
+- Pass 1 of a fresh routing batch (no pre-existing routes to preserve)
+- When you explicitly want the router to optimize globally (rip + reroute
+  everything together)
+- When pass 1's routes are known-bad and you want them displaced
 
 ## v3 fix history (2026-05-27 — multi-pad MST completion safety net)
 
