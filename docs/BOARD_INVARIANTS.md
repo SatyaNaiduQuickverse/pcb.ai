@@ -117,6 +117,42 @@ coords.
 | S2 to CH3 +VMOTOR feed | 64 | 47 | 70 | 53 | low-loop radial CH3 (mirror) |
 | S2 to CH4 +VMOTOR feed | 30 | 47 | 36 | 53 | low-loop radial CH4 |
 
+## HDI via-in-pad whitelist (locked 2026-05-27 Sai cost-OK)
+
+Per master 2026-05-27 R26 HDI dispatch (CH1 STEP-6 unblock — worker per-pin
+analysis showed routing capped at 22/33 across PR#202–#206 due to via-area
+saturation in the dog-bone fanout corridor between J18 south edge and
+BEMF/CSA filter wall). HDI via-in-pad on J18 + J19 drops vias directly
+under pin pads, eliminating the fan-out area pressure entirely.
+
+| Component | Footprint | Pitch | HDI rationale |
+|---|---|---|---|
+| **J18** | QFN-32 5x5mm (AT32F421 MCU) | 0.5mm | South-edge BEMF + PWM escape; 11 nets saturated standard fanout |
+| **J19** | HVQFN-24 4x4mm (DRV8300 gate driver) | 0.5mm | Driver fan-out; BSTA/B/C + PWM_INL/H fan-in collision |
+
+**Whitelist scope is BINDING**: NO other components may use HDI via-in-pad
+without Sai cost-OK + update to BOARD_INVARIANTS + audit_hdi_via_in_pad.
+Cost envelope is +$2-3/board production (Sai cleared 2026-05-27) ONLY for
+these two refs; expanding silently inflates BOM cost.
+
+### HDI fab spec (verify in production with JLC quote)
+- **Process**: HDI Class 2 — laser-drilled microvia + epoxy fill + plate-over
+- **Microvia drill**: 0.10 mm (JLC laser limit; standard mechanical drill is 0.20mm min)
+- **Microvia pad**: 0.25 mm (= QFN signal pad short-axis width — fits within SMD pad bbox)
+- **Annular ring**: 0.075 mm (vs board std 0.10mm — DRU relaxes for HDI)
+- **Hole clearance**: 0.10 mm (vs board std 0.25mm — DRU relaxes for HDI)
+- **Fill**: epoxy non-conductive + Cu plate-over (required to prevent solder wicking during reflow)
+
+### Enforcement gates
+- `hardware/kicad/scripts/audit_hdi_via_in_pad.py` — verifies HDI vias only on whitelist
+- `hardware/kicad/pcbai_fpv4in1.kicad_dru` — relaxes DRC for HDI sizes (scoped to `A.Hole <= 0.15mm`)
+- `route_subsystem_cooperative.HDI_VIA_IN_PAD_REFS` — router whitelist constant
+- `docs/MASTER_HDI_SPEC.md` — full fab spec + production order requirements
+
+### Other components: standard via cost preserved
+All other footprints use board-default via: 0.30mm drill, 0.50mm pad,
+0.10mm annular — standard JLC fab, no HDI surcharge.
+
 ## Invariant hash
 
 Per master v2 review #5: compute + store hash.
