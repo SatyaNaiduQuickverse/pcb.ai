@@ -108,6 +108,10 @@ def main():
         fp.SetPosition(pcbnew.VECTOR2I(int(new_x * 1e6), int(new_y * 1e6)))
         orig_orient = partner.GetOrientation().AsDegrees()
         fp.SetOrientationDegrees((180 - orig_orient) % 360)
+        # Layer inheritance — see CH2/CH3 mirror scripts. R23 + §8 #9 require
+        # CH4 partner on same layer as CH3 source (B.Cu for shunts R165-167).
+        if fp.IsFlipped() != partner.IsFlipped():
+            fp.Flip(fp.GetPosition(), False)
         reset_text_to_body(fp)
         moved += 1
 

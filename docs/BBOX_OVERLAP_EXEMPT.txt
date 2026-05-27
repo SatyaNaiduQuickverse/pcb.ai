@@ -1,0 +1,30 @@
+# Body bbox-overlap audit exempt pairs (consumed by audit_body_bbox_overlap.py G_PP11).
+#
+# Format: one pair per line, two refs separated by whitespace. Lines starting
+# with # are comments. Pair order is irrelevant (frozenset matched).
+#
+# Adding entries MUST be authorised by Sai per the comment in audit_body_bbox_overlap.py
+# top-of-file. Each pair has a rationale + PR reference.
+#
+# ── §8 addendum #9 shunt-FET source-pad overlap (lock 2026-05-27, PR #197) ──
+# High-current shunts MUST physically overlap LS FET source pad with ≥1.5mm² bbox
+# overlap area for IPC-2152 16-via 0.6mm-pitch array (~96A continuous). This
+# overlap is INTENTIONAL per the §8 addendum #9 placement rule — body bboxes
+# necessarily intersect on the LS layer (B.Cu).
+#
+# CH1
+R57 Q6
+R58 Q8
+R59 Q10
+# CH2 mirror_X(CH1)
+R93 Q12
+R94 Q14
+R95 Q16
+# CH3 mirror_Y(CH2)
+R129 Q18
+R130 Q20
+R131 Q22
+# CH4 mirror_X(CH3)
+R165 Q24
+R166 Q26
+R167 Q28

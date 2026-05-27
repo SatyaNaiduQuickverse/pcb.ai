@@ -47,9 +47,22 @@ import sys
 from pathlib import Path
 from collections import defaultdict
 
-# Refdes patterns. Default = CH1 shunts R56/R57/R58/R59 + per-channel
-# variants with _CHn suffix (e.g. R56_CH2) OR position-coded refs.
-SHUNT_REF_PATTERN = re.compile(r"^R(56|57|58|59)(_CH\d+)?$")
+# Refdes patterns. Original default included R56, but worker 2026-05-27
+# clarified R56/R77/R113/R149 (per-channel) are 10K CSA-C FILTERS in 0402,
+# NOT high-current shunts. The audit MUST identify shunts by their FOOTPRINT
+# package (2512 chip = 1W power resistor) AND their high-side net membership,
+# not by ref number alone. Without this filter the audit FAILs on the CSA
+# filter that legitimately shares the SHUNT_C_TOP_CHn net but isn't a shunt.
+#
+# Identification chain (BOTH must hold):
+#   1. Refdes is an "R" resistor with any number (allow CHn suffix per legacy)
+#   2. Footprint name contains "2512" (1W 6332-metric chip resistor)
+#   3. Has at least one pad on a SHUNT_[ABC]_TOP_CHn net
+#
+# Item (3) alone identified R56 (0402, on SHUNT_C_TOP_CH1) as a false-positive
+# shunt in PR #197 self-test 2026-05-27.
+SHUNT_REF_PATTERN = re.compile(r"^R\d+(_CH\d+)?$")
+SHUNT_FOOTPRINT_HINT = "2512"  # 1W chip-resistor package marker
 
 # High-side-of-shunt net pattern: SHUNT_A_TOP_CH1, SHUNT_B_TOP_CH2 etc.
 SHUNT_TOP_NET_PATTERN = re.compile(r"^SHUNT_([ABC])_TOP_CH(\d+)$")
@@ -175,8 +188,28 @@ def main():
             area = (s.x / mm) * (s.y / mm)
             net_to_pads[n].append((fp, pad.GetPadName(), bbox, area))
 
-    # Identify shunts
-    shunts = [fp for ref, fp in fp_by_ref.items() if SHUNT_REF_PATTERN.match(ref)]
+    # Identify shunts: ref pattern + 2512 footprint + SHUNT_*_TOP_CHn net.
+    # Without all three, CSA filter R56/R77/R113/R149 (10K 0402 on
+    # SHUNT_C_TOP_CHn for CSA-C circuit) is falsely classified as a shunt.
+    def _fpid_str(fp):
+        fpid = fp.GetFPID()
+        try:
+            return fpid.GetLibItemName().c_str()
+        except Exception:
+            return str(fpid.GetLibItemName())
+
+    def _has_top_net(fp):
+        for pad in fp.Pads():
+            if SHUNT_TOP_NET_PATTERN.match(pad.GetNetname() or ''):
+                return True
+        return False
+
+    shunts = [
+        fp for ref, fp in fp_by_ref.items()
+        if SHUNT_REF_PATTERN.match(ref)
+        and SHUNT_FOOTPRINT_HINT in _fpid_str(fp)
+        and _has_top_net(fp)
+    ]
     if not shunts:
         print(f"INFO: no shunts matched pattern {SHUNT_REF_PATTERN.pattern}")
         print(f"      (pattern covers R56/57/58/59 + optional _CHn suffix)")
