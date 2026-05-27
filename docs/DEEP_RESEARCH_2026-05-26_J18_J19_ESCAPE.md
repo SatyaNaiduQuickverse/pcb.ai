@@ -149,3 +149,29 @@ Combined effect:
 - ✅ [[feedback-edit-existing-dont-write-new]] — new RESEARCH doc only (no duplicate plan/methodology)
 - ✅ [[feedback-codify-not-patch]] — codified solutions, not band-aid fixes
 - ✅ [[feedback-system-learns-minimal-rules]] — extracted minimal rule set from canonical literature
+
+---
+
+## DIAGNOSIS CORRECTION (2026-05-28, empirical — Sai-requested)
+
+The 2026-05-26 research above framed the J18/J19 wall as a **layer-CAPACITY** problem and recommended **solution C (8L→10L)** with "Expected unblock: ALL 7 residual nets." **That framing was wrong, and the correction matters for the CH2/3/4 cascade + future boards.**
+
+**What the empirical work (CH1 STEP-6, 10L) actually proved:**
+- On 10L, CH1 signal routing plateaus at **24/30**, with the same dense-J18/J19 nets residual. The worker proved this cap is **robust across 4 router configurations** (--no-rip-routed / full cooperative ripup 97-rips-45-iters / single-net isolation / moved-placement).
+- Therefore the bottleneck is **NOT layer count**. It is **QFN escape-field saturation**: the via room around J18's 0.5 mm-pitch pin ring is geometrically full. Adding signal LAYERS adds routing CHANNELS (lanes between components) but adds **zero escape-via room at the saturated pins** — the nets can't even reach the new layers because they can't escape the pin field.
+- The **actual unlock was HDI via-in-pad (solution B)** — drilling the escape straight down through the pad eliminates the dog-bone stub and frees pin-field room. That is what moved CH1 past the wall (22→28→ final hand-route to 30).
+
+**The distinction to carry forward (layer-CAPACITY vs pin-ESCAPE-DENSITY):**
+| Symptom | Root | Fix | NOT fixed by |
+|---|---|---|---|
+| Routing channels between parts exhausted (board-wide congestion) | layer capacity | more layers (8L→10L) | — |
+| Fine-pitch IC (QFN/BGA ≤0.5 mm) nets can't escape the pin ring | pin escape-field density | HDI via-in-pad / dog-bone fanout | more layers (escape blocked before reaching them) |
+
+**Honest cost/decision assessment:**
+- We ended with **10L (+$1-2/board) AND HDI (+$2-3/board)**.
+- 10L delivered **real, independent value** — LS-side loop-L improved (B.Cu→In7 0.285 mm vs 8L 0.335 mm), BEMF shielded between In3-GND/In5-VMOTOR, +50% routing channels for the broad signal field. Not wasted.
+- BUT the **J18/J19-specific justification for 10L was overstated**; HDI was the operative fix for that wall. Had we diagnosed escape-density first, **8L + HDI might have sufficed** for J18/J19 (un-testable now; we're committed to 10L and it earns its keep on loop-L/EMI).
+
+**Binding rule for the cascade** (also in PLACEMENT_GLOBAL_PLAN §8 #10): before any future layer-count escalation to solve a routing wall, FIRST classify it — run the single-net isolation test on the stuck nets. If they fail in isolation at a fine-pitch IC, it's escape-density → HDI/fanout, NOT more layers. Reach for layers only when the failure is board-wide channel congestion, not pin-ring saturation.
+
+**Authority for the correction**: matches [[reference-qfn-pin-escape-bottleneck]] (the worker's 2026-05-26 (d)-router-v1 finding that QFN-pin-escape is the real bottleneck — which this 10L experience now confirms at scale) + Altium/NWES BGA-escape literature (solution B above) over the Howard Johnson "more layers uniformly works" framing (solution C) which is true for channel congestion but inapplicable to pin-escape saturation.
