@@ -143,12 +143,19 @@ PER_REF_EAST_EDGE = {
 # See: [[reference-parametric-placement-desync-trap]] + [[feedback-coord-pr-must-simulate-placement]]
 SHUNT_ANCHORS = {
     # CH1 — Q6/Q8/Q10 LS FETs at (8.4, 58.4|71.4|84.4) B.Cu rot=180° per R1-transplant.
-    # R57/58/59 KEEP F.Cu (opposite layer, no body collision) + rot=270° + Y+2.962 offset
-    # so pad-1 (SHUNT_x_TOP) lands at FET source EP center. 16 × 0.6mm/0.3mm via array
-    # in ~3×3mm overlap region transfers ~96A continuous IPC-2152 (R17 spec 70A = 37% margin).
-    'R57': {'pos': (8.400, 61.362), 'rotation': 270.0, 'layer': 'F.Cu'},  # pad-1 over Q6 EP @ (8.4, 58.4) B.Cu (phase A)
-    'R58': {'pos': (8.400, 74.362), 'rotation': 270.0, 'layer': 'F.Cu'},  # pad-1 over Q8 EP @ (8.4, 71.4) B.Cu (phase B)
-    'R59': {'pos': (8.400, 87.362), 'rotation': 270.0, 'layer': 'F.Cu'},  # pad-1 over Q10 EP @ (8.4, 84.4) B.Cu (phase C)
+    # R57/58/59 STAY at (8.4, 58.4|71.4|84.4) F.Cu rot=0° (current R1-transplant positions).
+    # WORKER R22 catch 2026-05-27 (third master-subagent over-reach in single cycle):
+    # G_SHUNT_FET_OVERLAP gate (#194) measures BODY-bbox overlap ≥1.5mm² threshold;
+    # at rot=0° body-overlap is 9.00mm² (6× margin) — PASSES. Previous PR #199 "moved"
+    # to rot=270° was my over-interpretation requiring pad-1 over EP, NOT in actual §8#9
+    # rule text. Reverted here to stay-put + additive 16-via array approach (worker
+    # extends F.Cu pad-1 copper over EP + 16 × 0.3mm-drill vias at 0.75mm pitch in 9mm²
+    # overlap = 88A continuous IPC-2152 = 26% margin over R17 70A spec).
+    # See: [[reference-parametric-placement-desync-trap]] + [[feedback-coord-pr-must-simulate-placement]]
+    # Both reference memories codified during this 3-catch cycle.
+    'R57': {'pos': (8.400, 58.400), 'rotation': 0.0, 'layer': 'F.Cu'},  # body 9mm² over Q6 EP B.Cu (phase A)
+    'R58': {'pos': (8.400, 71.400), 'rotation': 0.0, 'layer': 'F.Cu'},  # body 9mm² over Q8 EP B.Cu (phase B)
+    'R59': {'pos': (8.400, 84.400), 'rotation': 0.0, 'layer': 'F.Cu'},  # body 9mm² over Q10 EP B.Cu (phase C)
 }
 
 # Override default PER_REF_EAST_EDGE for shunts that are now anchored — anchor
