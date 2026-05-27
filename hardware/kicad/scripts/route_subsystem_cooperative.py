@@ -75,6 +75,32 @@ Reusable for CH1 STEP-6 J18/J19 fan-in + CH2/3/4 mirror routing +
 future dense subsystem escapes (S3 supervisor, S5 BEC if congested).
 
 Master 2026-05-27 R26 dispatch — replaces greedy escape line.
+
+v7 (2026-05-27, master R26 — worker R22 catch #4 on v6 HDI shorts):
+  Two-prong defense-in-depth fix for HDI microvia full-stack-validation gap
+  that allowed +2 net-to-net shorts on PR #207 v6 (GHC/GLC vias on F.Cu
+  shorting BEMF_A_CH1 / GLA_CH1 tracks on In4).
+
+  ROOT CAUSE: v6 short-circuited via_blocked_for_net to hdi_via_blocked_geom
+  for HDI cells (line ~1049), and the geometric check iterates
+  track_segments_by_layer / foreign_vias — both of which are populated ONLY
+  at _stamp_obstacles() startup. Same-router-run committed tracks/vias get
+  stamped into the cell-based obstacle map (catches non-HDI vias) but NOT
+  into the segment-list (HDI geom check blind to them).
+
+  PRONG 1: extend full-stack obstacle validation to ALL via classes.
+    - commit_paths() now appends committed tracks to track_segments_by_layer
+      and committed vias to foreign_vias so the HDI geom check sees them.
+    - via_blocked_for_net() for HDI cells now runs BOTH the geom check AND
+      a cell-based obstacle scan on inner layers (defense in depth).
+  PRONG 2: constrain MICROVIA tag to adjacent-layer pair only.
+    - emit_to_board() inspects via target span (F.Cu→target inner layer)
+    - Only tags as VIATYPE_MICROVIA when span is JLC HDI Class 2 compliant
+      (F.Cu↔In1.Cu or B.Cu↔In8.Cu adjacent-layer microvias).
+    - All other spans emit as standard through-via (no MICROVIA tag) —
+      they were physically through-vias anyway in v6.
+
+  Either prong alone fixes the bug. Both = defense in depth.
 """
 from __future__ import annotations
 
@@ -1043,10 +1069,20 @@ class CongestionGrid:
         hdi_owner = self.hdi_via_cells.get((i, j))
         is_hdi_via = (hdi_owner is not None and hdi_owner == netname)
         if is_hdi_via:
-            # v6: precise geometric check (cell-based stamp is too
-            # conservative for the small microvia). Bypasses the
-            # over-aggressive r_obs-based scan below.
-            return self.hdi_via_blocked_geom(i, j, netname, span_layers)
+            # v7 (worker R22 catch #4 on v6): HDI vias still physically
+            # spans the full F.Cu→B.Cu stack (per emit_to_board comment at
+            # line ~1492-1500). The geom check uses segment-lists that
+            # capture pre-router-startup tracks ONLY — same-router-run
+            # committed tracks/vias are stamped into the cell-based
+            # obstacle map but NOT into track_segments_by_layer /
+            # foreign_vias. v7 commit_paths() updates the segment lists,
+            # but as a defense-in-depth second check we also run the
+            # cell-based obstacle scan on inner+B.Cu layers below.
+            # If EITHER check flags, the via is rejected.
+            geom_blocked, _ = self.hdi_via_blocked_geom(i, j, netname, span_layers)
+            if geom_blocked:
+                return True, "hdi_geom_blocked"
+            # Fall through to the cell-based scan with HDI-aware skips.
         if is_hdi_via:
             # Microvia: 0.25mm pad → HDI_VIA_HALF_MM = 0.325mm clearance
             via_pad_half_mm = HDI_VIA_HALF_MM
@@ -1484,26 +1520,52 @@ def emit_to_board(board, segments, vias, net_obj, width_mm, added_items,
         v = pcbnew.PCB_VIA(board)
         v.SetPosition(pcbnew.VECTOR2I(mm_to_iu(x), mm_to_iu(y)))
         # v6: HDI microvia geometry if this via lands on a whitelist pad cell
-        is_hdi = False
+        is_hdi_cell = False
         if hdi_via_cells and grid is not None:
             ci, cj = grid.xy_to_ij(x, y)
             if (ci, cj) in hdi_via_cells:
-                is_hdi = True
-        # v6: HDI via emits as THROUGH via with MICROVIA type tag.
-        # Rationale: JLC HDI Class 2 microvia is strictly adjacent-layer
-        # (F.Cu↔In1.Cu single laser-drill) per industry spec. Multi-layer
-        # blind vias (F.Cu→In4 etc.) require stacked-microvia or special
-        # process — much higher cost. Our cost-cleared (+$2-3/board) HDI
-        # uses standard through-drilled holes that are SMALLER (0.10mm)
-        # and FILLED + plate-over for via-in-pad. The DRC treats them
-        # under microvia rules (per .kicad_dru) but they're physically
-        # through-vias. This is the simplest fab-compatible HDI.
-        v.SetLayerPair(F_CU, B_CU)
-        if is_hdi:
+                is_hdi_cell = True
+        # v7 (worker R22 catch #4 on v6 microvia-span gap):
+        # The MICROVIA type tag in v6 was applied to ALL HDI via-in-pad cells
+        # regardless of layer span — but JLC HDI Class 2 fab spec restricts
+        # microvia to ADJACENT-layer single laser-drill (F.Cu↔In1.Cu or
+        # B.Cu↔In8.Cu). Tagging an F.Cu→In4 through-via as MICROVIA is a
+        # spec lie that masks the through-via's full-stack obstacle exposure.
+        # v7 fix: only tag as MICROVIA when the actual span is JLC-compliant;
+        # otherwise emit as standard through-via with HDI geometry (small
+        # drill/pad) preserved. Through-via geometry is what the via
+        # PHYSICALLY is in v6 anyway (line ~1537 was always F_CU↔B_CU);
+        # we just stop lying with the type tag.
+        target_pair = via_target_layers.get((round(x, 3), round(y, 3))) \
+            if via_target_layers else None
+        is_adjacent_microvia_span = False
+        if is_hdi_cell and target_pair is not None:
+            L_from, L_to = target_pair
+            adj_pairs = {(F_CU, IN1_CU), (IN1_CU, F_CU),
+                         (B_CU, IN8_CU), (IN8_CU, B_CU)}
+            is_adjacent_microvia_span = (L_from, L_to) in adj_pairs
+        # Use HDI geometry (small drill / pad) whenever the cell is on the
+        # HDI whitelist (microvia geometry needed to fit between QFN pads),
+        # but only tag as MICROVIA when span is adjacent-layer.
+        is_hdi = is_hdi_cell
+        is_hdi_microvia = is_hdi_cell and is_adjacent_microvia_span
+        # Layer pair: for adjacent-layer HDI microvia, emit blind via on the
+        # actual layer pair (so DRC treats it as a true microvia). For all
+        # other vias (HDI or not), emit as through via F.Cu↔B.Cu — that's
+        # what the v6 code did and what the obstacle validation assumes.
+        if is_hdi_microvia:
+            v.SetLayerPair(target_pair[0], target_pair[1])
             try:
-                # Tag as MICROVIA so the .kicad_dru HDI rules apply
-                # (smaller min via_diameter, hole, annular)
                 v.SetViaType(pcbnew.VIATYPE_MICROVIA)
+            except Exception:
+                pass
+        else:
+            v.SetLayerPair(F_CU, B_CU)
+            # v7: explicit through-via type for non-adjacent HDI cells.
+            # Without this, v6 inherited MICROVIA from prior is_hdi
+            # branch — which is the spec violation we are fixing.
+            try:
+                v.SetViaType(pcbnew.VIATYPE_THROUGH)
             except Exception:
                 pass
         if is_hdi:
@@ -2142,6 +2204,14 @@ class CooperativeRouter:
             segments, vias = path_to_segments(path, self.grid)
             for (x1, y1, x2, y2, layer) in segments:
                 self._stamp_own_track_obstacle(x1, y1, x2, y2, width, layer, netname)
+                # v7 (worker R22 catch #4 on v6): append to segment list so
+                # hdi_via_blocked_geom sees this just-committed track when
+                # the NEXT HDI net's A* runs in this same iteration. v6 only
+                # populated track_segments_by_layer at _stamp_obstacles()
+                # startup — leaving HDI checks blind to same-run tracks and
+                # allowing the GHC/GLC via shorts on In4 in PR #207.
+                self.grid.track_segments_by_layer[layer].append(
+                    (x1, y1, x2, y2, width, netname))
             for (vx, vy) in vias:
                 # v2 fix: stamp via obstacle on ALL copper layers in the span
                 # (through-via spans F.Cu->B.Cu). Radius accommodates foreign-
@@ -2154,6 +2224,15 @@ class CooperativeRouter:
                 vi, vj = self.grid.xy_to_ij(vx, vy)
                 for layer in ALL_COPPER_LAYERS:
                     self.grid.via_plane_owners[(vi, vj)].setdefault(layer, netname)
+                # v7 (worker R22 catch #4 on v6): append to foreign_vias so
+                # hdi_via_blocked_geom sees this just-committed via when the
+                # NEXT HDI net's A* runs in this same iteration. Use the
+                # actual via diameter (HDI if applicable; standard otherwise).
+                est_diam = VIA_DIAM_MM
+                vi2, vj2 = self.grid.xy_to_ij(vx, vy)
+                if (vi2, vj2) in self.grid.hdi_via_cells:
+                    est_diam = HDI_VIA_DIAM_MM
+                self.grid.foreign_vias.append((vx, vy, est_diam, netname))
         # Re-allow pad cells for THIS net (in case its own pads got stamped)
         for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(netname, []):
             for lid in layers:

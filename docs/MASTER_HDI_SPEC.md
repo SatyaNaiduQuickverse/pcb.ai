@@ -83,13 +83,41 @@ JLC tooling note: their UI usually has an "HDI Order" or "Via-in-pad"
 checkbox in advanced options. Always confirm with JLC sales before
 production run.
 
+## Micro-via span constraint (v7, BINDING)
+
+JLC HDI Class 2 supports **single laser-drilled micro-vias only** — i.e. a
+micro-via spans exactly ONE dielectric layer between adjacent copper layers:
+
+- **Allowed micro-via spans**: F.Cu↔In1.Cu, or B.Cu↔In8.Cu (outer-to-first-
+  inner, single laser step).
+- **Any deeper span** (F.Cu→In2, F.Cu→In4, etc.) is NOT a Class 2 micro-via.
+  It requires stacked micro-vias (much higher cost) OR — what we actually use
+  — a **standard through-via with HDI-small geometry** (0.10mm drill / 0.25mm
+  pad, mechanically/laser through-drilled, epoxy-filled + plate-over).
+
+Our J18/J19 QFN escapes go F.Cu→In2 (or deeper inner signal layers), so they
+are PHYSICALLY through-vias. v7 stops tagging them `VIATYPE_MICROVIA` (a spec
+lie that masked their full-stack copper exposure during obstacle validation)
+and emits them as `VIATYPE_THROUGH`, which makes the obstacle validator and
+DRC treat their barrel against EVERY spanned layer. The `.kicad_dru` HDI rules
+key on `A.Hole <= 0.15mm` (drill-based, not via-type), so HDI-relaxed geometry
+limits still apply to these through-vias — no DRC regression from the retag.
+
+**Root cause of the v6 +2 shorts (worker R22 catch #4)**: v6 tagged ALL HDI
+via-in-pad cells as `VIATYPE_MICROVIA` regardless of span, and its
+`via_blocked_for_net` early-returned to a geometric check whose segment/via
+lists were populated only at router startup (blind to same-pass committed
+copper). The two together let GHC/GLC F.Cu vias short BEMF_A_CH1 / GLA_CH1
+tracks on In4. v7's two-prong fix (span-correct via type + full-stack
+validation extended to micro-via barrels + same-pass copper) closes both.
+
 ## Router integration
 
-`route_subsystem_cooperative.py` v6:
+`route_subsystem_cooperative.py` v7:
 
 ```python
 HDI_VIA_IN_PAD_REFS = ("J18", "J19")  # whitelist constant
-HDI_VIA_DRILL_MM = 0.10               # microvia geometry
+HDI_VIA_DRILL_MM = 0.10               # HDI-small geometry (laser/through)
 HDI_VIA_DIAM_MM = 0.25
 ```
 
@@ -97,11 +125,15 @@ CLI flag: `--via-in-pad-allowed` (default OFF for back-compat).
 When ON:
 1. `_stamp_obstacles` skips the via-keepout zone for J18/J19 pads,
    leaving the SMD pad cell available as an HDI via site.
-2. `via_blocked_for_net` uses precise geometric distance check
-   (`hdi_via_blocked_geom`) at HDI cells — the cell-based scan is
-   over-conservative for the 0.25mm microvia.
-3. `emit_to_board` writes HDI geometry (0.10mm/0.25mm) and tags
-   the via as `VIATYPE_MICROVIA` so DRC applies HDI-relaxed rules.
+2. `via_blocked_for_net` at HDI cells runs the precise geometric distance
+   check (`hdi_via_blocked_geom`) AND falls through to the cell-based
+   inner+B.Cu obstacle scan (v7 — was a v6 early-return). `commit_net`
+   appends just-committed tracks/vias to `track_segments_by_layer` /
+   `foreign_vias` so the geom check sees same-router-run copper.
+3. `emit_to_board` writes HDI-small geometry (0.10mm/0.25mm) and tags the via
+   `VIATYPE_MICROVIA` **only when its span is the adjacent-layer pair**
+   (F.Cu↔In1 / B.Cu↔In8); all other spans emit as `VIATYPE_THROUGH` (v7 —
+   see "Micro-via span constraint" above).
 4. Allowed layers expand to all SIGNAL_LAYERS for HDI-touching nets
    (router can spill to In4/In6 if In2/In8 saturated).
 
