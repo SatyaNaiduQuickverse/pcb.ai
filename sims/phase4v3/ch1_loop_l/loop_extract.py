@@ -180,8 +180,8 @@ def main():
 
     board = pcbnew.LoadBoard(BOARD_PATH)
     thickness_mm = board.GetDesignSettings().GetBoardThickness() / 1e6
-    n_tracks = sum(1 for t in board.Tracks() if t.Type() == pcbnew.PCB_TRACK_T)
-    n_vias = sum(1 for t in board.Tracks() if t.Type() == pcbnew.PCB_VIA_T)
+    n_tracks = sum(1 for t in board.Tracks() if t.GetClass() == 'PCB_TRACK')
+    n_vias = sum(1 for t in board.Tracks() if t.GetClass() == 'PCB_VIA')
 
     phases = {
         "A": ("Q5", "Q6", "MOTOR_A_CH1", "VMOTOR_CH", "SHUNT_A_TOP_CH1"),
