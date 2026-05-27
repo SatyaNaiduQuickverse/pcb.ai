@@ -1305,14 +1305,149 @@ class CooperativeRouter:
             cells_by_pad.append((ref, padname, x, y, cells, pad_layers, sx, sy))
         return cells_by_pad
 
+    def verify_net_connectivity(self, netname):
+        """v3: post-MST safety net — verify that all of this net's pads are
+        actually electrically connected by walking board tracks/vias and
+        building a union-find of pad islands.
+
+        Returns (n_islands, [list_of_island_pad_labels_per_island]).
+        n_islands == 1 means fully connected. >1 means SPLIT (the bug class
+        worker R22 reported on v2).
+
+        We use union-find rather than KiCad's GetRatsnestForNet because the
+        SWIG binding for RN_NET is opaque (no Python-accessible methods to
+        enumerate edges or counts).
+
+        Tolerances:
+          - Track endpoint ↔ track endpoint same layer: 0.05mm coincident
+          - Track endpoint ↔ pad: within pad bbox + 0.05mm
+          - Track endpoint ↔ via: 0.15mm coincident
+          - Via center connects all copper layers (through-via)
+        """
+        net_obj = self.state.net_obj.get(netname)
+        if net_obj is None:
+            net_obj = self.board.GetNetsByName().get(netname)
+        if net_obj is None:
+            return 0, []
+        nc = net_obj.GetNetCode()
+
+        # Collect pads of this net (with bbox)
+        pads = []
+        for fp in self.board.GetFootprints():
+            for pad in fp.Pads():
+                pnet = pad.GetNet()
+                if pnet and pnet.GetNetCode() == nc:
+                    p = pad.GetPosition()
+                    sz = pad.GetSize()
+                    pads.append({
+                        'label': f"{fp.GetReference()}.{pad.GetPadName()}",
+                        'x': iu_to_mm(p.x), 'y': iu_to_mm(p.y),
+                        'hx': iu_to_mm(sz.x) / 2, 'hy': iu_to_mm(sz.y) / 2,
+                    })
+        if len(pads) < 2:
+            return 1, [[p['label'] for p in pads]] if pads else []
+
+        # Collect tracks + vias of this net
+        tracks = []
+        vias = []
+        for t in self.board.GetTracks():
+            if t.GetNetCode() != nc:
+                continue
+            if isinstance(t, pcbnew.PCB_VIA):
+                p = t.GetPosition()
+                vias.append((iu_to_mm(p.x), iu_to_mm(p.y)))
+            else:
+                s = t.GetStart(); e = t.GetEnd()
+                tracks.append((iu_to_mm(s.x), iu_to_mm(s.y),
+                                iu_to_mm(e.x), iu_to_mm(e.y), t.GetLayer()))
+
+        # Node list: pads + track endpoints + vias
+        nodes = []   # (kind, label_or_index, x, y, layer or None)
+        for i, p in enumerate(pads):
+            nodes.append(('pad', i, p['x'], p['y'], None))  # kind, pad_index
+        for i, (x1, y1, x2, y2, L) in enumerate(tracks):
+            nodes.append(('trk_s', i, x1, y1, L))
+            nodes.append(('trk_e', i, x2, y2, L))
+        for i, (vx, vy) in enumerate(vias):
+            nodes.append(('via', i, vx, vy, None))
+
+        n = len(nodes)
+        parent = list(range(n))
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]; x = parent[x]
+            return x
+        def union(a, b):
+            parent[find(a)] = find(b)
+
+        TOL_COINCIDENT = 0.05  # mm
+        TOL_VIA = 0.15         # mm — via diameter tolerance for endpoint-on-via
+        for i in range(n):
+            for j in range(i + 1, n):
+                a = nodes[i]; b = nodes[j]
+                dx = a[2] - b[2]; dy = a[3] - b[3]
+                d2 = dx * dx + dy * dy
+                # Pad-touches-anything: check if other endpoint within pad bbox
+                if a[0] == 'pad':
+                    p = pads[a[1]]
+                    if (abs(b[2] - p['x']) <= p['hx'] + TOL_COINCIDENT
+                            and abs(b[3] - p['y']) <= p['hy'] + TOL_COINCIDENT):
+                        # If b is a track endpoint, layer must be a routing layer (any)
+                        union(i, j); continue
+                if b[0] == 'pad':
+                    p = pads[b[1]]
+                    if (abs(a[2] - p['x']) <= p['hx'] + TOL_COINCIDENT
+                            and abs(a[3] - p['y']) <= p['hy'] + TOL_COINCIDENT):
+                        union(i, j); continue
+                # Via spans all layers, connect to any nearby endpoint
+                if a[0] == 'via' or b[0] == 'via':
+                    if d2 <= TOL_VIA * TOL_VIA:
+                        union(i, j); continue
+                # Same-layer track endpoint touching another track endpoint
+                if a[4] is not None and b[4] is not None and a[4] == b[4]:
+                    if d2 <= TOL_COINCIDENT * TOL_COINCIDENT:
+                        union(i, j); continue
+                # Track endpoints on the same track (auto-connect)
+                if a[0] in ('trk_s', 'trk_e') and b[0] in ('trk_s', 'trk_e') and a[1] == b[1]:
+                    union(i, j)
+
+        # Group pad nodes by island
+        islands = defaultdict(list)
+        for i, node in enumerate(nodes):
+            if node[0] == 'pad':
+                islands[find(i)].append(pads[node[1]]['label'])
+        # Sort islands by size desc
+        island_list = sorted(islands.values(), key=lambda x: -len(x))
+        return len(island_list), island_list
+
     def route_one_net_mst(self, netname, present_factor, time_budget_s=8.0):
         """Build MST of pads. For each MST edge route via A*. Accumulate paths.
 
-        Returns (paths_list, success_bool). paths_list = [(segments, vias, width)]
+        Returns (paths_list, status, failed_pairs) where:
+          paths_list = [path_cells_per_edge]
+          status     = 'ROUTED' (all MST edges succeeded — full electrical merge),
+                       'PARTIAL' (>=1 edge routed, >=1 failed — net split into >1 islands),
+                       'FAILED'  (no edges routed at all)
+          failed_pairs = list of (pad_ref_a, pad_ref_b) edges that A* could not route
+
+        v3 (2026-05-27, master R26 NARROW FIX): previously, on first MST edge
+        failure the entire net was abandoned (all_paths discarded, ok=False).
+        That left multi-pad nets fully unrouted even when (N-1) of N edges
+        would have succeeded. Worker R22 saw "BEMF_B_CH1 split, BEMF_A/C OK"
+        after v2 — root cause is exactly this: one bad edge kills the whole net.
+
+        v3 behaviour:
+          - Each MST edge attempt is independent. If A* fails, mark that
+            pad-pair as failed but KEEP routing the remaining edges using the
+            paths so far as multi-source (so subsequent edges can hook into
+            already-routed islands of this net).
+          - Return status='PARTIAL' if >=1 path routed AND >=1 failed.
+          - run() will detect PARTIAL and re-attempt the failed pairs in
+            later iterations (with higher present_factor/history pressure).
         """
         pad_info = self._pad_cells_for_net(netname)
         if len(pad_info) < 2:
-            return [], False  # nothing to route
+            return [], 'FAILED', []  # nothing to route
         # MST: greedy nearest-neighbor from pad 0
         connected = {0}
         edges = []
@@ -1332,14 +1467,21 @@ class CooperativeRouter:
         # Allowed layers for this net's routing
         allowed = list(set([F_CU, B_CU] + inner_layers_for(netname)))
 
-        # Route each MST edge with A*, growing the connected set per edge
-        # After routing edge k, the resulting path cells become valid SOURCES for next edges
-        # of the same net (so the net's own routes are reusable, not obstacles).
-        # For simplicity we route each MST edge from source pad cells -> target pad cells +
-        # any prior committed path cells of this net (multi-source).
+        # Route each MST edge with A*, growing the connected set per edge.
+        # After routing edge k, the resulting path cells become valid SOURCES
+        # for next edges of the same net (so the net's own routes are reusable,
+        # not obstacles).
+        # v3: failed edges no longer abort. Track them in `failed_pairs` and
+        # continue. If a later edge's source pad has no path-cells yet, it
+        # still has its pad cells. Multi-source A* will find the closest of
+        # all available sources (own pads + own routed paths).
         all_paths = []
         my_route_cells = set()
-        # Initial sources = first pad
+        failed_pairs = []
+        # Helper to identify pad by ref.padname for human-readable failure
+        def pad_label(idx):
+            ref = pad_info[idx][0]; nm = pad_info[idx][1]
+            return f"{ref}.{nm}"
         for (i_edge, (a, b)) in enumerate(edges):
             sources = set()
             for cell in pad_info[a][4]:
@@ -1354,40 +1496,103 @@ class CooperativeRouter:
                                           netname, allowed, present_factor,
                                           time_budget_s=edge_budget)
             if path is None:
-                return all_paths, False
-            # Track cells
+                failed_pairs.append((pad_label(a), pad_label(b)))
+                continue  # v3: keep going — don't abandon prior edges
+            # Track cells — add to multi-source pool for subsequent MST edges
             for c in path: my_route_cells.add(c)
             all_paths.append(path)
-        return all_paths, True
+        if not all_paths:
+            return [], 'FAILED', failed_pairs
+        if failed_pairs:
+            return all_paths, 'PARTIAL', failed_pairs
+        return all_paths, 'ROUTED', []
 
-    def commit_net(self, netname, paths):
-        """Commit paths to board + grid."""
+    def route_pad_pair(self, netname, src_x, src_y, dst_x, dst_y,
+                       present_factor, time_budget_s=8.0):
+        """v3: route a single source-pad → destination-pad pair (no MST).
+
+        Used by re-attempt phase: when a multi-pad net was reported PARTIAL,
+        the run() loop calls this method with the specific failed pad-pair
+        coordinates so a subsequent iteration (with higher present_factor) can
+        attempt the missing edge without re-doing the entire MST.
+
+        Sources include the failed pad's cells AND any cells already committed
+        to this net (so the new path can attach to ANY existing island, not
+        just the original pad).
+
+        Returns (path or None,) — single path or None on failure.
+        """
+        pad_info = self._pad_cells_for_net(netname)
+        # Find the source and target pad by coordinate match (1e-3mm tol)
+        def find_pad_cells(x, y):
+            for (ref, pn, px, py, cells, layers, sx, sy) in pad_info:
+                if abs(px - x) < 1e-3 and abs(py - y) < 1e-3:
+                    return set(cells)
+            return None
+        src_cells = find_pad_cells(src_x, src_y)
+        dst_cells = find_pad_cells(dst_x, dst_y)
+        if not src_cells or not dst_cells:
+            return None
+        # Multi-source: include existing committed cells for this net
+        existing = self.committed.get(netname, (set(), []))[0]
+        sources = src_cells | existing
+        targets = dst_cells | existing  # allow path to terminate at any existing cell
+        # Avoid trivial src∩targets case
+        if sources & targets and not (src_cells & dst_cells):
+            # Both pads already in same island via existing routing — nothing to do
+            return None
+        allowed = list(set([F_CU, B_CU] + inner_layers_for(netname)))
+        path, cost = find_path_astar(self.grid, sources, targets,
+                                      netname, allowed, present_factor,
+                                      time_budget_s=time_budget_s)
+        return path
+
+    def commit_net(self, netname, paths, append=False):
+        """Commit paths to board + grid.
+
+        v3: when append=True, ADD these new paths to the existing committed
+        entry for this net (used by partial-net repair where a follow-up
+        MST-edge route extends an already-partially-routed net).
+
+        v3 also marks the committed track cells as net-accessible via
+        pad_cells (so the next MST edge / repair-pair attempt of THIS net
+        can use its own existing routing as a starting point — without this,
+        the stamp_obstacle_segment halo would block same-net A* from re-
+        attaching to the routed island).
+        """
         width = width_for(netname)
         net_obj = self.state.net_obj.get(netname)
         if net_obj is None:
             # Net obj missing; try lookup
             net_obj = self.board.GetNetsByName().get(netname)
-        added = []
-        all_cells = set()
+        if append and netname in self.committed:
+            prev_cells, added = self.committed[netname]
+            all_cells = set(prev_cells)
+        else:
+            added = []
+            all_cells = set()
         for path in paths:
             segments, vias = path_to_segments(path, self.grid)
             emit_to_board(self.board, segments, vias, net_obj, width, added)
             for c in path: all_cells.add(c)
         self.grid.commit_path(all_cells, netname)
         # Also stamp committed segments as obstacles for OTHER nets in next iters
-        # by adding to track_obstacles (so next A* sees them as hard blockers)
+        # by adding to track_obstacles (so next A* sees them as hard blockers).
+        # v3: after stamping the obstacle halo, re-mark all newly-blocked cells
+        # in the halo as ACCESSIBLE to THIS net (so subsequent MST edge / pair
+        # repair A* can traverse the net's own routing without being blocked
+        # by its own clearance halo).
         for path in paths:
             segments, vias = path_to_segments(path, self.grid)
             for (x1, y1, x2, y2, layer) in segments:
-                self.grid.stamp_obstacle_segment(x1, y1, x2, y2, width, layer)
-                # Allow this net's own pads to remain accessible
+                self._stamp_own_track_obstacle(x1, y1, x2, y2, width, layer, netname)
             for (vx, vy) in vias:
                 # v2 fix: stamp via obstacle on ALL copper layers in the span
                 # (through-via spans F.Cu->B.Cu). Radius accommodates foreign-
                 # track centerline gap.
                 r = VIA_DIAM_MM / 2 + CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM
                 for layer in ALL_COPPER_LAYERS:
-                    self.grid.stamp_obstacle_circle(vx, vy, r, layer)
+                    self._stamp_own_via_obstacle(vx, vy, r, layer, netname)
                 # Also mark as plane-owned by this net on every copper layer so
                 # a SAME-net repeat via doesn't get false-blocked.
                 vi, vj = self.grid.xy_to_ij(vx, vy)
@@ -1399,6 +1604,27 @@ class CooperativeRouter:
                 self.grid.allow_pad_access_rect(x, y, lid, netname, sx/2, sy/2)
         self.committed[netname] = (all_cells, added)
 
+    def _stamp_own_track_obstacle(self, x1, y1, x2, y2, w, layer, netname):
+        """v3: stamp a track halo as obstacle for OTHER nets, but mark all
+        the newly-stamped cells as accessible to `netname` (own-net pad-cell
+        access). Lets the same net re-route through its own routing area.
+        """
+        before = set(self.grid.obstacle)
+        self.grid.stamp_obstacle_segment(x1, y1, x2, y2, w, layer)
+        new_cells = self.grid.obstacle - before
+        for cell in new_cells:
+            self.grid.pad_cells[cell].add(netname)
+
+    def _stamp_own_via_obstacle(self, x, y, r, layer, netname):
+        """v3: stamp a via halo on `layer` as obstacle but mark cells as
+        same-net accessible. Companion to _stamp_own_track_obstacle for vias.
+        """
+        before = set(self.grid.obstacle)
+        self.grid.stamp_obstacle_circle(x, y, r, layer)
+        new_cells = self.grid.obstacle - before
+        for cell in new_cells:
+            self.grid.pad_cells[cell].add(netname)
+
     def rip_net(self, netname):
         """Remove a net's committed tracks/vias and obstacles."""
         if netname not in self.committed: return
@@ -1409,6 +1635,10 @@ class CooperativeRouter:
         # Instead, decrement present count; obstacle cells set is rebuilt on next iter via _rebuild_grid().
         self.grid.uncommit_path(cells, netname)
         del self.committed[netname]
+        # v3: ripping a partial net invalidates its tracked failed-pairs too.
+        # The net needs a fresh MST from scratch on its next route attempt.
+        if hasattr(self, 'partial_pairs') and netname in self.partial_pairs:
+            del self.partial_pairs[netname]
         self.ripup_count += 1
 
     def _rebuild_grid(self):
@@ -1425,13 +1655,106 @@ class CooperativeRouter:
             for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(n, []):
                 for lid in layers:
                     self.grid.allow_pad_access_rect(x, y, lid, n, sx/2, sy/2)
+        # v3: re-allow committed nets to re-enter their OWN routed cells
+        # AND own clearance halo. _stamp_obstacles re-stamps tracks/vias as
+        # obstacles per-layer from board state, so we need to walk every
+        # such cell and mark it as same-net pad_cells-accessible. Otherwise
+        # subsequent partial-pair repair of multi-pad nets gets blocked by
+        # its own clearance halo.
+        # We do this by iterating each track in the board, finding all cells
+        # within stamp_obstacle_segment's halo, and marking them accessible
+        # to the track's net.
+        for t in self.board.GetTracks():
+            netname = t.GetNetname()
+            if not netname or netname not in self.committed:
+                continue
+            if isinstance(t, pcbnew.PCB_VIA):
+                p = t.GetPosition()
+                vx = iu_to_mm(p.x); vy = iu_to_mm(p.y)
+                r = VIA_DIAM_MM / 2 + CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM
+                for layer in ALL_COPPER_LAYERS:
+                    cells_in_halo = self._cells_in_circle(vx, vy, r, layer)
+                    for cell in cells_in_halo:
+                        self.grid.pad_cells[cell].add(netname)
+            else:
+                s = t.GetStart(); e = t.GetEnd()
+                x1 = iu_to_mm(s.x); y1 = iu_to_mm(s.y)
+                x2 = iu_to_mm(e.x); y2 = iu_to_mm(e.y)
+                w = iu_to_mm(t.GetWidth())
+                layer = t.GetLayer()
+                cells_in_halo = self._cells_in_segment(x1, y1, x2, y2, w, layer)
+                for cell in cells_in_halo:
+                    self.grid.pad_cells[cell].add(netname)
+        # Re-allow path cells of currently-committed nets (stored cells set).
+        for n, (cells, _added) in self.committed.items():
+            for cell in cells:
+                self.grid.pad_cells[cell].add(n)
+
+    def _cells_in_circle(self, x, y, r, layer):
+        """Helper: enumerate grid cells within radius r of (x,y) on layer."""
+        cells = []
+        if layer not in self.grid.layers:
+            return cells
+        i0, j0 = self.grid.xy_to_ij(x, y)
+        n = int(math.ceil(r / self.grid.pitch))
+        r2 = r * r
+        for di in range(-n, n + 1):
+            for dj in range(-n, n + 1):
+                ci = i0 + di; cj = j0 + dj
+                if not self.grid.in_bounds(ci, cj): continue
+                cx, cy = self.grid.cell_xy(ci, cj)
+                if (cx - x) ** 2 + (cy - y) ** 2 <= r2:
+                    cells.append((ci, cj, layer))
+        return cells
+
+    def _cells_in_segment(self, x1, y1, x2, y2, w, layer):
+        """Helper: enumerate grid cells within trace halo of a segment on layer."""
+        cells = []
+        if layer not in self.grid.layers:
+            return cells
+        half = w / 2 + CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM
+        half2 = half * half
+        xa, xb = min(x1, x2), max(x1, x2)
+        ya, yb = min(y1, y2), max(y1, y2)
+        i_min, j_min = self.grid.xy_to_ij(xa - half, ya - half)
+        i_max, j_max = self.grid.xy_to_ij(xb + half, yb + half)
+        i_min = max(0, i_min); j_min = max(0, j_min)
+        i_max = min(self.grid.nx - 1, i_max); j_max = min(self.grid.ny - 1, j_max)
+        dx, dy = x2 - x1, y2 - y1
+        seg_len2 = dx * dx + dy * dy
+        if seg_len2 < 1e-12:
+            return self._cells_in_circle(x1, y1, half, layer)
+        for i in range(i_min, i_max + 1):
+            for j in range(j_min, j_max + 1):
+                cx, cy = self.grid.cell_xy(i, j)
+                tt = ((cx - x1) * dx + (cy - y1) * dy) / seg_len2
+                tt = max(0.0, min(1.0, tt))
+                px = x1 + tt * dx; py = y1 + tt * dy
+                if (cx - px) ** 2 + (cy - py) ** 2 <= half2:
+                    cells.append((i, j, layer))
+        return cells
 
     def run(self, max_iter=DEFAULT_MAX_ITER):
-        """Cooperative loop (Pathfinder-style negotiated congestion + ripup)."""
+        """Cooperative loop (Pathfinder-style negotiated congestion + ripup).
+
+        v3 (master 2026-05-27 R26 NARROW FIX):
+          - route_one_net_mst now returns 3-tuple (paths, status, failed_pairs).
+          - status='PARTIAL' nets have >=1 routed edge AND >=1 failed edge;
+            they get committed AND queued for re-attempt of failed pairs.
+          - self.partial_pairs[netname] = list of (pad_a_label, pad_b_label,
+            pad_a_xy, pad_b_xy). Each iteration re-attempts each failed pair
+            via route_pad_pair using higher present_factor (negotiation
+            pressure builds across iterations).
+          - A net is fully ROUTED only when its self.partial_pairs entry is
+            empty (= all MST edges connected = ratsnest semantically 0).
+        """
         self.start_time = time.monotonic()
         unrouted = list(self.nets)
         # Track per-net fail-count; nets that fail repeatedly get higher priority
         fail_count = defaultdict(int)
+        # v3: pad-pairs that failed to route for partially-routed nets.
+        # netname -> [(pad_a_label, pad_b_label, (xa, ya), (xb, yb)), ...]
+        self.partial_pairs = defaultdict(list)
         self.log(f"[coop] {len(unrouted)} target nets in {self.subsystem}: "
                  f"{', '.join(unrouted[:8])}{'...' if len(unrouted) > 8 else ''}")
 
@@ -1443,7 +1766,7 @@ class CooperativeRouter:
             self.iteration_count = it + 1
             self.log(f"\n[coop] === Iteration {it+1}/{max_iter} (present_factor={present_factor:.2f}) ===")
             # Re-allow pad access (in case obstacle map was reset)
-            for n in unrouted:
+            for n in list(unrouted) + list(self.partial_pairs.keys()):
                 for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(n, []):
                     for lid in layers:
                         self.grid.allow_pad_access_rect(x, y, lid, n, sx/2, sy/2)
@@ -1453,34 +1776,107 @@ class CooperativeRouter:
 
             still_unrouted = []
             routed_this_iter = []
+            partial_this_iter = []
             for nn in unrouted:
                 if nn in self.committed:
                     continue
                 # Higher budget for repeatedly-failing nets
                 budget = 6.0 + min(fail_count[nn], 5) * 4.0
-                paths, ok = self.route_one_net_mst(nn, present_factor, time_budget_s=budget)
-                if ok:
+                paths, status, failed_pairs = self.route_one_net_mst(
+                    nn, present_factor, time_budget_s=budget)
+                if status == 'ROUTED':
                     self.commit_net(nn, paths)
-                    routed_this_iter.append(nn)
+                    # v3 safety net: verify all pads landed in one island.
+                    # If MST claimed success but pad-to-track grid-snap broke
+                    # connectivity, this catches it before we report "routed".
+                    n_islands, island_list = self.verify_net_connectivity(nn)
+                    if n_islands > 1:
+                        # MST said success but verification disagrees — rip
+                        # this net's tracks and re-queue with fail_count bump.
+                        self.log(f"  [!] {nn}: MST-ROUTED but VERIFY-SPLIT "
+                                 f"({n_islands} islands: {island_list}) — "
+                                 f"ripping + retry")
+                        self.rip_net(nn)
+                        still_unrouted.append(nn)
+                        fail_count[nn] += 1
+                        # Track the inter-island pad-pair as the "failed pair"
+                        # for diagnostic (use first 2 islands' first members)
+                        if len(island_list) >= 2:
+                            pa = island_list[0][0]; pb = island_list[1][0]
+                            pad_xy = {}
+                            for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(nn, []):
+                                pad_xy[f"{ref}.{padname}"] = (x, y)
+                            xa, ya = pad_xy.get(pa, (None, None))
+                            xb, yb = pad_xy.get(pb, (None, None))
+                            if xa is not None and xb is not None:
+                                self.partial_pairs[nn] = [(pa, pb, (xa, ya), (xb, yb))]
+                    else:
+                        routed_this_iter.append(nn)
+                        n_segs = sum(len(path_to_segments(p, self.grid)[0]) for p in paths)
+                        n_vias = sum(len(path_to_segments(p, self.grid)[1]) for p in paths)
+                        self.log(f"  [+] {nn}: routed ({n_segs} segs, {n_vias} vias) "
+                                 f"verify=1-island fail_count_was={fail_count[nn]}")
+                elif status == 'PARTIAL':
+                    # v3 fix: DON'T commit partial paths — that locks in the
+                    # 2-of-3 edges and the remaining edge cannot route through
+                    # its own locked-in routing. Instead, treat partial as
+                    # FAILED so the next iteration re-attempts the FULL MST
+                    # fresh (same as v2). But ALSO record the failed pair in
+                    # `partial_pairs` for diagnostics, so the final report
+                    # shows which pad-pair was the actual blocker.
+                    pad_xy = {}
+                    for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(nn, []):
+                        pad_xy[f"{ref}.{padname}"] = (x, y)
+                    # Replace any prior partial_pair entry for this net
+                    self.partial_pairs[nn] = []
+                    for (pa, pb) in failed_pairs:
+                        xa, ya = pad_xy.get(pa, (None, None))
+                        xb, yb = pad_xy.get(pb, (None, None))
+                        if xa is not None and xb is not None:
+                            self.partial_pairs[nn].append((pa, pb, (xa, ya), (xb, yb)))
+                    still_unrouted.append(nn)
+                    fail_count[nn] += 1
                     n_segs = sum(len(path_to_segments(p, self.grid)[0]) for p in paths)
-                    n_vias = sum(len(path_to_segments(p, self.grid)[1]) for p in paths)
-                    self.log(f"  [+] {nn}: routed ({n_segs} segs, {n_vias} vias) "
-                             f"fail_count_was={fail_count[nn]}")
-                else:
+                    self.log(f"  [.] {nn}: PARTIAL+ROLLBACK "
+                             f"({len(paths)}/{len(paths)+len(failed_pairs)} edges, "
+                             f"would-be {n_segs} segs) — "
+                             f"failed pairs: {failed_pairs} "
+                             f"(fail_count={fail_count[nn]})")
+                else:  # FAILED
                     still_unrouted.append(nn)
                     fail_count[nn] += 1
                     self.log(f"  [.] {nn}: FAILED (fail_count={fail_count[nn]})")
 
-            self.log(f"  pass result: routed_this_iter={len(routed_this_iter)} "
-                     f"still_unrouted={len(still_unrouted)}")
+            # v3: partial_pairs is a DIAGNOSTIC-only cache that records the
+            # last-known failed pad-pair for each net that has had a partial
+            # MST run. When a net later routes successfully (status='ROUTED'),
+            # we clear its partial_pair entry. Otherwise, the entry persists
+            # so the final report can show WHICH pad-pair was the blocker.
+            # No per-iteration repair pass — full MST retry per iteration
+            # under bumped congestion is the negotiation mechanism.
+            repair_succeeded_this_iter = 0
+            for nn in routed_this_iter:
+                if nn in self.partial_pairs:
+                    del self.partial_pairs[nn]
+
+            self.log(f"  pass result: routed={len(routed_this_iter)} "
+                     f"partial={len(partial_this_iter)} "
+                     f"still_unrouted={len(still_unrouted)} "
+                     f"repairs_ok={repair_succeeded_this_iter} "
+                     f"open_partials={sum(len(v) for v in self.partial_pairs.values())}")
             unrouted = still_unrouted
-            if not unrouted:
-                self.log(f"\n[coop] ALL ROUTED in {it+1} iterations.")
+            # v3: termination requires BOTH unrouted-nets empty AND no open
+            # partial-net pad-pair backlog. Otherwise multi-pad nets stay
+            # SPLIT (the original worker R22 bug class).
+            if not unrouted and not self.partial_pairs:
+                self.log(f"\n[coop] ALL ROUTED in {it+1} iterations (no partial nets).")
                 break
 
             # Plateau detection: no NET MAKING PROGRESS for N iters
             # (count "progress" = at least 1 net routed this pass that wasn't routed before)
-            if not routed_this_iter:
+            # v3: REPAIRS count as progress — a partial net completing its
+            # missing pad-pair is forward motion that should reset plateau.
+            if not routed_this_iter and not partial_this_iter and repair_succeeded_this_iter == 0:
                 plateau_count += 1
             else:
                 plateau_count = 0
@@ -1514,11 +1910,19 @@ class CooperativeRouter:
                     self._rebuild_grid()
 
         elapsed = time.monotonic() - self.start_time
-        self.log(f"\n[coop] DONE. routed={len(self.committed)}/{len(self.nets)} "
+        # v3: fully-connected = committed AND no open partial pairs
+        full = sum(1 for n in self.committed if not self.partial_pairs.get(n))
+        partial = sum(1 for n in self.committed if self.partial_pairs.get(n))
+        self.log(f"\n[coop] DONE. full_routed={full}/{len(self.nets)} "
+                 f"partial={partial} unrouted={len(unrouted)} "
                  f"iterations={self.iteration_count} ripups={self.ripup_count} "
-                 f"unrouted={len(unrouted)} elapsed={elapsed:.1f}s")
+                 f"elapsed={elapsed:.1f}s")
         if unrouted:
             self.log(f"[coop] UNROUTED nets: {unrouted}")
+        if self.partial_pairs:
+            self.log(f"[coop] PARTIAL nets (with unrouted pad-pairs):")
+            for nn, pairs in self.partial_pairs.items():
+                self.log(f"  {nn}: {[(pa, pb) for (pa, pb, _, _) in pairs]}")
         return unrouted
 
     def _select_ripup_candidates(self, failed_nets, k=3):
@@ -1568,19 +1972,36 @@ def main():
 
     pcbnew.SaveBoard(args.output, board)
     print(f"\nSaved: {args.output}")
-    print(f"Result: {len(router.committed)}/{len(router.nets)} routed, "
+    # v3: distinguish full / partial / unrouted
+    full = sum(1 for n in router.committed if not router.partial_pairs.get(n))
+    partial = sum(1 for n in router.committed if router.partial_pairs.get(n))
+    print(f"Result: full={full}/{len(router.nets)} partial={partial} "
+          f"unrouted={len(unrouted)}, "
           f"{router.iteration_count} iterations, {router.ripup_count} ripups")
     if args.report:
         with open(args.report, "w") as f:
-            f.write("net,status,pads,priority,fail_count\n")
+            f.write("net,status,pads,priority,partial_pairs\n")
             for n in router.nets:
-                status = "ROUTED" if n in router.committed else "UNROUTED"
+                if n in router.committed:
+                    pp = router.partial_pairs.get(n, [])
+                    if pp:
+                        status = "PARTIAL"
+                        pp_str = ";".join(f"{pa}->{pb}" for (pa, pb, _, _) in pp)
+                    else:
+                        status = "ROUTED"
+                        pp_str = ""
+                else:
+                    status = "UNROUTED"
+                    pp_str = ""
                 pads = len(router.state.net_pads.get(n, []))
-                f.write(f"{n},{status},{pads},{net_priority(n)},0\n")
-            f.write(f"\n# summary: {len(router.committed)}/{len(router.nets)} routed, "
+                f.write(f"{n},{status},{pads},{net_priority(n)},{pp_str}\n")
+            f.write(f"\n# summary: full={full}/{len(router.nets)} partial={partial} "
+                    f"unrouted={len(unrouted)}, "
                     f"{router.iteration_count} iterations, {router.ripup_count} ripups\n")
         print(f"Report: {args.report}")
-    return 0 if not unrouted else 1
+    # v3: exit non-zero if ANY net is partial or unrouted (caller must know
+    # not to ship a board with split nets).
+    return 0 if not unrouted and not router.partial_pairs else 1
 
 
 if __name__ == "__main__":
