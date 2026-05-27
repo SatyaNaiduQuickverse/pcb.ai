@@ -13,14 +13,61 @@
 #
 # IPC-2221C §6.3.1 explicitly permits zero clearance to inert copper features
 # that carry no current and no logic signal. NC IC pads qualify.
+#
+# FIX 2026-05-27 #2 (worker R22 catch + master second-pass):
+# Initial split A/B rules STILL crashed KiCad 9.0.2 headless libeval_compiler
+# (assert SP()==1 → SIGTRAP). Root cause: the `=~` regex operator itself
+# triggers the libeval stack imbalance, not the OR. Refactor uses ONLY
+# `A.NetName == 'name'` exact-string comparison (parser-safe) and lists all
+# 28 NC nets explicitly. Less elegant than regex but works headless.
+# 28 nets enumerated from canonical: PA11/PA12/PB3/PB5/PB7/PF0/PF1 × 4 channels.
+# Reference: reference-kicad-dru-libeval-crash memory.
+#
+# DRC SEMANTICS PRESERVED: every NC net gets zero clearance to any other net,
+# both directions (A or B side), as inert copper. Adding a new NC-class net
+# in future = add 2 lines here (A-side + B-side per net).
 
-(rule "NC-net pads zero clearance"
-    (constraint clearance (min 0mm))
-    (condition "A.NetName =~ '.*_NC_.*' || B.NetName =~ '.*_NC_.*'"))
+# === PA11 NC (4 channels) ===
+(rule "PA11_NC_CH1 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PA11_NC_CH1' || B.NetName == 'PA11_NC_CH1'"))
+(rule "PA11_NC_CH2 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PA11_NC_CH2' || B.NetName == 'PA11_NC_CH2'"))
+(rule "PA11_NC_CH3 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PA11_NC_CH3' || B.NetName == 'PA11_NC_CH3'"))
+(rule "PA11_NC_CH4 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PA11_NC_CH4' || B.NetName == 'PA11_NC_CH4'"))
 
-(rule "NC-net pads zero hole clearance"
-    (constraint hole_clearance (min 0mm))
-    (condition "A.NetName =~ '.*_NC_.*' || B.NetName =~ '.*_NC_.*'"))
+# === PA12 NC ===
+(rule "PA12_NC_CH1 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PA12_NC_CH1' || B.NetName == 'PA12_NC_CH1'"))
+(rule "PA12_NC_CH2 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PA12_NC_CH2' || B.NetName == 'PA12_NC_CH2'"))
+(rule "PA12_NC_CH3 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PA12_NC_CH3' || B.NetName == 'PA12_NC_CH3'"))
+(rule "PA12_NC_CH4 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PA12_NC_CH4' || B.NetName == 'PA12_NC_CH4'"))
+
+# === PB3 NC ===
+(rule "PB3_NC_CH1 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PB3_NC_CH1' || B.NetName == 'PB3_NC_CH1'"))
+(rule "PB3_NC_CH2 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PB3_NC_CH2' || B.NetName == 'PB3_NC_CH2'"))
+(rule "PB3_NC_CH3 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PB3_NC_CH3' || B.NetName == 'PB3_NC_CH3'"))
+(rule "PB3_NC_CH4 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PB3_NC_CH4' || B.NetName == 'PB3_NC_CH4'"))
+
+# === PB5 NC ===
+(rule "PB5_NC_CH1 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PB5_NC_CH1' || B.NetName == 'PB5_NC_CH1'"))
+(rule "PB5_NC_CH2 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PB5_NC_CH2' || B.NetName == 'PB5_NC_CH2'"))
+(rule "PB5_NC_CH3 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PB5_NC_CH3' || B.NetName == 'PB5_NC_CH3'"))
+(rule "PB5_NC_CH4 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PB5_NC_CH4' || B.NetName == 'PB5_NC_CH4'"))
+
+# === PB7 NC ===
+(rule "PB7_NC_CH1 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PB7_NC_CH1' || B.NetName == 'PB7_NC_CH1'"))
+(rule "PB7_NC_CH2 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PB7_NC_CH2' || B.NetName == 'PB7_NC_CH2'"))
+(rule "PB7_NC_CH3 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PB7_NC_CH3' || B.NetName == 'PB7_NC_CH3'"))
+(rule "PB7_NC_CH4 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PB7_NC_CH4' || B.NetName == 'PB7_NC_CH4'"))
+
+# === PF0 NC ===
+(rule "PF0_NC_CH1 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PF0_NC_CH1' || B.NetName == 'PF0_NC_CH1'"))
+(rule "PF0_NC_CH2 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PF0_NC_CH2' || B.NetName == 'PF0_NC_CH2'"))
+(rule "PF0_NC_CH3 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PF0_NC_CH3' || B.NetName == 'PF0_NC_CH3'"))
+(rule "PF0_NC_CH4 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PF0_NC_CH4' || B.NetName == 'PF0_NC_CH4'"))
+
+# === PF1 NC ===
+(rule "PF1_NC_CH1 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PF1_NC_CH1' || B.NetName == 'PF1_NC_CH1'"))
+(rule "PF1_NC_CH2 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PF1_NC_CH2' || B.NetName == 'PF1_NC_CH2'"))
+(rule "PF1_NC_CH3 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PF1_NC_CH3' || B.NetName == 'PF1_NC_CH3'"))
+(rule "PF1_NC_CH4 clearance" (constraint clearance (min 0mm)) (condition "A.NetName == 'PF1_NC_CH4' || B.NetName == 'PF1_NC_CH4'"))
 
 # Future per-class rules (placeholder for HV creepage, diff-pair gap, etc):
 
