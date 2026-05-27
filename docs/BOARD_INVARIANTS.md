@@ -22,6 +22,7 @@ Any PR changing this hash WITHOUT explicit "invariant-change" PR title = REJECT.
   - In6.Cu→In7.Cu prepreg: 0.075 mm (NEW pair)
   - In7.Cu→In8.Cu core: 0.15 mm (NEW pair)
   - In8.Cu→B.Cu prepreg: 0.10 mm (symmetric to F.Cu side)
+  - **In8.Cu DUAL-USE** (lock 2026-05-27, worker R22 catch during CH1 STEP 4 VMOTOR_CH routing): primarily signal-overflow (PWM stragglers + low-current control signals per STAGE0_10L_LAYER_MAP); ADDITIONALLY hosts per-channel VMOTOR_CHn LOCAL pours in FET regions (x≈4-16 for CH1, mirror per channel). VMOTOR_CHn is the per-channel post-Hall-sense rail (separated from +VMOTOR by R34 0R bridge in S3 supervisor). Local pour avoids surface-pour overlap conflicts on F.Cu/B.Cu in dense FET region; provides ~0.4nH bypass-loop physics per Bogatin Ch.5 for HS-FET bypass caps C62-70 (CH1) + mirror sets for CH2/3/4. R34 bridge vias In8↔In5 routed at S3 STEP 1.
   - Total: 1.6 mm 10L (JLC standard) — copper 9×35µm (1oz) + 1×70µm (3oz In5 +VMOTOR) + 4×100µm prepreg + 4×75µm prepreg + 4×150µm core = ~1.6mm
   - Loop-L preservation: F.Cu→In1 = 0.10mm UNCHANGED → STEP 6 measured 0.1953nH/phase still valid + B.Cu→In7 (new) = 0.285mm (improved from 8L 0.335mm) → LS-side loop-L slightly better
   - EMI shield: BEMF (In4) now bracketed by In3 GND + In5 +VMOTOR (was In1 GND + In3 +VMOTOR in 8L); In5 +VMOTOR provides capacitive shield (favorable since SW switches against VMOTOR)
