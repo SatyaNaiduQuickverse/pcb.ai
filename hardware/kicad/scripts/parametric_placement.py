@@ -1,4 +1,29 @@
 #!/usr/bin/env python3
+# ─── DESYNC WARNING 2026-05-27 (worker R22 catch + lock, PR #197) ───────────
+# This module's COMPUTED positions DESYNC from validated R1-transplant placement
+# on the live .kicad_pcb (originally on phase4v3-stage1-ch1-on-10L branch,
+# merged to master). For any coord work (anchors, audits, layer-overlap
+# computations, via-array geometry):
+#
+#   ALWAYS EXTRACT FROM LIVE .kicad_pcb (source of truth)
+#   NEVER copy numerical positions from this module
+#
+# Concrete example of the desync:
+#   parametric_placement.ch_fet_anchors('CH1') → Q6 at (30, 54) row-pitch 12mm
+#   live pcbai_fpv4in1.kicad_pcb              → Q6 at (8.4, 58.4) row-pitch 13mm
+#
+# This module is KEPT because its ALGORITHMS (mirror_x/mirror_y/transform
+# generators, sub-zone definitions, parameter relationships) are correct and
+# remain useful for future re-placement work. Only the absolute numerical
+# anchors are stale.
+#
+# A PR #196 sub-agent used parametric coords to anchor SHUNT_ANCHORS and
+# produced wrong-base values; worker caught via R22 (extract-from-canonical
+# verification). PR #197 corrected with live-extracted coords.
+#
+# See: [[reference-parametric-placement-desync-trap]] +
+#      docs/MASTER_PARAMETRIC_DESYNC.md (3-way verification pattern).
+# ────────────────────────────────────────────────────────────────────────────
 """parametric_placement.py — eagle's-eye SSoT for ALL placement coords.
 
 Per Sai 2026-05-26 directive: top-down + parametric + routing-aware + bilateral
