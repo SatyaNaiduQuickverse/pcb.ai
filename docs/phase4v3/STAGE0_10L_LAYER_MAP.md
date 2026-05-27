@@ -17,7 +17,7 @@ scripts must use, and the **8L→10L remap** that breaks 8L-hardcoded assumption
 | 12        | In5.Cu | +VMOTOR 3oz | +VMOTOR ≥280A bus — **MOVED from In3 (8L)**           |
 | 14        | In6.Cu | signal 1oz  | SW inner escape (OQ-017) — **was In4 in 8L**          |
 | 16        | In7.Cu | GND 1oz     | **NEW** GND plane #3 — brackets In6 + In8             |
-| 18        | In8.Cu | signal 1oz  | **NEW** PWM_IN stragglers + low-current overflow      |
+| 18        | In8.Cu | signal 1oz  | **NEW** PWM_IN stragglers + low-current overflow + per-channel VMOTOR_CHn local pours in FET regions (CH1-4) |
 | 2         | B.Cu   | signal 1oz  | LS FETs, bulk caps, status LEDs                       |
 
 Note: all copper layers are **signal-typed** in the .kicad_pcb (DSN-export compat per
@@ -35,6 +35,7 @@ Plane-ness is by convention/descriptor, not the KiCad layer type, until Phase 5c
 | **SW escape**   | **In4 (10)**    | **In6 (14)**     | SW escape layer moved 10→14             |
 | escape / fan-in | (none / In2 ad-hoc) | In2 (6) dedicated | NEW dedicated escape layer          |
 | overflow signal | (none)          | In8 (18)         | NEW — PWM_IN straggler capacity         |
+| VMOTOR_CHn rail | (none)          | In8 (18) local   | NEW — per-channel local pour in FET region (x≈4-35 CH1, mirror per ch); VMOTOR_CH≠+VMOTOR until R34 (S3). Master-approved 2026-05-27 |
 
 Net routing capacity: 8L signal layers {F(0),In2(6),In4(10),In6(14),B(2)} = 4 inner+2 outer
 effective 4 → 10L signal {F(0),In2(6),In4(10 BEMF),In6(14),In8(18),B(2)} + In4 dedicated BEMF
