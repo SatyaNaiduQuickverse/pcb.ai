@@ -37,6 +37,7 @@ AUDIT_TAKES_BOARD = {
     "audit_fos_current.py", "audit_fos_pin_current.py",
     "audit_fos_cap_voltage.py", "audit_fos_cap_ripple.py",
     "audit_fos_thermal.py", "audit_bom_lcsc.py",
+    "audit_hdi_via_in_pad.py",
 }
 
 # Audits that DON'T need board (read lockfile / docs only)

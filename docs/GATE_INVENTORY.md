@@ -100,6 +100,7 @@ Sai-eye-catch waiting to happen. Build the gate BEFORE the error.
 | G_D2 memory file index sync | 🔴 | TODO audit_memory_index | every memory file has MEMORY.md row |
 | G_D3 audit-validation row sync | 🔴 | TODO audit_validation_index | every audit_*.py has truth-table row |
 | G_D4 R-rule three-artifact check | ✅ | audit_meta.py | every R-rule has fix-script + audit-fn + master-verified |
+| G_HDI_VIA_IN_PAD | ✅ | audit_hdi_via_in_pad | HDI via-in-pad whitelist J18/J19 only (cost-envelope guard; Sai 2026-05-27 +$2-3/board lock) |
 
 ## Build priority (catches likely in Stage 2 CH1)
 
