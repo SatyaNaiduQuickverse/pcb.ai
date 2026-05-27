@@ -30,6 +30,10 @@ PASS criteria:
 FAIL criteria:
   - Any HDI via outside J18/J19 SMD pads (cost scope creep).
   - HDI via inside a non-whitelist footprint's SMD pad.
+  - v7 (worker R22 #4 on v6): any via tagged VIATYPE_MICROVIA whose layer
+    span is NOT adjacent (F.Cu↔In1.Cu or B.Cu↔In8.Cu). JLC HDI Class 2
+    spec restricts microvia to single laser-drill adjacent-layer pairs;
+    longer spans must emit as through-vias (no MICROVIA tag).
 
 Usage:
   python3 audit_hdi_via_in_pad.py <board.kicad_pcb>
@@ -111,7 +115,18 @@ def main():
     # Scan all vias
     fails_in_pad_nonwhitelist = []  # via inside a non-whitelist pad bbox
     fails_hdi_outside_whitelist = []  # microvia outside any J18/J19 pad
+    fails_microvia_span = []  # v7: MICROVIA tag on non-adjacent span
     pass_count = 0  # vias correctly in J18/J19 pads
+
+    # v7: adjacent-layer pairs allowed for VIATYPE_MICROVIA tag (JLC HDI
+    # Class 2 single laser-drill spec). Anything longer is a through-via
+    # masquerading as microvia and must be re-emitted as VIATYPE_THROUGH.
+    ADJACENT_MICROVIA_PAIRS = {
+        (pcbnew.F_Cu, pcbnew.In1_Cu),
+        (pcbnew.In1_Cu, pcbnew.F_Cu),
+        (pcbnew.B_Cu, pcbnew.In8_Cu),
+        (pcbnew.In8_Cu, pcbnew.B_Cu),
+    }
 
     for t in b.GetTracks():
         if not isinstance(t, pcbnew.PCB_VIA):
@@ -129,6 +144,21 @@ def main():
         except Exception:
             is_microvia_tag = False
         is_hdi = (drill_mm <= HDI_DRILL_MAX_MM) or is_microvia_tag
+
+        # v7: span check — any VIATYPE_MICROVIA must be adjacent-layer.
+        if is_microvia_tag:
+            try:
+                L_top = t.TopLayer()
+                L_bot = t.BottomLayer()
+                if (L_top, L_bot) not in ADJACENT_MICROVIA_PAIRS:
+                    fails_microvia_span.append(
+                        (vx, vy, L_top, L_bot, drill_mm)
+                    )
+            except Exception:
+                # Can't read layer pair — conservatively flag as non-adjacent
+                fails_microvia_span.append(
+                    (vx, vy, -1, -1, drill_mm)
+                )
 
         # Only HDI vias are subject to this audit. Standard 0.3mm-drill
         # vias on pads are pre-existing routing convention and don't
@@ -187,8 +217,20 @@ def main():
     if len(fails_hdi_outside_whitelist) > 20:
         print(f"  ... and {len(fails_hdi_outside_whitelist) - 20} more")
 
+    # v7: microvia span report
+    print(f"")
+    print(f"MICROVIA-tagged vias with non-adjacent layer span (FAIL, v7): "
+          f"{len(fails_microvia_span)}")
+    for (vx, vy, Lt, Lb, drill) in fails_microvia_span[:20]:
+        print(f"  - microvia @({vx:.3f},{vy:.3f}) drill={drill:.3f} "
+              f"layer-pair=({Lt},{Lb}) — NOT adjacent (JLC HDI Class 2 "
+              f"violation; emit as VIATYPE_THROUGH instead)")
+    if len(fails_microvia_span) > 20:
+        print(f"  ... and {len(fails_microvia_span) - 20} more")
+
     total_fails = (len(fails_in_pad_nonwhitelist)
-                   + len(fails_hdi_outside_whitelist))
+                   + len(fails_hdi_outside_whitelist)
+                   + len(fails_microvia_span))
     if total_fails == 0:
         print(f"\n✅ PASS — all HDI via-in-pad placements on whitelist "
               f"({HDI_VIA_IN_PAD_WHITELIST}); cost envelope preserved.")
