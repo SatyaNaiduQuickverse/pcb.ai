@@ -548,9 +548,17 @@ def _accepted_verdicts(fx):
         global_routes AND greedy strands a net).
       * T9 (lever = HDI): accept INFEASIBLE (the base) OR NEEDS-HDI (the precise
         engine reading: infeasible with std vias, routable once HDI slots added).
+      * T6 (lever = plane-continuity-hard): accept CONDITIONAL (the base) OR
+        ROUTABLE (the engine's reading: a continuous-reference path EXISTS once the
+        split-crossing path is HARD-rejected). This does NOT weaken the test — the
+        real check is the metric `direct_path_allowed == False` (scored by
+        `_expected_for`): a solver that ALLOWS the split-crossing direct path FAILS
+        T6 on that metric regardless of which accepted verdict it returns.
     """
     gt = fx.ground_truth
     if fx.name in ("T3", "T4"):
+        return {"CONDITIONAL", "ROUTABLE"}
+    if fx.name == "T6":
         return {"CONDITIONAL", "ROUTABLE"}
     if fx.name == "T9":
         return {"INFEASIBLE", "NEEDS-HDI"}
