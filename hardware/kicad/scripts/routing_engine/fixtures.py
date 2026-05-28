@@ -1160,17 +1160,119 @@ def _build_T11():
 
 
 # ----------------------------------------------------------------------------
+# T13 — LONG-PATH-THROUGH-OBSTACLES (stretch). Appended by Engine Step 8b-ext
+# lever (b) — the maze-router (bounded A*) ground-truth case. Different from
+# T9/T10 escape (the cooperative router's bread-and-butter): this one's
+# bottleneck is FREE-SPACE NAVIGATION past component bodies over ~20mm. The
+# cooperative router thrashes (its negotiated-congestion model assumes the
+# bottleneck is via slots); a bounded-A* maze on a fine signal grid shines.
+# ----------------------------------------------------------------------------
+
+def _build_T13():
+    """T13 — LONG-PATH-THROUGH-OBSTACLES (stretch).
+
+    Construction: ONE critical net from S=(0,7) to E=(20,7), both on F.Cu. Three
+    body keep-outs are placed across the direct line — TWO with the gap BELOW
+    (y>=2), ONE with the gap ABOVE (y<=13). The direct y=7 line crosses all
+    three; the only feasible route weaves up-over / down-under / up-over them
+    (a multi-bend ~58mm detour), provable by hand:
+
+        obs1: x in [4,6],   y in [2,15]  (gap BELOW y=2)
+        obs2: x in [9,11],  y in [0,13]  (gap ABOVE y=13)
+        obs3: x in [14,16], y in [2,15]  (gap BELOW y=2)
+
+    Why the cooperative router stalls and the maze wins (the case this fixture
+    GATES, ROUTING_METHODOLOGY §0b):
+      * cooperative: negotiated congestion on via slots; no via supply here =>
+        the rip-up budget burns on dead-end pushes; iterations exhaust.
+      * maze (bounded A*): octilinear grid search over free space; clearance +
+        plane-continuity HARD; the multi-bend detour is the natural shortest
+        octilinear path, found within a small expansion budget.
+
+    Ground truth: ROUTABLE with a single witness path. Encoded:
+        path = [(0,7),(0,1),(7.5,1),(7.5,14),(12.5,14),(12.5,1),(20,1),(20,7)]
+    Hand-verifiable (each leg clears every obstacle by >= 0.3mm; total length =
+    58mm; 6 right-angle bends; 0 vias). Self-check confirms the witness is valid
+    (every leg clears every body AABB inflated by the trace + clearance margin)
+    AND the direct y=7 line DOES intersect each body (proving the bend topology
+    is forced, not cosmetic).
+    """
+    layers = (Layer("F.Cu", "signal"), Layer("In1", "plane", "GND"))
+    pins = [Pin("LP_S", 0.0, 7.0, "F.Cu"), Pin("LP_E", 20.0, 7.0, "F.Cu")]
+    nets = [Net("LP", ("LP_S", "LP_E"), "signal")]
+    # Three body keep-outs forcing a multi-bend octilinear detour.
+    obstacles = (
+        Obstacle("BODY_1", 4.0,  2.0,  6.0, 15.0, kind="body"),   # gap BELOW
+        Obstacle("BODY_2", 9.0,  0.0, 11.0, 13.0, kind="body"),   # gap ABOVE
+        Obstacle("BODY_3", 14.0, 2.0, 16.0, 15.0, kind="body"),   # gap BELOW
+    )
+    # Witness path (octilinear; uses only 90° bends so the hand-derivation stays
+    # closed-form). The maze router will likely find a SHORTER octilinear-45°
+    # path; the witness just PROVES routability + bounds.
+    witness_path = [(0.0, 7.0), (0.0, 1.0), (7.5, 1.0), (7.5, 14.0),
+                    (12.5, 14.0), (12.5, 1.0), (20.0, 1.0), (20.0, 7.0)]
+    witness_length = sum(
+        ((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5
+        for a, b in zip(witness_path, witness_path[1:]))
+    witness_corners = sum(
+        1 for i in range(1, len(witness_path) - 1)
+        if (witness_path[i][0] - witness_path[i - 1][0],
+            witness_path[i][1] - witness_path[i - 1][1])
+        != (witness_path[i + 1][0] - witness_path[i][0],
+            witness_path[i + 1][1] - witness_path[i][1]))
+    # Min path length is the L-shaped wrap around the tightest obstacle: any
+    # routable path MUST detour at least 2×(min_y_gap below + min_y_gap above) +
+    # horizontal span; a conservative lower bound is the horizontal span 20mm.
+    # A tighter bound: any path crossing x=10 must reach y<=0-0.3 OR y>=13+0.3 =>
+    # the integral of |dy/dx| forces total path length > 20mm + 2×(13-7) - small
+    # margins. We declare a SAFE lower bound 20mm (every routable path >=20mm).
+    gt = GroundTruth(
+        verdict="ROUTABLE",
+        metrics={
+            "routed": 1,
+            "min_length_mm": 20.0,          # lower bound (horizontal span)
+            "max_n_corners": 12,            # upper bound: the maze should not
+                                             # generate >12 bends in this region
+            "max_n_vias": 0,                # single layer => no vias needed
+            "witness_length_mm": round(witness_length, 4),
+            "witness_n_corners": witness_corners,
+            "direct_line_blocked": True,    # the direct y=7 line crosses bodies
+        },
+        witness={"path": witness_path,
+                 "trace_width_mm": 0.20,
+                 "clearance_mm": 0.20},
+    )
+    proof = (
+        "T13 (long-path through obstacles; the maze-router gate). The direct "
+        "line (0,7)→(20,7) crosses three body keep-outs at x in {4..6, 9..11, "
+        "14..16} (each obstacle spans y=7 by construction). The witness path "
+        "weaves down-under obs1+3 (y=1) and up-over obs2 (y=14), clearing every "
+        "AABB by ≥0.3mm (= trace 0.10 + clearance 0.20mm margin). Total witness "
+        f"length {witness_length:.2f}mm with {witness_corners} bends and 0 vias. "
+        "Self-check asserts: (a) the witness path clears every body inflated by "
+        "0.3mm; (b) the witness endpoints match the pin coords; (c) the direct "
+        "y=7 line DOES intersect each body (forcing the detour topology); (d) "
+        "all witness segments are octilinear (axis or 45° diagonal) — no acute "
+        "angles."
+    )
+    return Fixture("T13", "long-path through obstacles (maze gate)", "stretch",
+                   "bounded-A* maze on free-space navigation past body keep-outs",
+                   layers, tuple(pins), tuple(nets), (), obstacles, (), gt, proof)
+
+
+# ----------------------------------------------------------------------------
 # Registry
 # ----------------------------------------------------------------------------
 
 _BUILDERS = [
     _build_T1, _build_T2, _build_T3, _build_T4, _build_T5,
     _build_T6, _build_T7, _build_T8, _build_T9, _build_T10, _build_T11,
+    _build_T13,
 ]
 
 
 def all_fixtures():
-    """Return the 9 fixtures T1..T9 in difficulty-build order."""
+    """Return the registered fixtures (T1..T11 + T13; T12 added in parallel)."""
     return [b() for b in _BUILDERS]
 
 

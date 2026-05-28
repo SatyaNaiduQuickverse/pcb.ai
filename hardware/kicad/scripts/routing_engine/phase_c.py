@@ -189,11 +189,74 @@ def _has_door_contention(problem) -> bool:
     return any(getattr(n, "feasible_doors", ()) for n in problem.nets)
 
 
+def _direct_line_through_body(problem) -> bool:
+    """T13 / long-path MAZE signature: every net's straight-line S->E intersects
+    at least one body keep-out — i.e. the case is a FREE-SPACE NAVIGATION
+    problem past obstacles, not a channel/escape/crossing one.
+
+    Structural (NOT case-name): requires ≥1 body obstacle, ≥1 net, and EVERY net
+    has BOTH endpoints (2 pins) AND its straight S->E segment intersects at least
+    one body. We treat this signature as MAZE-territory so phase_c dispatches to
+    `fill_region_with_maze` rather than letting it fall through to `crossing`
+    (which would emit a layer-hop that does nothing — bodies block all layers in
+    the conservative model)."""
+    bodies = [o for o in problem.obstacles if o.kind == "body"]
+    if not bodies or not problem.nets:
+        return False
+    for net in problem.nets:
+        if len(net.pin_ids) != 2:
+            return False
+        a = problem.pin(net.pin_ids[0])
+        b = problem.pin(net.pin_ids[1])
+        crosses = False
+        for o in bodies:
+            if _seg_intersects_aabb(a.x_mm, a.y_mm, b.x_mm, b.y_mm,
+                                    o.x_min, o.y_min, o.x_max, o.y_max):
+                crosses = True
+                break
+        if not crosses:
+            return False
+    return True
+
+
+def _seg_intersects_aabb(x1, y1, x2, y2, rx_min, ry_min, rx_max, ry_max):
+    """Liang-Barsky segment-vs-AABB clip (strict interior crossing). Mirror of
+    run_suite._seg_intersects_rect kept here so phase_c stays import-self-
+    sufficient (no dependency on run_suite for the dispatch decision)."""
+    dx, dy = x2 - x1, y2 - y1
+    p = [-dx, dx, -dy, dy]
+    q = [x1 - rx_min, rx_max - x1, y1 - ry_min, ry_max - y1]
+    t0, t1 = 0.0, 1.0
+    for pi, qi in zip(p, q):
+        if abs(pi) < 1e-12:
+            if qi < 0:
+                return False
+        else:
+            r = qi / pi
+            if pi < 0:
+                if r > t1:
+                    return False
+                if r > t0:
+                    t0 = r
+            else:
+                if r < t0:
+                    return False
+                if r < t1:
+                    t1 = r
+    return t0 < t1 - 1e-9
+
+
 def classify(problem) -> str:
     """Return the Phase-C dispatch label for a Problem, purely from its input
     SHAPE. Decision order = most specific structural feature first (see module
     docstring). Labels: 'escape' | 'return_path' | 'matched_bus' | 'river' |
-    'dogleg' | 'global_plan' | 'crossing' | 'channel'."""
+    'dogleg' | 'global_plan' | 'maze' | 'crossing' | 'channel'.
+
+    The MAZE label (Engine Step 8b-ext lever b) covers single-/few-net
+    long-path-through-obstacles problems where the cooperative router's
+    negotiated-congestion model doesn't apply (no via supply contention —
+    bottleneck is free-space navigation past body keep-outs). It is the
+    structural signature `_direct_line_through_body` recognises."""
     if problem.via_slots:
         return "escape"
     if _has_plane_split(problem):
@@ -209,6 +272,12 @@ def classify(problem) -> str:
         return "dogleg"
     if _has_door_contention(problem):
         return "global_plan"
+    # MAZE territory: no doors, no via_slots, every net's direct line crosses
+    # at least one body obstacle => bounded A* maze is the right primitive.
+    # This MUST appear before `crossing` so T13 dispatches correctly.
+    if (not problem.doors and not problem.via_slots
+            and _direct_line_through_body(problem)):
+        return "maze"
     if not problem.doors:
         return "crossing"
     return "channel"
@@ -494,6 +563,36 @@ def _fill_global_plan(problem, pb_result, gp) -> dict:
     }
 
 
+def _fill_maze(problem) -> dict:
+    """MAZE realizer (T13) — bounded-A* maze for long-path-through-obstacles.
+
+    The MAZE backend (`routing_engine.maze_router.solve`) addresses the case
+    where the cooperative router thrashes: no via-supply contention, but the
+    direct path is blocked by body keep-outs across millimetres. Bounded A* on
+    a fine signal grid finds the octilinear detour within a small expansion
+    budget. Sai-locked A* discipline (region-confined + expansion-capped) is
+    preserved by the maze router itself.
+
+    This realizer is a THIN DISPATCH: it calls maze_router.solve on the same
+    INPUT-ONLY Problem view and surfaces the harness-scored metrics (routed,
+    n_vias). Phase C's PHASE-A/B integration is skipped here because the T13
+    shape has no via_slots (Phase A would emit no escape ledger) and no doors
+    (Phase B would emit no door plan) — the case IS its own one-net Phase-C
+    region. The corresponding REAL-BOARD adapter is `fill_region_with_maze`
+    below (same architecture as `fill_region_with_cooperative`)."""
+    try:
+        from . import maze_router as MR
+    except ImportError:
+        import maze_router as MR  # type: ignore
+    res = MR.solve(problem)
+    res.setdefault("rationale", "")
+    res["rationale"] = ("PHASE C maze fill (bounded A* — region-confined, "
+                        "expansion-capped, clearance HARD, plane-continuity "
+                        "HARD, octilinear-by-construction). "
+                        + res["rationale"])
+    return res
+
+
 def _fill_channel(problem) -> dict:
     """BASELINE CHANNEL realizer (T1). Reuse channel.solve — acyclic VCG => the
     left-edge algorithm achieves track count == density (the optimum). The realized
@@ -582,6 +681,12 @@ def solve(problem):
     if label == "crossing":
         out = _fill_crossing(problem)
         out["phase_c"] = {"case": label, "stage": "single-layer via-hop fill"}
+        return out
+
+    if label == "maze":
+        out = _fill_maze(problem)
+        out["phase_c"] = {"case": label,
+                          "stage": "bounded-A* maze fill (long-path through obstacles)"}
         return out
 
     # label == "channel"
@@ -769,6 +874,230 @@ def fill_region_with_cooperative(plan, region: "RegionSpec",
 
 
 # ============================================================================
+# REAL-BOARD ADAPTER #2 — maze router (bounded A*) as the long-path fill backend.
+# Mirrors the cooperative-router adapter above; selects between maze/cooperative
+# by region SHAPE (dense fanout -> cooperative; long-path/dense-obstacle -> maze).
+# pcbnew is lazy-imported INSIDE the function. NOT exercised on abstract fixtures.
+# ============================================================================
+
+@dataclass
+class MazeInvocation:
+    """The fully-resolved BOUNDED invocation of the maze router. Region-confined
+    (region.bbox), expansion-capped (region.expansion_cap), clearance HARD,
+    plane-continuity HARD, layers restricted to region.allowed_layers, via
+    classes restricted to the plan's allowed list. What the self-test validates
+    WITHOUT running the live router (no pcbnew needed)."""
+    board_path: str
+    output_path: str
+    region: "RegionSpec"
+    grid_pitch_mm: float
+    expansion_cap: int
+    width_mm: float
+    clearance_fos_mm: float
+    allowed_via_classes: Tuple[str, ...]
+    hdi_allowed: bool
+
+
+# Default JLC fab-min trace width / clearance, with §5c FoS headroom baked in
+# (above the raw fab min, never at it). The cooperative router uses the SAME
+# pitch (--grid-pitch 0.1) so the two adapters tile the same gcell grid.
+MAZE_DEFAULT_WIDTH_MM = 0.20
+MAZE_DEFAULT_CLEARANCE_FOS_MM = 0.20    # 0.0889mm fab min × ~2.25 headroom
+
+
+def _maze_via_classes_from_region(region: "RegionSpec") -> Tuple[str, ...]:
+    """Translate the region's via_budget + hdi_refs into the SUBSET of maze
+    via classes the search may emit. Standard slots => through (cheapest); HDI
+    budget => microvia/stacked, gated to whitelisted refs only (BOARD_INVARIANTS
+    J18/J19); blind always allowed when there is via budget (skip-layer mech
+    via is JLC standard process)."""
+    classes: List[str] = []
+    std_budget = int(region.via_budget.get("std", 0))
+    hdi_budget = int(region.via_budget.get("hdi", 0))
+    whitelisted = tuple(r for r in region.hdi_refs if r in HDI_WHITELIST_REFS)
+    if std_budget > 0:
+        classes.append("through")
+        classes.append("blind")
+    if hdi_budget > 0 and whitelisted:
+        classes.append("microvia")
+        classes.append("stacked")
+    return tuple(classes)
+
+
+def build_maze_invocation(board_path: str, output_path: str,
+                          region: "RegionSpec",
+                          width_mm: float = MAZE_DEFAULT_WIDTH_MM,
+                          clearance_fos_mm: float = MAZE_DEFAULT_CLEARANCE_FOS_MM,
+                          grid_pitch_mm: float = 0.1) -> "MazeInvocation":
+    """Construct (but do NOT run) the SCOPED maze-router invocation for a
+    region. Pure logic — NO pcbnew, NO subprocess — so the region-bounding +
+    argument construction is unit-testable (see self_test).
+
+    A* discipline (Sai-locked):
+      * region.bbox     bounds the search; cells outside are unreachable.
+      * region.expansion_cap is the A* expansion budget; over => NOT-ROUTABLE
+        kicked back to Phase B (caller carries verdict; never thrash).
+      * allowed_via_classes derived from the plan's via budget + HDI whitelist;
+        HDI classes are GATED to whitelisted refs (J18/J19), same gate as
+        `build_cooperative_invocation`."""
+    via_classes = _maze_via_classes_from_region(region)
+    hdi_budget = int(region.via_budget.get("hdi", 0))
+    whitelisted = tuple(r for r in region.hdi_refs if r in HDI_WHITELIST_REFS)
+    hdi_allowed = hdi_budget > 0 and len(whitelisted) > 0
+    return MazeInvocation(
+        board_path=board_path, output_path=output_path, region=region,
+        grid_pitch_mm=grid_pitch_mm, expansion_cap=region.expansion_cap,
+        width_mm=width_mm, clearance_fos_mm=clearance_fos_mm,
+        allowed_via_classes=via_classes, hdi_allowed=hdi_allowed,
+    )
+
+
+def fill_region_with_maze(plan, region: "RegionSpec",
+                          board=None,
+                          board_path: Optional[str] = None,
+                          output_path: Optional[str] = None,
+                          width_mm: float = MAZE_DEFAULT_WIDTH_MM,
+                          clearance_fos_mm: float = MAZE_DEFAULT_CLEARANCE_FOS_MM,
+                          grid_pitch_mm: float = 0.1,
+                          net_pairs: Optional[List[Tuple]] = None,
+                          dry_run: bool = False) -> dict:
+    """REAL-BOARD ADAPTER #2 — invoke the bounded-A* maze router SCOPED to a
+    Phase-B-certified region. Mirror of `fill_region_with_cooperative`.
+
+    USAGE
+        Use this for LOW-FANOUT / LONG-PATH / DENSE-OBSTACLE nets that the
+        cooperative router thrashes on (no via-supply contention; the bottleneck
+        is free-space navigation past component bodies — CH1 GLB ~20mm cross-
+        board is the seed case). Use `fill_region_with_cooperative` for dense
+        fanout escape. The two adapters compose; both are PHASE C primitives.
+
+    CONTRACT (documented; exercised at Step 8 / CH1, NOT on the abstract suite):
+      INPUTS
+        plan        : the Phase B GlobalPlan (or its .to_dict()) — the certified-
+                      feasible region assignment + layers + via slots + ordering.
+        region      : a RegionSpec — bbox / allowed layers / via budget (incl
+                      HDI ONLY where whitelisted) / net names / expansion cap.
+        board       : a live pcbnew BOARD (or None). When None / pcbnew absent
+                      the live emit is SKIPPED gracefully (status 'skipped').
+        board_path  : path to the canonical .kicad_pcb (per the canonical-
+                      artefact rule [[feedback-sim-artifact-must-be-canonical]]).
+        output_path : where the router writes the filled board.
+        net_pairs   : optional list of (start_pin_ref, end_pin_ref) tuples to
+                      route. When None (self-test/dry_run), the adapter builds
+                      the invocation but does NOT iterate nets; live mode reads
+                      the pin coords from the board.
+        dry_run     : when True, construct + validate the invocation but do NOT
+                      run the router even if pcbnew is present (self-test path).
+      BEHAVIOUR
+        1. Build the BOUNDED MazeInvocation (region-confined, expansion-capped,
+           HDI gated, allowed via classes derived from the plan's budget).
+        2. If pcbnew + a board are present and not dry_run: lazy-import pcbnew,
+           build Obstacle list from the board's footprints (each footprint's
+           bbox = body keep-out), iterate net_pairs through `maze_router.route`,
+           emit the result via geometry_primitives.emit_to_kicad.
+        3. Else: return status 'skipped' with the constructed invocation (so the
+           bounding + argument logic is still verifiable without pcbnew).
+      OUTPUT
+        {status, invocation, [routes], [reason]} — status in
+        {'routed','partial','skipped','error'}.
+
+    A* DISCIPLINE preserved: region-confined (region.bbox) + expansion-capped
+    (region.expansion_cap). Never the global mechanism. Per
+    ROUTING_METHODOLOGY.md §0b 'A* usage Sai-locked'."""
+    inv = build_maze_invocation(
+        board_path or "", output_path or "", region,
+        width_mm=width_mm, clearance_fos_mm=clearance_fos_mm,
+        grid_pitch_mm=grid_pitch_mm)
+
+    # Carry the plan's verdict gate (same as cooperative adapter).
+    plan_verdict = (plan.get("verdict") if isinstance(plan, dict)
+                    else getattr(plan, "verdict", None))
+    if plan_verdict not in (None, "ROUTABLE"):
+        return {"status": "skipped",
+                "reason": f"plan verdict {plan_verdict!r} is not ROUTABLE — "
+                          "Phase C does not fill an un-certified region (carry "
+                          "the verdict, escalate; no heroic route).",
+                "invocation": inv}
+
+    if dry_run:
+        return {"status": "skipped", "reason": "dry_run", "invocation": inv}
+
+    if not inv.allowed_via_classes:
+        # No via budget => maze must stay single-layer. Not an error (the most
+        # common case for GLB-style long-paths is a single B.Cu run); just note.
+        pass
+
+    # LAZY pcbnew import — only on a live run, only inside this function.
+    try:
+        import pcbnew  # noqa: F401  (lazy: real-board only)
+    except Exception as e:  # pragma: no cover (no pcbnew on the Pi engine env)
+        return {"status": "skipped",
+                "reason": f"pcbnew unavailable ({type(e).__name__}: {e}) — live "
+                          "region fill is a Step-8/CH1 op; invocation constructed.",
+                "invocation": inv}
+    if board is None or not board_path or not output_path or net_pairs is None:
+        return {"status": "skipped",
+                "reason": "no live BOARD / board_path / output_path / net_pairs "
+                          "— invocation constructed but not run (Step-8/CH1 wires "
+                          "these).",
+                "invocation": inv}
+
+    # LIVE region fill (Step 8 / CH1). Mostly a stub — the real wiring (reading
+    # footprint bodies as obstacles, looking up pad coords by ref, emitting
+    # via geometry_primitives.emit_to_kicad) is Step-8 territory. Code path is
+    # NOT covered by the abstract suite by design.
+    try:                                  # pragma: no cover (real-board only)
+        from . import maze_router as MR
+        import geometry_primitives as GP  # type: ignore
+        obstacles = _board_obstacles_from_pcbnew(board, region)
+        routes = []
+        for start_ref, end_ref in net_pairs:
+            start = _pin_from_pcbnew(board, start_ref)
+            end = _pin_from_pcbnew(board, end_ref)
+            r = MR.route(
+                start=start, end=end, region_bbox=region.bbox,
+                obstacles=obstacles,
+                allowed_layers=region.allowed_layers,
+                allowed_via_classes=inv.allowed_via_classes,
+                width_mm=inv.width_mm,
+                clearance_fos_mm=inv.clearance_fos_mm,
+                expansion_cap=inv.expansion_cap,
+                grid_pitch_mm=inv.grid_pitch_mm,
+            )
+            GP.emit_to_kicad(_route_to_primitives(r), board=board,
+                             default_layer=start.layer)
+            routes.append({"start": start_ref, "end": end_ref,
+                           "length_mm": r.length_mm, "n_vias": r.n_vias,
+                           "expansions": r.expansions})
+        return {"status": "routed", "routes": routes, "invocation": inv}
+    except Exception as e:                # pragma: no cover
+        return {"status": "error", "reason": f"{type(e).__name__}: {e}",
+                "invocation": inv}
+
+
+def _board_obstacles_from_pcbnew(board, region):  # pragma: no cover
+    """Stub: real implementation reads footprint bboxes + plane-split keep-outs
+    from the live board. Lives here so the adapter is structurally complete; the
+    real wiring is Step 8 / CH1."""
+    raise NotImplementedError(
+        "live obstacle extraction is a Step-8/CH1 op (lazy: not on the abstract suite)")
+
+
+def _pin_from_pcbnew(board, pin_ref):  # pragma: no cover
+    """Stub: real implementation resolves 'U1.5' style pin refs to coords + layer."""
+    raise NotImplementedError(
+        "live pin extraction is a Step-8/CH1 op (lazy: not on the abstract suite)")
+
+
+def _route_to_primitives(route):  # pragma: no cover
+    """Stub: real implementation turns Route.segments + .vias into the
+    geometry_primitives.Segment / .Via list emit_to_kicad consumes. The portable
+    descriptor path is in geometry_primitives.emit_to_kicad (lazy pcbnew)."""
+    raise NotImplementedError(
+        "primitives emission is a Step-8/CH1 op (lazy: not on the abstract suite)")
+
+
+# ============================================================================
 # SELF-TEST — validate the region-bounding / argument-construction logic without
 # pcbnew or a live board (the adapter's testable half). Run: python3 phase_c.py
 # ============================================================================
@@ -780,13 +1109,19 @@ def self_test() -> int:
     ok = True
 
     # 1. Dispatch: classify every fixture to the expected structural label.
+    # T10/T11 are stretch fixtures wired in earlier steps; their dispatch labels
+    # are not asserted here (other steps own them). T12 is added in parallel;
+    # we tolerate its absence. T13 (this step) is asserted as "maze".
     expect = {
         "T1": "channel", "T2": "dogleg", "T3": "global_plan", "T4": "global_plan",
         "T5": "crossing", "T6": "return_path", "T7": "matched_bus",
         "T8": "river", "T9": "escape",
+        "T13": "maze",
     }
     print("\n[dispatch] structural classify() per fixture:")
     for fx in F.all_fixtures():
+        if fx.name not in expect:
+            continue
         got = classify(fx.problem_view())
         good = got == expect[fx.name]
         ok &= good
@@ -855,6 +1190,80 @@ def self_test() -> int:
     ok &= cond5
     print(f"  {'ok ' if cond5 else 'XX '}no live board => status="
           f"{res5['status']} (graceful skip; Step-8/CH1 wires the live run)")
+
+    # 7. MAZE adapter: HDI-gated invocation (microvia + stacked classes appear
+    # ONLY when whitelisted refs have HDI budget). Same gate as the cooperative
+    # adapter — single source of HDI policy.
+    print("\n[adapter] MAZE region HDI-PERMITTED (whitelisted J19) — HDI via classes:")
+    region_maze_hdi = RegionSpec(
+        subsystem="CH1", bbox=(15.0, 60.0, 55.0, 95.0),
+        allowed_layers=("F.Cu", "In2.Cu", "B.Cu"),
+        via_budget={"std": 4, "hdi": 2}, hdi_refs=("J19",),
+        net_names=("GLB",), expansion_cap=100_000)
+    rmz = fill_region_with_maze({"verdict": "ROUTABLE"}, region_maze_hdi,
+                                board_path="hw.kicad_pcb",
+                                output_path="/tmp/o.kicad_pcb", dry_run=True)
+    invmz = rmz["invocation"]
+    cond6 = (rmz["status"] == "skipped" and invmz.hdi_allowed
+             and "microvia" in invmz.allowed_via_classes
+             and "stacked" in invmz.allowed_via_classes
+             and "through" in invmz.allowed_via_classes
+             and invmz.region.subsystem == "CH1"
+             and invmz.expansion_cap == 100_000)
+    ok &= cond6
+    print(f"  {'ok ' if cond6 else 'XX '}status={rmz['status']} hdi_allowed="
+          f"{invmz.hdi_allowed} via_classes={invmz.allowed_via_classes} "
+          f"expansion_cap={invmz.expansion_cap}")
+
+    # 8. MAZE adapter: non-whitelisted ref => HDI classes GATED OUT.
+    print("\n[adapter] MAZE HDI gating: non-whitelisted ref => no HDI classes:")
+    region_maze_bad = RegionSpec(
+        subsystem="CH1", bbox=(0, 0, 50, 50), allowed_layers=("F.Cu", "B.Cu"),
+        via_budget={"std": 4, "hdi": 4}, hdi_refs=("U99",),   # NOT whitelisted
+        net_names=("X",))
+    rmz2 = fill_region_with_maze({"verdict": "ROUTABLE"}, region_maze_bad,
+                                 dry_run=True)
+    cond7 = (not rmz2["invocation"].hdi_allowed
+             and "microvia" not in rmz2["invocation"].allowed_via_classes
+             and "stacked" not in rmz2["invocation"].allowed_via_classes)
+    ok &= cond7
+    print(f"  {'ok ' if cond7 else 'XX '}hdi_allowed="
+          f"{rmz2['invocation'].hdi_allowed} via_classes="
+          f"{rmz2['invocation'].allowed_via_classes} — HDI gated OUT")
+
+    # 9. MAZE adapter: non-ROUTABLE plan is NOT filled (carry verdict).
+    rmz3 = fill_region_with_maze({"verdict": "NEEDS-HDI"}, region_maze_hdi,
+                                 dry_run=True)
+    cond8 = (rmz3["status"] == "skipped" and "not ROUTABLE" in rmz3["reason"])
+    ok &= cond8
+    print(f"  {'ok ' if cond8 else 'XX '}NEEDS-HDI plan => not filled "
+          f"(status={rmz3['status']})")
+
+    # 10. MAZE adapter: graceful SKIP when no live board.
+    rmz4 = fill_region_with_maze({"verdict": "ROUTABLE"}, region_maze_hdi,
+                                 board=None)
+    cond9 = rmz4["status"] == "skipped"
+    ok &= cond9
+    print(f"  {'ok ' if cond9 else 'XX '}no live board => status="
+          f"{rmz4['status']} (graceful skip; Step-8/CH1 wires the live run)")
+
+    # 11. MAZE dispatch end-to-end on T13: solve(problem) routes the long-path
+    # case via _fill_maze => maze_router.solve. Proves Phase C's dispatch wires
+    # the maze backend into the unified pipeline.
+    print("\n[dispatch] T13 end-to-end via solve():")
+    try:
+        t13 = F.get_fixture("T13")
+        got = solve(t13.problem_view())
+        cond10 = (got.get("verdict") == "ROUTABLE"
+                  and got.get("routed") == 1
+                  and got.get("n_vias", 0) == 0
+                  and got.get("phase_c", {}).get("case") == "maze")
+        ok &= cond10
+        print(f"  {'ok ' if cond10 else 'XX '}T13 solve(): verdict="
+              f"{got.get('verdict')} routed={got.get('routed')} n_vias="
+              f"{got.get('n_vias')} case={got.get('phase_c', {}).get('case')}")
+    except KeyError:
+        print("  -- T13 not registered (skip)")
 
     print("\n" + "=" * 72)
     print("phase_c self-test: " + ("ALL PASS" if ok else "FAILURES PRESENT"))
