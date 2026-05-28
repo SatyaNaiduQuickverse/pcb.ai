@@ -85,6 +85,13 @@ T10/T11/T12 are layer-aware/multi-side/layer-aware additions to the original
 T1-T9 base (APPEND-ONLY; the original 9 are unchanged). T12 is the OQ-020
 root-fix fixture: layer-aware escape supply (plane-bottoming via classes are
 NOT counted as signal escape supply). See fixtures._build_T12 docstring.
+
+T13/T14 are further APPEND-ONLY additions (T13 = maze-router long-path gate;
+T14 = per-net whitelist preservation under std overflow, the OQ-020 T14
+root-fix fixture that locks the engine refactor where per-named-net
+blind_F_In2 supply is preserved against side-aggregate std-overflow
+consumption — canonical d4ab0f2 J19_N PWM_INHB regression). See
+fixtures._build_T13 / fixtures._build_T14 docstrings.
 """
 from __future__ import annotations
 
@@ -779,12 +786,176 @@ def _selfcheck_T12(fx, msgs):
     return ok
 
 
+def _selfcheck_T14(fx, msgs):
+    """T14 — PER-NET WHITELIST PRESERVATION UNDER STD OVERFLOW (the OQ-020 T14
+    root-fix fixture). The bug-witness is end-to-end:
+      (a) re-derive per-class supply (std + per-net hdi + plane-dropped
+          microvia + pool hdi) from the fixture INPUTS, with NO solver;
+      (b) INVOKE the engine (phase_a.escape_ledger) DIRECTLY with the
+          bug-trigger inputs (consumed_by_side={'J21_N': 3},
+          demand_by_side={'J21_N': 1}) and assert the engine reports
+          overflow_std=0, overflow_hdi=0, supply_hdi_per_net=1, verdict
+          ROUTABLE — the FIXED behaviour (preserves the per-net blind slot
+          reservation for the whitelist net against side-aggregate std
+          overflow of OTHER nets);
+      (c) RE-DERIVE the BUGGY formula on the SAME inputs and assert it
+          would compute hdi_remaining=0, overflow_hdi=1 — proving a
+          regression to the side-aggregate-overflow logic FAILS T14 (the
+          test catches the bug). This is the OQ-020 T14 lockfile.
+    """
+    # Lazy import the engine here so the selfcheck self-contains the bug-
+    # witness invocation (mirrors T9/T10/T12 pattern; the engine is the
+    # SUT for T14 specifically).
+    try:
+        from . import phase_a as _PA   # type: ignore
+    except ImportError:                # pragma: no cover — script-mode import
+        import os as _os
+        import sys as _sys
+        _here = _os.path.dirname(_os.path.abspath(__file__))
+        if _here not in _sys.path:
+            _sys.path.insert(0, _here)
+        import phase_a as _PA          # type: ignore
+    gt = fx.ground_truth
+    m = gt.metrics
+    ok = True
+    layer_role = {L.name: L.role for L in fx.layers}
+    # (a) Re-derive per-class supply from INPUTS (no engine; same pattern as
+    # T12 — confirms the layer-aware partition is faithful to the fixture).
+    std_total = sum(1 for v in fx.via_slots if not v.hdi_only)
+    hdi_signal = sum(1 for v in fx.via_slots
+                     if v.hdi_only
+                     and v.target_layer is not None
+                     and layer_role.get(v.target_layer) == "signal")
+    hdi_plane = sum(1 for v in fx.via_slots
+                    if v.hdi_only
+                    and v.target_layer is not None
+                    and layer_role.get(v.target_layer) == "plane")
+    hdi_per_net = sum(1 for v in fx.via_slots
+                      if v.hdi_only
+                      and v.via_class in _PA.PER_NET_RESERVED_VIA_CLASSES)
+    hdi_pool = hdi_signal - hdi_per_net
+    demand = len(fx.nets)
+    ok &= _assert(std_total == m["std_total"] == 2,
+                  f"re-derived std supply {std_total} == stored {m['std_total']} "
+                  "== 2 (the per-side standard fanout)", msgs)
+    ok &= _assert(hdi_signal == m["supply_hdi_signal"] == 1,
+                  f"re-derived HDI signal supply {hdi_signal} == "
+                  f"stored {m['supply_hdi_signal']} == 1 (blind F-In2 only; "
+                  "microvia F-In1 is plane-dropped by layer-awareness)", msgs)
+    ok &= _assert(hdi_per_net == m["supply_hdi_per_net"] == 1,
+                  f"re-derived per-net HDI {hdi_per_net} == "
+                  f"stored {m['supply_hdi_per_net']} == 1 (the blind_F_In2 "
+                  "slot — PER-NAMED-NET reserved class per "
+                  "phase_a.PER_NET_RESERVED_VIA_CLASSES)", msgs)
+    ok &= _assert(hdi_pool == m["supply_hdi_pool"] == 0,
+                  f"re-derived pool HDI {hdi_pool} == "
+                  f"stored {m['supply_hdi_pool']} == 0 (no generic-pool HDI "
+                  "in T14 — the whole HDI signal supply is per-net reserved)",
+                  msgs)
+    ok &= _assert(hdi_plane == m["supply_hdi_plane_DROPPED"] == 1,
+                  f"re-derived plane-bottoming HDI {hdi_plane} == "
+                  f"stored {m['supply_hdi_plane_DROPPED']} == 1 (microvia "
+                  "F-In1 — DROPPED by layer-awareness; T12 rule still fires)",
+                  msgs)
+    ok &= _assert(demand == m["demand_nets"] == 1,
+                  f"demand {demand} == stored {m['demand_nets']} == 1 (the "
+                  "residual whitelist net wl0 — for which the blind_F_In2 "
+                  "slot is reserved by construction)", msgs)
+    # (b) INVOKE the engine directly with the bug-trigger inputs and assert
+    # the FIXED behaviour (preserves per-net slot reservation). This is the
+    # canonical d4ab0f2 J19_N PWM_INHB pattern, reduced to its minimal form.
+    consumed_v = m["consumed_for_bug_witness"]
+    prob = fx.problem_view()
+    esc = _PA.escape_ledger(
+        prob,
+        demand_by_side={"J21_N": demand},
+        consumed_by_side={"J21_N": consumed_v},
+    )
+    ok &= _assert("J21_N" in esc,
+                  f"engine produced a ledger for J21_N (the only side; got "
+                  f"{sorted(esc)})", msgs)
+    if "J21_N" in esc:
+        L = esc["J21_N"]
+        ok &= _assert(L.supply_hdi_per_net == hdi_per_net == 1,
+                      f"engine ledger supply_hdi_per_net {L.supply_hdi_per_net} "
+                      f"== {hdi_per_net} == 1 (per-net partition is exposed "
+                      "in the ledger output)", msgs)
+        ok &= _assert(L.supply_hdi_pool == hdi_pool == 0,
+                      f"engine ledger supply_hdi_pool {L.supply_hdi_pool} == "
+                      f"{hdi_pool} == 0 (no generic-pool HDI in T14)", msgs)
+        ok &= _assert(L.non_whitelist_demand == m["fixed_non_whitelist_demand"]
+                      == 0,
+                      f"engine ledger non_whitelist_demand "
+                      f"{L.non_whitelist_demand} == 0 (the 1 demand net is "
+                      "whitelist-served by its per-net slot; nothing competes "
+                      "for std)", msgs)
+        ok &= _assert(L.overflow_std == m["fixed_overflow_std"] == 0,
+                      f"engine ledger overflow_std {L.overflow_std} == 0 "
+                      "(per-net-aware: std_remaining 0 but non_whitelist_"
+                      "demand 0 — std is NOT short for any net)", msgs)
+        ok &= _assert(L.overflow_hdi == m["fixed_overflow_hdi"] == 0,
+                      f"engine ledger overflow_hdi {L.overflow_hdi} == 0 "
+                      "(per-net-aware: whitelist demand 1 served by per-net "
+                      "blind 1; no shortage after HDI offered)", msgs)
+    # (b) cont.: end-to-end engine verdict via phase_a.solve() with the same
+    # bug-trigger inputs (confirms _decide_verdict consumes the corrected
+    # overflow fields and emits ROUTABLE, not INFEASIBLE).
+    res = _PA.solve(prob,
+                    demand_by_side={"J21_N": demand},
+                    consumed_by_side={"J21_N": consumed_v})
+    ok &= _assert(res["verdict"] == "ROUTABLE",
+                  f"engine end-to-end verdict {res['verdict']!r} == "
+                  f"'ROUTABLE' under bug-trigger inputs (consumed={consumed_v}, "
+                  f"demand={demand}) — the per-net slot reservation for the "
+                  "whitelist net is preserved (the canonical d4ab0f2 J19_N "
+                  "PWM_INHB fix; T14 lockfile)", msgs)
+    ok &= _assert(res["overflow"] == 0,
+                  f"engine end-to-end overflow {res['overflow']} == 0 "
+                  "(no residual shortage after per-net allocation)", msgs)
+    # (c) RE-DERIVE the BUGGY formula on the SAME inputs and assert the liar
+    # would compute INFEASIBLE — proving T14 catches the regression. The
+    # buggy formula is the pre-T14 escape_ledger code (preserved here in
+    # COMMENT-AS-EXECUTABLE form so the regression test is independent of
+    # the engine module — a future engine that re-introduces the bug FAILS
+    # T14 on the engine-invocation check above, but this re-derivation
+    # additionally proves the FIXTURE itself is bug-distinguishing).
+    buggy_std_remaining = max(0, std_total - consumed_v)
+    buggy_hdi_remaining = max(0, hdi_signal
+                              - max(0, consumed_v - std_total))
+    buggy_overflow_std = max(0, demand - buggy_std_remaining)
+    buggy_overflow_hdi = max(0, demand
+                             - (buggy_std_remaining + buggy_hdi_remaining))
+    ok &= _assert(buggy_hdi_remaining == m["buggy_hdi_remaining"] == 0,
+                  f"BUGGY formula hdi_remaining {buggy_hdi_remaining} == 0 "
+                  "(the EATEN per-net blind slot — buggy logic subtracted "
+                  "the std-overflow-of-OTHERS from per-net supply, defeating "
+                  "the reservation; the canonical d4ab0f2 J19_N bug)", msgs)
+    ok &= _assert(buggy_overflow_std == m["buggy_overflow_std"] == 1,
+                  f"BUGGY formula overflow_std {buggy_overflow_std} == 1 "
+                  "(buggy: std_remaining 0 < demand 1; per-net-aware: 0 < "
+                  "non_whitelist_demand 0 — the demand_partition matters)",
+                  msgs)
+    ok &= _assert(buggy_overflow_hdi == m["buggy_overflow_hdi"] == 1,
+                  f"BUGGY formula overflow_hdi {buggy_overflow_hdi} == 1 "
+                  "⇒ liar verdict would be INFEASIBLE (zero supply, "
+                  "demand 1). A regression to the buggy formula FAILS T14 "
+                  "on the engine-invocation check above — this re-derivation "
+                  "additionally proves the FIXTURE itself is bug-"
+                  "distinguishing (the same inputs that produce ROUTABLE "
+                  "under the fix produce INFEASIBLE under the bug).", msgs)
+    ok &= _assert(gt.verdict == "ROUTABLE",
+                  "stored ground-truth verdict ROUTABLE (the per-net slot "
+                  "reservation is sufficient — no escalation lever needed)",
+                  msgs)
+    return ok
+
+
 _SELFCHECKS = {
     "T1": _selfcheck_T1, "T2": _selfcheck_T2, "T3": _selfcheck_T3,
     "T4": _selfcheck_T4, "T5": _selfcheck_T5, "T6": _selfcheck_T6,
     "T7": _selfcheck_T7, "T8": _selfcheck_T8, "T9": _selfcheck_T9,
     "T10": _selfcheck_T10, "T11": _selfcheck_T11,
-    "T12": _selfcheck_T12, "T13": _selfcheck_T13,
+    "T12": _selfcheck_T12, "T13": _selfcheck_T13, "T14": _selfcheck_T14,
 }
 
 
@@ -871,6 +1042,17 @@ def _key_metric_str(fx):
         return (f"long-path through {3} bodies; witness length="
                 f"{m['witness_length_mm']}mm, bends={m['witness_n_corners']}, "
                 f"vias=0 (the maze-router gate)")
+    if name == "T14":
+        # T14 — per-net whitelist preservation under std overflow (OQ-020 T14
+        # root fix). Headline: under bug-trigger inputs (consumed > std_total)
+        # the per-net blind slot is RESERVED for the whitelist net; fixed
+        # engine ⇒ overflow 0 ROUTABLE; buggy formula ⇒ overflow_hdi 1
+        # INFEASIBLE (the regression check).
+        return (f"demand={m['demand_nets']} (1 whitelist) vs std={m['std_total']} + "
+                f"blind_F_In2(per-net)={m['supply_hdi_per_net']}; "
+                f"consumed_bug_trigger={m['consumed_for_bug_witness']} "
+                f"⇒ FIXED overflow={m['fixed_overflow_hdi']} ROUTABLE vs "
+                f"BUGGY overflow_hdi={m['buggy_overflow_hdi']} INFEASIBLE")
     return ""
 
 
@@ -929,6 +1111,18 @@ def _accepted_verdicts(fx):
         # A NAIVE plane-counting liar would emit ROUTABLE/NEEDS-HDI — those
         # are REJECTED here (not in the accepted set), so the liar FAILS T12.
         return {"NEEDS-PLACEMENT-CHANGE", "INFEASIBLE"}
+    if fx.name == "T14":
+        # T14 OQ-020 T14 root-fix: under the solver-path inputs (consumed=0
+        # — the run_suite harness does not pass consumed_by_side), the
+        # fixture trivially routes (demand 1 ≤ std 2 + blind 1 = 3 supply).
+        # Both buggy + fixed engines emit ROUTABLE here; the BUG-WITNESS is
+        # the consumed=3 path inside the SELFCHECK (which invokes the engine
+        # directly and asserts ROUTABLE under the fix vs INFEASIBLE under
+        # the buggy re-derivation). NEEDS-HDI accepted as an alternate
+        # reading (overflow_std == 0, HDI offered with one blind slot — the
+        # engine MAY surface NEEDS-HDI if it counts blind as "HDI to be
+        # used"; the harness scoring still passes since overflow == 0).
+        return {"ROUTABLE", "NEEDS-HDI"}
     # T11 base verdict is ROUTABLE (no lever) — only that.
     return {gt.verdict}
 
@@ -979,6 +1173,16 @@ def _expected_for(fx):
         # n_vias must stay at 0 (single-layer detour is feasible — vias add cost).
         exp["routed"] = m["routed"]               # == 1
         exp["n_vias"] = m["max_n_vias"]           # == 0
+    elif fx.name == "T14":
+        # T14 — per-net whitelist preservation under std overflow (OQ-020 T14
+        # root fix). Harness-scored overflow on the solver path (consumed=0)
+        # == 0 (trivial routing of 1 demand vs 3 supply). The bug-witness
+        # lives in the SELFCHECK (consumed=3 direct engine invocation +
+        # buggy-formula re-derivation). A regression that breaks per-net
+        # reservation would NOT necessarily fail this metric on the solver
+        # path (consumed=0 trivially routes under both buggy and fixed
+        # engines) — the selfcheck is the definitive bug-catching check.
+        exp["overflow"] = m["overflow"]           # == 0
     return exp
 
 

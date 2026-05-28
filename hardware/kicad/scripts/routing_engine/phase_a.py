@@ -555,36 +555,104 @@ class EscapeSideLedger:
     ic_side: str
     demand: int                 # nets that must escape this side
     supply_std: int             # standard (non-HDI) via slots REMAINING for demand
-    supply_hdi: int             # additional HDI-only via slots
-    overflow_std: int           # max(0, demand - supply_std)
-    overflow_hdi: int           # max(0, demand - (supply_std + supply_hdi))
+    supply_hdi: int             # additional HDI-only via slots (layer-aware signal)
+    overflow_std: int           # binding std overflow (per-net-aware; OQ-020 fix:
+                                # std overflow of OTHER nets does NOT consume per-
+                                # net-reserved whitelist supply; T14 ground truth)
+    overflow_hdi: int           # binding overflow after HDI offered (per-net-aware)
     # FoS (headroom on the via field — §5c routing-process capacity FoS):
     headroom_supply_std: float  # FoS * supply_std
     headroom_ok_std: bool       # demand <= FoS*supply_std (margin without HDI)
     headroom_supply_all: float  # FoS * (supply_std + supply_hdi)
     headroom_ok_all: bool       # demand <= FoS*(all slots)
+    # ---- PER-NET-AWARE allocation (the OQ-020 T14 fix — 2026-05-28) ----------
+    # supply_hdi_per_net: HDI slots that are PER-NAMED-NET RESERVATIONS (the
+    # blind_F_In2 whitelist class — driver emits 1 slot per whitelist-eligible
+    # residual net on the side). MUST NOT be consumed by std overflow of OTHER
+    # nets (the bug T14 catches: when consumed > std_total the buggy engine ate
+    # into hdi to backfill, defeating the per-net guarantee for PWM_INHB et al).
+    # supply_hdi_pool: HDI slots that are GENERIC/POOL (fungible backfill for std
+    # overflow — the T9/T10 model where HDI is a shared escalation, NOT per-net).
+    # Per-net + pool partition `supply_hdi` (supply_hdi_per_net + supply_hdi_pool
+    # == supply_hdi when fixtures emit a target_layer/via_class; for back-compat
+    # untyped fixtures the unknown class is assumed pool).
+    supply_hdi_per_net: int = 0     # PER-NET reserved (blind_F_In2 class)
+    supply_hdi_pool: int = 0        # GENERIC pool (T9/T10 backfill semantics)
+    # non_whitelist_demand: residual demand minus whitelist-eligible (each
+    # whitelist-eligible net is guaranteed its own reserved slot, so the
+    # remaining demand is what competes for std/pool resources).
+    non_whitelist_demand: int = 0
 
 
-def make_side_ledger(ic_side, demand, supply_std, supply_hdi):
+def make_side_ledger(ic_side, demand, supply_std, supply_hdi,
+                     supply_hdi_per_net=None, supply_hdi_pool=None,
+                     non_whitelist_demand=None):
     """Construct an EscapeSideLedger from raw demand + supply, computing the
     overflow + §5c FoS-headroom fields ONCE in the engine. This is the single
     source of the per-side overflow math — used by `escape_ledger` (native
     derivation) AND by callers that supply MEASURED demand/supply from real
     geometry (the real-board driver), so the two cannot drift. `supply_std` is
     the REMAINING std supply (already-consumed slots have been deducted by the
-    caller / by `escape_ledger`'s consumed model)."""
+    caller / by `escape_ledger`'s consumed model).
+
+    PER-NET-AWARE OVERFLOW (OQ-020 T14 root fix — 2026-05-28):
+      supply_hdi_per_net : HDI slots that are PER-NAMED-NET reservations (the
+                           OQ-020 blind_F_In2 whitelist class). Driver emits
+                           one such slot per whitelist-eligible residual net on
+                           the side; the slot is RESERVED for that named net and
+                           CANNOT be consumed by the std overflow of OTHER nets.
+      supply_hdi_pool    : HDI slots that are GENERIC fungible backfill (T9/T10
+                           model — any net can use any pool slot). Std overflow
+                           that doesn't fit the std pool can spill into the pool.
+      non_whitelist_demand: residual demand minus whitelist-eligible nets (each
+                            whitelist-eligible net is guaranteed its reserved
+                            slot, so what competes for std/pool is the residue).
+
+    When `supply_hdi_per_net` is None we INFER pool-only (back-compat:
+    `supply_hdi_pool = supply_hdi`, `supply_hdi_per_net = 0`,
+    `non_whitelist_demand = demand`); this preserves the T9/T10 generic-HDI
+    semantics exactly. When given, overflow_std is computed against
+    non_whitelist_demand (the std-overflow-of-OTHERS-eats-per-net-HDI bug fix).
+    """
     std, hdi, dem = supply_std, supply_hdi, demand
+    if supply_hdi_per_net is None:
+        # Back-compat path: all HDI is pool (T9/T10/abstract-fixture semantics).
+        per_net = 0
+        pool = hdi
+        nwl_demand = dem
+    else:
+        per_net = int(supply_hdi_per_net)
+        pool = int(supply_hdi_pool) if supply_hdi_pool is not None else max(
+            0, hdi - per_net)
+        nwl_demand = int(non_whitelist_demand) if non_whitelist_demand is not None \
+            else max(0, dem - per_net)
+    # PER-NET-AWARE binding overflow. The std pool serves non_whitelist_demand
+    # only (whitelist nets are served by their reserved per-net slot). The
+    # generic HDI pool ALSO serves non_whitelist_demand (T9/T10 backfill). The
+    # whitelist demand is satisfied iff supply_hdi_per_net >= whitelist_demand
+    # — true BY CONSTRUCTION when driver emits 1 slot per eligible net (the
+    # supply IS the whitelist demand). The residual whitelist shortage (if any)
+    # adds to overflow_hdi.
+    whitelist_demand = dem - nwl_demand
+    overflow_std_per_net = max(0, nwl_demand - std)
+    # When HDI offered: pool backfills non_whitelist std overflow; per-net
+    # slots satisfy whitelist demand 1-for-1 (any per-net shortage adds).
+    overflow_hdi_per_net = (max(0, nwl_demand - (std + pool))
+                            + max(0, whitelist_demand - per_net))
     return EscapeSideLedger(
         ic_side=ic_side,
         demand=dem,
         supply_std=std,
         supply_hdi=hdi,
-        overflow_std=max(0, dem - std),
-        overflow_hdi=max(0, dem - (std + hdi)),
+        overflow_std=overflow_std_per_net,
+        overflow_hdi=overflow_hdi_per_net,
         headroom_supply_std=FOS_ROUTING_CAPACITY * std,
         headroom_ok_std=dem <= FOS_ROUTING_CAPACITY * std + 1e-9,
         headroom_supply_all=FOS_ROUTING_CAPACITY * (std + hdi),
         headroom_ok_all=dem <= FOS_ROUTING_CAPACITY * (std + hdi) + 1e-9,
+        supply_hdi_per_net=per_net,
+        supply_hdi_pool=pool,
+        non_whitelist_demand=nwl_demand,
     )
 
 
@@ -629,23 +697,59 @@ def _slot_reaches_signal(fx, vs):
     return _layer_role(fx, vs.target_layer) == "signal"
 
 
-def side_supply(fx):
-    """Per-IC-side via-slot SUPPLY, grouped from the inputs — LAYER-AWARE.
+# OQ-020 ACTIVATE / T14 (2026-05-28): the set of via_class tags whose slots
+# are PER-NAMED-NET RESERVATIONS (not generic pool). Driver emits 1 slot per
+# whitelist-eligible residual net on the side, so the slot count itself IS
+# the per-side whitelist demand cap; std-overflow of OTHER nets MUST NOT eat
+# into these per-net reservations (the bug T14 catches; canonical d4ab0f2
+# J19_N PWM_INHB regression). Centralised here so the policy is one constant.
+PER_NET_RESERVED_VIA_CLASSES = frozenset(("blind_F_In2",))
 
-    Returns {ic_side: {"std": int, "hdi": int}} — std (hdi_only=False) + HDI-
-    only slots per side that REACH A SIGNAL LAYER (per `_slot_reaches_signal`).
-    Plane-bottoming slots are DROPPED from supply (the OQ-020 / T12 root fix).
+
+def _slot_is_per_net_reserved(vs):
+    """True iff via slot `vs` is a PER-NAMED-NET reservation (not generic
+    pool). Identified by its `via_class` tag matching a name in
+    `PER_NET_RESERVED_VIA_CLASSES` (currently only the OQ-020 blind_F_In2
+    lever). Such slots are reserved for a specific named net (the driver
+    creates one per whitelist-eligible residual net on the side) — they
+    MUST NOT be consumed by std overflow of other nets on the same side.
+    Pure tag lookup; no router."""
+    return (vs.via_class is not None
+            and vs.via_class in PER_NET_RESERVED_VIA_CLASSES)
+
+
+def side_supply(fx):
+    """Per-IC-side via-slot SUPPLY, grouped from the inputs — LAYER-AWARE +
+    PER-NET-AWARE (the OQ-020 T14 root fix on top of the T12 root fix).
+
+    Returns {ic_side: {"std": int, "hdi": int, "hdi_per_net": int,
+    "hdi_pool": int}} — std (hdi_only=False) + HDI-only slots per side that
+    REACH A SIGNAL LAYER (per `_slot_reaches_signal`). Plane-bottoming slots
+    are DROPPED from supply (the OQ-020 / T12 root fix). The HDI signal supply
+    is partitioned into:
+      * `hdi_per_net` : PER-NAMED-NET RESERVATIONS (via_class in
+                        `PER_NET_RESERVED_VIA_CLASSES`, currently blind_F_In2).
+                        Reserved for the named whitelist nets; the std overflow
+                        of OTHER nets does NOT consume these (the T14 fix).
+      * `hdi_pool`    : GENERIC FUNGIBLE backfill (T9/T10 model — any net can
+                        use any pool slot). Std overflow can spill into pool.
+    `hdi == hdi_per_net + hdi_pool` (a partition).
 
     The single source of the supply count for both `escape_ledger` and Phase
-    B's via pre-assignment, so layer-awareness propagates consistently.
+    B's via pre-assignment, so layer/per-net awareness propagates consistently.
     """
     sides = {}
     for vs in fx.via_slots:
-        sides.setdefault(vs.ic_side, {"std": 0, "hdi": 0})
+        sides.setdefault(vs.ic_side, {"std": 0, "hdi": 0,
+                                       "hdi_per_net": 0, "hdi_pool": 0})
         if not _slot_reaches_signal(fx, vs):
             continue   # plane-bottoming via class — NOT a signal escape supply
         if vs.hdi_only:
             sides[vs.ic_side]["hdi"] += 1
+            if _slot_is_per_net_reserved(vs):
+                sides[vs.ic_side]["hdi_per_net"] += 1
+            else:
+                sides[vs.ic_side]["hdi_pool"] += 1
         else:
             sides[vs.ic_side]["std"] += 1
     return sides
@@ -703,17 +807,56 @@ def escape_demand_by_side(fx):
 
 def escape_ledger(fx, demand_by_side=None, consumed_by_side=None):
     """Build per-IC-side via-slot demand/supply ledgers — the T9/J18-J19 escape
-    model, NATIVELY per-side (the FIX1 generalisation of the multi-side case).
+    model, NATIVELY per-side (the FIX1 generalisation of the multi-side case)
+    + PER-NET-AWARE (the OQ-020 T14 root fix; 2026-05-28).
 
-    SUPPLY  : grouped per ic_side from the via_slots (std = hdi_only=False;
-              hdi = hdi_only=True), via `side_supply`.
+    SUPPLY  : grouped per ic_side from the via_slots via `side_supply`:
+              * std       (hdi_only=False, signal-reaching)
+              * hdi_per_net (hdi_only=True, via_class in
+                            `PER_NET_RESERVED_VIA_CLASSES`; reserved-per-named-
+                            net — driver emits 1 slot per whitelist-eligible
+                            residual net on the side)
+              * hdi_pool  (hdi_only=True, generic fungible backfill — the T9/T10
+                          generic-HDI model)
     REMAINING-capacity model: `consumed_by_side[side]` = std slots ALREADY
-              consumed by already-routed nets on that side; the binding std
-              supply for the REMAINING demand is max(0, std_total - consumed).
-              Callers with a real board pass this (the 24/30 routed nets consumed
-              their fanout slots); fixtures omit it (consumed = 0). The HDI supply
-              is likewise reduced by what routed+remaining-std already covers when
-              consumed is given, so HDI is the residual escalation lever.
+              consumed by already-routed nets on that side; std_REMAINING =
+              max(0, std_total - consumed). Callers with a real board pass this
+              (the 24/30 routed nets consumed their fanout slots); fixtures omit
+              it (consumed = 0).
+
+              CRITICAL (T14 fix; OQ-020 PWM_INHB regression on d4ab0f2 J19_N):
+              `consumed` MUST NOT derate the per-net HDI supply. The old code
+              `hdi_remaining = max(0, hdi_total - max(0, consumed - std_total))`
+              treated HDI as fungible backfill for std overflow — that defeats
+              the per-named-net reservation guarantee (the blind_F_In2 slot for
+              PWM_INHB cannot be eaten by std overflow of OTHER nets on the
+              same side; the slot is RESERVED for PWM_INHB by construction).
+              Per-net HDI supply is preserved AS-IS; only the pool HDI absorbs
+              non-whitelist std overflow. The headline aggregation now agrees
+              with run_on_board.py's detailed per-side `blind-eligible=[...]`
+              ledger (the per-side lever assignment was already correct in the
+              detailed view — this aligns the headline).
+
+    PER-NET-AWARE ALLOCATION (per side):
+      whitelist_demand = min(hdi_per_net, demand)
+                       = hdi_per_net (since driver emits 1 reserved slot per
+                         eligible residual net — the supply IS the whitelist
+                         demand cap on a side, by construction).
+      non_whitelist_demand = max(0, demand - hdi_per_net) — the residue that
+                             competes for std + pool resources.
+      overflow_std  = max(0, non_whitelist_demand - std_REMAINING)
+                      (whitelist demand is satisfied by per-net slots — never
+                      contributes to std overflow).
+      overflow_hdi  = max(0, non_whitelist_demand - (std_REMAINING + hdi_pool))
+                      + max(0, whitelist_demand - hdi_per_net)
+                      (pool backfills non-whitelist std overflow; per-net
+                      shortage adds — usually 0 by driver construction).
+
+    BACK-COMPAT (T9/T10/T11/T12 untyped or generic HDI): no slot has via_class
+    in PER_NET_RESERVED_VIA_CLASSES => hdi_per_net=0, hdi_pool=hdi, and
+    overflow_std == max(0, demand - std_REMAINING) — exactly the T9/T10
+    aggregate behaviour preserved.
+
     DEMAND  : per side, attributed NATIVELY from geometry via
               `escape_demand_by_side` (each net counts against the ONE side it
               escapes). A caller MAY override with a MEASURED `demand_by_side`
@@ -734,18 +877,28 @@ def escape_ledger(fx, demand_by_side=None, consumed_by_side=None):
         demand = int(demand_by_side.get(side, 0))
         std_total = sup["std"]
         hdi_total = sup["hdi"]
+        hdi_per_net = sup.get("hdi_per_net", 0)
+        hdi_pool = sup.get("hdi_pool", hdi_total)
         consumed = int(consumed_by_side.get(side, 0))
-        # REMAINING std supply after already-routed nets consumed their slots.
+        # REMAINING std supply after already-routed nets consumed their slots
+        # (max(0, ...) saturates: routed nets that consumed non-std mechanisms
+        # — e.g. a microvia_F_In1 reaching a plane-bottomed via — do NOT add a
+        # credit anywhere; they simply leave std_remaining at 0).
         std_remaining = max(0, std_total - consumed)
-        # HDI residual: one microvia per slot, minus what routed + remaining-std
-        # already cover (only meaningful when a consumed model is supplied; with
-        # consumed == 0 this is just the declared hdi_total, the T9 behaviour).
-        if consumed:
-            hdi_remaining = max(0, hdi_total - max(0, consumed - std_total))
-        else:
-            hdi_remaining = hdi_total
-        ledgers[side] = make_side_ledger(side, demand, std_remaining,
-                                         hdi_remaining)
+        # PER-NET-AWARE allocation (the OQ-020 T14 fix). hdi_per_net is the
+        # PER-NAMED-NET reservation cap (driver emits 1 reserved slot per
+        # whitelist-eligible residual net — by construction
+        # whitelist_demand <= hdi_per_net == supply, so allocation succeeds).
+        # The non-whitelist residue is what competes for std + pool resources.
+        # NO derating of per-net HDI by std consumed — the per-net slot is
+        # RESERVED, not fungible.
+        non_whitelist_demand = max(0, demand - hdi_per_net)
+        ledgers[side] = make_side_ledger(
+            side, demand, std_remaining, hdi_total,
+            supply_hdi_per_net=hdi_per_net,
+            supply_hdi_pool=hdi_pool,
+            non_whitelist_demand=non_whitelist_demand,
+        )
     return ledgers
 
 
