@@ -1080,6 +1080,240 @@ def test_lever_L_halo_and_span():
     return ok
 
 
+# ─── v11 (CH1 30/30 lever K1 + K2) tests ──────────────────────────────────
+#
+# K1: adjacent-HDI pad-edge clearance vs FoS target.
+# K2: per-leaf MST rejoin retries + provenance.
+#
+# These tests verify the v11 patches at the API level (no full board route).
+# K1 tests exercise the hdi_via_blocked_geom pad-edge path; K2 tests exercise
+# is_compatible_hdi_via + MST_LEAF_RETRY_CAP + the partial-MST provenance
+# helper.
+
+def test_lever_K1_compat_helper():
+    """(K1a) is_compatible_hdi_via classifies the 4 sanctioned classes
+    correctly: blind_F_In2 and the two microvia classes are compatible
+    (known pad geometry); through is NOT compatible (falls through to the
+    existing halo path — shorts-gate intact). None / unknown class is also
+    NOT compatible.
+    """
+    cases = [
+        ("microvia_F_In1", True),
+        ("microvia_B_In8", True),
+        ("blind_F_In2",   True),
+        ("through",       False),
+        (None,            False),
+        ("garbage",       False),
+    ]
+    ok = True
+    for cls, expected in cases:
+        got = rsc.is_compatible_hdi_via(cls)
+        good = (got == expected)
+        ok &= good
+        print(f"  [{'OK' if good else 'BAD'}] (K1a) is_compatible_hdi_via"
+              f"({cls!r}) = {got} (expected {expected})")
+    return ok
+
+
+def test_lever_K1_pad_edge_accept_at_fos():
+    """(K1b) hdi_via_blocked_geom ACCEPTS a blind_F_In2 candidate vs an
+    adjacent blind_F_In2 foreign via at 0.5mm pitch (pad-edge = 0.20mm =
+    FoS target). Pre-K1 halo refused this case; K1 accepts at the
+    boundary.
+
+    Distance setup:
+       foreign  pad_half = 0.15 (blind_F_In2)
+       candidate pad_half = 0.15 (blind_F_In2)
+       D = 0.50mm  → pad_edge = 0.50 − 0.15 − 0.15 = 0.20mm = CLEARANCE_MM
+       Pre-K1 halo required = 0.15 + 0.15 + 0.20 = 0.50mm; at D=0.50−1e-3
+       pre-K1 would refuse (off by 1e-3 grid slop epsilon).
+       K1 path: pad_edge_clearance ≥ FoS target → ACCEPT.
+    """
+    fx, fy = 20.0, 70.0
+    cand_x, cand_y = fx + 0.50, fy
+    _, router, _ = _build_synthetic_state_with_foreign_via(
+        foreign_diam_mm=BLIND_F_IN2_DIAM_MM, foreign_xy=(fx, fy))
+    g = router.grid
+    ci, cj = g.xy_to_ij(cand_x, cand_y)
+    span = list(rsc.via_span_layers('blind_F_In2'))
+    blk, reason = g.hdi_via_blocked_geom(
+        ci, cj, netname="BSTB_CH1", span_layers=span,
+        via_class='blind_F_In2')
+    ok = (not blk)
+    print(f"  [{'OK' if ok else 'BAD'}] (K1b) blind_F_In2 cand vs adjacent "
+          f"blind_F_In2 foreign at 0.5mm pitch: blocked={blk} reason={reason!r} "
+          f"(pad-edge=0.20mm = FoS target; K1 ACCEPT)")
+    return ok
+
+
+def test_lever_K1_pad_edge_refuse_below_fos():
+    """(K1c) hdi_via_blocked_geom REFUSES when pad-edge clearance falls
+    BELOW the FoS target — proves K1 enforces the §5c 'no cut-to-cut' bound
+    strictly (no silent relaxation past the target).
+
+    Distance setup: foreign 0.30 + candidate 0.30 at D = 0.40mm:
+       pad_edge = 0.40 − 0.15 − 0.15 = 0.10mm < FoS target 0.20mm → REFUSE.
+    """
+    fx, fy = 20.0, 70.0
+    cand_x, cand_y = fx + 0.40, fy
+    _, router, _ = _build_synthetic_state_with_foreign_via(
+        foreign_diam_mm=BLIND_F_IN2_DIAM_MM, foreign_xy=(fx, fy))
+    g = router.grid
+    ci, cj = g.xy_to_ij(cand_x, cand_y)
+    span = list(rsc.via_span_layers('blind_F_In2'))
+    blk, reason = g.hdi_via_blocked_geom(
+        ci, cj, netname="BSTB_CH1", span_layers=span,
+        via_class='blind_F_In2')
+    ok = blk
+    print(f"  [{'OK' if ok else 'BAD'}] (K1c) blind_F_In2 cand vs blind_F_In2 "
+          f"foreign at D=0.40mm: blocked={blk} reason={reason!r} "
+          f"(pad-edge=0.10mm < FoS 0.20mm; K1 REFUSE — strict bound)")
+    return ok
+
+
+def test_lever_K1_through_unchanged():
+    """(K1d) K1 must NOT relax through-via clearances. A through-via
+    candidate vs an adjacent 0.5mm-pitch HDI foreign still goes through
+    the existing halo-overlap rule (which correctly refuses; through is
+    incompatible per is_compatible_hdi_via).
+
+    This is the shorts-gate integrity test: K1 only loosens for KNOWN-
+    geometry HDI classes; through-vias keep the conservative halo.
+    """
+    fx, fy = 20.0, 70.0
+    cand_x, cand_y = fx + 0.50, fy
+    _, router, _ = _build_synthetic_state_with_foreign_via(
+        foreign_diam_mm=BLIND_F_IN2_DIAM_MM, foreign_xy=(fx, fy))
+    g = router.grid
+    ci, cj = g.xy_to_ij(cand_x, cand_y)
+    span = list(rsc.ALL_COPPER_LAYERS)
+    blk, reason = g.hdi_via_blocked_geom(
+        ci, cj, netname="BSTB_CH1", span_layers=span,
+        via_class='through')
+    # Through candidate (pad_half=0.30) vs blind foreign (diam=0.30):
+    # required = 0.30/2 + 0.30 + 0.20 = 0.65mm; D=0.50 < 0.65 → REFUSE.
+    # K1 does NOT loosen this (candidate_class=through not compatible).
+    ok = blk
+    print(f"  [{'OK' if ok else 'BAD'}] (K1d) THROUGH cand vs blind_F_In2 "
+          f"foreign at D=0.50mm: blocked={blk} reason={reason!r} "
+          f"(K1 unchanged for through — shorts-gate intact)")
+    return ok
+
+
+def test_lever_K2_retry_cap_constant():
+    """(K2a) MST_LEAF_RETRY_CAP is exposed as a module constant and == 3.
+    SSoT discipline — the audit (audit_partial_mst_provenance.py) reads
+    this value as the cascade bound; a drift would silently weaken the
+    bound.
+    """
+    cap = rsc.MST_LEAF_RETRY_CAP
+    ok = (cap == 3)
+    print(f"  [{'OK' if ok else 'BAD'}] (K2a) MST_LEAF_RETRY_CAP = {cap} "
+          f"(expected 3 — cascade bound SSoT)")
+    return ok
+
+
+def test_lever_K2_provenance_dir_constant():
+    """(K2b) PARTIAL_MST_PROVENANCE_DIR_REL is exposed and matches the
+    audit's expected path. SSoT — the audit reads from the same dir.
+    """
+    expected = "sims/routing_provenance/partial_mst"
+    got = rsc.PARTIAL_MST_PROVENANCE_DIR_REL
+    ok = (got == expected)
+    print(f"  [{'OK' if ok else 'BAD'}] (K2b) PARTIAL_MST_PROVENANCE_DIR_REL "
+          f"= {got!r} (expected {expected!r})")
+    return ok
+
+
+def test_lever_K2_provenance_writer_round_trip():
+    """(K2c) flush_partial_mst_provenance() writes a JSON file with the
+    expected schema; audit_partial_mst_provenance.audit() loads it and
+    PASSES (correct schema → no R40 violation). Round-trip proves the
+    writer + audit are in lock-step.
+    """
+    import tempfile
+    import audit_partial_mst_provenance as aud
+    # Stand up a minimal router-like object with the writer methods.
+    class _Stub:
+        pass
+    stub = _Stub()
+    # Call the unbound functions with stub as the explicit self —
+    # avoids the descriptor double-binding bug.
+    rsc.CooperativeRouter._record_partial_mst(
+        stub, "KILL_RAIL_K2_TEST",
+        # pad_info: tuples in the (ref, padname, x, y, cells, layers, sx, sy) shape
+        # (or compatible — the writer only needs ref+padname).
+        [("D38", "2", 0.0, 0.0, set(), [], 0.5, 0.5),
+         ("R76", "2", 2.0, 0.0, set(), [], 0.5, 0.5),
+         ("D37", "2", 4.0, 0.0, set(), [], 0.5, 0.5),
+         ("J19", "8", 2.0, 2.0, set(), [], 0.5, 0.5)],
+        routed_paths=[[(0, 0, 0)], [(1, 0, 0)]],
+        failed_pairs=[("J19.8", "D38.2")],
+        retries_per_leaf={0: 1, 1: 1, 2: 3},
+        failed_pair_pads={("J19.8", "D38.2"): (2.0, 2.0, 0.0, 0.0)},
+    )
+    # Use a temp dir as the repo root so we don't pollute real sims/.
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        written = rsc.CooperativeRouter.flush_partial_mst_provenance(
+            stub, repo_root=td_path, board_sha="abc123def456")
+        # Verify the file exists + audit passes
+        ok_written = len(written) == 1 and Path(written[0]).exists()
+        rc = aud.audit(td_path, verbose=False)
+        ok_audit = (rc == 0)
+        # Also verify the file contents — schema
+        if ok_written:
+            import json as _json
+            content = _json.loads(Path(written[0]).read_text())
+            ok_schema = (
+                content.get("schema_version") == 1
+                and content.get("netname") == "KILL_RAIL_K2_TEST"
+                and isinstance(content.get("retries_per_leaf"), dict)
+                and content["retries_per_leaf"].get("2") == 3
+                and isinstance(content.get("failed_pad_pairs"), list)
+                and content["failed_pad_pairs"][0] == ["J19.8", "D38.2"]
+            )
+        else:
+            ok_schema = False
+    ok = ok_written and ok_audit and ok_schema
+    print(f"  [{'OK' if ok else 'BAD'}] (K2c) provenance round-trip: "
+          f"written={ok_written} audit_pass={ok_audit} schema_ok={ok_schema}")
+    return ok
+
+
+def test_lever_K2_provenance_audit_rejects_over_cap():
+    """(K2d) audit_partial_mst_provenance REJECTS an entry whose
+    retries_per_leaf exceeds the cap (the synthetic "skip-cap LIAR").
+    Verifies R40 cascade bound is ENFORCED by the audit, not just
+    documented.
+    """
+    import tempfile, json as _json
+    import audit_partial_mst_provenance as aud
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        d = td_path / "sims/routing_provenance/partial_mst"
+        d.mkdir(parents=True, exist_ok=True)
+        # Synthetic over-cap entry — retry = 5 > cap 3
+        (d / "abc_KILL_RAIL_OVERCAP.json").write_text(_json.dumps({
+            "schema_version": 1,
+            "netname": "KILL_RAIL_OVERCAP",
+            "timestamp_iso": "2026-05-28T00:00:00+00:00",
+            "board_sha": "abc",
+            "pad_refs": ["A.1", "B.1", "C.1"],
+            "routed_edges": 1,
+            "failed_pad_pairs": [["A.1", "B.1"]],
+            "retries_per_leaf": {"0": 5},   # > cap 3 — the LIE
+            "reason": "synthetic over-cap liar",
+        }))
+        rc = aud.audit(td_path, verbose=False)
+    # Audit MUST FAIL (rc != 0) on the over-cap entry.
+    ok = (rc != 0)
+    print(f"  [{'OK' if ok else 'BAD'}] (K2d) audit rejects synthetic "
+          f"over-cap entry (retry=5 > cap=3): rc={rc} "
+          f"({'PASS' if ok else 'FAIL — audit missed the violation'})")
+    return ok
+
+
 def main():
     if not PLACED_BOARD.exists():
         print(f"FAIL: board {PLACED_BOARD} not found")
@@ -1089,6 +1323,9 @@ def main():
     print("                       + v9 per-via-class halo radius (CH1 30/30 F)")
     print("                       + v10 foreign-via actual-diam (CH1 30/30 I)")
     print("                       + v11 LEVER L stacked microvia (CH1 30/30 L)")
+    print("                       + v11 adjacent-HDI pad-edge K1 +")
+    print("                             MST completion + provenance K2")
+    print("                             (CH1 30/30 K1+K2 this PR)")
     print(f"  board: {PLACED_BOARD}")
     print(f"  audit: {HERE / 'audit_hdi_via_in_pad.py'}")
     print("=" * 72)
@@ -1135,6 +1372,24 @@ def main():
                     test_lever_L_emit_all_8_landings()))
     results.append(("(L6) per-class halo/span/diam helpers (SSoT)",
                     test_lever_L_halo_and_span()))
+    # v11 (CH1 30/30 K1) adjacent-HDI pad-edge clearance tests.
+    results.append(("(K1a) is_compatible_hdi_via helper",
+                    test_lever_K1_compat_helper()))
+    results.append(("(K1b) pad-edge ACCEPT at FoS target",
+                    test_lever_K1_pad_edge_accept_at_fos()))
+    results.append(("(K1c) pad-edge REFUSE below FoS target",
+                    test_lever_K1_pad_edge_refuse_below_fos()))
+    results.append(("(K1d) through-via unchanged (shorts-gate intact)",
+                    test_lever_K1_through_unchanged()))
+    # v11 (CH1 30/30 K2) MST completion + provenance tests.
+    results.append(("(K2a) MST_LEAF_RETRY_CAP SSoT constant",
+                    test_lever_K2_retry_cap_constant()))
+    results.append(("(K2b) PARTIAL_MST_PROVENANCE_DIR_REL SSoT constant",
+                    test_lever_K2_provenance_dir_constant()))
+    results.append(("(K2c) provenance writer + audit round-trip",
+                    test_lever_K2_provenance_writer_round_trip()))
+    results.append(("(K2d) audit rejects over-cap entry (LIAR)",
+                    test_lever_K2_provenance_audit_rejects_over_cap()))
     print("=" * 72)
     n_pass = sum(1 for (_, p) in results if p)
     n = len(results)

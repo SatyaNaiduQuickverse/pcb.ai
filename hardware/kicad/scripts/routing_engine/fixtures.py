@@ -2736,6 +2736,353 @@ def _build_T20():
 # lockfile; 2026-05-28). Appended via `.append(...)` so the T1-T17 lines
 # above stay byte-identical (diff-stat: only NEW lines).
 _BUILDERS.append(_build_T20)
+# T18 — ADJACENT-HDI-HALO (CH1 30/30 lever K1 lockfile, 2026-05-28).
+#
+# The bug class: when two HDI vias (microvia / blind_F_In2) sit on adjacent
+# 0.5mm-pitch QFN pads, the pre-K1 halo path refuses BOTH placements
+# (centerline-to-centerline check uses pad_a/2 + pad_b/2 + 2×CLEARANCE_MM
+# ≈ 0.70mm minimum gap, but the pitch is only 0.5mm). The PHYSICALLY
+# correct rule is pad-EDGE clearance against the FoS target
+# (CLEARANCE_MM = 0.20mm per ROUTING_METHODOLOGY §5c): at 0.5mm pitch
+# with 0.15mm pad-halves, edge = 0.50 − 0.15 − 0.15 = 0.20mm = FoS target,
+# which clears. The 25/30 board already exhibits this geometry — BSTB blind
+# via @ J19.17 ↔ J19.16 sit at sub-fab-tolerance accepted by the post-
+# commit shorts-gate but were refused pre-commit. K1 fixes the
+# inconsistency by allowing AT-target placements (NOT below).
+#
+# ADVERSARIAL "K1-disabled" liar: a solver that retains the pre-K1 halo
+# behaviour FAILS T18 (it refuses both placements; routed = 0/2).
+# ----------------------------------------------------------------------------
+
+def _build_T18():
+    """T18 — ADJACENT-HDI-HALO (K1 lockfile). Two HDI vias at 0.5mm pitch.
+
+    Stackup: F.Cu (signal) + In1 (GND plane) + In2 (signal). The HDI
+    blind/buried F.Cu↔In2 class drops from F.Cu through In1 to In2; ViaSlot
+    target_layer=In2 marks each slot as a USABLE signal escape.
+
+    Construction:
+      * 2 PINS at QFN-pitch 0.5mm: A=(0.0, 0.0) on F.Cu and B=(0.5, 0.0)
+        on F.Cu, each driven by its own net.
+      * 2 NETS: NET_A connects pin A to its escape on In2 (single pad +
+        single via target — the via_slot IS the escape, mirrors T9/T11
+        escape pattern); same for NET_B at pin B.
+      * 2 VIA SLOTS at the EXACT pin coordinates (HDI via-in-pad geometry),
+        each `hdi_only=True` so they are SUPPLY only with HDI enabled,
+        `target_layer="In2"`, `via_class="blind_F_In2"`.
+      * NO foreign-track obstacles between the pads — the bug is purely
+        the via-cell halo over-rejection (K1 patch surface).
+
+    Ground truth (re-derivable by hand):
+      verdict = CONDITIONAL on lever='K1_pad_edge_clearance'.
+      Base (no K1): both slots REFUSED (halo check center-to-center
+        requires 0.70mm but pitch is 0.5mm) → 0/2 routed.
+      Alt (K1 enabled): both slots ACCEPTED at pad-edge = 0.20mm =
+        FoS target (CLEARANCE_MM) → 2/2 routed.
+      pad_edge_clearance_mm = 0.50 - 0.15 - 0.15 = 0.20
+      fos_target_mm         = 0.20  (ROUTING_METHODOLOGY §5c "no cut-to-cut")
+      buggy_halo_required   = 0.15 + 0.15 + 2 × 0.20 = 0.70  (pre-K1 rule)
+      pitch_mm              = 0.50  (QFN 0.5mm pitch)
+
+    The witness encodes both vias placed AT-TARGET (clearance EXACTLY at FoS).
+    """
+    # Stackup: F.Cu signal / In1 GND plane / In2 signal escape destination.
+    # This matches BLIND_F_IN2_SPAN's actual geometry (F.Cu, In1, In2).
+    layers = (
+        Layer("F.Cu", "signal"),
+        Layer("In1",  "plane", "GND"),
+        Layer("In2",  "signal"),
+    )
+    # Pin coordinates: 0.5mm QFN pitch. Same y, x offset = 0.5mm.
+    pa = Pin("A", 0.0, 0.0, "F.Cu")
+    pb = Pin("B", 0.5, 0.0, "F.Cu")
+    pins = (pa, pb)
+    nets = (
+        Net("NET_A", ("A",), "signal"),
+        Net("NET_B", ("B",), "signal"),
+    )
+    # HDI via slots at EXACT pin coordinates (via-in-pad). hdi_only=True so
+    # they only count as escape supply when HDI is enabled. target_layer=In2
+    # so they are USABLE signal escapes (per the T12 OQ-020 layer-aware fix).
+    via_slots = (
+        ViaSlot("VS_A", 0.0, 0.0, ic_side="south",
+                hdi_only=True, target_layer="In2",
+                via_class="blind_F_In2"),
+        ViaSlot("VS_B", 0.5, 0.0, ic_side="south",
+                hdi_only=True, target_layer="In2",
+                via_class="blind_F_In2"),
+    )
+    # No foreign-track obstacles. The bug is purely the via-cell halo
+    # over-rejection.
+    obstacles = ()
+    # Math witness — referenced by selfcheck.
+    pitch_mm            = 0.5
+    blind_pad_diam      = 0.30   # BLIND_F_IN2_DIAM_MM
+    blind_pad_half      = 0.15
+    fos_target_mm       = 0.20   # CLEARANCE_MM
+    pad_edge_clearance  = pitch_mm - 2 * blind_pad_half
+    # Pre-K1 halo conservative rule: foreign_via 0.30 → required gap
+    # diam/2 + hdi_pad_half + CLEARANCE = 0.15 + 0.15 + 0.20 = 0.50mm
+    # which is GREATER than the pitch 0.5mm by 1e-3 (the epsilon is the
+    # GRID_SLOP_MM 0.025 — pre-K1 demands 0.50+slop ≈ 0.525 > 0.5 ⇒ refused).
+    buggy_halo_required = blind_pad_half + blind_pad_half + 2 * fos_target_mm
+
+    gt = GroundTruth(
+        verdict="CONDITIONAL",
+        metrics={
+            # Base (pre-K1 halo): both refused, 0/2 routed.
+            "base_routes": 0,
+            # K1 applied: both accepted at pad-edge = 0.20mm = FoS target.
+            "k1_routes": 2,
+            "pitch_mm": pitch_mm,
+            "pad_edge_clearance_mm": pad_edge_clearance,
+            "fos_target_mm": fos_target_mm,
+            "buggy_halo_required_mm": buggy_halo_required,
+            "n_via_slots": 2,
+            "n_nets": 2,
+        },
+        witness={
+            "routed_paths": {
+                "NET_A": [(0.0, 0.0, "F.Cu"), (0.0, 0.0, "In2")],
+                "NET_B": [(0.5, 0.0, "F.Cu"), (0.5, 0.0, "In2")],
+            },
+            "via_classes": {
+                "NET_A": "blind_F_In2",
+                "NET_B": "blind_F_In2",
+            },
+            "pad_edge_clearance_mm": pad_edge_clearance,
+            "fos_target_mm": fos_target_mm,
+        },
+        conditional_on="K1_pad_edge_clearance",
+        alt_verdict="ROUTABLE",
+        alt_metrics={
+            "routed": 2,
+            "pad_edge_clearance_mm": pad_edge_clearance,
+        },
+        alt_witness={
+            "routed_paths": {
+                "NET_A": [(0.0, 0.0, "F.Cu"), (0.0, 0.0, "In2")],
+                "NET_B": [(0.5, 0.0, "F.Cu"), (0.5, 0.0, "In2")],
+            },
+            "pad_edge_clearance_mm": pad_edge_clearance,
+        },
+    )
+    proof = (
+        "T18 (ADJACENT-HDI-HALO; the CH1 30/30 lever K1 capability "
+        "lockfile). Two HDI vias at 0.5mm QFN pitch (pin A=(0,0), pin "
+        "B=(0.5,0)) — both blind_F_In2 (pad 0.30mm, drill 0.15mm). "
+        f"PRE-K1 halo rule = diam/2 + pad/2 + 2×CLEARANCE = "
+        f"{blind_pad_half}+{blind_pad_half}+2×{fos_target_mm} = "
+        f"{buggy_halo_required:.3f}mm center-to-center MINIMUM; pitch is "
+        f"only {pitch_mm}mm so BOTH refused → 0/2 routed (the failure "
+        "mode K1 fixes). PHYSICALLY-correct K1 rule = pad-EDGE "
+        f"clearance vs FoS target: edge = {pitch_mm} - 2×{blind_pad_half} "
+        f"= {pad_edge_clearance:.3f}mm ≥ {fos_target_mm}mm (=FoS target, "
+        "ROUTING_METHODOLOGY §5c 'no cut-to-cut') → BOTH accepted → "
+        "2/2 routed. ADVERSARIAL 'K1-disabled' LIAR retains pre-K1 halo "
+        "and refuses both → 0/2 → FAILS T18 verdict (CONDITIONAL/ROUTABLE "
+        "alt must have routed=2). Self-check verifies (a) pitch == 0.5mm; "
+        "(b) pad_edge_clearance is exactly fos_target_mm (boundary case); "
+        "(c) buggy_halo_required > pitch (the precise PRE-K1 failure "
+        "math); (d) FoS target == CLEARANCE_MM = 0.20mm (§5c sourced); "
+        "(e) the K1-disabled liar's routes=0 metric mismatches the "
+        "alt verdict's routes=2."
+    )
+    return Fixture("T18",
+                   "adjacent-HDI-halo (capability; "
+                   "CH1 30/30 (K1) lockfile)",
+                   "stretch",
+                   "adjacent-HDI halo correction: pad-edge clearance "
+                   "against §5c FoS target replaces halo-overlap rule "
+                   "when both candidate + foreign are HDI-class with "
+                   "known pad geometry. Shorts-gate post-commit "
+                   "preserved (the halo path stays for non-HDI / "
+                   "unknown-geometry foreigners). Pre-K1 over-rejection "
+                   "refuses two 0.5mm-pitch blind_F_In2 vias whose "
+                   "physical edges sit 0.20mm apart = FoS target.",
+                   layers, pins, nets, (), obstacles, via_slots,
+                   gt, proof)
+
+
+_BUILDERS.append(_build_T18)
+
+
+# ----------------------------------------------------------------------------
+# T19 — MST-COMPLETION-ROBUSTNESS (CH1 30/30 lever K2 lockfile, 2026-05-28).
+#
+# The bug class: a multi-pad net's MST has N-1 edges; if ONE leaf fails its
+# first attempt the v3 forward-greedy pass commits N-1 of N edges only — and
+# the cooperative loop only retries it on a LATER iteration (with higher
+# present_factor pressure). For a leaf whose conflict is geometric (not
+# congestion), that retry re-fails the same way — net stays PARTIAL until
+# the iteration cap. KILL_RAIL_N @ {J19.8, D38.2, R76.2, D37.2} is the
+# real-board exemplar (PR #227 final probing): 3 leaves routable + 1 fails
+# → router reports PARTIAL with 0/3 progress across iterations.
+#
+# K2 fix: per-leaf rejoin retries inside ONE MST call against the FULL
+# multi-source pool (so a leaf can attach to ANY of the net's islands, not
+# only the original source pad). Bounded ≤ MST_LEAF_RETRY_CAP = 3. Every
+# committed PARTIAL writes a provenance entry (G_K1 / R40 enforces).
+#
+# ADVERSARIAL "skip-retry" liar: a solver that retains the v3 forward-only
+# single-pass behaviour rolls back the WHOLE TREE on first failure → 0/4
+# routed. FAILS T19 routed-count metric.
+# ----------------------------------------------------------------------------
+
+def _build_T19():
+    """T19 — MST-COMPLETION-ROBUSTNESS (K2 lockfile). 4-pad net, 1 leaf
+    initially blocked, K2 rejoins via the full multi-source pool.
+
+    Construction (smallest faithful reproduction):
+      * Stackup: F.Cu signal only.
+      * 1 NET (KILL_RAIL) with 4 pads at:
+          P1=(0.0, 0.0), P2=(2.0, 0.0), P3=(4.0, 0.0), P4=(2.0, 2.0).
+        Greedy nearest-neighbour MST from P1 picks edges (P1→P2),
+        (P2→P3), (P2→P4) — that is, a star at P2 with three leaves.
+      * 1 OBSTACLE: a small body at (3.6-4.0, 1.5-2.5) — specifically
+        placed so the DIRECT P2→P4 path on F.Cu only has to detour
+        slightly but the obstacle GROWS into a wider keep-out for the
+        FIRST-PASS attempt (modelling congestion that materialises only
+        after P2→P3 is routed). The construction encodes this by giving
+        P4 ONLY a feasible attach point through P3's routed cells (i.e.
+        the K2 rejoin window where P4 attaches to the same-net island
+        formed by P2→P3 instead of to the original P2 source).
+      * Witness paths:
+          (P1→P2): (0,0) → (2,0)  [straight; 2mm]
+          (P2→P3): (2,0) → (4,0)  [straight; 2mm]
+          (P2→P4 rejoin via P3-island): (4,0) → (4,2) → (2,2)
+              [right-angle; 4mm]
+        All 3 routed → 4/4 pads connected.
+
+    Ground truth (re-derivable by hand):
+      verdict = CONDITIONAL on lever='K2_per_leaf_rejoin'.
+      Base (no K2): forward-greedy single pass — P2→P4 fails on first
+        attempt (the body blocks the direct lane), no rejoin → 0/4
+        routed under the SKIP-RETRY-LIAR's whole-tree-rollback rule.
+        (Note: the v3-no-K2 router would commit 2 of 3 edges and report
+        PARTIAL; the adversarial skip-retry liar models the pre-v3 bug
+        of rolling back the whole tree on one failure.)
+      Alt (K2 enabled): 3 retries per leaf against full multi-source
+        pool — P2→P4 rejoins via the P3-island → all 3 edges routed
+        → 4/4 connected.
+      retry_cap = 3  (MST_LEAF_RETRY_CAP — cascade bound)
+      n_edges = 3  (MST is a star at P2; 4 pads → 3 edges)
+    """
+    layers = (
+        Layer("F.Cu", "signal"),
+    )
+    # Four pads — P2 is the MST star center (nearest-neighbour from P1).
+    p1 = Pin("P1", 0.0, 0.0, "F.Cu")
+    p2 = Pin("P2", 2.0, 0.0, "F.Cu")
+    p3 = Pin("P3", 4.0, 0.0, "F.Cu")
+    p4 = Pin("P4", 2.0, 2.0, "F.Cu")
+    pins = (p1, p2, p3, p4)
+    nets = (
+        Net("KILL_RAIL", ("P1", "P2", "P3", "P4"), "signal"),
+    )
+    # Body blocks the DIRECT P2→P4 lane (centerline x=2 from y=0 to y=2).
+    # The K2 fix attaches P4 through the P3-island (which routes along y=0
+    # to x=4 then up to y=2 then left to (2,2)). The bbox encodes the
+    # geometry that forces the K2 rejoin pattern.
+    obstacles = (
+        # Body at x ∈ [1.7, 2.3], y ∈ [0.5, 1.7] — blocks the direct
+        # P2→P4 lane on F.Cu. P4 can only attach via the east detour
+        # which traverses the P3-island.
+        Obstacle("BODY_BLOCKING_P2_P4", 1.7, 0.5, 2.3, 1.7, kind="body"),
+    )
+    witness_paths = {
+        "P1_P2": [(0.0, 0.0), (2.0, 0.0)],
+        "P2_P3": [(2.0, 0.0), (4.0, 0.0)],
+        # K2 rejoin: P4 attaches to the P2→P3 island at (4,0) and detours
+        # east of the BODY_BLOCKING_P2_P4 keep-out.
+        "P4_via_P3_island": [(4.0, 0.0), (4.0, 2.0), (2.0, 2.0)],
+    }
+    p1_p2_len = 2.0
+    p2_p3_len = 2.0
+    # P4 rejoin path: (4,0)→(4,2)→(2,2) = 2.0 + 2.0 = 4.0mm
+    p4_rejoin_len = 4.0
+
+    gt = GroundTruth(
+        verdict="CONDITIONAL",
+        metrics={
+            # SKIP-RETRY LIAR base behaviour: whole-tree rollback on
+            # first leaf failure → 0/4 pads connected.
+            "skip_retry_routes": 0,
+            # K2 applied: 3 edges → 4 pads connected.
+            "k2_routes": 4,
+            "n_pads": 4,
+            "n_mst_edges": 3,
+            "retry_cap": 3,  # MST_LEAF_RETRY_CAP — cascade bound
+            "p1_p2_len_mm": p1_p2_len,
+            "p2_p3_len_mm": p2_p3_len,
+            "p4_rejoin_len_mm": p4_rejoin_len,
+            "n_failed_leaves_first_pass": 1,
+            "n_retries_used_p4": 2,   # original + 1 rejoin retry
+        },
+        witness={
+            "routed_paths": witness_paths,
+            "retries_per_leaf": {
+                # edge indices in MST: 0=(P1,P2), 1=(P2,P3), 2=(P2,P4).
+                # P2→P4 needs 1 rejoin retry; others succeed first attempt.
+                "0": 1, "1": 1, "2": 2,
+            },
+            "retry_cap": 3,
+        },
+        conditional_on="K2_per_leaf_rejoin",
+        alt_verdict="ROUTABLE",
+        alt_metrics={
+            "routed": 4,
+            "n_failed_leaves_final": 0,
+        },
+        alt_witness={
+            "routed_paths": witness_paths,
+            "retries_per_leaf": {"0": 1, "1": 1, "2": 2},
+        },
+    )
+    proof = (
+        "T19 (MST-COMPLETION-ROBUSTNESS; the CH1 30/30 lever K2 "
+        "capability lockfile). Multi-pad net KILL_RAIL with 4 pads in "
+        "a star topology at P2 (greedy nearest-neighbour MST from P1 "
+        "picks edges (P1,P2)+(P2,P3)+(P2,P4)). Body keep-out at "
+        "x∈[1.7,2.3], y∈[0.5,1.7] blocks the DIRECT P2→P4 lane on "
+        "F.Cu. The SKIP-RETRY LIAR (modelling the pre-K2 rollback-"
+        "whole-tree bug) refuses to retry the failed (P2,P4) edge and "
+        "rolls back the WHOLE TREE → 0/4 routed (the failure mode K2 "
+        "fixes). K2 enabled: per-leaf rejoin against the FULL multi-"
+        "source pool — P4 attaches to the P3-island formed by the "
+        "successful P2→P3 edge ((4,0)→(4,2)→(2,2), length "
+        f"{p4_rejoin_len}mm); all 3 MST edges committed → 4/4 routed. "
+        "Cascade-bounded: 1 rejoin retry used (cap=3, MST_LEAF_RETRY_"
+        "CAP). Per-leaf atomicity: trunk + every successfully-routed "
+        "leaf committed together; only still-failed leaves dropped. "
+        "Self-check verifies (a) MST structure is a star at P2 (3 "
+        "edges, P2 with degree 3); (b) the body keep-out blocks the "
+        "direct P2→P4 lane (centerline at x=2 hits the bbox); (c) the "
+        "rejoin path (4,0)→(4,2)→(2,2) clears the body keep-out; "
+        "(d) all 3 routed edges are pairwise non-crossing on F.Cu; "
+        "(e) retries_per_leaf each in [1, MST_LEAF_RETRY_CAP=3]; "
+        "(f) skip-retry liar's routes=0 metric mismatches the alt "
+        "verdict's routes=4."
+    )
+    return Fixture("T19",
+                   "MST-completion-robustness (capability; "
+                   "CH1 30/30 (K2) lockfile)",
+                   "stretch",
+                   "Per-leaf rejoin retries against full multi-source "
+                   "pool; per-subtree atomicity (trunk + successful "
+                   "leaves committed even if one leaf fails); cascade-"
+                   "bounded ≤ MST_LEAF_RETRY_CAP=3; partial-MST "
+                   "provenance under sims/routing_provenance/partial_"
+                   "mst/ when a leaf still fails after the retry cap "
+                   "(R40/G_K1 enforces). Pre-K2 forward-only single-"
+                   "pass rolled back the whole tree on one failed "
+                   "leaf → KILL_RAIL @ {J19.8,D38.2,R76.2,D37.2} "
+                   "stayed PARTIAL across iterations.",
+                   layers, pins, nets, (), obstacles, (),
+                   gt, proof)
+
+
+_BUILDERS.append(_build_T19)
 
 
 def all_fixtures():
