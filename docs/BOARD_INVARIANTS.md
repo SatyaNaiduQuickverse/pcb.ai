@@ -143,10 +143,79 @@ these two refs; expanding silently inflates BOM cost.
 - **Hole clearance**: 0.10 mm (vs board std 0.25mm — DRU relaxes for HDI)
 - **Fill**: epoxy non-conductive + Cu plate-over (required to prevent solder wicking during reflow)
 
+### HDI Class extension: blind/buried F.Cu↔In2 (Sai cost-OK 2026-05-28; OQ-020 ACTIVATE)
+
+The HDI extension for the 4 residual J18/J19 escape nets the engine v1
+naively counted as "covered by F-In1 microvia" but which physically bottom on
+the In1=GND plane (NOT a signal escape). Per the layer-aware escape supply
+correction (T12 in the engine fixture suite + `docs/DEEP_RESEARCH_2026-05-26_J18_J19_ESCAPE.md`
+2026-05-28 "DIAGNOSIS CORRECTION" + escape-density-not-layer-capacity), the
+engine v1 / PR #171 OQ-020 closure was wrong — the offered HDI microvia
+F-In1 was DROPPED from supply by layer-awareness (it stitches to GND), so
+the 4 nets still had no escape. The fix is a blind/buried via class that
+reaches In2 (a signal layer on the 10L stackup).
+
+**New via class** (added to whitelist on top of the existing microvia F-In1):
+
+- **Process**: JLC HDI Class with blind/buried — laser-drilled blind via,
+  epoxy-filled + plate-over (same fab process; just span extends one layer).
+- **Span**: F.Cu → In2.Cu (skips In1=GND, lands on In2=signal). Total depth
+  ≈ 0.10mm prepreg (F-In1) + 0.035mm In1 copper + 0.15mm core (In1-In2) =
+  ~0.285 mm — well within JLC laser capability (≤0.4 mm typical).
+- **Blind via drill**: 0.15 mm (>= JLC HDI blind/buried laser min; +50% FoS
+  above the 0.10mm single-microvia laser limit, per §5c FoS-everywhere).
+- **Blind via pad**: 0.30 mm (>= drill + 2×annular ring = 0.15 + 2×0.075 =
+  0.30 mm; sits within QFN signal-pad bbox 0.25mm short-axis when emitted
+  via-in-pad on the long-axis dimension; verify per-pin in DRC).
+- **Annular ring**: 0.075 mm (= existing microvia ring; ≥ board std 0.10mm
+  AFTER plate-over; FoS margin above JLC blind-via fab min of 0.05mm).
+- **Hole clearance**: 0.10 mm (= existing HDI hole clearance; relaxed from
+  board std 0.25mm only inside the whitelist).
+- **Fab cost adder**: ~$2-5/board over base-HDI (JLC blind/buried Class
+  upgrade; on top of the existing +$2-3/board epoxy-fill+plate-over). Sai
+  cost-cleared 2026-05-28 for the 4 residual signals (~$5/board total HDI
+  envelope: standard microvia + blind/buried add-on, ONLY on J18+J19).
+
+**NARROWEST possible scope** — blind F-In2 vias are permitted ONLY on these
+**4 specific J18/J19 signal pins** (CH1 only; 4 nets, 4 pins, one blind via
+per pin). The canonical .kicad_pcb net names carry the schematic `_CH1`
+channel suffix (J18+J19 are the CH1 instances of the MCU + gate-driver; the
+CH2/3/4 mirrors at J28+J29/J38+J39/J48+J49 are NOT in this whitelist).
+
+| Net (canonical .kicad_pcb name) | Logical signal | Footprint | Pin # | Rationale |
+|---|---|---|---|---|
+| `BSTB_CH1` | BSTB | J19 | 17 | gate-driver bootstrap B — residual escape on J19 west side |
+| `PWM_INHB_CH1` | PWM_INHB | J18 | 19 | PWM input high B — residual escape on J18 east side |
+| `SWDIO_CH1` | SWDIO | J18 | 23 | SWD data — residual escape on J18 east side |
+| `PWM_INLA_CH1` | PWM_INLA | J18 | 15 | PWM input low A — residual escape on J18 south side |
+
+These 4 are the exact set the CH1 STEP-8b worker analysis identified as
+needing In2 (a signal layer) to escape; on the 10L stackup the only way to
+get a F.Cu pin to In2 in one structure is a blind F.Cu↔In2 via. The existing
+microvia F.Cu↔In1 class is RETAINED for nets whose return-path / GND-stitch
+need is what the microvia delivers (and where the signal escape is via the
+standard fanout band, not via-in-pad).
+
+**Whitelist scope is BINDING**: blind F.Cu↔In2 vias on ANY pin not in the
+above 4 = FAIL `audit_hdi_via_in_pad.py` (layer + whitelist check). Adding
+a 5th pin requires Sai cost-OK + update to this section + audit re-lock.
+
+**DRU enforcement**: `hardware/kicad/pcbai_fpv4in1.kicad_dru` carries a
+blind-via geometry rule scoped to vias with the new dimensions (drill
+0.15mm) AND on the 4 named nets only — `==` net-name comparison per
+[[reference-kicad-dru-libeval-crash]] (KiCad 9.0.2 libeval SIGTRAPs on
+`=~` regex; only `==` is headless-safe).
+
 ### Enforcement gates
 - `hardware/kicad/scripts/audit_hdi_via_in_pad.py` — verifies HDI vias only on whitelist
-- `hardware/kicad/pcbai_fpv4in1.kicad_dru` — relaxes DRC for HDI sizes (scoped to `A.Hole <= 0.15mm`)
+  (extended 2026-05-28 to accept blind F.Cu↔In2 vias on the 4 net whitelist
+  above, in addition to the existing microvia F.Cu↔In1 acceptance)
+- `hardware/kicad/pcbai_fpv4in1.kicad_dru` — relaxes DRC for HDI sizes (scoped to `A.Hole <= 0.15mm`),
+  + new blind F.Cu↔In2 geometry rule scoped to the 4 net names above
 - `route_subsystem_cooperative.HDI_VIA_IN_PAD_REFS` — router whitelist constant
+- `hardware/kicad/scripts/routing_engine/phase_a.py` — LAYER-AWARE escape supply
+  (`side_supply` drops plane-bottoming via classes from supply; T12 fixture
+  proves a naive plane-counting liar FAILS — the OQ-020 root fix)
 - `docs/MASTER_HDI_SPEC.md` — full fab spec + production order requirements
 
 ### Other components: standard via cost preserved

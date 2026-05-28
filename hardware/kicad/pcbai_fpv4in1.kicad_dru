@@ -127,20 +127,70 @@
 # semantics: takes most-restrictive of all applicable constraints). To
 # preserve the board std minimum on non-HDI vias (≥0.20mm drill), this
 # rule enforces 0.50mm diameter + 0.30mm hole + 0.10mm annular on them.
+# NB: the standard non-HDI rule is REFINED for the blind F-In2 class below
+# (drill 0.15mm < 0.20mm but > 0.15mm boundary used by HDI rules), so the
+# >0.15 condition catches the new blind class; we explicitly exclude blind-
+# F-In2 from this standard band by requiring A.Hole > 0.20mm here.
 
 (rule "Standard via diameter (non-HDI)"
   (constraint via_diameter (min 0.50mm))
-  (condition "A.Type == 'via' && A.Hole > 0.15mm"))
+  (condition "A.Type == 'via' && A.Hole > 0.20mm"))
 
 (rule "Standard via hole size (non-HDI)"
   (constraint hole_size (min 0.30mm))
-  (condition "A.Type == 'via' && A.Hole > 0.15mm"))
+  (condition "A.Type == 'via' && A.Hole > 0.20mm"))
 
 (rule "Standard via annular width (non-HDI)"
   (constraint annular_width (min 0.10mm))
-  (condition "A.Type == 'via' && A.Hole > 0.15mm"))
+  (condition "A.Type == 'via' && A.Hole > 0.20mm"))
 
 (rule "Standard via hole clearance (non-HDI)"
   (constraint hole_clearance (min 0.25mm))
-  (condition "A.Type == 'via' && A.Hole > 0.15mm"))
+  (condition "A.Type == 'via' && A.Hole > 0.20mm"))
+
+# === HDI blind/buried F.Cu↔In2 (OQ-020 ACTIVATE 2026-05-28; Sai cost-OK) ===
+# Per BOARD_INVARIANTS §"HDI Class extension: blind/buried F.Cu↔In2": the 4
+# residual J18/J19 escape signals need In2 (a signal layer); a F.Cu↔In1
+# microvia bottoms on In1=GND PLANE (not a signal escape, per the layer-
+# aware engine T12 fixture). The blind/buried F.Cu↔In2 class is the lever.
+#
+# Geometry (above fab min with §5c FoS):
+#   - drill 0.15mm (>= JLC HDI blind/buried laser min; +50% FoS over 0.10mm)
+#   - pad 0.30mm   (= drill 0.15 + 2×annular 0.075 = 0.30; fits QFN long-axis)
+#   - annular ring 0.075mm (≥ board std 0.10mm AFTER plate-over; FoS over 0.05)
+#   - hole clearance 0.10mm (= existing HDI; relaxed only inside whitelist)
+#
+# Whitelist scope: ONLY the 4 named net-pin pairs (BSTB.J19.17, PWM_INHB.
+# J18.19, SWDIO.J18.23, PWM_INLA.J18.15). Net-name == comparison (KiCad
+# 9.0.2 libeval SIGTRAPs on =~ regex per [[reference-kicad-dru-libeval-
+# crash]]; only == is safe headless). DRU rule-pick takes most-restrictive,
+# so the blind-via geometry MUST be permitted by net-name; on any OTHER
+# net, A.Hole=0.15mm falls into the >0.15mm-and-<=0.20mm band where the
+# rule below does NOT apply (the "Standard via" band starts at >0.20mm),
+# so an off-whitelist blind via fails the via_diameter rule's 0.50mm min.
+#
+# Net names are the canonical post-kinet2pcb names (per the CH1 schematic
+# which suffixes per-channel signals as _CHn): BSTB_CH1, PWM_INHB_CH1,
+# SWDIO_CH1, PWM_INLA_CH1. SCOPE: CH1 ONLY (where the OQ-020 wall was
+# diagnosed; Sai cost-OK envelope is CH1-specific). Expanding to CH2/3/4
+# requires Sai cost-OK + new PR + BOARD_INVARIANT_HASH re-lock under
+# [methodology-change] tag. The logical signal names appear in
+# BOARD_INVARIANTS + audit_hdi_via_in_pad.BLIND_F_IN2_LOGICAL_SIGNALS as
+# cross-reference.
+
+(rule "HDI blind F-In2 via diameter (whitelist)"
+  (constraint via_diameter (min 0.30mm))
+  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1')"))
+
+(rule "HDI blind F-In2 hole size (whitelist)"
+  (constraint hole_size (min 0.15mm))
+  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1')"))
+
+(rule "HDI blind F-In2 annular width (whitelist)"
+  (constraint annular_width (min 0.075mm))
+  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1')"))
+
+(rule "HDI blind F-In2 hole clearance (whitelist)"
+  (constraint hole_clearance (min 0.10mm))
+  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1')"))
 

@@ -124,6 +124,16 @@
 - **Status**: proposed
 - **Sim cross-check**: thermal/ampacity FoS already gated by the implemented audit_fos_* suite; routing-process headroom validated by T3 (greedy-trap) in the T1–T9 suite where a 100%-fill plan fails and an ≤80%-fill plan succeeds.
 
+### L13 — Via class supply MUST be layer-aware (plane-bottoming ≠ signal escape) — OQ-020 ACTIVATE (2026-05-28)
+
+- **Date**: 2026-05-28
+- **Pattern**: counting "+1 escape supply" per HDI via slot naively, regardless of which layer the via class actually terminates at. On a stackup whose adjacent layer is a reference PLANE (GND or +VMOTOR), the single-step microvia to that plane does NOT add signal escape supply — the net cannot continue from a plane.
+- **Observation**: PR #171 closed OQ-020 as "not needed" based on a layer-CAPACITY framing; the layer-aware engine `phase_a.side_supply` audit (2026-05-28 — T12 fixture) re-opens it. On the locked 10L stackup (F.Cu / In1=GND / In2=sig / ...), the J18/J19 HDI whitelist's microvia F.Cu↔In1 BOTTOMS ON In1=GND. 4 of the CH1 residual escapes (BSTB.J19.17, PWM_INHB.J18.19, SWDIO.J18.23, PWM_INLA.J18.15) need In2 — which on this stackup is a blind F.Cu↔In2 via (a different fab class).
+- **Root cause** (physics + counting): every via class is characterised by its TARGET LAYER (the layer it bottoms on). Only via classes whose target is a signal layer add signal escape supply; plane-bottoming classes add return-path stitch / decoupling, NOT escape. Engine v1's `side_supply` ignored target — counted ALL hdi_only slots equally — and over-stated supply by exactly the plane-bottoming count, masking the residual escape shortage. The OQ-020 root miscount.
+- **Cost adjustment** (`hardware/kicad/scripts/routing_engine/phase_a.py`): `side_supply` consults `Layer.role` for each `ViaSlot.target_layer` and DROPS plane-bottoming via classes from signal escape supply (`_slot_reaches_signal`). The T12 fixture proves a naive plane-counting LIAR FAILS (overflow goes from 0 → 1 when layer-awareness is enforced). Real-board path: `run_on_board.py` emits three via classes per IC side — `through` (target=None back-compat = signal-usable), `microvia_F_In1` (target=In1 PLANE — DROPPED), `blind_F_In2` (target=In2 SIGNAL; ONLY for the 4 whitelisted nets). BOARD_INVARIANTS adds the blind/buried F-In2 class with NARROWEST-possible scope (4 named CH1 nets at named pins; Sai cost-OK +$2-5/board JLC HDI blind/buried Class). `audit_hdi_via_in_pad.py` enforces the whitelist exact-string match; `pcbai_fpv4in1.kicad_dru` carries net-scoped blind-via geometry rules (== net-name per [[reference-kicad-dru-libeval-crash]]).
+- **Status**: proposed
+- **Sim cross-check**: T12 fixture self-check PASSES from first principles; T9/T10/T11 unchanged (no regression on naive-counting cases by the back-compat target=None path); a deliberate plane-counting adversarial liar (`_adversarial_plane_liar.py`) FAILS T12 (proves the case enforces layer-awareness, not just states it); audit synthetic test (`test_audit_hdi_blind_f_in2.py`) PASSES blind F-In2 on whitelist net + FAILS on non-whitelist (proves the whitelist scope is BINDING). Fab cost note: JLC HDI Class blind/buried activated for J18/J19 4-pin set, +$2-5/board on top of existing +$2-3/board epoxy-fill+plate-over, unlocks In2 escape for the 4 residual signals.
+
 ---
 
 ## Lesson template for new entries
@@ -159,5 +169,5 @@ A lesson can be `retired` if later evidence shows the pattern was a false positi
 ## ROUTING_LESSONS_HASH
 
 ```
-ROUTING_LESSONS_HASH = 4424015d88c739fdeaca5ec7e2113018d06efc69e7abd0ca7a62473858f99cfb
+ROUTING_LESSONS_HASH = 5c7fc6301bf0d9dbf644223448dc5d05eb1e8a24221d6bfa3b49f6166af65e9a
 ```

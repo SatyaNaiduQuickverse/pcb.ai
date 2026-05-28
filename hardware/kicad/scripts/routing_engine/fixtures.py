@@ -147,12 +147,36 @@ class Door:
 class ViaSlot:
     """An escape via site (HDI dog-bone fanout band model — BOARD_INVARIANTS
     §HDI via-in-pad whitelist). `hdi_only=True` slots exist ONLY when HDI
-    via-in-pad is enabled (the T9 escalation lever)."""
+    via-in-pad is enabled (the T9 escalation lever).
+
+    LAYER-AWARE ESCAPE SUPPLY (T12 / OQ-020 root-fix — 2026-05-28)
+    --------------------------------------------------------------
+    A via class is escape SUPPLY only if it reaches a USABLE SIGNAL layer.
+    On the locked 10L stackup a single-step F.Cu↔In1 microvia BOTTOMS ON the
+    In1=GND plane — it provides a stitch to GND, NOT a signal escape route
+    (the net cannot continue from In1 because In1 is a reference plane). On
+    the same stackup a blind F.Cu↔In2 via reaches In2 (a signal layer) and IS
+    a signal escape (the OQ-020 lever).
+
+      target_layer : name of the layer this via class terminates at (the deep
+                     side of the blind / microvia hop). MUST match a Layer.name
+                     in the same fixture / Problem when set. When None (back-
+                     compat with T1-T11 which abstract away layer targets) the
+                     slot is counted naively (treated as a usable signal slot).
+                     `phase_a.side_supply` cross-checks target_layer against
+                     the fixture's layers tuple and DROPS slots whose target is
+                     a plane (role='plane') — that is the layer-aware fix.
+      via_class    : optional human-readable class tag for ledgers/PR evidence
+                     (e.g. "microvia_F_In1", "blind_F_In2", "through"). Not
+                     used by the supply math; pure provenance.
+    """
     id: str
     x_mm: float
     y_mm: float
     ic_side: str             # which fine-pitch IC side this slot serves
     hdi_only: bool = False   # True => available only with HDI enabled
+    target_layer: Optional[str] = None   # layer the via terminates at (None=naive)
+    via_class: Optional[str] = None      # provenance tag, e.g. "blind_F_In2"
 
 
 @dataclass(frozen=True)
@@ -1159,6 +1183,531 @@ def _build_T11():
                    (door_A, door_B), (), (), gt, proof)
 
 
+def _build_T12():
+    """T12 — LAYER-AWARE ESCAPE SUPPLY (stretch). The OQ-020 root-fix fixture.
+
+    The CH1 graduation surfaced a counting bug: the engine v1 added an HDI via
+    slot as +1 escape supply NAIVELY, regardless of which layer the via class
+    actually reached. On the locked 10L stackup (F.Cu / In1=GND / In2=sig /
+    In3=GND / ...) a single-step F.Cu↔In1 microvia BOTTOMS ON the In1=GND
+    PLANE — it stitches to GND, NOT a signal escape route. A blind F.Cu↔In2
+    via reaches In2 (a signal layer) and IS a signal escape (the OQ-020 fab
+    class). The engine MUST count a via class as supply ONLY if its target
+    layer is a SIGNAL layer (per the stackup roles).
+
+    Construction (the smallest faithful case — provable by hand):
+      * STACKUP (3 layers): F.Cu signal, In1 PLANE (GND), In2 SIGNAL.
+      * ONE IC side (J20_S) with K=2 standard via slots
+        (`via_class=through`, `target_layer=B.Cu`-equivalent — but our 3-layer
+        stack uses In2 as the deep signal so std target=In2 signal) BUT to
+        keep the counting tight here, std slots use `target_layer=None`
+        (back-compat: treated as signal-usable; mirrors the abstract T9 std
+        slots that don't declare a target).
+      * On TOP of the std supply we add a LIAR class of HDI-only slots whose
+        target is In1 (plane) — 2 microvias F.Cu↔In1. A NAIVE counter (engine
+        v1) would add these +2 to the supply and call it ROUTABLE. The
+        LAYER-AWARE engine must DROP them from supply (they bottom on GND).
+      * We also add a TRUTH class of HDI-only slots whose target is In2
+        (signal) — 1 blind F.Cu↔In2. These DO count as supply.
+
+      * DEMAND = K+2 = 4 escape nets, all attributed to J20_S (the only side).
+
+    Ground-truth counting (re-derivable by hand, no solver):
+      std supply (signal target) = 2
+      plane-bottoming microvia F-In1 supply = 0  (DROPPED — they reach plane)
+      blind F-In2 supply = 1                       (signal target — kept)
+      LAYER-AWARE total HDI supply = 1
+      demand 4 > std 2 + HDI 1 = 3 => overflow = 1 with HDI
+                                 => NEEDS-PLACEMENT-CHANGE / NEEDS-other-via-class
+      NAIVE (engine-v1 liar) total HDI supply = 1 + 2 = 3
+      demand 4 vs std 2 + naive HDI 3 = 5 => overflow 0 => WRONGLY ROUTABLE/NEEDS-HDI
+
+    THE POINT: a naive plane-counting liar PASSES the case as ROUTABLE/NEEDS-HDI
+    (overflow 0); the layer-aware engine reports NEEDS-PLACEMENT-CHANGE
+    (overflow 1 with HDI — HDI doesn't close it because the offered HDI is
+    mostly plane-bottoming). The base verdict the engine emits with std-only is
+    INFEASIBLE (demand 4 > std 2 = overflow 2) — the conditional lever is the
+    blind-F-In2 supply, which on its own ALSO leaves overflow 1 (because the
+    plane-bottoming HDI is not supply). So the fixture's BASE verdict is
+    NEEDS-PLACEMENT-CHANGE, exposing the layer-aware miscount.
+    """
+    # 3-layer minimum stackup to express plane vs signal targeting.
+    layers = (
+        Layer("F.Cu", "signal"),
+        Layer("In1", "plane", "GND"),     # PLANE — vias bottoming here are NOT signal escape
+        Layer("In2", "signal"),           # SIGNAL — vias bottoming here ARE signal escape
+    )
+    via_slots = []
+    # K=2 STANDARD slots (no target_layer declared => signal-usable, back-compat).
+    K = 2
+    for i in range(K):
+        via_slots.append(ViaSlot(f"VS_STD{i}", 1.0 + i, 2.0, "J20_S",
+                                 hdi_only=False, target_layer=None,
+                                 via_class="through"))
+    # LIAR class: 2 HDI microvia F.Cu↔In1 — target=In1 (PLANE). These would be
+    # +2 supply under naive counting but DROPPED by the layer-aware engine.
+    LIAR = 2
+    for i in range(LIAR):
+        via_slots.append(ViaSlot(f"VS_HDI_PLANE{i}", 3.0 + i, 2.0, "J20_S",
+                                 hdi_only=True, target_layer="In1",
+                                 via_class="microvia_F_In1"))
+    # TRUTH class: 1 HDI blind F.Cu↔In2 — target=In2 (SIGNAL). Counts as supply.
+    TRUTH = 1
+    for i in range(TRUTH):
+        via_slots.append(ViaSlot(f"VS_HDI_SIG{i}", 5.0 + i, 2.0, "J20_S",
+                                 hdi_only=True, target_layer="In2",
+                                 via_class="blind_F_In2"))
+    # K+2=4 escape nets, each must escape J20_S.
+    DEMAND = K + 2   # 4 — provably ABOVE std (2) + truthful HDI (1) supply
+    pins, nets = [], []
+    for i in range(DEMAND):
+        nid = f"esc{i}"
+        pins.append(Pin(f"{nid}_PAD", 1.0 + i, 3.0, "F.Cu"))
+        pins.append(Pin(f"{nid}_DST", 1.0 + i, 0.0, "F.Cu"))
+        nets.append(Net(nid, (f"{nid}_PAD", f"{nid}_DST"), "PWM"))
+    # Ground-truth bookkeeping (re-derivable from the slots/nets above).
+    std_signal = sum(1 for v in via_slots
+                     if not v.hdi_only
+                     and (v.target_layer is None
+                          or any(L.name == v.target_layer and L.role == "signal"
+                                 for L in layers)))
+    hdi_signal = sum(1 for v in via_slots
+                     if v.hdi_only
+                     and v.target_layer is not None
+                     and any(L.name == v.target_layer and L.role == "signal"
+                             for L in layers))
+    hdi_plane = sum(1 for v in via_slots
+                    if v.hdi_only
+                    and v.target_layer is not None
+                    and any(L.name == v.target_layer and L.role == "plane"
+                            for L in layers))
+    naive_hdi = sum(1 for v in via_slots if v.hdi_only)   # plane + signal (the liar)
+    overflow_std_layer_aware = max(0, DEMAND - std_signal)        # 4-2 = 2
+    overflow_all_layer_aware = max(0, DEMAND - (std_signal + hdi_signal))  # 4-3 = 1
+    overflow_all_naive = max(0, DEMAND - (std_signal + naive_hdi))         # 4-5 = 0 (LIAR)
+    gt = GroundTruth(
+        # Base verdict: even with the offered HDI, the layer-aware engine
+        # reports overflow 1 (HDI can't close it because most of the HDI is
+        # plane-bottoming) -> NEEDS-PLACEMENT-CHANGE per phase_a._decide_verdict.
+        verdict="NEEDS-PLACEMENT-CHANGE",
+        metrics={
+            "ic_side": "J20_S",
+            "demand_nets": DEMAND,                              # 4
+            "supply_std_signal": std_signal,                    # 2
+            "supply_hdi_signal": hdi_signal,                    # 1 (blind F-In2)
+            "supply_hdi_plane_DROPPED": hdi_plane,              # 2 (microvia F-In1 — NOT supply)
+            "overflow_std_layer_aware": overflow_std_layer_aware,    # 2
+            "overflow_all_layer_aware": overflow_all_layer_aware,    # 1 (binding overflow with HDI)
+            "naive_hdi_supply_LIAR": naive_hdi,                 # 3 (plane + signal counted alike)
+            "overflow_all_naive_LIAR": overflow_all_naive,      # 0 — WRONGLY ROUTABLE
+            "verdict_reason": ("demand 4 > std 2 + LAYER-AWARE HDI 1 = 3 "
+                               "(overflow_with_hdi 1, HDI does not close); "
+                               "NAIVE counter sees demand 4 vs supply 5 "
+                               "(overflow 0 — wrongly ROUTABLE) — proves the "
+                               "engine MUST drop plane-bottoming via classes "
+                               "from supply; OQ-020 root fix."),
+            "escalation": "blind/buried F.Cu→In2 (signal target) — the only "
+                          "HDI class that adds REAL signal escape supply on a "
+                          "stackup where F-In1 bottoms on GND",
+            "overflow": overflow_all_layer_aware,   # harness-scored: overflow w/ HDI offered
+        },
+        conditional_on=None,    # the offered HDI cannot resolve it (only 1 blind)
+        alt_verdict=None,
+        alt_metrics={},
+        alt_witness={},
+        # Witness for the LAYER-AWARE supply ledger (re-checkable by hand):
+        witness={
+            "supply_by_class": {
+                "through (target=None signal-usable)": std_signal,
+                "microvia_F_In1 (target=In1 PLANE)": "DROPPED (not signal supply)",
+                "blind_F_In2 (target=In2 SIGNAL)": hdi_signal,
+            },
+            "layer_aware_total_supply": std_signal + hdi_signal,
+            "naive_total_supply_LIAR": std_signal + naive_hdi,
+        },
+    )
+    proof = (
+        "T12 (LAYER-AWARE ESCAPE SUPPLY; the OQ-020 root-fix; "
+        "DEEP_RESEARCH_2026-05-26_J18_J19_ESCAPE 2026-05-28 escape-density "
+        "correction; engine layer-awareness). 3-layer stackup: F.Cu signal, "
+        "In1 PLANE (GND), In2 SIGNAL. ONE IC side J20_S with 4 demand nets "
+        "and three via classes offered: 2 STANDARD slots (target=None, "
+        "signal-usable by back-compat); 2 HDI microvia F-In1 (target=In1 "
+        "PLANE — NOT signal escape supply); 1 HDI blind F-In2 (target=In2 "
+        "SIGNAL — IS signal escape supply). LAYER-AWARE counting: std supply "
+        "2 + HDI(signal) 1 = 3 < demand 4 => overflow_with_hdi 1 — the "
+        "offered HDI cannot close the gap because most of it bottoms on the "
+        "GND plane; verdict NEEDS-PLACEMENT-CHANGE (the only HDI class that "
+        "would help is MORE blind F-In2 slots — the OQ-020 lever). NAIVE "
+        "counter (engine v1 liar): would add 1+2=3 HDI slots indiscriminately "
+        "=> total 2+3=5 >= demand 4 => overflow 0 => WRONGLY ROUTABLE/NEEDS-"
+        "HDI. Self-check counts by class (no solver), asserts the layer-aware "
+        "overflow_with_hdi == 1 AND the naive overflow == 0 AND asserts a "
+        "plane-counting liar would FAIL T12 by reporting overflow 0."
+    )
+    return Fixture("T12", "layer-aware escape supply (OQ-020 root fix)",
+                   "stretch",
+                   "layer-aware escape: count via class as supply ONLY if it "
+                   "reaches a SIGNAL layer (plane-bottoming via classes are "
+                   "DROPPED from supply); generalises the HDI counting "
+                   "(engine v1 counted naively => the OQ-020 J18/J19 miscount)",
+                   layers, tuple(pins), tuple(nets), (), (), tuple(via_slots),
+                   gt, proof)
+
+
+# ----------------------------------------------------------------------------
+# T13 — LONG-PATH-THROUGH-OBSTACLES (stretch). Appended by Engine Step 8b-ext
+# lever (b) — the maze-router (bounded A*) ground-truth case. Different from
+# T9/T10 escape (the cooperative router's bread-and-butter): this one's
+# bottleneck is FREE-SPACE NAVIGATION past component bodies over ~20mm. The
+# cooperative router thrashes (its negotiated-congestion model assumes the
+# bottleneck is via slots); a bounded-A* maze on a fine signal grid shines.
+# ----------------------------------------------------------------------------
+
+def _build_T13():
+    """T13 — LONG-PATH-THROUGH-OBSTACLES (stretch).
+
+    Construction: ONE critical net from S=(0,7) to E=(20,7), both on F.Cu. Three
+    body keep-outs are placed across the direct line — TWO with the gap BELOW
+    (y>=2), ONE with the gap ABOVE (y<=13). The direct y=7 line crosses all
+    three; the only feasible route weaves up-over / down-under / up-over them
+    (a multi-bend ~58mm detour), provable by hand:
+
+        obs1: x in [4,6],   y in [2,15]  (gap BELOW y=2)
+        obs2: x in [9,11],  y in [0,13]  (gap ABOVE y=13)
+        obs3: x in [14,16], y in [2,15]  (gap BELOW y=2)
+
+    Why the cooperative router stalls and the maze wins (the case this fixture
+    GATES, ROUTING_METHODOLOGY §0b):
+      * cooperative: negotiated congestion on via slots; no via supply here =>
+        the rip-up budget burns on dead-end pushes; iterations exhaust.
+      * maze (bounded A*): octilinear grid search over free space; clearance +
+        plane-continuity HARD; the multi-bend detour is the natural shortest
+        octilinear path, found within a small expansion budget.
+
+    Ground truth: ROUTABLE with a single witness path. Encoded:
+        path = [(0,7),(0,1),(7.5,1),(7.5,14),(12.5,14),(12.5,1),(20,1),(20,7)]
+    Hand-verifiable (each leg clears every obstacle by >= 0.3mm; total length =
+    58mm; 6 right-angle bends; 0 vias). Self-check confirms the witness is valid
+    (every leg clears every body AABB inflated by the trace + clearance margin)
+    AND the direct y=7 line DOES intersect each body (proving the bend topology
+    is forced, not cosmetic).
+    """
+    layers = (Layer("F.Cu", "signal"), Layer("In1", "plane", "GND"))
+    pins = [Pin("LP_S", 0.0, 7.0, "F.Cu"), Pin("LP_E", 20.0, 7.0, "F.Cu")]
+    nets = [Net("LP", ("LP_S", "LP_E"), "signal")]
+    # Three body keep-outs forcing a multi-bend octilinear detour.
+    obstacles = (
+        Obstacle("BODY_1", 4.0,  2.0,  6.0, 15.0, kind="body"),   # gap BELOW
+        Obstacle("BODY_2", 9.0,  0.0, 11.0, 13.0, kind="body"),   # gap ABOVE
+        Obstacle("BODY_3", 14.0, 2.0, 16.0, 15.0, kind="body"),   # gap BELOW
+    )
+    # Witness path (octilinear; uses only 90° bends so the hand-derivation stays
+    # closed-form). The maze router will likely find a SHORTER octilinear-45°
+    # path; the witness just PROVES routability + bounds.
+    witness_path = [(0.0, 7.0), (0.0, 1.0), (7.5, 1.0), (7.5, 14.0),
+                    (12.5, 14.0), (12.5, 1.0), (20.0, 1.0), (20.0, 7.0)]
+    witness_length = sum(
+        ((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5
+        for a, b in zip(witness_path, witness_path[1:]))
+    witness_corners = sum(
+        1 for i in range(1, len(witness_path) - 1)
+        if (witness_path[i][0] - witness_path[i - 1][0],
+            witness_path[i][1] - witness_path[i - 1][1])
+        != (witness_path[i + 1][0] - witness_path[i][0],
+            witness_path[i + 1][1] - witness_path[i][1]))
+    # Min path length is the L-shaped wrap around the tightest obstacle: any
+    # routable path MUST detour at least 2×(min_y_gap below + min_y_gap above) +
+    # horizontal span; a conservative lower bound is the horizontal span 20mm.
+    # A tighter bound: any path crossing x=10 must reach y<=0-0.3 OR y>=13+0.3 =>
+    # the integral of |dy/dx| forces total path length > 20mm + 2×(13-7) - small
+    # margins. We declare a SAFE lower bound 20mm (every routable path >=20mm).
+    gt = GroundTruth(
+        verdict="ROUTABLE",
+        metrics={
+            "routed": 1,
+            "min_length_mm": 20.0,          # lower bound (horizontal span)
+            "max_n_corners": 12,            # upper bound: the maze should not
+                                             # generate >12 bends in this region
+            "max_n_vias": 0,                # single layer => no vias needed
+            "witness_length_mm": round(witness_length, 4),
+            "witness_n_corners": witness_corners,
+            "direct_line_blocked": True,    # the direct y=7 line crosses bodies
+        },
+        witness={"path": witness_path,
+                 "trace_width_mm": 0.20,
+                 "clearance_mm": 0.20},
+    )
+    proof = (
+        "T13 (long-path through obstacles; the maze-router gate). The direct "
+        "line (0,7)→(20,7) crosses three body keep-outs at x in {4..6, 9..11, "
+        "14..16} (each obstacle spans y=7 by construction). The witness path "
+        "weaves down-under obs1+3 (y=1) and up-over obs2 (y=14), clearing every "
+        "AABB by ≥0.3mm (= trace 0.10 + clearance 0.20mm margin). Total witness "
+        f"length {witness_length:.2f}mm with {witness_corners} bends and 0 vias. "
+        "Self-check asserts: (a) the witness path clears every body inflated by "
+        "0.3mm; (b) the witness endpoints match the pin coords; (c) the direct "
+        "y=7 line DOES intersect each body (forcing the detour topology); (d) "
+        "all witness segments are octilinear (axis or 45° diagonal) — no acute "
+        "angles."
+    )
+    return Fixture("T13", "long-path through obstacles (maze gate)", "stretch",
+                   "bounded-A* maze on free-space navigation past body keep-outs",
+                   layers, tuple(pins), tuple(nets), (), obstacles, (), gt, proof)
+
+
+# ----------------------------------------------------------------------------
+# T14 — PER-NET WHITELIST PRESERVATION UNDER STD OVERFLOW (stretch). Appended
+# 2026-05-28 to lock the OQ-020 T14 root-fix (the engine bug where per-named-
+# net blind_F_In2 supply was eaten by side-level std overflow of OTHER nets;
+# canonical d4ab0f2 J19_N PWM_INHB regression). APPEND-ONLY: T1-T13 unchanged.
+# ----------------------------------------------------------------------------
+
+def _build_T14():
+    """T14 — PER-NET WHITELIST PRESERVATION UNDER STD OVERFLOW (stretch).
+    The OQ-020 T14 root-fix fixture (2026-05-28; engine_v2 layer+per-net
+    awareness on top of T12 layer-awareness).
+
+    THE BUG (canonical d4ab0f2 J19_N regression — the live failure case):
+    when the engine sees consumed > std_total on an IC side (some routed nets
+    used HDI/non-std mechanisms), the engine v2 (pre-T14) DERATED the per-net
+    HDI supply by the overflow:
+        hdi_remaining = max(0, hdi_total - max(0, consumed - std_total))
+    This treats HDI as fungible BACKFILL for std overflow. But the OQ-020
+    blind_F_In2 supply is a PER-NAMED-NET RESERVATION (driver emits 1 blind
+    slot per whitelist-eligible residual net by construction) — the std
+    overflow of OTHER nets MUST NOT eat into the reserved slot for PWM_INHB
+    (or BSTB/SWDIO/PWM_INLA). On the canonical board, J19_N had std_total=3,
+    consumed=4, hdi_total=1 (blind for PWM_INHB), and the buggy engine
+    reported hdi_remaining = max(0, 1 - 1) = 0 ⇒ INFEASIBLE for PWM_INHB,
+    when the truth is the per-net slot IS reserved for it ⇒ ROUTABLE.
+
+    Construction (smallest faithful reproduction — provable by hand):
+      * STACKUP (3 layers): F.Cu signal, In1 PLANE (GND), In2 SIGNAL — the
+        same minimal layer-aware stack T12 uses (so T14 stacks on T12, not
+        bypassing layer-awareness).
+      * ONE IC side (J21_N) with three via classes:
+          - 2 STANDARD slots (target=None back-compat signal-usable; the
+            T9-style abstract std).
+          - 1 HDI microvia F.Cu↔In1 LIAR slot (target=In1 PLANE — DROPPED
+            from signal supply by layer-awareness; included only to confirm
+            T12's plane-drop rule still fires under T14).
+          - 1 HDI blind F.Cu↔In2 slot (target=In2 SIGNAL, via_class=
+            "blind_F_In2") — the PER-NAMED-NET reserved class. Driver-
+            equivalent: one such slot reserved for the residual whitelist
+            net on this side.
+      * DEMAND = 1 escape net (`wl0`) — the residual whitelist net the
+        blind slot is reserved for.
+
+    GROUND TRUTH (re-derivable by hand, no solver) — under consumed=3:
+      std_remaining = max(0, std_total 2 - consumed 3) = 0
+      hdi_per_net (blind_F_In2, signal target) = 1   (RESERVED for wl0)
+      hdi_plane (microvia_F_In1) = 1                  (DROPPED by layer-aware)
+      whitelist_demand = 1  (wl0)
+      non_whitelist_demand = demand 1 - whitelist 1 = 0
+      ⇒ overflow_std (per-net-aware) = max(0, 0 - 0) = 0
+      ⇒ overflow_hdi (per-net-aware) = 0 + max(0, 1 - 1) = 0
+      ⇒ VERDICT = ROUTABLE (the per-net slot satisfies the whitelist demand)
+    BUGGY-ENGINE ground truth (re-derived by the LIAR formula) — same inputs:
+      hdi_remaining (BUGGY) = max(0, hdi_total 1 - max(0, consumed 3 - std 2))
+                            = max(0, 1 - 1) = 0
+      std_remaining = max(0, 2 - 3) = 0
+      ⇒ demand 1 > supply (0 std + 0 HDI) = 0 ⇒ overflow_hdi = 1
+      ⇒ VERDICT = INFEASIBLE (WRONG — per-net slot was reserved for wl0).
+
+    THE POINT (T14 is the OQ-020 lockfile against engine drift):
+    a regression to the buggy formula (or any side-aggregate-overflow logic
+    that lets std overflow of OTHER nets consume per-net reserved supply)
+    FAILS T14 immediately — selfcheck calls the engine directly with the
+    bug-trigger inputs (consumed_by_side={"J21_N": 3},
+    demand_by_side={"J21_N": 1}) and asserts the engine reports overflow
+    0 and verdict ROUTABLE, AND re-derives the BUGGY formula to confirm a
+    liar reproducing the old logic would say INFEASIBLE on the SAME inputs.
+
+    SOLVER-PATH NOTE: the run_suite harness calls `solve(problem)` with no
+    consumed_by_side override (the abstract fixtures default to consumed=0).
+    With consumed=0 the fixture trivially routes (demand 1 ≤ std 2 + blind 1
+    = 3 supply) — both buggy + fixed engines emit ROUTABLE. The bug-witness
+    lives in selfcheck (direct engine invocation, which is where the
+    canonical d4ab0f2 driver flow hits the bug too). Ground truth verdict
+    is ROUTABLE under BOTH consumed scenarios; the bug-witness is the
+    per-net allocation math + buggy-formula re-derivation, not the
+    solver-path verdict alone.
+    """
+    # 3-layer minimum stackup to express plane vs signal targeting (same as T12).
+    layers = (
+        Layer("F.Cu", "signal"),
+        Layer("In1", "plane", "GND"),     # PLANE — microvia bottoming here is NOT signal
+        Layer("In2", "signal"),           # SIGNAL — blind via bottoming here IS signal
+    )
+    # 2 STANDARD slots (target_layer=None back-compat signal-usable).
+    via_slots = [
+        ViaSlot("VS_STD0", 1.0, 2.0, "J21_N",
+                hdi_only=False, target_layer=None, via_class="through"),
+        ViaSlot("VS_STD1", 2.0, 2.0, "J21_N",
+                hdi_only=False, target_layer=None, via_class="through"),
+        # LIAR class: 1 HDI microvia F.Cu↔In1 — target=In1 (PLANE). DROPPED
+        # by layer-awareness (T12 rule); confirms T14 layers on T12, not
+        # bypasses it.
+        ViaSlot("VS_HDI_PLANE0", 3.0, 2.0, "J21_N",
+                hdi_only=True, target_layer="In1", via_class="microvia_F_In1"),
+        # TRUTH class: 1 HDI blind F.Cu↔In2 — target=In2 (SIGNAL), PER-NET
+        # reserved (via_class in `phase_a.PER_NET_RESERVED_VIA_CLASSES`).
+        # Reserved for the residual whitelist net `wl0` by construction
+        # (driver invariant: 1 blind slot per eligible residual net).
+        ViaSlot("VS_HDI_BLIND_FIn2_0", 4.0, 2.0, "J21_N",
+                hdi_only=True, target_layer="In2", via_class="blind_F_In2"),
+    ]
+    # 1 demand net (the residual whitelist net the blind slot is reserved for).
+    pins = [
+        Pin("wl0_PAD", 1.0, 3.0, "F.Cu"),    # on the IC pad
+        Pin("wl0_DST", 1.0, 0.0, "F.Cu"),    # escape target
+    ]
+    nets = [Net("wl0", ("wl0_PAD", "wl0_DST"), "PWM")]
+    # Re-derivable counts (ground-truth bookkeeping; selfcheck cross-checks).
+    std_total = sum(1 for v in via_slots if not v.hdi_only)              # 2
+    hdi_signal = sum(1 for v in via_slots
+                     if v.hdi_only
+                     and v.target_layer is not None
+                     and any(L.name == v.target_layer and L.role == "signal"
+                             for L in layers))                            # 1
+    hdi_plane = sum(1 for v in via_slots
+                    if v.hdi_only
+                    and v.target_layer is not None
+                    and any(L.name == v.target_layer and L.role == "plane"
+                            for L in layers))                             # 1
+    hdi_per_net = sum(1 for v in via_slots
+                      if v.hdi_only and v.via_class == "blind_F_In2")     # 1
+    hdi_pool = hdi_signal - hdi_per_net                                   # 0
+    demand = len(nets)                                                    # 1
+    # Bug-trigger inputs the selfcheck feeds the engine (the canonical
+    # d4ab0f2 J19_N pattern: consumed > std_total, demand = 1 whitelist net).
+    consumed_for_bug_witness = 3
+    # PER-NET-AWARE (fixed engine) accounting on those inputs:
+    std_remaining_fixed = max(0, std_total - consumed_for_bug_witness)    # 0
+    whitelist_demand_fixed = min(hdi_per_net, demand)                     # 1
+    non_whitelist_demand_fixed = demand - whitelist_demand_fixed          # 0
+    overflow_std_fixed = max(0, non_whitelist_demand_fixed
+                             - std_remaining_fixed)                       # 0
+    overflow_hdi_fixed = (max(0, non_whitelist_demand_fixed
+                              - (std_remaining_fixed + hdi_pool))
+                          + max(0, whitelist_demand_fixed - hdi_per_net)) # 0
+    # BUGGY (engine_v1 pre-T14) accounting on the SAME inputs — the liar:
+    hdi_remaining_buggy = max(0, hdi_signal
+                              - max(0, consumed_for_bug_witness - std_total))  # 0
+    std_remaining_buggy = max(0, std_total - consumed_for_bug_witness)    # 0
+    overflow_std_buggy = max(0, demand - std_remaining_buggy)             # 1
+    overflow_hdi_buggy = max(0, demand
+                             - (std_remaining_buggy + hdi_remaining_buggy))  # 1
+    gt = GroundTruth(
+        verdict="ROUTABLE",
+        metrics={
+            "ic_side": "J21_N",
+            "demand_nets": demand,                                  # 1
+            "std_total": std_total,                                 # 2
+            "supply_hdi_signal": hdi_signal,                        # 1 (blind only)
+            "supply_hdi_per_net": hdi_per_net,                      # 1 (blind reserved)
+            "supply_hdi_pool": hdi_pool,                            # 0
+            "supply_hdi_plane_DROPPED": hdi_plane,                  # 1 (microvia F-In1)
+            "consumed_for_bug_witness": consumed_for_bug_witness,   # 3
+            # Fixed-engine (per-net-aware) under the bug-trigger inputs:
+            "fixed_std_remaining": std_remaining_fixed,             # 0
+            "fixed_non_whitelist_demand": non_whitelist_demand_fixed,  # 0
+            "fixed_whitelist_demand": whitelist_demand_fixed,       # 1
+            "fixed_overflow_std": overflow_std_fixed,               # 0
+            "fixed_overflow_hdi": overflow_hdi_fixed,               # 0
+            "fixed_verdict": "ROUTABLE",
+            # Buggy-engine (side-aggregate-overflow-eats-whitelist) on SAME:
+            "buggy_hdi_remaining": hdi_remaining_buggy,             # 0 (the EATEN slot)
+            "buggy_std_remaining": std_remaining_buggy,             # 0
+            "buggy_overflow_std": overflow_std_buggy,               # 1
+            "buggy_overflow_hdi": overflow_hdi_buggy,               # 1
+            "buggy_verdict": "INFEASIBLE",
+            "verdict_reason": (
+                "with consumed_by_side={'J21_N': 3} > std_total 2, the bug "
+                "formula `hdi_remaining = max(0, 1 - max(0, 3-2))` = 0 "
+                "INCORRECTLY consumes the per-net blind_F_In2 slot reserved "
+                "for the whitelist net wl0 (the d4ab0f2 J19_N PWM_INHB "
+                "regression). The per-net-aware fix preserves the reservation "
+                "(non_whitelist_demand=0, blind_per_net=1, allocated to wl0) "
+                "⇒ overflow 0 ⇒ ROUTABLE."),
+            "escalation": (
+                "ALREADY APPLIED — the per-net-aware allocation in "
+                "phase_a.escape_ledger preserves per-named-net blind_F_In2 "
+                "supply against side-level std-overflow consumption (the "
+                "OQ-020 / T14 root fix; PER_NET_RESERVED_VIA_CLASSES "
+                "policy)."),
+            # Harness-scored metric on the SOLVER path (consumed=0): the
+            # fixture trivially routes (1 demand ≤ 3 supply); overflow == 0.
+            "overflow": 0,
+        },
+        # Witness: explicit allocation under both consumed scenarios.
+        witness={
+            # Under consumed=3 (the bug-trigger): fixed engine assigns the
+            # per-net blind_F_In2 slot to wl0, std_remaining = 0 but
+            # non_whitelist_demand = 0 too — every net is allocated.
+            "allocation_consumed3": {
+                "wl0": "VS_HDI_BLIND_FIn2_0 (per-net reserved blind F-In2)",
+            },
+            # Under consumed=0 (the solver path): wl0 may use std or blind;
+            # we record the per-net-preferred assignment.
+            "allocation_consumed0": {
+                "wl0": "VS_STD0 (std slot — wl0 has fallback options too)",
+            },
+            "supply_by_class_layer_aware": {
+                "through (target=None signal-usable)": std_total,
+                "microvia_F_In1 (target=In1 PLANE)": "DROPPED (not signal supply)",
+                "blind_F_In2 (target=In2 SIGNAL; PER-NET reserved)": hdi_per_net,
+            },
+        },
+        # No CONDITIONAL lever — the fix is structural (engine refactor), not
+        # a runtime escalation; the fixture is ROUTABLE both ways once the
+        # engine is correct.
+        conditional_on=None,
+        alt_verdict=None,
+        alt_metrics={},
+        alt_witness={},
+    )
+    proof = (
+        "T14 (PER-NET WHITELIST PRESERVATION UNDER STD OVERFLOW; the OQ-020 "
+        "T14 root-fix; canonical d4ab0f2 J19_N PWM_INHB regression). 3-layer "
+        "stackup F.Cu/In1=GND/In2=signal (same as T12 — layer-aware). ONE IC "
+        "side J21_N with 4 via classes (2 std + 1 microvia F-In1 LIAR + 1 "
+        "blind F-In2 PER-NET) and 1 whitelist demand net wl0. BUG-WITNESS "
+        "inputs: consumed_by_side={'J21_N': 3} (3 routed nets consumed std + "
+        "spilled to other mechanisms), demand_by_side={'J21_N': 1} (the "
+        "residual whitelist net). The buggy formula "
+        "`hdi_remaining = max(0, hdi_total - max(0, consumed - std_total))` "
+        "computes hdi_remaining = max(0, 1 - 1) = 0, EATING the per-net "
+        "blind slot reserved for wl0 ⇒ demand 1 > supply (0 std + 0 HDI) ⇒ "
+        "INFEASIBLE (WRONG). The PER-NET-AWARE fix recognizes blind_F_In2 "
+        "as PER-NAMED-NET RESERVATION (PER_NET_RESERVED_VIA_CLASSES = "
+        "{'blind_F_In2'}); the std-overflow of OTHER nets does NOT consume "
+        "it (non_whitelist_demand 0, std_remaining 0, blind_per_net 1, "
+        "whitelist_demand 1 served by blind) ⇒ overflow 0 ⇒ ROUTABLE. "
+        "Self-check (1) invokes phase_a.escape_ledger directly with the "
+        "bug-trigger inputs and asserts overflow_std=0, overflow_hdi=0, "
+        "supply_hdi_per_net=1, verdict ROUTABLE; (2) re-derives the BUGGY "
+        "formula on the SAME inputs and asserts the liar would compute "
+        "hdi_remaining=0, overflow_hdi=1, verdict INFEASIBLE; (3) asserts "
+        "the T12 plane-drop rule still fires (microvia F-In1 = 0 signal "
+        "supply, blind F-In2 = 1 signal supply). The fixture also routes "
+        "trivially under consumed=0 (the solver-path verdict ROUTABLE) — "
+        "the bug-witness is the consumed=3 selfcheck path, mirroring the "
+        "live d4ab0f2 J19_N driver invocation."
+    )
+    return Fixture("T14",
+                   "per-net whitelist preservation under std overflow "
+                   "(OQ-020 T14 root fix)",
+                   "stretch",
+                   "per-net HDI allocation: blind_F_In2 slots are PER-NAMED-"
+                   "NET RESERVATIONS that std-overflow of OTHER nets MUST "
+                   "NOT consume (canonical d4ab0f2 J19_N PWM_INHB "
+                   "regression; engine_v2 layer+per-net awareness)",
+                   layers, tuple(pins), tuple(nets), (), (), tuple(via_slots),
+                   gt, proof)
+
+
 # ----------------------------------------------------------------------------
 # Registry
 # ----------------------------------------------------------------------------
@@ -1166,11 +1715,12 @@ def _build_T11():
 _BUILDERS = [
     _build_T1, _build_T2, _build_T3, _build_T4, _build_T5,
     _build_T6, _build_T7, _build_T8, _build_T9, _build_T10, _build_T11,
+    _build_T12, _build_T13, _build_T14,
 ]
 
 
 def all_fixtures():
-    """Return the 9 fixtures T1..T9 in difficulty-build order."""
+    """Return the registered fixtures in case-number order (T1..T14)."""
     return [b() for b in _BUILDERS]
 
 
