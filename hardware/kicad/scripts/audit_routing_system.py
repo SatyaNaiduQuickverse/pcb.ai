@@ -9,9 +9,13 @@ Checks:
    `[routing-system-update]`)
 2. ROUTING_LESSONS_HASH matches stored value (any change requires PR tag
    `[lesson-update]`)
-3. physics_primitives.py self-test still PASS
-4. constraint_engine.py smoke test still PASS
-5. All required scripts present + importable
+3. ROUTING_METHODOLOGY_HASH matches stored value (any change requires PR tag
+   `[methodology-change]`)
+4. ROUTING_TOPOLOGY_HASH matches stored value (any change requires PR tag
+   `[methodology-change]`)
+5. physics_primitives.py self-test still PASS
+6. constraint_engine.py smoke test still PASS
+7. All required scripts present + importable
 
 Run on every routing PR. Master gate REJECTS if any drift not pre-declared.
 """
@@ -81,6 +85,32 @@ def check_routing_lessons_doc_hash():
     return "PASS", f"hash={computed[:16]}"
 
 
+def check_routing_methodology_doc_hash():
+    path = DOCS / "ROUTING_METHODOLOGY.md"
+    if not path.exists():
+        return "FAIL", f"{path} missing"
+    computed = compute_doc_content_hash(path)
+    stored = extract_stored_hash(path, "ROUTING_METHODOLOGY_HASH")
+    if stored is None:
+        return "WARN", f"computed={computed[:16]}, no stored hash (run --write to lock)"
+    if stored != computed:
+        return "FAIL", f"computed={computed[:16]}, stored={stored[:16]} — drift; PR must tag [methodology-change]"
+    return "PASS", f"hash={computed[:16]}"
+
+
+def check_routing_topology_hash():
+    path = DOCS / "PHASE4V3_LOCKFILES/routing_topology.yaml"
+    if not path.exists():
+        return "FAIL", f"{path} missing"
+    computed = compute_doc_content_hash(path)
+    stored = extract_stored_hash(path, "ROUTING_TOPOLOGY_HASH")
+    if stored is None:
+        return "WARN", f"computed={computed[:16]}, no stored hash (run --write to lock)"
+    if stored != computed:
+        return "FAIL", f"computed={computed[:16]}, stored={stored[:16]} — drift; PR must tag [methodology-change]"
+    return "PASS", f"hash={computed[:16]}"
+
+
 def check_physics_primitives_self_test():
     """Run physics_primitives.py and check exit code."""
     path = SCRIPTS / "physics_primitives.py"
@@ -112,6 +142,8 @@ def check_required_files_present():
     required = [
         DOCS / "ROUTING_SYSTEM.md",
         DOCS / "ROUTING_LESSONS.md",
+        DOCS / "ROUTING_METHODOLOGY.md",
+        DOCS / "PHASE4V3_LOCKFILES/routing_topology.yaml",
         SCRIPTS / "physics_primitives.py",
         SCRIPTS / "constraint_engine.py",
         SCRIPTS / "audit_routing_system.py",  # this file
@@ -129,6 +161,8 @@ def write_hashes():
     for path, var_name in [
             (DOCS / "ROUTING_SYSTEM.md", "ROUTING_SYSTEM_HASH"),
             (DOCS / "ROUTING_LESSONS.md", "ROUTING_LESSONS_HASH"),
+            (DOCS / "ROUTING_METHODOLOGY.md", "ROUTING_METHODOLOGY_HASH"),
+            (DOCS / "PHASE4V3_LOCKFILES/routing_topology.yaml", "ROUTING_TOPOLOGY_HASH"),
     ]:
         if not path.exists():
             continue
@@ -158,6 +192,8 @@ def main():
             ("REQUIRED_FILES", check_required_files_present),
             ("ROUTING_SYSTEM_HASH", check_routing_system_doc_hash),
             ("ROUTING_LESSONS_HASH", check_routing_lessons_doc_hash),
+            ("ROUTING_METHODOLOGY_HASH", check_routing_methodology_doc_hash),
+            ("ROUTING_TOPOLOGY_HASH", check_routing_topology_hash),
             ("PHYSICS_PRIMITIVES", check_physics_primitives_self_test),
             ("CONSTRAINT_ENGINE", check_constraint_engine_smoke),
     ]:
