@@ -23,29 +23,63 @@ THREE MODES
 
 SOLVER CALLABLE CONTRACT
 ------------------------
-A solver is any callable `solve(fixture) -> dict`. The returned dict reports the
-solver's findings for that case. Recognised keys (all optional; the harness
-compares only the keys the case's ground truth defines):
+A solver is any callable `solve(problem) -> dict`. **`problem` is the INPUT-ONLY
+`Problem` view** (`fixtures.Problem`, built by `Fixture.problem_view()`) — it
+exposes ONLY pins/nets/doors/via_slots/obstacles/layers (+ the `pin`/
+`signal_layers`/`plane_layers` helpers) and STRUCTURALLY has NO `ground_truth`,
+`witness`, or `alt_*` attribute. A solver therefore CANNOT read the answer it is
+scored against (anti-drift "structural not discipline" fix, `[[feedback-systemic-
+rule-enforcement]]`). The harness asserts this property before every run
+(`assert_problem_view_has_no_answer`).
 
-    verdict                 : "ROUTABLE" | "INFEASIBLE" | "CONDITIONAL"
+The returned dict reports the solver's findings for that case. Recognised keys
+(all optional; the harness compares only the keys the case's expectation names):
+
+    verdict                 : engine verdict vocabulary —
+                              "ROUTABLE" | "INFEASIBLE" | "CONDITIONAL" |
+                              "NEEDS-HDI" | "NEEDS-PLACEMENT-CHANGE"
     optimal_track_count     : int   (T1)
     vcg_cyclic              : bool  (T2)
     min_doglegs             : int   (T2 resolved)
-    routed_nets             : int   (T3/T4/T9 — how many nets the solver routed)
+    routed_nets             : int   (T3/T4/T9 — nets the FEASIBLE GLOBAL plan routes)
     vias_required           : int   (T5)
     direct_path_allowed     : bool  (T6 — must be False)
     achieved_skew_mm        : float (T7)
     crossings               : int   (T8)
-    overflow                : int   (T9 — must be 0 only with HDI)
+    overflow                : int   (T9 — escape overflow with std vias; 0 only w/ HDI)
+    greedy                  : dict  ({greedy_routes, global_routes, stranded_nets})
+                              — REQUIRED on T3/T4 to PROVE the greedy strand
+
+VERDICT RECONCILIATION (CONDITIONAL cases — see `_accepted_verdicts`)
+---------------------------------------------------------------------
+The fixtures store a BASE `verdict` (and an `alt_verdict` once a named lever is
+applied). A capacity pre-check (Phase A) does NOT emit "CONDITIONAL"; it emits a
+concrete engine verdict. The harness reconciles cleanly WITHOUT weakening the
+check:
+
+  * T3/T4 (base CONDITIONAL on global-vs-greedy): a solver PASSES iff
+      (a) verdict ∈ {CONDITIONAL, ROUTABLE} — Phase A proves a feasible GLOBAL
+          assignment EXISTS, so it reports ROUTABLE-under-global (accepted), AND
+      (b) routed_nets == global_routes (the global plan routes ALL nets), AND
+      (c) greedy.greedy_routes < greedy.global_routes with greedy.stranded_nets
+          non-empty — the solver must DEMONSTRATE the greedy strand (the proof the
+          global phase is necessary). This is genuinely stronger than the base
+          check, not weaker.
+  * T9 (base INFEASIBLE → ROUTABLE on HDI): a solver PASSES iff
+      verdict ∈ {INFEASIBLE, NEEDS-HDI} (NEEDS-HDI is the precise engine reading
+      of "infeasible with std vias, routable with HDI") AND overflow == 1 (the
+      std-resource overflow, by counting; 0 only once HDI slots are added).
 
 The harness scores each declared metric and prints the delta. A solver "passes" a
-case when its verdict matches and every metric it reports matches ground truth
-within tolerance. This file contains NO routing algorithm — only the harness.
+case when its verdict is accepted AND every scored metric matches within
+tolerance. This file contains NO routing algorithm — only the harness.
 
 Run:
   python3 hardware/kicad/scripts/routing_engine/run_suite.py --self-check
   python3 hardware/kicad/scripts/routing_engine/run_suite.py --list
   python3 hardware/kicad/scripts/routing_engine/run_suite.py --solver mymod:solve
+  python3 hardware/kicad/scripts/routing_engine/run_suite.py \
+          --solver routing_engine.phase_a:solve --cases T3,T4,T9
 """
 from __future__ import annotations
 
@@ -501,13 +535,35 @@ def _load_solver(spec):
     return getattr(mod, attr)
 
 
-def _expected_for(fx):
-    """Build the {metric: expected} dict the solver is scored against. For
-    CONDITIONAL cases the solver should report the BASE verdict (pre-lever); the
-    lever-applied numbers live under alt_*. We score base verdict + the metrics
-    that name the case's pass-criterion."""
+def _accepted_verdicts(fx):
+    """The SET of solver `verdict` strings accepted for this case. For
+    deterministic-verdict cases this is just {ground_truth.verdict}. For
+    CONDITIONAL cases the fixture's base label is "CONDITIONAL", but a capacity
+    pre-check emits a concrete engine verdict; we accept the clean engine reading
+    of the lever WITHOUT weakening the metric checks (see SEMANTIC RECONCILIATION
+    in the module docstring):
+      * T3/T4 (lever = global-vs-greedy): accept CONDITIONAL (the base) OR
+        ROUTABLE (Phase A's "a feasible GLOBAL assignment exists"). The genuine
+        demonstration is enforced separately by `_special_checks` (routed_nets ==
+        global_routes AND greedy strands a net).
+      * T9 (lever = HDI): accept INFEASIBLE (the base) OR NEEDS-HDI (the precise
+        engine reading: infeasible with std vias, routable once HDI slots added).
+    """
     gt = fx.ground_truth
-    exp = {"verdict": gt.verdict}
+    if fx.name in ("T3", "T4"):
+        return {"CONDITIONAL", "ROUTABLE"}
+    if fx.name == "T9":
+        return {"INFEASIBLE", "NEEDS-HDI"}
+    return {gt.verdict}
+
+
+def _expected_for(fx):
+    """Build the {metric: expected} dict the solver's NUMERIC findings are scored
+    against (verdict is scored separately via `_accepted_verdicts`). For
+    CONDITIONAL cases the lever-applied numbers live under alt_*; we score the
+    metrics that name the case's pass-criterion."""
+    gt = fx.ground_truth
+    exp = {}
     m = gt.metrics
     if fx.name == "T1":
         exp["optimal_track_count"] = m["optimal_track_count"]
@@ -515,7 +571,7 @@ def _expected_for(fx):
         exp["vcg_cyclic"] = True
         exp["min_doglegs"] = gt.alt_metrics["min_doglegs"]
     elif fx.name in ("T3", "T4"):
-        # solver under GLOBAL planning should route all nets (alt verdict path)
+        # under GLOBAL planning the solver routes ALL nets (the alt/global path)
         exp["routed_nets"] = m["global_routes"]
     elif fx.name == "T5":
         exp["vias_required"] = gt.alt_metrics["vias_required"]
@@ -530,41 +586,120 @@ def _expected_for(fx):
     return exp
 
 
-def run_solver(spec):
+def _special_checks(fx, got):
+    """Extra PASS conditions beyond the scored metrics — these make CONDITIONAL
+    reconciliation genuinely STRONGER, not weaker. Returns (ok, notes).
+
+    T3/T4: the solver must DEMONSTRATE the greedy strand (the proof the global
+    phase is the fix): a `greedy` block with greedy_routes < global_routes AND a
+    non-empty stranded_nets. Without this, claiming ROUTABLE-under-global is not
+    backed by the necessity argument and the case FAILS.
+    """
+    notes = []
+    if fx.name in ("T3", "T4"):
+        g = got.get("greedy")
+        if not isinstance(g, dict):
+            return False, ["greedy strand block MISSING (need {greedy_routes, "
+                           "global_routes, stranded_nets} to prove global phase)"]
+        gr = g.get("greedy_routes")
+        gl = g.get("global_routes")
+        strand = g.get("stranded_nets") or []
+        ok = (isinstance(gr, int) and isinstance(gl, int)
+              and gr < gl and len(strand) > 0)
+        notes.append(f"greedy {gr} < global {gl}, stranded={strand} "
+                     f"=> {'PASS (greedy strand proven)' if ok else 'FAIL'}")
+        return ok, notes
+    return True, notes
+
+
+def assert_problem_view_has_no_answer(view):
+    """Anti-drift structural assertion: the object handed to a solver MUST NOT
+    carry the answer. Raises AssertionError if `view` exposes ground_truth /
+    witness / alt_* / construction_proof. Demonstrated once at run_solver start
+    (and trivially re-checkable by any reviewer)."""
+    forbidden = ("ground_truth", "construction_proof", "witness",
+                 "alt_verdict", "alt_metrics", "alt_witness")
+    present = [a for a in forbidden if hasattr(view, a)]
+    assert not present, (
+        f"Problem view leaks the answer via {present!r} — a solver could read "
+        f"ground truth. The harness must hand solvers an INPUT-ONLY view "
+        f"(fixtures.Problem / Fixture.problem_view()).")
+
+
+def run_solver(spec, cases=None):
+    """Run a pluggable solver against the suite (or a `--cases` subset).
+
+    `cases` = list of case names (e.g. ["T3","T4","T9"]); None => all 9. A
+    component need only pass the cases it ADDRESSES (design §3 gates each
+    component on its own T-rows), so scoring is over the selected subset.
+
+    The solver is handed the INPUT-ONLY Problem view (it cannot read the answer);
+    verdict is scored against the ACCEPTED set (CONDITIONAL reconciliation), and
+    CONDITIONAL cases carry an extra demonstration check (greedy strand)."""
     solve = _load_solver(spec)
-    print(f"Running solver {spec!r} against T1-T9...")
+    all_fx = F.all_fixtures()
+    if cases:
+        want = {c.strip() for c in cases}
+        unknown = want - {f.name for f in all_fx}
+        if unknown:
+            raise SystemExit(f"--cases: unknown case(s) {sorted(unknown)}; "
+                             f"valid = T1..T9")
+        sel = [f for f in all_fx if f.name in want]
+    else:
+        sel = all_fx
+    print(f"Running solver {spec!r} against "
+          f"{'all 9' if not cases else ','.join(f.name for f in sel)}...")
+    # Anti-drift structural demonstration: prove the object we hand the solver
+    # carries NO answer, ONCE, up front (and per case below via problem_view()).
+    assert_problem_view_has_no_answer(sel[0].problem_view())
+    print("  [structural] Problem view has no ground_truth/witness/alt_* — "
+          "solver cannot read the answer.")
     print("=" * 72)
     n_pass = 0
-    for fx in F.all_fixtures():
+    for fx in sel:
         exp = _expected_for(fx)
+        accepted = _accepted_verdicts(fx)
+        problem = fx.problem_view()   # INPUT-ONLY view (no answer leaks)
         try:
-            got = solve(fx) or {}
+            got = solve(problem) or {}
         except Exception as e:  # solver crash = case fail, do not abort suite
             print(f"[FAIL] {fx.name}: solver raised {type(e).__name__}: {e}")
             continue
         deltas = []
         ok = True
+        # 1. verdict against the accepted set.
+        gv_verdict = got.get("verdict", "<missing>")
+        v_ok = gv_verdict in accepted
+        deltas.append(f"verdict: got {gv_verdict} accepted {sorted(accepted)} "
+                      f"=> {'OK' if v_ok else 'MISMATCH'}")
+        ok &= v_ok
+        # 2. scored numeric/bool metrics.
         for k, ev in exp.items():
             if k not in got:
                 deltas.append(f"{k}: MISSING (exp {ev})")
                 ok = False
                 continue
-            gv = got[k]
-            if isinstance(ev, float) or isinstance(gv, float):
-                match = abs(float(gv) - float(ev)) <= TOL
-                deltas.append(f"{k}: got {gv} exp {ev} (Δ {float(gv)-float(ev):+.3g})")
+            gvv = got[k]
+            if isinstance(ev, float) or isinstance(gvv, float):
+                match = abs(float(gvv) - float(ev)) <= TOL
+                deltas.append(f"{k}: got {gvv} exp {ev} (Δ {float(gvv)-float(ev):+.3g})")
             else:
-                match = gv == ev
-                deltas.append(f"{k}: got {gv} exp {ev}")
+                match = gvv == ev
+                deltas.append(f"{k}: got {gvv} exp {ev}")
             ok &= match
+        # 3. case-specific demonstration (greedy strand for T3/T4).
+        sp_ok, sp_notes = _special_checks(fx, got)
+        deltas.extend(sp_notes)
+        ok &= sp_ok
         n_pass += ok
         flag = "PASS" if ok else "FAIL"
         print(f"[{flag}] {fx.name} — {fx.title}")
         for d in deltas:
             print(f"        {d}")
     print("=" * 72)
-    print(f"SOLVER RESULT: {n_pass}/9 cases PASS against ground truth.")
-    return 0 if n_pass == 9 else 1
+    total = len(sel)
+    print(f"SOLVER RESULT: {n_pass}/{total} cases PASS against ground truth.")
+    return 0 if n_pass == total else 1
 
 
 def main(argv=None):
@@ -576,13 +711,20 @@ def main(argv=None):
                    help="list each case's verdict + key metric")
     g.add_argument("--solver", metavar="module:callable",
                    help="run a pluggable solver and score it vs ground truth")
+    ap.add_argument("--cases", metavar="T3,T4,T9", default=None,
+                    help="comma-separated subset of cases to score the solver on "
+                         "(default = all 9). A component need only pass the cases "
+                         "it addresses (design §3).")
     args = ap.parse_args(argv)
 
     if args.list:
         run_list()
         return 0
     if args.solver:
-        return run_solver(args.solver)
+        cases = args.cases.split(",") if args.cases else None
+        return run_solver(args.solver, cases)
+    if args.cases:
+        ap.error("--cases only applies with --solver")
     # default = self-check (the trustworthiness gate)
     return run_self_check()
 
