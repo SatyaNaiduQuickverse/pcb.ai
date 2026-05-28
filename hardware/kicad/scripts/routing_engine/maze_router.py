@@ -175,6 +175,25 @@ class Obstacle:
     kind='body'        : component / passive body keep-out (HARD clearance).
     kind='plane_split' : a GAP in a reference plane (HARD reject for any layer
                          change crossing that gap — Sai-locked SI rule).
+
+    PER-LAYER FILTER (CH1 30/30 (E) engine correctness — 2026-05-28)
+    ----------------------------------------------------------------
+    `layers` declares the SET of signal layers this obstacle applies to:
+      * `None` (default)  → applies to ALL layers (full-stack keep-out, the
+                            back-compat behaviour). E.g. a component body
+                            keep-out that conservatively blocks every signal
+                            layer below it.
+      * non-None frozenset → applies ONLY to the named layers (e.g. a track
+                            on `In2.Cu` is a keep-out on `In2.Cu` only — a
+                            route on `In6.Cu` is physically free to ignore
+                            it). Pre-fix, the maze (which iterated obstacles
+                            without checking their layer) WRONGLY blocked the
+                            In6.Cu route — the engine-correctness bug T15
+                            locks against.
+
+    The A* expansion in `route()` skips an obstacle whose `layers` is not
+    None AND does not contain the current cell's layer. For `layers=None`
+    the obstacle blocks every layer (existing semantics).
     """
     x_min: float
     y_min: float
@@ -182,6 +201,8 @@ class Obstacle:
     y_max: float
     kind: str = "body"
     plane: Optional[str] = None    # for plane_split: the GND/+VMOTOR plane that splits
+    layers: Optional[FrozenSet[str]] = None  # None=all layers (default);
+                                             # else frozenset of layer names
 
 
 @dataclass(frozen=True)
@@ -350,16 +371,47 @@ def _seg_intersects_aabb_strict(x1, y1, x2, y2, rx_min, ry_min, rx_max, ry_max) 
     return t0 < t1 - 1e-9
 
 
-def _swept_track_clears(p1, p2, width_mm, clearance_mm, obstacles) -> bool:
+def _obstacle_applies_to_layer(o: "Obstacle", layer: Optional[str]) -> bool:
+    """PER-LAYER FILTER (CH1 30/30 (E) engine correctness — 2026-05-28).
+
+    Return True iff obstacle `o` applies on `layer`:
+      * `o.layers is None`        → applies to ALL layers (back-compat).
+      * `layer is None`           → caller skipped layer (conservative; apply).
+      * `layer in o.layers`       → applies on this layer.
+      * else                      → does NOT apply (skip — the per-layer fix:
+                                     an In2.Cu obstacle does NOT block an In6.Cu
+                                     route just because their xy footprints
+                                     coincide).
+    """
+    if o.layers is None:
+        return True
+    if layer is None:
+        return True
+    return layer in o.layers
+
+
+def _swept_track_clears(p1, p2, width_mm, clearance_mm, obstacles,
+                        layer: Optional[str] = None) -> bool:
     """True iff the swept trace from p1 to p2 (width + clearance margin on each
-    side) clears EVERY body obstacle by >= (width/2 + clearance) Euclidean
-    distance — the EXACT fab clearance check, not the conservative AABB. For
-    octilinear traces this matches the AABB only on axis-aligned segments; for
-    45° diagonals the AABB over-rejects, so we use the exact segment-to-rect
-    min distance (the same primitive the anti-liar witness check uses)."""
+    side) clears EVERY APPLICABLE body obstacle by >= (width/2 + clearance)
+    Euclidean distance — the EXACT fab clearance check, not the conservative
+    AABB. For octilinear traces this matches the AABB only on axis-aligned
+    segments; for 45° diagonals the AABB over-rejects, so we use the exact
+    segment-to-rect min distance (the same primitive the anti-liar witness
+    check uses).
+
+    `layer` is the signal-layer the trace is being drawn on. Per the per-layer
+    obstacle filter (Obstacle.layers field; CH1 30/30 (E) fix), an obstacle
+    whose `layers` field is set and does NOT include `layer` is SKIPPED —
+    physics says a track on In6.Cu is not blocked by an In2.Cu-only keep-out.
+    For back-compat, `layer=None` or `o.layers=None` preserves the original
+    full-stack-block behaviour.
+    """
     margin = width_mm / 2.0 + clearance_mm
     for o in obstacles:
         if o.kind != "body":
+            continue
+        if not _obstacle_applies_to_layer(o, layer):
             continue
         d = _seg_aabb_min_dist(p1, p2, o.x_min, o.y_min, o.x_max, o.y_max)
         if d < margin - 1e-9:
@@ -532,14 +584,19 @@ def route(
 
     # ---- precompute per-(cell, layer) "cell is clear" (HARD clearance) -----
     # A cell is CLEAR iff a width_mm trace centred at the cell point clears every
-    # body obstacle by >= clearance_fos_mm. Layer-agnostic for body (component
-    # bodies block all signal layers below them in our 10L model) — a precise
-    # per-layer keep-out model would refine, but the conservative "body blocks
-    # all signal layers" matches the cooperative router's assumption.
+    # APPLICABLE body obstacle by >= clearance_fos_mm.
+    #
+    # PER-LAYER FILTER (CH1 30/30 (E) engine correctness — 2026-05-28):
+    # An obstacle whose `Obstacle.layers` is set and does NOT contain the
+    # candidate cell's layer is SKIPPED. For back-compat the default
+    # (layers=None) blocks every layer — same conservative semantics as the
+    # original (full-stack body keep-out). The fix matters when callers
+    # ATTRIBUTE obstacles to specific layers (e.g. an In2.Cu track that should
+    # NOT block an In6.Cu route).
     inflate = width_mm / 2.0 + clearance_fos_mm
     body_obs = [o for o in obstacles if o.kind == "body"]
 
-    def cell_clear(ix: int, iy: int) -> bool:
+    def cell_clear(ix: int, iy: int, layer: Optional[str] = None) -> bool:
         if ix < 0 or ix > nx or iy < 0 or iy > ny:
             return False
         px, py = point_of(ix, iy)
@@ -548,6 +605,8 @@ def route(
         cell_x_max = px + inflate
         cell_y_max = py + inflate
         for o in body_obs:
+            if not _obstacle_applies_to_layer(o, layer):
+                continue
             if (cell_x_max <= o.x_min or cell_x_min >= o.x_max
                     or cell_y_max <= o.y_min or cell_y_min >= o.y_max):
                 continue
@@ -558,7 +617,8 @@ def route(
     # body by definition (its pad IS the body's terminal). Clearance is checked
     # against EVERY OTHER body obstacle. Without this the search can never start
     # — the start cell is "inside the IC". Standard maze-router practice (Lee 1961).
-    def endpoint_cell_clear(ix: int, iy: int, pin_point) -> bool:
+    def endpoint_cell_clear(ix: int, iy: int, pin_point,
+                            layer: Optional[str] = None) -> bool:
         if ix < 0 or ix > nx or iy < 0 or iy > ny:
             return False
         px, py = point_of(ix, iy)
@@ -567,6 +627,8 @@ def route(
         cell_x_max = px + inflate
         cell_y_max = py + inflate
         for o in body_obs:
+            if not _obstacle_applies_to_layer(o, layer):
+                continue
             # Skip the body the pin actually sits inside.
             if (o.x_min - 1e-6 <= pin_point[0] <= o.x_max + 1e-6
                     and o.y_min - 1e-6 <= pin_point[1] <= o.y_max + 1e-6):
@@ -577,9 +639,9 @@ def route(
             return False
         return True
 
-    if not endpoint_cell_clear(sx, sy, start.point):
+    if not endpoint_cell_clear(sx, sy, start.point, start.layer):
         raise NotRoutable("BLOCKED", f"start cell ({sx},{sy}) blocked")
-    if not endpoint_cell_clear(ex, ey, end.point):
+    if not endpoint_cell_clear(ex, ey, end.point, end.layer):
         raise NotRoutable("BLOCKED", f"end cell ({ex},{ey}) blocked")
 
     # ---- A* ---------------------------------------------------------------
@@ -645,26 +707,28 @@ def route(
             if not (0 <= nx2 <= nx and 0 <= ny2 <= ny):
                 continue
             # cells along the move must be passable (octilinear): both axis cells
-            # for a diagonal step ('acid-trap-free bevel' rule).
+            # for a diagonal step ('acid-trap-free bevel' rule). Layer-aware
+            # filter: skip obstacles attributed to other layers (Obstacle.layers).
             if kind == "diag":
-                if not cell_clear(node.ix + dx, node.iy):
+                if not cell_clear(node.ix + dx, node.iy, node.layer):
                     continue
-                if not cell_clear(node.ix, node.iy + dy):
+                if not cell_clear(node.ix, node.iy + dy, node.layer):
                     continue
             # The arrival cell itself: endpoint override iff it IS the end.
             if (nx2, ny2) == (ex, ey) and node.layer == end.layer:
-                arrival_ok = endpoint_cell_clear(nx2, ny2, end.point)
+                arrival_ok = endpoint_cell_clear(nx2, ny2, end.point, node.layer)
             elif (nx2, ny2) == (sx, sy) and node.layer == start.layer:
-                arrival_ok = endpoint_cell_clear(nx2, ny2, start.point)
+                arrival_ok = endpoint_cell_clear(nx2, ny2, start.point, node.layer)
             else:
-                arrival_ok = cell_clear(nx2, ny2)
+                arrival_ok = cell_clear(nx2, ny2, node.layer)
             if not arrival_ok:
                 continue
-            # the swept trace (from current point to next point) must also clear.
+            # the swept trace (from current point to next point) must also clear,
+            # honoring the per-layer obstacle filter at this trace's layer.
             p_curr = point_of(node.ix, node.iy)
             p_next = point_of(nx2, ny2)
             if not _swept_track_clears(p_curr, p_next, width_mm, clearance_fos_mm,
-                                       obstacles):
+                                       obstacles, layer=node.layer):
                 continue
             cost = base
             # corner penalty (direction change)
@@ -776,13 +840,21 @@ def _reconstruct(start_state, end_state, came_from, via_class_used,
 
 def solve(problem) -> dict:
     """run_suite.py contract: `solve(problem) -> dict` where problem is the
-    fixtures.Problem input-only view. The maze router addresses T13 only (the
-    long-path-through-obstacles case it was built for); for every OTHER case the
-    solver returns a clear 'NOT-MY-CASE' verdict (so a misuse fails loudly).
+    fixtures.Problem input-only view. The maze router addresses single-net
+    long-path-through-obstacles cases:
+      * T13 — bodies block the direct path on the route's layer; multi-bend
+              octilinear detour is forced (the original maze-gate case).
+      * T15 — bodies on OTHER layers project onto the route's xy footprint,
+              but the per-layer Obstacle.layers filter correctly recognises
+              they do NOT block this route's layer (CH1 30/30 (E) engine
+              correctness fix, 2026-05-28).
+    For every OTHER case the solver returns a clear 'NOT-MY-CASE' verdict
+    (so a misuse fails loudly).
 
-    For T13 the solver:
+    For T13 / T15 the solver:
       1. extracts the single long-path net (start + end pins) from the fixture,
       2. constructs the Obstacle list from problem.obstacles (body kind),
+         carrying the per-layer `layers` field through verbatim,
       3. picks the search region as the fixture's pin-bounding box + a margin,
       4. calls route(...) with conservative defaults (octilinear + via through),
       5. PROVES routability + reports the harness-scored metrics:
@@ -793,29 +865,37 @@ def solve(problem) -> dict:
             n_vias
             expansions
     """
-    # The maze router's only registered case.
-    if problem.name != "T13":
+    # The maze router's registered cases.
+    if problem.name not in ("T13", "T15"):
         return {"verdict": "NOT-MY-CASE",
-                "rationale": f"maze_router.solve handles T13 long-path through "
-                             f"obstacles; got {problem.name}. Use phase_c.solve "
-                             "for general dispatch."}
+                "rationale": f"maze_router.solve handles T13/T15 long-path "
+                             f"through obstacles; got {problem.name}. Use "
+                             "phase_c.solve for general dispatch."}
 
     if len(problem.nets) != 1:
         return {"verdict": "INVALID-INPUTS",
-                "rationale": f"T13 declares 1 long-path net; got {len(problem.nets)}"}
+                "rationale": f"{problem.name} declares 1 long-path net; "
+                             f"got {len(problem.nets)}"}
 
     net = problem.nets[0]
     if len(net.pin_ids) != 2:
         return {"verdict": "INVALID-INPUTS",
-                "rationale": f"T13 net needs 2 pins; got {len(net.pin_ids)}"}
+                "rationale": f"{problem.name} net needs 2 pins; "
+                             f"got {len(net.pin_ids)}"}
 
     p_start = problem.pin(net.pin_ids[0])
     p_end = problem.pin(net.pin_ids[1])
 
     # Build maze obstacles from fixture obstacles (body keep-outs).
+    # Per-layer filter carries through: fixture Obstacle.layers (None = all
+    # layers, back-compat; or frozenset of layer names — the CH1 30/30 (E)
+    # engine-correctness fix, T15) is preserved verbatim into the maze
+    # Obstacle, so the A* expansion can correctly skip obstacles on layers
+    # the candidate cell is not routed on.
     obs = tuple(
         Obstacle(x_min=o.x_min, y_min=o.y_min, x_max=o.x_max,
-                 y_max=o.y_max, kind=o.kind, plane=o.plane)
+                 y_max=o.y_max, kind=o.kind, plane=o.plane,
+                 layers=o.layers)
         for o in problem.obstacles)
 
     # Region bbox = pin-bounding rect with a 2mm margin. T13's witness path stays
