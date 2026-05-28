@@ -62,6 +62,63 @@ files to confirm every named function/script in this manifest actually exists).
 
 ---
 
+## R29 extension — Global→Detailed routing engine (2026-05-28, design-stage)
+
+R29's 6-tier methodology is the **detailed-phase ordering**. Per master locked
+decisions after the CH1 24/30 plateau (`docs/DEEP_RESEARCH_2026-05-28_ROUTING_METHODOLOGY.md`),
+the engine wraps the 6 tiers in a 3-phase global→detailed architecture, documented
+as methodology in `docs/ROUTING_METHODOLOGY.md` §0b/§5b/§5c and as a build+validation
+plan in `docs/ROUTING_ENGINE_DESIGN_2026-05-28.md`:
+
+- **Phase A** — capacity + escape pre-check (SURESHOT deterministic counting; emits
+  ROUTABLE / NEEDS-HDI / NEEDS-PLACEMENT-CHANGE / INFEASIBLE up front).
+- **Phase B** — global plan + DOORS (corridor cross-sections, schema added to
+  `docs/PHASE4V3_LOCKFILES/routing_topology.yaml`) + topology-before-geometry +
+  via-slot pre-assignment, with FoS-on-routing-process (doors/corridors filled
+  ≤75–80%, never 100% — the root-cause fix for the 24/30 corner-paint).
+- **Phase C** — detailed fill: the existing `route_subsystem_cooperative.py`
+  (R34/R35 PathFinder router) demoted from "the router" to "the region filler."
+
+A* is confined to Phase C bounded regions (never the global mechanism). Geometry
+policy: octilinear default + teardrops + sim-driven local high-current fillet, NO
+global chamfer rule (ROUTING_METHODOLOGY §5b). FoS-everywhere table
+(ROUTING_METHODOLOGY §5c) aligns with the already-implemented FoS gates
+(`audit_fos_current.py`, `audit_fos_thermal.py`, `audit_fos_cap_voltage.py`,
+`audit_fos_cap_ripple.py`, `audit_fos_pin_current.py`, `audit_via_current_capacity.py`).
+This is a DESIGN-stage artifact for review; no engine algorithm code is added by
+this PR (only methodology docs, the routing_topology schema, the FoS table, and
+design-stage geometry-primitive stubs with a self-test).
+
+### Planned routing gates (NOT yet implemented — prose only, no manifest rows)
+
+These gates are the 3-artifact contract targets for the engine when its phases
+are built. They are listed here as PLANNED so they are NOT silently forgotten,
+but they are intentionally NOT given manifest table rows and NOT named with
+backticked function/script identifiers — because their code does not yet exist
+on disk, and a binding manifest row to a nonexistent artifact would break the
+`audit_meta.py` declared-but-missing meta-check (and an empty audit script file
+would orphan under `audit_meta_coverage.py` / G_META1). When each gate's fix
+script + audit function are authored, add its manifest row at that time per the
+"Process for adding a new rule" below.
+
+1. **FoS-meta gate** — the G_META1 analogue for safety: parse the
+   `factor_of_safety:` fields in `docs/PHASE4V3_LOCKFILES/routing_topology.yaml`
+   and fail if any physical routing quantity is present with no declared FoS
+   (every quantity must declare limit÷FoS or requirement×FoS, never raw limit).
+2. **Acute-angle-reject gate** — fail any routed interior angle <90°
+   (acid-trap / over-etch DFM class; octilinear-default should make this
+   vacuously pass, the gate catches hand-edit regressions).
+3. **Teardrop-coverage gate** — verify a teardrop fillet exists at every
+   trace-to-pad and trace-to-via junction (IPC stress + current-crowding relief).
+4. **Door-capacity gate** — verify each Phase-B door's planned demand ≤
+   `global_capacity_headroom` fill fraction × computed capacity (no door/corridor
+   filled to 100%); the routing-process FoS check.
+5. **Escape-precheck gate** — verify the Phase-A per-IC-side escape demand/supply
+   ledger was computed and its verdict honored for every fine-pitch IC
+   (J18/J19) before any geometry was committed.
+
+---
+
 ## Sai-eye-catch classes — every catch becomes a permanent audit gate
 
 | # | Catch | Date | Fix script | Audit gate | Master verified | Status |

@@ -17,6 +17,25 @@ created: 2026-05-25
 status: schema-and-skeleton  # worker fills concrete entries during REDO infra PR
 
 # ============================================================
+# Global routing-process parameter (Phase B — engine FoS-on-process)
+# Added 2026-05-28 per ROUTING_METHODOLOGY §0b/§5c (global→detailed engine).
+# ============================================================
+#
+# The global planner fills doors/corridors to AT MOST this fraction of capacity,
+# never 100%. This is the Factor of Safety on the routing PROCESS itself and the
+# root-cause fix for the 24/30 corner-paint plateau (greedy filled a corridor to
+# 100%, leaving no slack for negotiated congestion or later nets).
+# Source: ISPD-2008 global-routing convention (any overflow = failure) + Sai
+# FoS-everywhere mandate 2026-05-28. STATUS: schema — concrete per-board value
+# tuned in a later phase, kept in the 0.75–0.80 band per ROUTING_METHODOLOGY §5c.
+
+global_capacity_headroom:
+  max_door_fill_fraction: 0.80      # door demand ≤ 0.80 × door capacity at plan time
+  max_corridor_fill_fraction: 0.75  # corridor demand ≤ 0.75 × corridor capacity
+  overflow_policy: forbid           # any planned edge demand > capacity ⇒ Phase A escalation
+  metric: ispd_total_overflow       # rank by Total Overflow then Max Overflow (ISPD-2008)
+
+# ============================================================
 # Net classification (per-net)
 # ============================================================
 
@@ -158,6 +177,79 @@ nets:
   #     ref_layer: In1.Cu
   #     length_match_group: dshot_ch1234
   #     length_match_tolerance_mm: 2
+
+# ============================================================
+# DOORS — corridor cross-sections (Phase B first-class objects)
+# Added 2026-05-28 per ROUTING_METHODOLOGY §0b Phase B.
+# ============================================================
+#
+# A DOOR is a corridor cross-section through which nets pass. Each door declares
+# capacity (how many tracks/vias the cross-section supports) and which net /
+# net-group passes through it, in ORDER (topology-before-geometry). The global
+# planner assigns nets to doors with capacity headroom (see global_capacity_headroom)
+# and orders nets through each door BEFORE geometry exists.
+#
+# Two door categories:
+#   - board-edge / inter-subsystem doors ARE the BOARD_INVARIANTS.md
+#     "Subsystem I/O ports" table — REFERENCED here by id, NOT redefined.
+#     (coord/width/signals are owned by BOARD_INVARIANTS; do not duplicate values.)
+#   - interior doors = channel mouths between component clusters + highway entries
+#     (BOARD_INVARIANTS.md "Highway reservations").
+#
+# STATUS: schema only. Concrete coords come from BOARD_INVARIANTS (single source);
+# capacity numbers are computed by Phase A (boundary÷pitch per layer) at plan time.
+# Do NOT fill concrete CH1 numbers here (later phase).
+
+doors:
+
+  # ---- Schema (one entry per door) ----
+  #
+  # <door_id>:
+  #   source: BOARD_INVARIANTS            # 'BOARD_INVARIANTS' = coord/width owned there
+  #   invariant_ref: "S6 -> CH1"          # exact row in BOARD_INVARIANTS I/O ports table
+  #   coord: [x, y]                       # REFERENCED from BOARD_INVARIANTS (do not edit here)
+  #   width_mm: <w>                        # REFERENCED from BOARD_INVARIANTS
+  #   layers: [In2.Cu, In8.Cu]            # signal layers crossing this door
+  #   capacity:
+  #     tracks: <computed-by-PhaseA>      # boundary_len / (trace_w + clearance) per layer, summed
+  #     via_slots: <computed-by-PhaseA>   # via sites fitting the fanout band
+  #     status: computed-phase-a          # NOT hand-set; deterministic counting
+  #   passes:                             # net / net-group, IN ORDER (rubber-band / VCG)
+  #     - { order: 0, net_group: dshot_chN }
+  #     - { order: 1, net_group: tlm_chN }
+  #   fill_target: 0.80                    # ≤ global_capacity_headroom.max_door_fill_fraction
+  #   category: inter-subsystem | interior-channel-mouth | highway-entry
+  #
+  # ---- Interior door schema (channel mouth / highway entry) ----
+  #
+  # <interior_door_id>:
+  #   source: ROUTING_TOPOLOGY            # interior door computed from cluster geometry
+  #   between: [Q_HS_CH1_cluster, J18_south_edge]   # the two cluster sides bounding the mouth
+  #   coord: [x, y]                        # corridor centroid (computed from placement)
+  #   width_mm: <w>                        # narrowest cross-section of the corridor
+  #   layers: [In2.Cu, In4.Cu, In8.Cu]
+  #   capacity: { tracks: <PhaseA>, via_slots: <PhaseA>, status: computed-phase-a }
+  #   passes: []                           # ordered net list, planner-assigned
+  #   fill_target: 0.75                    # corridor headroom
+  #   escape_precheck: false               # true for fine-pitch-IC escape doors (J18/J19)
+  #   category: interior-channel-mouth
+
+  # Fine-pitch-IC escape doors (Phase A escape pre-check ledger applies here).
+  # These map to BOARD_INVARIANTS HDI whitelist (J18 QFN-32, J19 HVQFN-24, 0.5mm).
+  # j18_south_escape:
+  #   source: ROUTING_TOPOLOGY
+  #   ic: J18                              # BOARD_INVARIANTS HDI whitelist
+  #   side: south
+  #   pitch_mm: 0.5
+  #   layers: [In2.Cu, In4.Cu, In8.Cu]
+  #   capacity:                            # Phase A computes supply per side per layer
+  #     escape_demand: <PhaseA>            # nets that must escape this side
+  #     escape_supply: <PhaseA>            # tracks-between-pads + via-slot count
+  #     status: computed-phase-a
+  #   hdi_via_in_pad: true                 # per BOARD_INVARIANTS HDI whitelist + R35
+  #   verdict: <ROUTABLE|NEEDS-HDI|NEEDS-PLACEMENT-CHANGE|INFEASIBLE>  # Phase A output
+  #   escape_precheck: true
+  #   category: interior-channel-mouth
 
 # ============================================================
 # Component role classification (per-component)
@@ -345,24 +437,49 @@ components:
 # Per-class routing constraints (for audit_routing.py enforcement)
 # ============================================================
 
+# factor_of_safety schema (Sai-locked 2026-05-28 "no cut-to-cut"):
+#   Every physical quantity in a routing class declares a FoS so the design
+#   target is limit÷FoS (ceilings) or requirement×FoS (floors), never the raw
+#   limit. Values align with the implemented FoS gates so routing inherits them:
+#     ampacity_continuous: 1.5  (audit_fos_current.py G_FoS2)
+#     ampacity_burst:      1.2  (audit_fos_current.py G_FoS2)
+#     via_current:         1.5  (audit_via_current_capacity.py FOS_VIA)
+#     clearance:           above-fab-min  (never == JLC 0.0889mm process floor)
+#     impedance:           band  (W chosen so Z0 stays within ±10% fab tolerance)
+#   See ROUTING_METHODOLOGY.md §5c for the full FoS table + sources.
+#   STATUS: schema — concrete numeric targets computed from physics_primitives
+#   at plan time; the declared FoS multipliers are the binding policy here.
+
 routing_classes:
 
   power-plane:
     width_constraint: plane
     spacing_constraint: 1.0mm  # to other plane
     via_constraint: stitching
+    factor_of_safety:
+      ampacity_burst: 1.2       # +VMOTOR 280A burst, plane (G_FoS2)
+      via_current: 1.5          # stitching via count derate (audit_via_current_capacity)
+      clearance: above-fab-min
 
   power-trunk:
     width_min_mm: 1.5
     spacing_min_mm: 0.5
     z0: null
     length_match: false
+    factor_of_safety:
+      ampacity_continuous: 1.5  # +BATT 40A continuous (G_FoS2)
+      via_current: 1.5
+      clearance: above-fab-min
 
   bec-trunk:
     width_min_mm: 1.0
     spacing_min_mm: 0.5
     z0: null
     length_match: false
+    factor_of_safety:
+      ampacity_continuous: 1.5  # BEC rails (G_FoS2)
+      via_current: 1.5
+      clearance: above-fab-min
 
   decoupling:
     width_min_mm: 0.5
@@ -370,29 +487,46 @@ routing_classes:
     z0: null
     length_match: false
     same_layer_as_ic: true  # R25
+    factor_of_safety:
+      clearance: above-fab-min
+      loop_inductance: margin   # ESL below decoupling-effectiveness budget (Tier 3 sim)
 
   signal-highway:
     width_min_mm: 0.25
     spacing_min_mm: 0.25
     z0: 50  # SE controlled-impedance
     length_match: true  # per-group tolerance in net entry
+    factor_of_safety:
+      impedance: band           # W keeps Z0 within ±10% across fab stack tolerance
+      clearance: above-fab-min
+      crosstalk: margin         # 3W-or-better vs aggressor parallel runs
 
   signal-diff:
     width_min_mm: 0.20
     spacing_min_mm: 0.15
     z0: 90  # diff
     length_match: true
+    factor_of_safety:
+      impedance: band           # diff Z0 within ±10%
+      clearance: above-fab-min
+      crosstalk: margin
 
   analog-star:
     width_min_mm: 0.25
     spacing_min_mm: 0.25
     z0: null
     length_match: true  # all sinks within 5mm
+    factor_of_safety:
+      clearance: above-fab-min
+      crosstalk: margin         # shielded from switching (Tier 4)
 
   ground-plane:
     width_constraint: plane
     spacing_constraint: 0.3mm
     via_constraint: stitching
+    factor_of_safety:
+      via_current: 1.5
+      clearance: above-fab-min
 
 
 # ============================================================
