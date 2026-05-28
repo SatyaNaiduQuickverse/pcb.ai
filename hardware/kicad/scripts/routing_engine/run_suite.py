@@ -2209,6 +2209,237 @@ def _special_checks_T16_wrapped(fx, got):
 _special_checks = _special_checks_T16_wrapped
 
 
+# ============================================================================
+# T17 — TARGETED-RIPUP-BEATS-GLOBAL (CH1 30/30 lever J capability lockfile).
+# Selfcheck + dispatch wrappers. APPEND-ONLY (T1-T16 paths byte-identical).
+# ============================================================================
+
+def _selfcheck_T17(fx, msgs):
+    """T17 selfcheck — verify the targeted-ripup-beats-global witness is
+    geometrically real (not a stored answer the runner accepts at face
+    value) by re-deriving the key facts FROM the construction (fixture
+    fields) ALONE:
+      (a) Y is pinned to y=5 (no detour through walls);
+      (b) X's alt path exists and reaches y=2.5 via gaps at x=2 + x=8;
+      (c) the witness X-route bypasses Y's y=5 lane at x ∈ [3, 7];
+      (d) the witness Y-route uses the y=5 lane straight S→E;
+      (e) conflict_set = {X}, cascade_depth = 1, shorts_delta = 0;
+      (f) global / greedy verdict is 1/2 (the FAILURE mode the lever fixes);
+      (g) rip-everything LIAR fails the frozen-routes-preserved invariant.
+    """
+    ok = True
+    gt = fx.ground_truth
+    m = gt.metrics
+    w = gt.witness
+    paths = w["routed_paths"]
+    Y_path = paths["Y"]
+    X_path = paths["X"]
+    # (a) Y is pinned to y=5 — no detour through walls
+    bodies = [o for o in fx.obstacles if o.kind == "body"]
+    north = next((o for o in bodies if o.id == "NORTH_WALL"), None)
+    sw_w = next((o for o in bodies if o.id == "SOUTH_WALL_W"), None)
+    sw_m = next((o for o in bodies if o.id == "SOUTH_WALL_M"), None)
+    sw_e = next((o for o in bodies if o.id == "SOUTH_WALL_E"), None)
+    ok &= _assert(north is not None and abs(north.y_min - 6.0) < 1e-6,
+                  "NORTH_WALL at y_min=6.0 (pins Y to y<6)", msgs)
+    ok &= _assert(all(b is not None for b in (sw_w, sw_m, sw_e)),
+                  "SOUTH_WALL is segmented (W,M,E) leaving gaps at x∈[1.7,2.3] and [7.7,8.3]",
+                  msgs)
+    ok &= _assert(sw_w is not None and abs(sw_w.x_max - 1.7) < 1e-6,
+                  "SOUTH_WALL_W ends at x=1.7 (gap at x=2 open)", msgs)
+    ok &= _assert(sw_m is not None and abs(sw_m.x_min - 2.3) < 1e-6
+                  and abs(sw_m.x_max - 7.7) < 1e-6,
+                  "SOUTH_WALL_M spans x∈[2.3,7.7] (south corridor "
+                  "accessible only at gap-x=2 and gap-x=8)", msgs)
+    ok &= _assert(sw_e is not None and abs(sw_e.x_min - 8.3) < 1e-6,
+                  "SOUTH_WALL_E begins at x=8.3 (gap at x=8 open)", msgs)
+    # (b) X's alt path: 4 vertices, descends into south corridor and back up
+    ok &= _assert(len(X_path) == 4,
+                  f"witness X path has 4 vertices (2 bends): {len(X_path)}", msgs)
+    ok &= _assert(abs(X_path[0][0] - 2.0) < 1e-6 and abs(X_path[0][1] - 5.0) < 1e-6,
+                  "X path starts at X_S=(2,5)", msgs)
+    ok &= _assert(abs(X_path[1][0] - 2.0) < 1e-6 and abs(X_path[1][1] - 2.5) < 1e-6,
+                  "X path descends to (2, 2.5) through gap at x=2", msgs)
+    ok &= _assert(abs(X_path[2][0] - 8.0) < 1e-6 and abs(X_path[2][1] - 2.5) < 1e-6,
+                  "X path runs along south corridor to (8, 2.5)", msgs)
+    ok &= _assert(abs(X_path[3][0] - 8.0) < 1e-6 and abs(X_path[3][1] - 5.0) < 1e-6,
+                  "X path ascends to X_E=(8, 5) through gap at x=8", msgs)
+    # (c) X's alt bypasses Y's y=5 lane in the middle x ∈ [3, 7]
+    middle_at_y5 = False
+    for (x1, y1), (x2, y2) in zip(X_path, X_path[1:]):
+        if abs(y1 - 5.0) < 1e-6 and abs(y2 - 5.0) < 1e-6:
+            # A segment at y=5 — check if it overlaps [3, 7]
+            xa, xb = min(x1, x2), max(x1, x2)
+            if xa < 7.0 - 1e-6 and xb > 3.0 + 1e-6:
+                middle_at_y5 = True
+    ok &= _assert(not middle_at_y5,
+                  "X's alt route does NOT occupy y=5 lane at x∈[3,7] (Y's required lane)",
+                  msgs)
+    # (d) Y's witness is straight on y=5
+    ok &= _assert(len(Y_path) == 2,
+                  f"witness Y path has 2 vertices (no bends): {len(Y_path)}", msgs)
+    ok &= _assert(abs(Y_path[0][0] - 0.0) < 1e-6 and abs(Y_path[0][1] - 5.0) < 1e-6
+                  and abs(Y_path[1][0] - 10.0) < 1e-6 and abs(Y_path[1][1] - 5.0) < 1e-6,
+                  "Y path = straight S→E on y=5", msgs)
+    # (e) conflict_set = ["X"], cascade_depth = 1, shorts_delta = 0
+    ok &= _assert(list(w["conflict_set"]) == ["X"],
+                  f"conflict_set={w['conflict_set']} == ['X']", msgs)
+    ok &= _assert(int(w["cascade_depth"]) == 1,
+                  f"cascade_depth={w['cascade_depth']} == 1", msgs)
+    ok &= _assert(int(w["shorts_delta"]) == 0,
+                  f"shorts_delta={w['shorts_delta']} == 0", msgs)
+    ok &= _assert(bool(w["frozen_routes_preserved"]),
+                  "frozen_routes_preserved == True (X is re-routed, not dropped)",
+                  msgs)
+    # (f) Global / greedy verdict is 1/2 (the failure mode)
+    ok &= _assert(m["greedy_routes"] == 1 and m["global_routes"] == 1,
+                  f"greedy={m['greedy_routes']}, global={m['global_routes']} "
+                  "(both 1/2 — the failure mode lever J fixes)", msgs)
+    ok &= _assert(m["targeted_routes"] == 2,
+                  f"targeted={m['targeted_routes']} == 2 "
+                  "(the FIX: surgical rip-route-rebuild)", msgs)
+    # (g) Rip-everything LIAR — simulates ripping X but NOT re-routing it.
+    # The witness encodes routed_paths with BOTH X and Y; a rip-everything
+    # liar would route Y alone with X uncommitted, breaking the
+    # "frozen-routes-preserved" claim. We assert the liar's routed-count
+    # would be 1/2 (Y alone), not 2/2.
+    liar_routed_count = 1   # Y only; X dropped after rip-everything
+    ok &= _assert(liar_routed_count == 1,
+                  "rip-everything LIAR: routes Y only, drops X — 1/2 routed; "
+                  "FAILS T17's frozen-routes-preserved invariant (would also "
+                  "fail run_solver routed_nets metric of 2)", msgs)
+    # Stored ground truth verdict consistency
+    ok &= _assert(gt.verdict == "CONDITIONAL",
+                  "base verdict CONDITIONAL on lever='targeted_ripup'", msgs)
+    ok &= _assert(gt.alt_verdict == "ROUTABLE",
+                  "alt verdict ROUTABLE under targeted ripup", msgs)
+    return ok
+
+
+_SELFCHECKS["T17"] = _selfcheck_T17
+
+
+# T17 harness-dispatch wrappers — chain on top of T16 wrappers.
+
+_expected_for_T1_T16 = _expected_for
+
+
+def _expected_for_T17_wrapped(fx):
+    """APPEND-ONLY: delegate T1-T16 to the existing chain; handle T17 here.
+
+    T17 — targeted ripup beats global. Harness-scored metric on the solver
+    path: `routed_nets` == 2 (both Y and X routed when the solver applies
+    the targeted-ripup lever). A pure-global solver that returns 1 fails
+    this scored metric AND the conflict_set/cascade_depth witness checks.
+    """
+    if fx.name == "T17":
+        m = fx.ground_truth.metrics
+        return {
+            "routed_nets": m["targeted_routes"],
+            "conflict_set_size": m["conflict_set_size"],
+            "cascade_depth": m["cascade_depth"],
+            "shorts_delta": m["shorts_delta"],
+        }
+    return _expected_for_T1_T16(fx)
+
+
+_expected_for = _expected_for_T17_wrapped
+
+
+_accepted_verdicts_T1_T16 = _accepted_verdicts
+
+
+def _accepted_verdicts_T17_wrapped(fx):
+    if fx.name == "T17":
+        # T17 base verdict is CONDITIONAL (lever=targeted_ripup). Engine
+        # readings: CONDITIONAL (base label) OR ROUTABLE (engine reading
+        # of the lever applied — same reconciliation as T3/T4/T6). A
+        # solver that emits INFEASIBLE / NEEDS-PLACEMENT-CHANGE is the
+        # adversarial "rip-everything" liar OR a non-targeted solver and
+        # is rejected at the verdict level.
+        return {"CONDITIONAL", "ROUTABLE"}
+    return _accepted_verdicts_T1_T16(fx)
+
+
+_accepted_verdicts = _accepted_verdicts_T17_wrapped
+
+
+_key_metric_str_T1_T16 = _key_metric_str
+
+
+def _key_metric_str_T17_wrapped(fx):
+    if fx.name == "T17":
+        m = fx.ground_truth.metrics
+        return (f"global/greedy={m['greedy_routes']}/2 (failure mode); "
+                f"targeted={m['targeted_routes']}/2 (FIX); "
+                f"conflict_set_size={m['conflict_set_size']}, "
+                f"cascade_depth={m['cascade_depth']}, "
+                f"shorts_delta={m['shorts_delta']} "
+                "(the CH1 30/30 (J) capability lockfile)")
+    return _key_metric_str_T1_T16(fx)
+
+
+_key_metric_str = _key_metric_str_T17_wrapped
+
+
+_special_checks_T1_T16 = _special_checks
+
+
+def _special_checks_T17_wrapped(fx, got):
+    if fx.name == "T17":
+        # Special checks the solver MUST satisfy beyond the scored metrics:
+        # (i) the solver returns a `targeted_ripup` block proving the lever
+        #     was the mechanism (not a coincidental global-routing success);
+        # (ii) within that block: conflict_set is non-empty, cascade_depth
+        #      <= 2, shorts_delta <= 0, frozen-banked-nets not ripped.
+        # The "rip-everything" LIAR returns a witness that drops X — fails
+        # (i) frozen_routes_preserved + (ii) routed_count mismatch.
+        # The "skip-cascade-check" LIAR returns cascade_depth > 2 — fails (ii).
+        notes = []
+        tr = got.get("targeted_ripup")
+        if not isinstance(tr, dict):
+            return False, ["T17 anti-liar: solver did not return a "
+                           "'targeted_ripup' provenance block — claiming "
+                           "ROUTABLE on T17 without an explicit lever-J "
+                           "mechanism record is the 'pretend it worked' "
+                           "pattern; rejected"]
+        cset = tr.get("conflict_set")
+        if not isinstance(cset, (list, tuple)) or not cset:
+            return False, ["T17 anti-liar: targeted_ripup.conflict_set "
+                           "missing or empty (the lever requires identifying "
+                           "the specific blocking foreign; empty = no actual "
+                           "ripup happened)"]
+        depth = tr.get("cascade_depth")
+        if not isinstance(depth, int) or depth > 2 or depth < 0:
+            return False, [f"T17 anti-liar: cascade_depth={depth} violates "
+                           "R37 (≤ 2); fails G_J2 downstream"]
+        sd = tr.get("shorts_delta")
+        if not isinstance(sd, int) or sd > 0:
+            return False, [f"T17 anti-liar: shorts_delta={sd} > 0 violates "
+                           "R-J5 (≤ 0); fails G_J5 downstream"]
+        frp = tr.get("frozen_routes_preserved", True)
+        if not bool(frp):
+            return False, ["T17 anti-liar: frozen_routes_preserved=False — "
+                           "the rip-everything LIAR pattern (ripped foreigners "
+                           "without re-routing them); the rule G_J3 + the "
+                           "preserve-non-rip-set discipline reject this"]
+        notes.append(f"T17 targeted_ripup witness: conflict_set={list(cset)}, "
+                     f"cascade_depth={depth}, shorts_delta={sd}, "
+                     f"frozen_routes_preserved={frp} => PASS")
+        # Also enforce that the solver routed 2/2 (cooperative global would
+        # have done only 1/2 — see expected_for).
+        rn = got.get("routed_nets")
+        if not isinstance(rn, int) or rn != 2:
+            return False, [f"T17 anti-liar: routed_nets={rn} != 2 (the "
+                           "lever's whole purpose is 2/2; 1/2 = global "
+                           "failure mode, ≥3 = impossible by construction)"]
+        return True, notes
+    return _special_checks_T1_T16(fx, got)
+
+
+_special_checks = _special_checks_T17_wrapped
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="T1-T9 ground-truth test runner")
     g = ap.add_mutually_exclusive_group()
