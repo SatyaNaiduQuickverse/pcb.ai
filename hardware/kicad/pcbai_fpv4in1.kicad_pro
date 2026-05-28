@@ -209,7 +209,12 @@
           "spacing": 0.6
         }
       },
-      "via_dimensions": [],
+      "via_dimensions": [
+        {
+          "diameter": 0.3,
+          "drill": 0.15
+        }
+      ],
       "zones_allow_external_fillets": false
     },
     "ipc2581": {

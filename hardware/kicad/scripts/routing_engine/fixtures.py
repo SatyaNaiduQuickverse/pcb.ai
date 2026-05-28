@@ -147,12 +147,36 @@ class Door:
 class ViaSlot:
     """An escape via site (HDI dog-bone fanout band model — BOARD_INVARIANTS
     §HDI via-in-pad whitelist). `hdi_only=True` slots exist ONLY when HDI
-    via-in-pad is enabled (the T9 escalation lever)."""
+    via-in-pad is enabled (the T9 escalation lever).
+
+    LAYER-AWARE ESCAPE SUPPLY (T12 / OQ-020 root-fix — 2026-05-28)
+    --------------------------------------------------------------
+    A via class is escape SUPPLY only if it reaches a USABLE SIGNAL layer.
+    On the locked 10L stackup a single-step F.Cu↔In1 microvia BOTTOMS ON the
+    In1=GND plane — it provides a stitch to GND, NOT a signal escape route
+    (the net cannot continue from In1 because In1 is a reference plane). On
+    the same stackup a blind F.Cu↔In2 via reaches In2 (a signal layer) and IS
+    a signal escape (the OQ-020 lever).
+
+      target_layer : name of the layer this via class terminates at (the deep
+                     side of the blind / microvia hop). MUST match a Layer.name
+                     in the same fixture / Problem when set. When None (back-
+                     compat with T1-T11 which abstract away layer targets) the
+                     slot is counted naively (treated as a usable signal slot).
+                     `phase_a.side_supply` cross-checks target_layer against
+                     the fixture's layers tuple and DROPS slots whose target is
+                     a plane (role='plane') — that is the layer-aware fix.
+      via_class    : optional human-readable class tag for ledgers/PR evidence
+                     (e.g. "microvia_F_In1", "blind_F_In2", "through"). Not
+                     used by the supply math; pure provenance.
+    """
     id: str
     x_mm: float
     y_mm: float
     ic_side: str             # which fine-pitch IC side this slot serves
     hdi_only: bool = False   # True => available only with HDI enabled
+    target_layer: Optional[str] = None   # layer the via terminates at (None=naive)
+    via_class: Optional[str] = None      # provenance tag, e.g. "blind_F_In2"
 
 
 @dataclass(frozen=True)
@@ -1159,6 +1183,178 @@ def _build_T11():
                    (door_A, door_B), (), (), gt, proof)
 
 
+def _build_T12():
+    """T12 — LAYER-AWARE ESCAPE SUPPLY (stretch). The OQ-020 root-fix fixture.
+
+    The CH1 graduation surfaced a counting bug: the engine v1 added an HDI via
+    slot as +1 escape supply NAIVELY, regardless of which layer the via class
+    actually reached. On the locked 10L stackup (F.Cu / In1=GND / In2=sig /
+    In3=GND / ...) a single-step F.Cu↔In1 microvia BOTTOMS ON the In1=GND
+    PLANE — it stitches to GND, NOT a signal escape route. A blind F.Cu↔In2
+    via reaches In2 (a signal layer) and IS a signal escape (the OQ-020 fab
+    class). The engine MUST count a via class as supply ONLY if its target
+    layer is a SIGNAL layer (per the stackup roles).
+
+    Construction (the smallest faithful case — provable by hand):
+      * STACKUP (3 layers): F.Cu signal, In1 PLANE (GND), In2 SIGNAL.
+      * ONE IC side (J20_S) with K=2 standard via slots
+        (`via_class=through`, `target_layer=B.Cu`-equivalent — but our 3-layer
+        stack uses In2 as the deep signal so std target=In2 signal) BUT to
+        keep the counting tight here, std slots use `target_layer=None`
+        (back-compat: treated as signal-usable; mirrors the abstract T9 std
+        slots that don't declare a target).
+      * On TOP of the std supply we add a LIAR class of HDI-only slots whose
+        target is In1 (plane) — 2 microvias F.Cu↔In1. A NAIVE counter (engine
+        v1) would add these +2 to the supply and call it ROUTABLE. The
+        LAYER-AWARE engine must DROP them from supply (they bottom on GND).
+      * We also add a TRUTH class of HDI-only slots whose target is In2
+        (signal) — 1 blind F.Cu↔In2. These DO count as supply.
+
+      * DEMAND = K+2 = 4 escape nets, all attributed to J20_S (the only side).
+
+    Ground-truth counting (re-derivable by hand, no solver):
+      std supply (signal target) = 2
+      plane-bottoming microvia F-In1 supply = 0  (DROPPED — they reach plane)
+      blind F-In2 supply = 1                       (signal target — kept)
+      LAYER-AWARE total HDI supply = 1
+      demand 4 > std 2 + HDI 1 = 3 => overflow = 1 with HDI
+                                 => NEEDS-PLACEMENT-CHANGE / NEEDS-other-via-class
+      NAIVE (engine-v1 liar) total HDI supply = 1 + 2 = 3
+      demand 4 vs std 2 + naive HDI 3 = 5 => overflow 0 => WRONGLY ROUTABLE/NEEDS-HDI
+
+    THE POINT: a naive plane-counting liar PASSES the case as ROUTABLE/NEEDS-HDI
+    (overflow 0); the layer-aware engine reports NEEDS-PLACEMENT-CHANGE
+    (overflow 1 with HDI — HDI doesn't close it because the offered HDI is
+    mostly plane-bottoming). The base verdict the engine emits with std-only is
+    INFEASIBLE (demand 4 > std 2 = overflow 2) — the conditional lever is the
+    blind-F-In2 supply, which on its own ALSO leaves overflow 1 (because the
+    plane-bottoming HDI is not supply). So the fixture's BASE verdict is
+    NEEDS-PLACEMENT-CHANGE, exposing the layer-aware miscount.
+    """
+    # 3-layer minimum stackup to express plane vs signal targeting.
+    layers = (
+        Layer("F.Cu", "signal"),
+        Layer("In1", "plane", "GND"),     # PLANE — vias bottoming here are NOT signal escape
+        Layer("In2", "signal"),           # SIGNAL — vias bottoming here ARE signal escape
+    )
+    via_slots = []
+    # K=2 STANDARD slots (no target_layer declared => signal-usable, back-compat).
+    K = 2
+    for i in range(K):
+        via_slots.append(ViaSlot(f"VS_STD{i}", 1.0 + i, 2.0, "J20_S",
+                                 hdi_only=False, target_layer=None,
+                                 via_class="through"))
+    # LIAR class: 2 HDI microvia F.Cu↔In1 — target=In1 (PLANE). These would be
+    # +2 supply under naive counting but DROPPED by the layer-aware engine.
+    LIAR = 2
+    for i in range(LIAR):
+        via_slots.append(ViaSlot(f"VS_HDI_PLANE{i}", 3.0 + i, 2.0, "J20_S",
+                                 hdi_only=True, target_layer="In1",
+                                 via_class="microvia_F_In1"))
+    # TRUTH class: 1 HDI blind F.Cu↔In2 — target=In2 (SIGNAL). Counts as supply.
+    TRUTH = 1
+    for i in range(TRUTH):
+        via_slots.append(ViaSlot(f"VS_HDI_SIG{i}", 5.0 + i, 2.0, "J20_S",
+                                 hdi_only=True, target_layer="In2",
+                                 via_class="blind_F_In2"))
+    # K+2=4 escape nets, each must escape J20_S.
+    DEMAND = K + 2   # 4 — provably ABOVE std (2) + truthful HDI (1) supply
+    pins, nets = [], []
+    for i in range(DEMAND):
+        nid = f"esc{i}"
+        pins.append(Pin(f"{nid}_PAD", 1.0 + i, 3.0, "F.Cu"))
+        pins.append(Pin(f"{nid}_DST", 1.0 + i, 0.0, "F.Cu"))
+        nets.append(Net(nid, (f"{nid}_PAD", f"{nid}_DST"), "PWM"))
+    # Ground-truth bookkeeping (re-derivable from the slots/nets above).
+    std_signal = sum(1 for v in via_slots
+                     if not v.hdi_only
+                     and (v.target_layer is None
+                          or any(L.name == v.target_layer and L.role == "signal"
+                                 for L in layers)))
+    hdi_signal = sum(1 for v in via_slots
+                     if v.hdi_only
+                     and v.target_layer is not None
+                     and any(L.name == v.target_layer and L.role == "signal"
+                             for L in layers))
+    hdi_plane = sum(1 for v in via_slots
+                    if v.hdi_only
+                    and v.target_layer is not None
+                    and any(L.name == v.target_layer and L.role == "plane"
+                            for L in layers))
+    naive_hdi = sum(1 for v in via_slots if v.hdi_only)   # plane + signal (the liar)
+    overflow_std_layer_aware = max(0, DEMAND - std_signal)        # 4-2 = 2
+    overflow_all_layer_aware = max(0, DEMAND - (std_signal + hdi_signal))  # 4-3 = 1
+    overflow_all_naive = max(0, DEMAND - (std_signal + naive_hdi))         # 4-5 = 0 (LIAR)
+    gt = GroundTruth(
+        # Base verdict: even with the offered HDI, the layer-aware engine
+        # reports overflow 1 (HDI can't close it because most of the HDI is
+        # plane-bottoming) -> NEEDS-PLACEMENT-CHANGE per phase_a._decide_verdict.
+        verdict="NEEDS-PLACEMENT-CHANGE",
+        metrics={
+            "ic_side": "J20_S",
+            "demand_nets": DEMAND,                              # 4
+            "supply_std_signal": std_signal,                    # 2
+            "supply_hdi_signal": hdi_signal,                    # 1 (blind F-In2)
+            "supply_hdi_plane_DROPPED": hdi_plane,              # 2 (microvia F-In1 — NOT supply)
+            "overflow_std_layer_aware": overflow_std_layer_aware,    # 2
+            "overflow_all_layer_aware": overflow_all_layer_aware,    # 1 (binding overflow with HDI)
+            "naive_hdi_supply_LIAR": naive_hdi,                 # 3 (plane + signal counted alike)
+            "overflow_all_naive_LIAR": overflow_all_naive,      # 0 — WRONGLY ROUTABLE
+            "verdict_reason": ("demand 4 > std 2 + LAYER-AWARE HDI 1 = 3 "
+                               "(overflow_with_hdi 1, HDI does not close); "
+                               "NAIVE counter sees demand 4 vs supply 5 "
+                               "(overflow 0 — wrongly ROUTABLE) — proves the "
+                               "engine MUST drop plane-bottoming via classes "
+                               "from supply; OQ-020 root fix."),
+            "escalation": "blind/buried F.Cu→In2 (signal target) — the only "
+                          "HDI class that adds REAL signal escape supply on a "
+                          "stackup where F-In1 bottoms on GND",
+            "overflow": overflow_all_layer_aware,   # harness-scored: overflow w/ HDI offered
+        },
+        conditional_on=None,    # the offered HDI cannot resolve it (only 1 blind)
+        alt_verdict=None,
+        alt_metrics={},
+        alt_witness={},
+        # Witness for the LAYER-AWARE supply ledger (re-checkable by hand):
+        witness={
+            "supply_by_class": {
+                "through (target=None signal-usable)": std_signal,
+                "microvia_F_In1 (target=In1 PLANE)": "DROPPED (not signal supply)",
+                "blind_F_In2 (target=In2 SIGNAL)": hdi_signal,
+            },
+            "layer_aware_total_supply": std_signal + hdi_signal,
+            "naive_total_supply_LIAR": std_signal + naive_hdi,
+        },
+    )
+    proof = (
+        "T12 (LAYER-AWARE ESCAPE SUPPLY; the OQ-020 root-fix; "
+        "DEEP_RESEARCH_2026-05-26_J18_J19_ESCAPE 2026-05-28 escape-density "
+        "correction; engine layer-awareness). 3-layer stackup: F.Cu signal, "
+        "In1 PLANE (GND), In2 SIGNAL. ONE IC side J20_S with 4 demand nets "
+        "and three via classes offered: 2 STANDARD slots (target=None, "
+        "signal-usable by back-compat); 2 HDI microvia F-In1 (target=In1 "
+        "PLANE — NOT signal escape supply); 1 HDI blind F-In2 (target=In2 "
+        "SIGNAL — IS signal escape supply). LAYER-AWARE counting: std supply "
+        "2 + HDI(signal) 1 = 3 < demand 4 => overflow_with_hdi 1 — the "
+        "offered HDI cannot close the gap because most of it bottoms on the "
+        "GND plane; verdict NEEDS-PLACEMENT-CHANGE (the only HDI class that "
+        "would help is MORE blind F-In2 slots — the OQ-020 lever). NAIVE "
+        "counter (engine v1 liar): would add 1+2=3 HDI slots indiscriminately "
+        "=> total 2+3=5 >= demand 4 => overflow 0 => WRONGLY ROUTABLE/NEEDS-"
+        "HDI. Self-check counts by class (no solver), asserts the layer-aware "
+        "overflow_with_hdi == 1 AND the naive overflow == 0 AND asserts a "
+        "plane-counting liar would FAIL T12 by reporting overflow 0."
+    )
+    return Fixture("T12", "layer-aware escape supply (OQ-020 root fix)",
+                   "stretch",
+                   "layer-aware escape: count via class as supply ONLY if it "
+                   "reaches a SIGNAL layer (plane-bottoming via classes are "
+                   "DROPPED from supply); generalises the HDI counting "
+                   "(engine v1 counted naively => the OQ-020 J18/J19 miscount)",
+                   layers, tuple(pins), tuple(nets), (), (), tuple(via_slots),
+                   gt, proof)
+
+
 # ----------------------------------------------------------------------------
 # T13 — LONG-PATH-THROUGH-OBSTACLES (stretch). Appended by Engine Step 8b-ext
 # lever (b) — the maze-router (bounded A*) ground-truth case. Different from
@@ -1267,12 +1463,12 @@ def _build_T13():
 _BUILDERS = [
     _build_T1, _build_T2, _build_T3, _build_T4, _build_T5,
     _build_T6, _build_T7, _build_T8, _build_T9, _build_T10, _build_T11,
-    _build_T13,
+    _build_T12, _build_T13,
 ]
 
 
 def all_fixtures():
-    """Return the registered fixtures (T1..T11 + T13; T12 added in parallel)."""
+    """Return the registered fixtures in case-number order (T1..T13)."""
     return [b() for b in _BUILDERS]
 
 

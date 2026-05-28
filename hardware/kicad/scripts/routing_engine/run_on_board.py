@@ -163,6 +163,19 @@ except Exception:  # pragma: no cover - RC is always present in repo
     RC = None
     _HAVE_RC = False
 
+# OQ-020 ACTIVATE 2026-05-28: the 4-net whitelist for blind F.Cu↔In2 (the
+# layer-aware HDI lever that DOES reach a signal layer — In2 — on the locked
+# 10L stackup). Source-of-truth: BOARD_INVARIANTS §"HDI Class extension:
+# blind/buried F.Cu↔In2" + audit_hdi_via_in_pad.BLIND_F_IN2_NET_WHITELIST +
+# pcbai_fpv4in1.kicad_dru "HDI blind F-In2" rule set. Re-imported lazily
+# from the audit module so the SSoT is the audit (which the JLC DRC also
+# enforces); failing back to a hardcoded tuple keeps this module importable
+# on hosts without pcbnew (the audit imports pcbnew at module load).
+try:
+    from audit_hdi_via_in_pad import BLIND_F_IN2_NET_WHITELIST  # type: ignore
+except Exception:
+    BLIND_F_IN2_NET_WHITELIST = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA")
+
 
 MODELLING_ASSUMPTIONS = [
     "PINS = all CH1-zone footprint pads + J18(QFN-32 pins 1-32) + J19(HVQFN-24 "
@@ -175,13 +188,18 @@ MODELLING_ASSUMPTIONS = [
     "DOORS = BOARD_INVARIANTS S2->CH1(40,50,4mm power), S5->CH1(35,65,2mm power), "
     "S6->CH1(17,82,2mm SIGNAL) + In8 FET-region escape door; capacity = "
     f"floor(width/{TRACK_PITCH_MM}mm pitch) x {DOOR_SIGNAL_LAYERS} signal layer.",
-    "VIA_SLOTS per IC side use REMAINING capacity (the honest 24/30 model): "
-    f"std_total = floor(side_pin_span / {STD_VIA_FANOUT_PITCH_MM}mm fanout pitch); "
-    "already-routed signal nets on the side CONSUMED std slots; std_REMAINING = "
-    "max(0, std_total - routed_consumed) is the binding std supply for residual "
-    "nets. HDI-only (via-in-pad, one microvia per pin) = the escalation lever, "
-    "flagged hdi_only=True; only J18/J19 are whitelisted (BOARD_INVARIANTS HDI "
-    "whitelist). Power/NC/unconnected pins consume no escape slot.",
+    "VIA_SLOTS per IC side use REMAINING capacity (the honest 24/30 model) AND "
+    "LAYER-AWARE classes (OQ-020 ACTIVATE 2026-05-28; T12 root fix): "
+    f"std_total = floor(side_pin_span / {STD_VIA_FANOUT_PITCH_MM}mm fanout pitch) "
+    "(through-vias reach B.Cu = SIGNAL = count as std supply); already-routed "
+    "signal nets on the side CONSUMED std slots; std_REMAINING = max(0, "
+    "std_total - routed_consumed). HDI microvia F.Cu↔In1 (target=In1=GND PLANE) "
+    "= emitted for ledger honesty but DROPPED from signal-escape supply by the "
+    "layer-aware engine (engine v1 counted it naively — the OQ-020 bug). "
+    "HDI blind/buried F.Cu↔In2 (target=In2=SIGNAL) = the OQ-020 ACTIVATE lever, "
+    "available ONLY for the 4 whitelisted nets (BSTB/PWM_INHB/SWDIO/PWM_INLA) "
+    "per BOARD_INVARIANTS; one blind via per pin (via-in-pad). Power/NC/"
+    "unconnected pins consume no escape slot.",
     "OBSTACLES = none fabricated: In1/In3/In7 GND + In5 +VMOTOR planes are "
     "continuous in CH1 (no measured CH1-zone plane split) — conservative/honest.",
     "LAYERS = 10L stackup (F.Cu/In1=GND/In2/In3=GND/In4=BEMF/In5=+VMOTOR/In6=SW/"
@@ -209,6 +227,17 @@ class _SideModel:
     hdi_slots: int        # HDI via-in-pad supply still available (REMAINING)
     demand: int           # residual nets needing to escape this side
     residual_nets: tuple  # the residual net ids on this side
+    # OQ-020 ACTIVATE 2026-05-28: blind F.Cu↔In2 supply (layer-aware).
+    # The existing microvia F.Cu↔In1 class BOTTOMS ON the In1=GND PLANE
+    # and is therefore DROPPED from signal escape supply by the layer-aware
+    # engine (phase_a._slot_reaches_signal); the only HDI class that
+    # delivers real signal escape for the 4 residual nets is the
+    # blind/buried F.Cu↔In2. Per the BOARD_INVARIANTS whitelist this is
+    # available ONLY on the 4 named nets (BSTB / PWM_INHB / SWDIO /
+    # PWM_INLA), so blind_f_in2_supply == # of residual nets on this side
+    # whose net name is in BLIND_F_IN2_NET_WHITELIST.
+    blind_f_in2_supply: int = 0   # per-side OQ-020 blind F-In2 capacity (signal)
+    blind_f_in2_nets: tuple = ()  # the residual nets entitled to a blind F-In2
 
 
 def _classify_sides(board, ref, n_sig, residual_nets, routed_nets):
@@ -267,10 +296,28 @@ def _classify_sides(board, ref, n_sig, residual_nets, routed_nets):
         consumed = len({p[1] for p in ps if p[1] in routed_nets})
         std_remaining = max(0, std_total - consumed)
         resid = tuple(sorted({p[1] for p in ps if p[1] in residual_nets}))
-        # HDI via-in-pad TOTAL = one per pin minus the std fanout band (n_pins -
-        # std_total); REMAINING = total minus what routed beyond std already used.
+        # HDI microvia F.Cu↔In1 TOTAL = one per pin minus the std fanout band
+        # (n_pins - std_total); REMAINING = total minus what routed beyond std
+        # already used. WARNING — LAYER-AWARE NOTE: on the locked 10L stackup
+        # this class BOTTOMS ON In1=GND (PLANE) so it is NOT a signal escape;
+        # the engine's `phase_a.side_supply` DROPS it from supply via
+        # `_slot_reaches_signal` (target_layer="In1" + role="plane"). We still
+        # emit the slots into the Problem so the ledger shows them honestly
+        # (helps diagnose old-engine miscounts), but they contribute 0 to
+        # the layer-aware supply. This is the OQ-020 root fix.
         hdi_total = max(0, len(ps) - std_total)
         hdi_remaining = max(0, len(ps) - consumed - std_remaining)
+        # OQ-020 ACTIVATE 2026-05-28 (Sai cost-OK): the blind/buried F.Cu↔In2
+        # class IS a signal escape (target=In2, role=signal). Available ONLY
+        # for residual nets whose name is in BLIND_F_IN2_NET_WHITELIST (per
+        # BOARD_INVARIANTS §"HDI Class extension: blind/buried F.Cu↔In2";
+        # NARROWEST-possible scope, exactly the 4 nets the worker analysis
+        # identified). Supply = # of residual nets on this side eligible
+        # (one blind via per pin, via-in-pad). This is the layer-aware lever
+        # the engine v1 was missing.
+        blind_eligible = tuple(sorted(n for n in resid
+                                      if n in BLIND_F_IN2_NET_WHITELIST))
+        blind_supply = len(blind_eligible)
         out.append(_SideModel(
             ic_side=f"{ref}_{s}",
             n_pins=len(ps),
@@ -282,6 +329,8 @@ def _classify_sides(board, ref, n_sig, residual_nets, routed_nets):
             hdi_slots=hdi_remaining,
             demand=len(resid),
             residual_nets=resid,
+            blind_f_in2_supply=blind_supply,
+            blind_f_in2_nets=blind_eligible,
         ))
     return out
 
@@ -387,18 +436,44 @@ def extract_problem(board_path, subsystem="CH1"):
     for ref, n_sig in (("J18", 32), ("J19", 24)):
         side_models.extend(
             _classify_sides(board, ref, n_sig, residual_set, routed_set))
-    # Emit the TOTAL per-side supply (std_total std + hdi_total HDI). The engine's
-    # REMAINING-capacity model (escape_ledger consumed_by_side) deducts the slots
-    # already consumed by routed nets — so the driver feeds raw geometry SUPPLY +
-    # the measured CONSUMED count, and the engine owns the remaining-supply math.
+    # Emit the per-side supply as LAYER-TAGGED via classes — the layer-aware
+    # engine drops plane-bottoming classes (OQ-020 root fix). Three classes:
+    #   1. STANDARD (target=None back-compat = signal-usable): the dog-bone
+    #      fanout band — through-vias reach B.Cu signal, counted in std.
+    #   2. HDI microvia F.Cu↔In1 (target="In1", role="plane"): the existing
+    #      whitelisted microvia class. BOTTOMS ON GND on the 10L stackup so
+    #      DROPPED from signal escape supply by the layer-aware engine.
+    #      Emitted into the Problem honestly (visible in the ledger) but
+    #      contributes 0 to layer-aware supply. (engine v1 counted it as +1
+    #      supply naively — the OQ-020 bug; T12 fixture proves this.)
+    #   3. HDI blind/buried F.Cu↔In2 (target="In2", role="signal"): the
+    #      OQ-020 ACTIVATE lever — REAL signal escape. Available only on the
+    #      4 named whitelist nets (BSTB / PWM_INHB / SWDIO / PWM_INLA),
+    #      one blind via per pin (via-in-pad). NARROWEST-possible scope per
+    #      BOARD_INVARIANTS + audit_hdi_via_in_pad.
+    # The engine's REMAINING-capacity model (escape_ledger consumed_by_side)
+    # still deducts already-consumed std slots; the driver feeds raw geometry
+    # SUPPLY + CONSUMED count and the engine owns the remaining math.
     via_slots = []
     for sm in side_models:
         for i in range(sm.std_total):
-            via_slots.append(F.ViaSlot(f"{sm.ic_side}_STD{i}", 0.0, 0.0,
-                                       sm.ic_side, hdi_only=False))
+            via_slots.append(F.ViaSlot(
+                f"{sm.ic_side}_STD{i}", 0.0, 0.0, sm.ic_side,
+                hdi_only=False, target_layer=None, via_class="through"))
+        # The HDI microvia F-In1 class — PLANE-bottoming; emitted for ledger
+        # honesty, DROPPED by layer-aware supply (T12 root fix).
         for i in range(sm.hdi_total):
-            via_slots.append(F.ViaSlot(f"{sm.ic_side}_HDI{i}", 0.0, 0.0,
-                                       sm.ic_side, hdi_only=True))
+            via_slots.append(F.ViaSlot(
+                f"{sm.ic_side}_HDIuv_FIn1_{i}", 0.0, 0.0, sm.ic_side,
+                hdi_only=True, target_layer="In1",
+                via_class="microvia_F_In1"))
+        # OQ-020 ACTIVATE: the blind F-In2 class — SIGNAL-targeting. Available
+        # only for nets on the BLIND_F_IN2_NET_WHITELIST (NARROWEST scope).
+        for i in range(sm.blind_f_in2_supply):
+            via_slots.append(F.ViaSlot(
+                f"{sm.ic_side}_HDIblind_FIn2_{i}", 0.0, 0.0, sm.ic_side,
+                hdi_only=True, target_layer="In2",
+                via_class="blind_F_In2"))
 
     # ---- DOORS: BOARD_INVARIANTS CH1 I/O ports + In8 escape door -----------
     doors = _ch1_doors()
@@ -598,9 +673,12 @@ def _print_header(problem, meta):
     for sm in meta["side_models"]:
         print(f"    {sm.ic_side}: pins={sm.n_pins} span={sm.span_mm}mm | "
               f"std_total={sm.std_total} routed_consumed={sm.routed_consumed} "
-              f"=> std_REMAINING={sm.std_slots} +HDI={sm.hdi_slots} "
-              f"(total_with_HDI={sm.std_slots + sm.hdi_slots}) | "
-              f"residual_demand={sm.demand} {list(sm.residual_nets)}")
+              f"=> std_REMAINING={sm.std_slots} "
+              f"+HDIuv_FIn1(PLANE-DROPPED)={sm.hdi_slots} "
+              f"+HDIblind_FIn2(OQ-020 signal)={sm.blind_f_in2_supply} "
+              f"=> layer-aware-supply={sm.std_slots + sm.blind_f_in2_supply} | "
+              f"residual_demand={sm.demand} {list(sm.residual_nets)} | "
+              f"blind-eligible={list(sm.blind_f_in2_nets)}")
     print()
     print("  MODELLING ASSUMPTIONS:")
     for i, asm in enumerate(MODELLING_ASSUMPTIONS, 1):

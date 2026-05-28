@@ -588,14 +588,62 @@ def make_side_ledger(ic_side, demand, supply_std, supply_hdi):
     )
 
 
+# ----------------------------------------------------------------------------
+# LAYER-AWARE ESCAPE SUPPLY (T12 / OQ-020 root-fix — 2026-05-28).
+# ----------------------------------------------------------------------------
+# A via class is escape SUPPLY only if it reaches a USABLE SIGNAL layer. The
+# engine v1 counted "+1 escape supply" per HDI slot naively. On the locked 10L
+# stackup (F.Cu / In1=GND / In2=sig / In3=GND / ...) a single-step F.Cu↔In1
+# microvia BOTTOMS ON the In1=GND PLANE — it stitches to GND, NOT a signal
+# escape (the net cannot continue from In1 because In1 is a reference plane). A
+# blind F.Cu↔In2 via reaches In2 (a signal layer) and IS a signal escape — the
+# OQ-020 lever. Layer-awareness drops plane-bottoming via classes from the
+# supply ledger (the bug). Generic across subsystems; not CH1-special.
+#
+# When a ViaSlot's `target_layer` is None (T1-T11 abstract style, no layer
+# targeting), we COUNT it (back-compat: the abstract fixtures' slots are
+# assumed signal-usable). When `target_layer` names a layer in the fixture
+# stackup, we count the slot ONLY if that layer is role='signal'.
+# ----------------------------------------------------------------------------
+
+def _layer_role(fx, layer_name):
+    """Return the role ('signal'|'plane') of the Layer named `layer_name` in
+    fixture/Problem `fx`. Returns None if the layer is not declared (unknown
+    layer = treat as unusable for supply, since we cannot prove it is signal).
+    Pure stackup lookup; no router."""
+    for L in fx.layers:
+        if L.name == layer_name:
+            return L.role
+    return None
+
+
+def _slot_reaches_signal(fx, vs):
+    """True iff via slot `vs` provides a signal escape — i.e. it terminates on
+    a USABLE SIGNAL layer (per the stackup). When `target_layer` is None (back-
+    compat) the slot is assumed signal-usable (the T1-T11 abstract fixtures
+    declare no layer target). When set, we look up the role in `fx.layers` and
+    drop the slot if the target is a PLANE (or the named layer is unknown — we
+    cannot prove signal). This is the layer-awareness primitive."""
+    if vs.target_layer is None:
+        return True
+    return _layer_role(fx, vs.target_layer) == "signal"
+
+
 def side_supply(fx):
-    """Per-IC-side via-slot SUPPLY, grouped from the inputs. Returns
-    {ic_side: {"std": int, "hdi": int}} — std (hdi_only=False) + HDI-only slots
-    per side. The single source of the supply count for both `escape_ledger` and
-    Phase B's via pre-assignment."""
+    """Per-IC-side via-slot SUPPLY, grouped from the inputs — LAYER-AWARE.
+
+    Returns {ic_side: {"std": int, "hdi": int}} — std (hdi_only=False) + HDI-
+    only slots per side that REACH A SIGNAL LAYER (per `_slot_reaches_signal`).
+    Plane-bottoming slots are DROPPED from supply (the OQ-020 / T12 root fix).
+
+    The single source of the supply count for both `escape_ledger` and Phase
+    B's via pre-assignment, so layer-awareness propagates consistently.
+    """
     sides = {}
     for vs in fx.via_slots:
         sides.setdefault(vs.ic_side, {"std": 0, "hdi": 0})
+        if not _slot_reaches_signal(fx, vs):
+            continue   # plane-bottoming via class — NOT a signal escape supply
         if vs.hdi_only:
             sides[vs.ic_side]["hdi"] += 1
         else:
@@ -876,8 +924,12 @@ def _decide_verdict(fx, feas, esc, global_routes, greedy_routes, stranded):
                                             routable, the naive ROUTER is not.
           - infeasible                   -> INFEASIBLE (Hall-deficient; demand >
                                             supply over a confined door set).
-    `overflow_std` for the harness = escape overflow (T9) when via_slots exist,
-    else the door overflow total.
+    `overflow` for the harness = the BINDING overflow that the verdict's
+    escalation cannot close — for ROUTABLE 0; for NEEDS-HDI the std-only
+    overflow (HDI closes it); for NEEDS-PLACEMENT-CHANGE the overflow_hdi
+    (offered HDI does NOT close it — the binding residual that demands more
+    escalation; T12 OQ-020 layer-aware case); for INFEASIBLE the overflow_hdi
+    (when supply is zero, equals demand).
     """
     # --- Escape (via-slot) case: the T9 honesty test ---
     if esc:
@@ -889,6 +941,7 @@ def _decide_verdict(fx, feas, esc, global_routes, greedy_routes, stranded):
             v = "ROUTABLE"
             r = (f"escape side {worst.ic_side}: demand {worst.demand} <= "
                  f"std via supply {worst.supply_std} (overflow 0) => ROUTABLE")
+            return v, global_routes, 0, r
         elif worst.overflow_hdi == 0:
             v = "NEEDS-HDI"
             r = (f"escape side {worst.ic_side}: demand {worst.demand} > std via "
@@ -897,6 +950,10 @@ def _decide_verdict(fx, feas, esc, global_routes, greedy_routes, stranded):
                  f"{worst.supply_std + worst.supply_hdi}, overflow 0 => NEEDS-HDI "
                  f"(pin-escape-density fix, DEEP_RESEARCH decision table; "
                  f"BOARD_INVARIANTS HDI whitelist)")
+            # NEEDS-HDI: the binding overflow that HDI CLOSES = the std-only
+            # overflow (the T9/T10 harness contract — overflow == 1 with std,
+            # 0 with HDI). The harness scores this against `overflow_no_hdi`.
+            return v, global_routes, worst.overflow_std, r
         else:
             # HDI cannot close the gap. Per the DEEP_RESEARCH table this is a
             # placement/package problem (NOT layers). If even adding HDI leaves
@@ -912,10 +969,17 @@ def _decide_verdict(fx, feas, esc, global_routes, greedy_routes, stranded):
                 v = "NEEDS-PLACEMENT-CHANGE"
                 r = (f"escape side {worst.ic_side}: demand {worst.demand} > "
                      f"std+HDI supply {worst.supply_std + worst.supply_hdi} "
-                     f"(overflow {worst.overflow_hdi}); HDI does not close the "
-                     f"gap => redistribute pins / placement change "
-                     f"(DEEP_RESEARCH escalation #2)")
-        return v, global_routes, worst.overflow_std, r
+                     f"(overflow_with_hdi {worst.overflow_hdi}); HDI does not "
+                     f"close the gap => redistribute pins / placement change / "
+                     f"add a different via class that reaches a SIGNAL layer "
+                     f"(DEEP_RESEARCH escalation #2; T12 OQ-020 layer-aware: "
+                     f"plane-bottoming HDI classes are NOT signal supply)")
+            # NEEDS-PLACEMENT-CHANGE / INFEASIBLE: the binding overflow that the
+            # offered HDI does NOT close = overflow_hdi. This is what the T12
+            # OQ-020 harness scores ("with HDI offered, the residual overflow
+            # is overflow_hdi"). A naive plane-counting liar would have HDI
+            # supply inflated and report overflow_hdi=0 — FAILING T12 here.
+            return v, global_routes, worst.overflow_hdi, r
 
     # --- Door/corridor case: T3/T4 (global bipartite feasibility) ---
     if feas is None:

@@ -80,6 +80,11 @@ Run:
   python3 hardware/kicad/scripts/routing_engine/run_suite.py --solver mymod:solve
   python3 hardware/kicad/scripts/routing_engine/run_suite.py \
           --solver routing_engine.phase_a:solve --cases T3,T4,T9
+
+T10/T11/T12 are layer-aware/multi-side/layer-aware additions to the original
+T1-T9 base (APPEND-ONLY; the original 9 are unchanged). T12 is the OQ-020
+root-fix fixture: layer-aware escape supply (plane-bottoming via classes are
+NOT counted as signal escape supply). See fixtures._build_T12 docstring.
 """
 from __future__ import annotations
 
@@ -704,12 +709,82 @@ def _selfcheck_T13(fx, msgs):
     return ok
 
 
+def _selfcheck_T12(fx, msgs):
+    """T12 — LAYER-AWARE ESCAPE SUPPLY (the OQ-020 root-fix fixture). Re-derive
+    the per-via-class supply count from the stackup + via_slots (NO solver),
+    prove the LAYER-AWARE engine correctly drops plane-bottoming via classes
+    from supply, AND prove that a NAIVE plane-counting liar would WRONGLY
+    report ROUTABLE — the adversarial witness the engine must reject."""
+    gt = fx.ground_truth
+    ok = True
+    layer_role = {L.name: L.role for L in fx.layers}
+    # Re-derive per-class supply (signal vs plane target) independently.
+    std_signal = 0
+    hdi_signal = 0
+    hdi_plane = 0
+    for vs in fx.via_slots:
+        # target_layer=None -> back-compat signal-usable (the T1-T11 style).
+        is_signal = (vs.target_layer is None
+                     or layer_role.get(vs.target_layer) == "signal")
+        is_plane = (vs.target_layer is not None
+                    and layer_role.get(vs.target_layer) == "plane")
+        if not vs.hdi_only and is_signal:
+            std_signal += 1
+        if vs.hdi_only and is_signal:
+            hdi_signal += 1
+        if vs.hdi_only and is_plane:
+            hdi_plane += 1
+    demand = len(fx.nets)
+    # LAYER-AWARE counts (the truth).
+    ovf_std_aware = max(0, demand - std_signal)
+    ovf_all_aware = max(0, demand - (std_signal + hdi_signal))
+    # NAIVE counts (the liar: includes plane-bottoming HDI as supply).
+    naive_hdi = hdi_signal + hdi_plane
+    ovf_all_naive = max(0, demand - (std_signal + naive_hdi))
+    m = gt.metrics
+    ok &= _assert(std_signal == m["supply_std_signal"],
+                  f"re-derived std signal supply {std_signal} == "
+                  f"stored {m['supply_std_signal']} (== 2)", msgs)
+    ok &= _assert(hdi_signal == m["supply_hdi_signal"],
+                  f"re-derived HDI signal supply {hdi_signal} == "
+                  f"stored {m['supply_hdi_signal']} (== 1, blind F-In2)", msgs)
+    ok &= _assert(hdi_plane == m["supply_hdi_plane_DROPPED"],
+                  f"re-derived plane-bottoming HDI {hdi_plane} == "
+                  f"stored {m['supply_hdi_plane_DROPPED']} (== 2, microvia F-In1 "
+                  "— DROPPED from supply by layer-awareness)", msgs)
+    ok &= _assert(ovf_std_aware == m["overflow_std_layer_aware"],
+                  f"layer-aware std overflow {ovf_std_aware} == 2 (demand 4 - "
+                  "std 2)", msgs)
+    ok &= _assert(ovf_all_aware == m["overflow_all_layer_aware"] == 1,
+                  f"layer-aware overflow_with_hdi {ovf_all_aware} == 1 "
+                  "(demand 4 - (std 2 + HDI signal 1) — HDI does not close it)",
+                  msgs)
+    ok &= _assert(naive_hdi == m["naive_hdi_supply_LIAR"]
+                  and ovf_all_naive == m["overflow_all_naive_LIAR"] == 0,
+                  f"NAIVE liar HDI supply {naive_hdi} -> overflow "
+                  f"{ovf_all_naive} == 0 (WRONGLY ROUTABLE) — proves the engine "
+                  "MUST drop plane-bottoming via classes from supply", msgs)
+    ok &= _assert(gt.verdict == "NEEDS-PLACEMENT-CHANGE",
+                  "base verdict NEEDS-PLACEMENT-CHANGE (offered HDI cannot "
+                  "close the gap because most of it bottoms on a PLANE — the "
+                  "lever is MORE blind-F-In2 slots, not more F-In1 microvias)",
+                  msgs)
+    # Confirm the stackup is layer-aware-meaningful (at least 1 plane + 1 signal
+    # layer present); otherwise the fixture is degenerate.
+    n_plane = sum(1 for L in fx.layers if L.role == "plane")
+    n_signal = sum(1 for L in fx.layers if L.role == "signal")
+    ok &= _assert(n_plane >= 1 and n_signal >= 1,
+                  f"stackup has plane + signal layers (planes={n_plane}, "
+                  f"signals={n_signal}) — layer-awareness is meaningful", msgs)
+    return ok
+
+
 _SELFCHECKS = {
     "T1": _selfcheck_T1, "T2": _selfcheck_T2, "T3": _selfcheck_T3,
     "T4": _selfcheck_T4, "T5": _selfcheck_T5, "T6": _selfcheck_T6,
     "T7": _selfcheck_T7, "T8": _selfcheck_T8, "T9": _selfcheck_T9,
     "T10": _selfcheck_T10, "T11": _selfcheck_T11,
-    "T13": _selfcheck_T13,
+    "T12": _selfcheck_T12, "T13": _selfcheck_T13,
 }
 
 
@@ -786,6 +861,12 @@ def _key_metric_str(fx):
     if name == "T11":
         return (f"internal={m['n_internal']} (no door) + crossing={m['n_crossing']} "
                 f"== door_supply={m['door_supply']} => ROUTABLE")
+    if name == "T12":
+        return (f"demand={m['demand_nets']} vs std_signal={m['supply_std_signal']} + "
+                f"HDI_signal={m['supply_hdi_signal']} (plane-bottoming HDI "
+                f"{m['supply_hdi_plane_DROPPED']} DROPPED) => overflow_with_hdi="
+                f"{m['overflow_all_layer_aware']} => NEEDS-PLACEMENT-CHANGE; "
+                f"naive liar would say overflow={m['overflow_all_naive_LIAR']}")
     if name == "T13":
         return (f"long-path through {3} bodies; witness length="
                 f"{m['witness_length_mm']}mm, bends={m['witness_n_corners']}, "
@@ -838,6 +919,16 @@ def _accepted_verdicts(fx):
         # NEEDS-HDI is the precise engine reading; INFEASIBLE accepted as the
         # base "infeasible with std vias" label (same reconciliation as T9).
         return {"INFEASIBLE", "NEEDS-HDI"}
+    if fx.name == "T12":
+        # T12 OQ-020 root-fix: the offered HDI cannot close the gap (most of
+        # it is plane-bottoming and DROPPED from supply by layer-awareness).
+        # Engine emits NEEDS-PLACEMENT-CHANGE (the DEEP_RESEARCH escalation
+        # #2: HDI does not help, redistribute pins / add more signal-target
+        # via classes). INFEASIBLE accepted as a stronger "no escalation in
+        # this model helps" reading (also correct for the offered classes).
+        # A NAIVE plane-counting liar would emit ROUTABLE/NEEDS-HDI — those
+        # are REJECTED here (not in the accepted set), so the liar FAILS T12.
+        return {"NEEDS-PLACEMENT-CHANGE", "INFEASIBLE"}
     # T11 base verdict is ROUTABLE (no lever) — only that.
     return {gt.verdict}
 
@@ -876,6 +967,12 @@ def _expected_for(fx):
         # all 5 nets route (2 crossing via doors + 3 internal within-zone). A
         # planner that force-assigned all to doors would route < 5 (strand 3).
         exp["routed_nets"] = m["routed_nets"]     # == 5
+    elif fx.name == "T12":
+        # T12 OQ-020: harness-scored overflow == the LAYER-AWARE overflow_with_hdi
+        # == 1 (demand 4 - (std 2 + HDI-signal 1) = 1). A NAIVE liar (counting
+        # plane-bottoming microvias as supply) reports overflow == 0 — that
+        # FAILS this metric, exactly the adversarial check we want.
+        exp["overflow"] = m["overflow_all_layer_aware"]   # == 1
     elif fx.name == "T13":
         # the maze router routes the single long-path net (== 1). length is
         # bounded BELOW by min_length_mm (must be at least the horizontal span);
