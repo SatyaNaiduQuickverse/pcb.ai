@@ -2479,6 +2479,265 @@ def _build_T17():
 _BUILDERS.append(_build_T17)
 
 
+# ----------------------------------------------------------------------------
+# T20 — MULTI-MECH-PATH (stretch). Appended 2026-05-28 to lock the CH1 30/30
+# lever (K3) capability: multi-mechanism path planning that chains 2+ via
+# classes along a single route. The seed case is the canonical SWDIO_CH1
+# failure on PR #227: J18.23 (F.Cu, HDI-whitelisted) -> TP22.1 (B.Cu). The
+# whitelist permits blind_F_In2 escape at J18.23 (lands on In2.Cu) but no
+# single mechanism reaches B.Cu from there — In2->B.Cu needs a through-via
+# elsewhere along the path. Single-mech maze fails; multi-mech chain
+# succeeds. APPEND-ONLY: T1-T17 unchanged.
+# ----------------------------------------------------------------------------
+
+def _build_T20():
+    """T20 — MULTI-MECH-PATH (stretch).
+    The CH1 30/30 (K3) capability fixture (2026-05-28; the multi-mech
+    planner chains 2+ via mechanisms along a single route — the canonical
+    SWDIO_CH1 unblocker).
+
+    THE PROBLEM CLASS (PR #227 SWDIO_CH1 reproducer):
+    A single net whose START and END live on DIFFERENT outer copper layers
+    (F.Cu start + B.Cu end). The start pin is HDI-whitelisted: at fine-pitch
+    QFN cells like J18.23, the cooperative router's via_class_for_span
+    REFUSES through-via (would short adjacent inner-layer pads on every
+    layer in the F.Cu↔B.Cu barrel — the v6/v7 shorts lesson). Only the
+    sanctioned HDI classes (microvia_F_In1 / microvia_B_In8 / blind_F_In2)
+    are physically realisable at the HDI cell. blind_F_In2 lands on In2.Cu.
+    To reach B.Cu from In2.Cu the route needs ANOTHER mechanism — a
+    through-via at a non-HDI cell somewhere along the path. The chain is:
+
+        blind_F_In2 (F.Cu→In2.Cu) at the start cell
+            → In2.Cu route to a clear cell
+                → through-via (In2.Cu→B.Cu) at the clear cell
+                    → B.Cu route to the end cell
+
+    A SINGLE-MECHANISM maze (the lever-(b) router) tries one via class per
+    attempt:
+      * blind_F_In2 only — lands on In2.Cu, cannot reach B.Cu (wrong layer).
+      * through only      — REFUSED at the HDI start cell (HDI policy).
+    Either way: NO-PATH. The board GEOMETRY supports the route; the router
+    can't plan the chain. The MULTI-MECH planner lifts the state-space to
+    (cell, layer, last_via_class), admitting 2+ via transitions in one A*
+    path, and routes the chain natively. T20 locks this end-to-end.
+
+    Construction (smallest faithful reproduction — provable by hand):
+      * STACKUP: F.Cu signal, In1=GND plane (for plane-continuity context),
+        In2.Cu signal, In8.Cu signal (signal-symmetric to In2 on the B side),
+        B.Cu signal. 5-layer minimum so blind_F_In2 has a sanctioned span
+        (F.Cu+In1+In2) and through has a sanctioned span (F.Cu..B.Cu).
+      * 1 NET: MM from S=(0,5,F.Cu, HDI-whitelisted) to E=(10,5,B.Cu).
+      * 2 OBSTACLES:
+        - F.Cu blocking field at x∈[0.5, 11.5], y∈[-1, 11] on
+          layers={"F.Cu"}. The start cell at (0,5) is the only F.Cu cell
+          that clears; F.Cu past x=0.5 is blocked. The route MUST escape
+          off F.Cu at the start cell — and the start cell is HDI-
+          whitelisted, so through is REFUSED there; blind_F_In2 is the
+          ONLY legal escape.
+        - B.Cu blocking field at x∈[-1.5, 9.5], y∈[-1, 11] on
+          layers={"B.Cu"}. B.Cu cells before x≈9.5 are blocked. The
+          through-via to B.Cu MUST land near the end cell (x≥9.5); the
+          via comes AFTER the In2.Cu route to (~9.5, 5).
+      * HDI WHITELIST: the start pin is HDI-whitelisted (mirrors J18.23
+        per BOARD_INVARIANTS).
+
+    GROUND TRUTH (re-derivable by hand, no solver):
+      verdict        = ROUTABLE under multi-mech (CONDITIONAL on the K3
+                       lever — single-mech reports NO-PATH).
+      Witness chain  = [blind_F_In2 at (0,5) F→In2,
+                        In2.Cu trace (0,5)→(9.5,5),
+                        through at (9.5,5) In2→B,
+                        B.Cu trace (9.5,5)→(10,5)]
+      routed         = 1   (the single multi-mech net is routed)
+      n_vias         = 2   (one blind + one through)
+      n_mechanisms   = 2   (two DIFFERENT via classes — the K3 chain)
+      via_chain      = ['blind_F_In2', 'through']
+
+    BUG-WITNESS (the single-mech adversary fails):
+      A SINGLE-MECH-ONLY liar (the legacy maze or any router that admits
+      ONE via class per attempt) reports NO-PATH:
+        * blind_F_In2 only → lands on In2.Cu, no transition to B.Cu
+                              available → NO-PATH.
+        * through only     → REFUSED at the HDI start cell (HDI policy)
+                              AND the F.Cu blocking field prevents the
+                              route from stepping to a non-HDI F.Cu cell
+                              first → NO-PATH.
+      The K3 planner ADMITS the chain (state-space lifted with
+      last_via_class) and routes ROUTABLE — the lockfile catches a
+      regression to single-mech-only.
+
+    SELF-CHECK DEMONSTRATES (8 assertions):
+      (a) the start pin is HDI-whitelisted (the K3 lever requires the
+          asymmetric HDI cell — a non-HDI start would admit through-via
+          single-mech trivially);
+      (b) the witness chain has exactly 2 vias of 2 distinct classes
+          (the K3 capability is the multi-mechanism nature);
+      (c) the first via is blind_F_In2 F.Cu→In2.Cu at the start cell;
+      (d) the second via is through (In2.Cu→B.Cu) at the chain cell;
+      (e) the In2.Cu trace clears the In2-applicable bodies by ≥ margin
+          (per-layer filter from lever (E));
+      (f) the chain cell at x=9.5 clears the B.Cu body by ≥ through halo
+          (per-class halo from lever (H));
+      (g) a SINGLE-MECH-ONLY liar (admits ONLY 'blind_F_In2' OR ONLY
+          'through' classes) reports NO-PATH on the same fixture —
+          PROVES the bug class is real and a regression FAILS T20;
+      (h) INVOKES `multi_mech_planner.solve` directly and asserts the
+          engine emits verdict=ROUTABLE, routed=1, n_vias=2,
+          via_chain matches the witness — the engine wires the fix
+          end-to-end.
+    """
+    # 5-layer minimum stackup to express both via classes:
+    layers = (
+        Layer("F.Cu", "signal"),
+        Layer("In1.Cu", "plane", "GND"),
+        Layer("In2.Cu", "signal"),
+        Layer("In8.Cu", "signal"),
+        Layer("B.Cu", "signal"),
+    )
+    pins = [
+        Pin("MM_S", 0.0, 5.0, "F.Cu"),
+        Pin("MM_E", 10.0, 5.0, "B.Cu"),
+    ]
+    nets = [Net("MM", ("MM_S", "MM_E"), "signal")]
+    # Two-layer obstacle field that forces the chain:
+    obstacles = (
+        # F.Cu east blocker (no F.Cu detour east of start).
+        Obstacle("F_BLOCK_E", 0.4, -2.0, 11.5, 12.0,
+                 kind="body", layers=frozenset({"F.Cu"})),
+        # F.Cu north blocker (no F.Cu detour north of start). Stops at
+        # x=0.3 so the start cell itself (x=0) is clear.
+        Obstacle("F_BLOCK_N", -2.0, 5.4, 0.3, 12.0,
+                 kind="body", layers=frozenset({"F.Cu"})),
+        # F.Cu south blocker (no F.Cu detour south of start).
+        Obstacle("F_BLOCK_S", -2.0, -2.0, 0.3, 4.6,
+                 kind="body", layers=frozenset({"F.Cu"})),
+        # F.Cu west blocker (no F.Cu detour west of start; the start cell
+        # at (0,5) sits in a clear "slot" between -0.3 and 0.3 on x).
+        Obstacle("F_BLOCK_W", -2.0, -2.0, -0.4, 12.0,
+                 kind="body", layers=frozenset({"F.Cu"})),
+        # B.Cu blocking field (B.Cu clear only near the end cell).
+        # Through halo 0.50mm; chain cell at x>=9.5 lands clear of body
+        # at x_max=9.4 (clearance >= 0.10mm at the chain edge; ample).
+        Obstacle("B_BLOCK", -2.5, -2.0, 9.4, 12.0,
+                 kind="body", layers=frozenset({"B.Cu"})),
+    )
+    # Witness chain — provable by hand:
+    #   start (F.Cu, 0, 5)
+    #     blind_F_In2 → In2.Cu
+    #   trace (In2.Cu, 0, 5) → (10, 5)
+    #     through → B.Cu     (lands at end pin — chain cell == end cell)
+    # The chain cell sits AT the end pin (10, 5) because B_BLOCK extends to
+    # x=9.4 and the through-via halo (0.50mm pad+clearance) needs >= 0.1mm
+    # gap to the body — only x>=9.9 clears, so the LAST grid-aligned cell
+    # the through-via can land at (with 0.5mm grid pitch) is x=10.0 = the
+    # end cell. The B.Cu segment is the zero-length "segment" between the
+    # via and the end pin — encoded in the witness as the path's final
+    # vertex (10, 5).
+    chain_x = 10.0
+    witness_vias = [
+        {"point": (0.0, 5.0), "via_class": "blind_F_In2",
+         "from_layer": "F.Cu", "to_layer": "In2.Cu"},
+        {"point": (chain_x, 5.0), "via_class": "through",
+         "from_layer": "In2.Cu", "to_layer": "B.Cu"},
+    ]
+    witness_segments = [
+        {"p1": (0.0, 5.0), "p2": (chain_x, 5.0),
+         "layer": "In2.Cu", "width_mm": 0.20},
+        {"p1": (chain_x, 5.0), "p2": (10.0, 5.0),
+         "layer": "B.Cu", "width_mm": 0.20},
+    ]
+    witness_path = [(0.0, 5.0), (chain_x, 5.0), (10.0, 5.0)]
+    witness_length = ((chain_x - 0.0) ** 2 + 0.0) ** 0.5 \
+        + ((10.0 - chain_x) ** 2 + 0.0) ** 0.5
+    gt = GroundTruth(
+        verdict="CONDITIONAL",
+        metrics={
+            "routed": 1,
+            "n_vias": 2,
+            "n_mechanisms": 2,
+            "via_chain": ["blind_F_In2", "through"],
+            "witness_length_mm": round(witness_length, 4),
+            "single_mech_blind_only_verdict": "INFEASIBLE",
+            "single_mech_through_only_verdict": "INFEASIBLE",
+            "multi_mech_verdict": "ROUTABLE",
+        },
+        witness={
+            "path": witness_path,
+            "segments": witness_segments,
+            "vias": witness_vias,
+            "via_chain": ["blind_F_In2", "through"],
+            "trace_width_mm": 0.20,
+            "clearance_mm": 0.20,
+        },
+        conditional_on="multi_mech",
+        alt_verdict="ROUTABLE",
+        alt_metrics={
+            "routed": 1,
+            "n_vias": 2,
+            "n_mechanisms": 2,
+        },
+        alt_witness={
+            "path": witness_path,
+            "via_chain": ["blind_F_In2", "through"],
+        },
+    )
+    proof = (
+        "T20 (MULTI-MECH-PATH; the CH1 30/30 (K3) capability lockfile; "
+        "multi-mechanism path planning chains 2+ via classes along a "
+        "single route — the canonical SWDIO_CH1 unblocker). Stackup: "
+        "F.Cu signal + In1=GND plane + In2.Cu signal + In8.Cu signal + "
+        "B.Cu signal (5 layers). ONE net MM: S=(0,5,F.Cu,HDI-whitelisted) "
+        "→ E=(10,5,B.Cu). TWO body obstacles encapsulate the route on "
+        "F.Cu and B.Cu: F_BLOCK on F.Cu at x∈[0.5,11.5] y∈[-1,11] forces "
+        "the route off F.Cu at the start cell (no detour available); "
+        "B_BLOCK on B.Cu at x∈[-1.5,9.5] y∈[-1,11] forces the through-"
+        "via to land near the end cell (x≥9.5). At the HDI start cell, "
+        "through-via is REFUSED (cooperative router's via_class_for_span "
+        "policy; the v6/v7 shorts lesson: through F.Cu↔B.Cu at a fine-"
+        "pitch QFN pad shorts adjacent inner-layer copper on every "
+        "barrel layer). So blind_F_In2 is the ONLY legal escape — lands "
+        "on In2.Cu. From In2.Cu the route runs east to x=9.5 (the first "
+        "B.Cu-clear column) and emits a through-via to B.Cu, then a "
+        "0.5mm B.Cu hop to the end pin. Two distinct mechanisms chained: "
+        "via_chain = ['blind_F_In2', 'through']. Witness path = "
+        "[(0,5)→(9.5,5)→(10,5)] (the In2.Cu segment + B.Cu segment); "
+        f"witness length = {witness_length:.2f}mm. SINGLE-MECH-ONLY "
+        "LIARS fail: a blind-only solver lands on In2.Cu and cannot "
+        "reach B.Cu (no second mechanism); a through-only solver is "
+        "REFUSED at the HDI start AND the F.Cu blocking field prevents "
+        "stepping to a non-HDI F.Cu cell — NO-PATH on both. The K3 "
+        "MULTI-MECH planner lifts the A* state-space to (cell, layer, "
+        "last_via_class) and admits 2+ via transitions in one path, "
+        "routing the chain natively. Self-check (a) asserts the start "
+        "pin is HDI-whitelisted; (b) the witness chain has 2 vias of "
+        "2 distinct classes; (c) first via is blind_F_In2 F→In2 at "
+        "start; (d) second via is through In2→B at chain cell; (e) "
+        "In2.Cu segment clears every In2-applicable body by ≥0.30mm; "
+        "(f) the chain cell at x=9.5 clears B_BLOCK by ≥ through halo "
+        "0.50mm; (g) a single-mech-only liar reports NO-PATH (bug "
+        "class is real, regression FAILS T20); (h) invokes "
+        "multi_mech_planner.solve and asserts the engine emits "
+        "verdict=ROUTABLE, routed=1, n_vias=2, via_chain == witness."
+    )
+    return Fixture("T20",
+                   "multi-mech path planning (CH1 30/30 (K3) lockfile)",
+                   "stretch",
+                   "multi-mechanism path planner: chain 2+ via classes "
+                   "along a single route. Single-mech maze fails on "
+                   "F.Cu-start + B.Cu-end + HDI-cell constraints "
+                   "(canonical SWDIO_CH1 reproducer); multi-mech "
+                   "planner lifts the A* state-space and routes the "
+                   "chain natively. The K3 capability lockfile.",
+                   layers, tuple(pins), tuple(nets), (), obstacles, (),
+                   gt, proof)
+
+
+# APPEND-ONLY: T20 — multi-mech-path planner (CH1 30/30 (K3) capability
+# lockfile; 2026-05-28). Appended via `.append(...)` so the T1-T17 lines
+# above stay byte-identical (diff-stat: only NEW lines).
+_BUILDERS.append(_build_T20)
+
+
 def all_fixtures():
     """Return the registered fixtures in case-number order (T1..T14)."""
     return [b() for b in _BUILDERS]

@@ -305,12 +305,58 @@ def _is_targeted_ripup_shape(problem) -> bool:
     return False
 
 
+def _is_multi_mech_shape(problem) -> bool:
+    """T20 / CH1 30/30 lever (K3) signature — purely from input SHAPE:
+      (a) no via_slots, no doors (else escape / channel dispatch),
+      (b) ≥1 net with EXACTLY 2 pins on DIFFERENT outer copper layers
+          (F.Cu and B.Cu — the cross-stack signature; both outer layers
+          present in the layer stack so the problem is well-defined),
+      (c) at least one body obstacle attributed to a SPECIFIC outer layer
+          (an Obstacle.layers frozenset containing exactly the start- or
+          end-layer of the cross-stack net) — the lever (K3) characteristic
+          is that single-mech routing on EACH outer layer is constrained
+          by a per-layer obstacle, forcing the chain across the stack.
+    The signature catches T20 (F.Cu->B.Cu net with F.Cu and B.Cu blocking
+    strips) without matching T13/T15/T16 (single-layer nets) or T17
+    (multi-net targeted ripup). MUST be evaluated BEFORE 'maze' so T20
+    dispatches to the multi-mech planner instead of the legacy single-mech
+    maze (which would report NO-PATH — the K3 bug class)."""
+    if problem.doors or problem.via_slots:
+        return False
+    outer_pair = {"F.Cu", "B.Cu"}
+    signal_layer_names = {L.name for L in problem.signal_layers()}
+    if not outer_pair.issubset(signal_layer_names):
+        return False
+    cross_stack_seen = False
+    for net in problem.nets:
+        if len(net.pin_ids) != 2:
+            continue
+        a = problem.pin(net.pin_ids[0])
+        b = problem.pin(net.pin_ids[1])
+        if {a.layer, b.layer} == outer_pair:
+            cross_stack_seen = True
+            break
+    if not cross_stack_seen:
+        return False
+    # At least one body keep-out is attributed to F.Cu OR B.Cu (the per-
+    # layer K3 constraint: each outer layer is constrained by its own
+    # per-layer body, forcing the chain).
+    bodies = [o for o in problem.obstacles if o.kind == "body"]
+    f_specific = any(o.layers is not None and "F.Cu" in o.layers
+                     and o.layers != frozenset(signal_layer_names)
+                     for o in bodies)
+    b_specific = any(o.layers is not None and "B.Cu" in o.layers
+                     and o.layers != frozenset(signal_layer_names)
+                     for o in bodies)
+    return f_specific or b_specific
+
+
 def classify(problem) -> str:
     """Return the Phase-C dispatch label for a Problem, purely from its input
     SHAPE. Decision order = most specific structural feature first (see module
     docstring). Labels: 'escape' | 'return_path' | 'matched_bus' | 'river' |
     'dogleg' | 'global_plan' | 'maze' | 'crossing' | 'channel' |
-    'targeted_ripup' (CH1 30/30 lever J).
+    'targeted_ripup' (CH1 30/30 lever J) | 'multi_mech' (CH1 30/30 lever K3).
 
     The MAZE label (Engine Step 8b-ext lever b) covers single-/few-net
     long-path-through-obstacles problems where the cooperative router's
@@ -324,6 +370,14 @@ def classify(problem) -> str:
     cooperative global ripup converges at N-1 routed (cost-min keeps the
     foreigner over the no-alt blocked net), targeted ripup achieves N/N
     by surgically ripping + re-routing. See ROUTING_METHODOLOGY §0c.
+
+    The MULTI_MECH label (Engine lever K3, 2026-05-28) covers the cross-
+    stack chained-via signature: a net whose start + end are on DIFFERENT
+    outer copper layers with per-layer obstacles on each outer layer
+    forcing a multi-mechanism chain. The single-mech maze fails (one via
+    class per attempt cannot bridge F.Cu↔B.Cu through the HDI start cell);
+    the multi-mech planner lifts the A* state-space and routes the chain
+    (canonical SWDIO_CH1 unblocker).
     """
     if problem.via_slots:
         return "escape"
@@ -347,6 +401,12 @@ def classify(problem) -> str:
     # _is_targeted_ripup_shape (it requires ≥2 nets sharing a lane).
     if _is_targeted_ripup_shape(problem):
         return "targeted_ripup"
+    # MULTI-MECH territory: lever K3 shape (cross-stack net + per-layer
+    # outer-layer bodies). MUST appear before 'maze' so T20 dispatches to
+    # the multi-mech planner instead of the legacy single-mech maze
+    # (which would report NO-PATH — the K3 bug class T20 catches).
+    if _is_multi_mech_shape(problem):
+        return "multi_mech"
     # MAZE territory: no doors, no via_slots, every net's direct line crosses
     # at least one body obstacle => bounded A* maze is the right primitive.
     # This MUST appear before `crossing` so T13 dispatches correctly.
@@ -638,6 +698,39 @@ def _fill_global_plan(problem, pb_result, gp) -> dict:
     }
 
 
+def _fill_multi_mech(problem) -> dict:
+    """MULTI-MECH realizer (T20) — bounded-A* multi-mechanism path planner.
+
+    The MULTI-MECH backend (`routing_engine.multi_mech_planner.solve`)
+    addresses the cross-stack case where the single-mech maze fails: a net
+    whose start and end live on DIFFERENT outer copper layers, with per-
+    layer obstacles forcing chained via mechanisms. Bounded A* over the
+    LIFTED state-space (cell, layer, last_via_class) finds the chain
+    within a small expansion budget. Sai-locked A* discipline
+    (region-confined + expansion-capped) is preserved by the planner.
+
+    This realizer is a THIN DISPATCH: it calls multi_mech_planner.solve on
+    the same INPUT-ONLY Problem view and surfaces the harness-scored
+    metrics (routed, n_vias, via_chain, n_mechanisms). The corresponding
+    REAL-BOARD adapter is `fill_region_with_multi_mech` below (same
+    architecture as `fill_region_with_maze`)."""
+    try:
+        from . import multi_mech_planner as MMP
+    except ImportError:
+        import multi_mech_planner as MMP  # type: ignore
+    res = MMP.solve(problem)
+    res.setdefault("rationale", "")
+    res["rationale"] = (
+        "PHASE C multi-mech fill (bounded A* over lifted state-space "
+        "(cell, layer, last_via_class) — region-confined, expansion-"
+        "capped, clearance HARD, per-class halo + per-layer obstacle "
+        "filter + shorts-gate semantics preserved). The K3 capability: "
+        "single-mech maze fails on F.Cu->B.Cu + HDI start cell + per-"
+        "layer outer-layer bodies; multi-mech planner routes the chain. "
+        + res["rationale"])
+    return res
+
+
 def _fill_maze(problem) -> dict:
     """MAZE realizer (T13) — bounded-A* maze for long-path-through-obstacles.
 
@@ -899,6 +992,13 @@ def solve(problem):
         out = _fill_maze(problem)
         out["phase_c"] = {"case": label,
                           "stage": "bounded-A* maze fill (long-path through obstacles)"}
+        return out
+
+    if label == "multi_mech":
+        out = _fill_multi_mech(problem)
+        out["phase_c"] = {"case": label,
+                          "stage": "bounded-A* multi-mech fill "
+                                   "(chained-mechanism cross-stack route)"}
         return out
 
     if label == "targeted_ripup":
@@ -1316,6 +1416,252 @@ def _route_to_primitives(route):  # pragma: no cover
 
 
 # ============================================================================
+# REAL-BOARD ADAPTER #3 — multi-mech planner (bounded A* over lifted state-
+# space) as the cross-stack chained-mechanism fill backend. Mirrors the
+# maze-router adapter above; selects between maze/multi-mech/cooperative by
+# region SHAPE (dense fanout -> cooperative; long-path -> maze;
+# cross-stack chained-mech -> multi-mech). pcbnew is lazy-imported inside.
+# NOT exercised on abstract fixtures (the dispatch lives in solve()).
+# ============================================================================
+
+@dataclass
+class MultiMechInvocation:
+    """The fully-resolved BOUNDED invocation of the multi-mech planner.
+    Region-confined (region.bbox), expansion-capped (region.expansion_cap),
+    clearance HARD, per-class halo + per-layer obstacle filter + shorts-
+    gate semantics preserved. Layers restricted to region.allowed_layers,
+    via classes restricted to the plan's allowed list. What the self-test
+    validates WITHOUT running the live planner."""
+    board_path: str
+    output_path: str
+    region: "RegionSpec"
+    grid_pitch_mm: float
+    expansion_cap: int
+    width_mm: float
+    clearance_fos_mm: float
+    allowed_via_classes: Tuple[str, ...]
+    hdi_allowed: bool
+    max_chain_depth: int
+
+
+# Default chain depth — matches multi_mech_planner.MAX_VIA_CHAIN_DEPTH.
+# A separate constant kept here so callers don't need to import the planner
+# just to set a sensible default; the planner clamps to its own value.
+MULTI_MECH_DEFAULT_CHAIN_DEPTH = 3
+
+
+def _multi_mech_via_classes_from_region(region: "RegionSpec") -> Tuple[str, ...]:
+    """Translate the region's via_budget + hdi_refs into the SUBSET of
+    multi-mech via classes the search may emit. Same gate as the cooperative
+    + maze adapters (single source of HDI policy across Phase C backends):
+      * std budget => 'through' (cheapest)
+      * HDI budget + whitelisted refs => 'blind_F_In2' + 'microvia_F_In1' +
+                                          'microvia_B_In8' (the concrete
+                                          cooperative-router class names —
+                                          the multi-mech planner accepts
+                                          BOTH abstract and concrete names).
+    """
+    classes: List[str] = []
+    std_budget = int(region.via_budget.get("std", 0))
+    hdi_budget = int(region.via_budget.get("hdi", 0))
+    whitelisted = tuple(r for r in region.hdi_refs if r in HDI_WHITELIST_REFS)
+    if std_budget > 0:
+        classes.append("through")
+    if hdi_budget > 0 and whitelisted:
+        # Use the COOPERATIVE-CONCRETE class names so the planner's emit
+        # adapter passes them directly to the cooperative router emitter
+        # (single source of via-class identity across backends).
+        classes.append("blind_F_In2")
+        classes.append("microvia_F_In1")
+        classes.append("microvia_B_In8")
+    return tuple(classes)
+
+
+def build_multi_mech_invocation(board_path: str, output_path: str,
+                                region: "RegionSpec",
+                                width_mm: float = MAZE_DEFAULT_WIDTH_MM,
+                                clearance_fos_mm: float = MAZE_DEFAULT_CLEARANCE_FOS_MM,
+                                grid_pitch_mm: float = 0.1,
+                                max_chain_depth: int = MULTI_MECH_DEFAULT_CHAIN_DEPTH) \
+        -> "MultiMechInvocation":
+    """Construct (but do NOT run) the SCOPED multi-mech planner invocation
+    for a region. Pure logic — NO pcbnew, NO subprocess — so the region-
+    bounding + argument construction is unit-testable (see self_test).
+
+    A* discipline (Sai-locked; same envelope as build_maze_invocation):
+      * region.bbox     bounds the search; cells outside are unreachable.
+      * region.expansion_cap is the A* expansion budget; over => NO-PATH.
+      * allowed_via_classes derived from the plan's via budget + HDI
+        whitelist; HDI classes are GATED to whitelisted refs (J18/J19).
+      * max_chain_depth caps the # of via transitions in one route.
+    """
+    via_classes = _multi_mech_via_classes_from_region(region)
+    hdi_budget = int(region.via_budget.get("hdi", 0))
+    whitelisted = tuple(r for r in region.hdi_refs if r in HDI_WHITELIST_REFS)
+    hdi_allowed = hdi_budget > 0 and len(whitelisted) > 0
+    return MultiMechInvocation(
+        board_path=board_path, output_path=output_path, region=region,
+        grid_pitch_mm=grid_pitch_mm, expansion_cap=region.expansion_cap,
+        width_mm=width_mm, clearance_fos_mm=clearance_fos_mm,
+        allowed_via_classes=via_classes, hdi_allowed=hdi_allowed,
+        max_chain_depth=max_chain_depth,
+    )
+
+
+def fill_region_with_multi_mech(plan, region: "RegionSpec",
+                                board=None,
+                                board_path: Optional[str] = None,
+                                output_path: Optional[str] = None,
+                                width_mm: float = MAZE_DEFAULT_WIDTH_MM,
+                                clearance_fos_mm: float = MAZE_DEFAULT_CLEARANCE_FOS_MM,
+                                grid_pitch_mm: float = 0.1,
+                                net_pairs: Optional[List[Tuple]] = None,
+                                max_chain_depth: int = MULTI_MECH_DEFAULT_CHAIN_DEPTH,
+                                dry_run: bool = False) -> dict:
+    """REAL-BOARD ADAPTER #3 — invoke the bounded-A* multi-mech planner
+    SCOPED to a Phase-B-certified region. Mirror of `fill_region_with_maze`
+    + `fill_region_with_cooperative`.
+
+    USAGE
+        Use this for CROSS-STACK nets (start.layer in outer pair; end.layer
+        in the OTHER outer pair) where the single-mech maze cannot route a
+        chain (canonical SWDIO_CH1: F.Cu J18.23 -> B.Cu TP22.1 via
+        blind_F_In2 + through). The two-mech chain falls out naturally
+        from the lifted state-space.
+
+    CONTRACT (documented; exercised at Step 8 / CH1, NOT abstract suite):
+      INPUTS
+        plan        : the Phase B GlobalPlan (or .to_dict()) — certified-
+                      feasible region assignment.
+        region      : RegionSpec — bbox / allowed layers / via budget /
+                      HDI refs / net names / expansion cap.
+        board       : a live pcbnew BOARD or None. None / pcbnew absent =>
+                      live emit SKIPPED gracefully (status 'skipped').
+        board_path  : canonical .kicad_pcb path
+                      ([[feedback-sim-artifact-must-be-canonical]]).
+        output_path : where the planner writes the filled board.
+        net_pairs   : list of (start_pin_ref, end_pin_ref) tuples to route.
+                      None (self-test/dry_run) => invocation built but not
+                      iterated; live mode reads pin coords from the board.
+        max_chain_depth : cap on the # of via transitions per route. 3 by
+                      default (enough for blind+through, blind+through+
+                      microvia patterns); deeper chains usually indicate a
+                      placement bug (analog of R37 cascade-depth ≤ 2).
+        dry_run     : True => construct + validate; do NOT run the planner.
+      BEHAVIOUR
+        1. Build the BOUNDED MultiMechInvocation (region-confined,
+           expansion-capped, HDI gated, allowed via classes derived from
+           the plan's budget).
+        2. If pcbnew + a board are present and not dry_run: lazy-import
+           pcbnew, build the Obstacle list from the board's footprints
+           (each footprint bbox = body keep-out on every signal layer it
+           spans), iterate net_pairs through `multi_mech_planner.
+           plan_multi_mech_route`, emit the result via geometry_primitives.
+        3. Else: return status 'skipped' with the constructed invocation.
+      OUTPUT
+        {status, invocation, [routes], [reason]} — status in
+        {'routed','partial','skipped','error'}.
+
+    PRE-EMIT VALIDATION:
+        Every via in the returned plan is checked against the audit_hdi_via_in_pad
+        whitelist semantics: the via class must be sanctioned at its position
+        per the HDI policy. Vias at non-HDI cells must be 'through'; vias at
+        HDI cells must be one of the 3 HDI classes. Validation failures
+        ROLLBACK the plan (no partial emit). Defense-in-depth: even though
+        the planner's `candidate_via_classes` already enforces this at
+        plan-time, the adapter re-checks at emit-time so a future planner
+        bug surfaces here, not on the live board.
+
+    A* DISCIPLINE preserved: region-confined (region.bbox) + expansion-
+    capped (region.expansion_cap) + chain-depth-bounded (max_chain_depth).
+    Per ROUTING_METHODOLOGY.md §0b 'A* usage Sai-locked'."""
+    inv = build_multi_mech_invocation(
+        board_path or "", output_path or "", region,
+        width_mm=width_mm, clearance_fos_mm=clearance_fos_mm,
+        grid_pitch_mm=grid_pitch_mm, max_chain_depth=max_chain_depth)
+
+    # Carry the plan's verdict gate (same as the other two adapters).
+    plan_verdict = (plan.get("verdict") if isinstance(plan, dict)
+                    else getattr(plan, "verdict", None))
+    if plan_verdict not in (None, "ROUTABLE"):
+        return {"status": "skipped",
+                "reason": (f"plan verdict {plan_verdict!r} is not ROUTABLE "
+                           "— Phase C does not fill an un-certified region "
+                           "(carry the verdict, escalate; no heroic route)."),
+                "invocation": inv}
+
+    if dry_run:
+        return {"status": "skipped", "reason": "dry_run", "invocation": inv}
+
+    # LAZY pcbnew import — only on a live run, only inside this function.
+    try:
+        import pcbnew  # noqa: F401  (lazy: real-board only)
+    except Exception as e:  # pragma: no cover (no pcbnew on the Pi engine env)
+        return {"status": "skipped",
+                "reason": (f"pcbnew unavailable ({type(e).__name__}: {e}) — "
+                           "live region fill is a Step-8/CH1 op; invocation "
+                           "constructed."),
+                "invocation": inv}
+    if (board is None or not board_path or not output_path
+            or net_pairs is None):
+        return {"status": "skipped",
+                "reason": ("no live BOARD / board_path / output_path / "
+                           "net_pairs — invocation constructed but not run "
+                           "(Step-8/CH1 wires these)."),
+                "invocation": inv}
+
+    # LIVE region fill (Step 8 / CH1). Stub — the real wiring is Step-8
+    # territory (mirrors fill_region_with_maze; same scaffolding).
+    try:                                # pragma: no cover (real-board only)
+        from . import multi_mech_planner as MMP
+        import geometry_primitives as GP  # type: ignore
+        obstacles = _board_obstacles_from_pcbnew(board, region)
+        routes = []
+        for start_ref, end_ref in net_pairs:
+            start = _pin_from_pcbnew(board, start_ref)
+            end = _pin_from_pcbnew(board, end_ref)
+            plan_obj = MMP.plan_multi_mech_route(
+                start=start, end=end, region_bbox=region.bbox,
+                obstacles=obstacles,
+                allowed_layers=region.allowed_layers,
+                allowed_via_classes=inv.allowed_via_classes,
+                width_mm=inv.width_mm,
+                clearance_fos_mm=inv.clearance_fos_mm,
+                expansion_cap=inv.expansion_cap,
+                grid_pitch_mm=inv.grid_pitch_mm,
+                max_chain_depth=inv.max_chain_depth,
+            )
+            if plan_obj is None:
+                routes.append({"start": start_ref, "end": end_ref,
+                               "status": "NO-PATH"})
+                continue
+            # Pre-emit validation: each via class must be one of the
+            # invocation's allowed_via_classes (defense-in-depth; the
+            # planner already enforced this, but the adapter re-checks).
+            bad = next((v for v in plan_obj.vias
+                        if v.via_class not in inv.allowed_via_classes),
+                       None)
+            if bad is not None:
+                routes.append({"start": start_ref, "end": end_ref,
+                               "status": "rollback",
+                               "reason": (f"via class {bad.via_class!r} "
+                                          "outside invocation allow-list")})
+                continue
+            GP.emit_to_kicad(_route_to_primitives(plan_obj), board=board,
+                             default_layer=start.layer)
+            routes.append({"start": start_ref, "end": end_ref,
+                           "length_mm": plan_obj.length_mm,
+                           "n_vias": plan_obj.n_vias,
+                           "via_chain": list(plan_obj.via_chain),
+                           "expansions": plan_obj.expansions,
+                           "status": "routed"})
+        return {"status": "routed", "routes": routes, "invocation": inv}
+    except Exception as e:              # pragma: no cover
+        return {"status": "error", "reason": f"{type(e).__name__}: {e}",
+                "invocation": inv}
+
+
+# ============================================================================
 # SELF-TEST — validate the region-bounding / argument-construction logic without
 # pcbnew or a live board (the adapter's testable half). Run: python3 phase_c.py
 # ============================================================================
@@ -1335,6 +1681,7 @@ def self_test() -> int:
         "T5": "crossing", "T6": "return_path", "T7": "matched_bus",
         "T8": "river", "T9": "escape",
         "T13": "maze",
+        "T20": "multi_mech",
     }
     print("\n[dispatch] structural classify() per fixture:")
     for fx in F.all_fixtures():
@@ -1482,6 +1829,91 @@ def self_test() -> int:
               f"{got.get('n_vias')} case={got.get('phase_c', {}).get('case')}")
     except KeyError:
         print("  -- T13 not registered (skip)")
+
+    # 12. MULTI-MECH adapter: HDI-gated invocation (blind_F_In2 + microvia
+    # classes appear ONLY when whitelisted refs have HDI budget). Same gate
+    # as cooperative + maze adapters — single source of HDI policy.
+    print("\n[adapter] MULTI-MECH region HDI-PERMITTED (whitelisted J18) — "
+          "HDI via classes:")
+    region_mm_hdi = RegionSpec(
+        subsystem="CH1", bbox=(15.0, 60.0, 55.0, 95.0),
+        allowed_layers=("F.Cu", "In2.Cu", "B.Cu"),
+        via_budget={"std": 4, "hdi": 2}, hdi_refs=("J18",),
+        net_names=("SWDIO_CH1",), expansion_cap=120_000)
+    rmm = fill_region_with_multi_mech(
+        {"verdict": "ROUTABLE"}, region_mm_hdi,
+        board_path="hw.kicad_pcb", output_path="/tmp/o.kicad_pcb",
+        dry_run=True)
+    invmm = rmm["invocation"]
+    cond11 = (rmm["status"] == "skipped" and invmm.hdi_allowed
+              and "blind_F_In2" in invmm.allowed_via_classes
+              and "microvia_F_In1" in invmm.allowed_via_classes
+              and "microvia_B_In8" in invmm.allowed_via_classes
+              and "through" in invmm.allowed_via_classes
+              and invmm.region.subsystem == "CH1"
+              and invmm.expansion_cap == 120_000
+              and invmm.max_chain_depth == MULTI_MECH_DEFAULT_CHAIN_DEPTH)
+    ok &= cond11
+    print(f"  {'ok ' if cond11 else 'XX '}status={rmm['status']} hdi_allowed="
+          f"{invmm.hdi_allowed} via_classes={invmm.allowed_via_classes} "
+          f"expansion_cap={invmm.expansion_cap} max_chain_depth="
+          f"{invmm.max_chain_depth}")
+
+    # 13. MULTI-MECH adapter: non-whitelisted ref => HDI classes GATED OUT.
+    print("\n[adapter] MULTI-MECH HDI gating: non-whitelisted ref => no HDI:")
+    region_mm_bad = RegionSpec(
+        subsystem="CH1", bbox=(0, 0, 50, 50),
+        allowed_layers=("F.Cu", "B.Cu"),
+        via_budget={"std": 4, "hdi": 4}, hdi_refs=("U99",),  # NOT whitelisted
+        net_names=("X",))
+    rmm2 = fill_region_with_multi_mech({"verdict": "ROUTABLE"}, region_mm_bad,
+                                       dry_run=True)
+    cond12 = (not rmm2["invocation"].hdi_allowed
+              and "blind_F_In2" not in rmm2["invocation"].allowed_via_classes
+              and "microvia_F_In1" not in rmm2["invocation"].allowed_via_classes
+              and "microvia_B_In8" not in rmm2["invocation"].allowed_via_classes)
+    ok &= cond12
+    print(f"  {'ok ' if cond12 else 'XX '}hdi_allowed="
+          f"{rmm2['invocation'].hdi_allowed} via_classes="
+          f"{rmm2['invocation'].allowed_via_classes} — HDI gated OUT")
+
+    # 14. MULTI-MECH adapter: non-ROUTABLE plan is NOT filled.
+    rmm3 = fill_region_with_multi_mech({"verdict": "NEEDS-HDI"}, region_mm_hdi,
+                                       dry_run=True)
+    cond13 = (rmm3["status"] == "skipped"
+              and "not ROUTABLE" in rmm3["reason"])
+    ok &= cond13
+    print(f"  {'ok ' if cond13 else 'XX '}NEEDS-HDI plan => not filled "
+          f"(status={rmm3['status']})")
+
+    # 15. MULTI-MECH adapter: graceful SKIP when no live board.
+    rmm4 = fill_region_with_multi_mech({"verdict": "ROUTABLE"}, region_mm_hdi,
+                                       board=None)
+    cond14 = rmm4["status"] == "skipped"
+    ok &= cond14
+    print(f"  {'ok ' if cond14 else 'XX '}no live board => status="
+          f"{rmm4['status']} (graceful skip; Step-8/CH1 wires the live run)")
+
+    # 16. MULTI-MECH dispatch end-to-end on T20: solve(problem) routes the
+    # multi-mech chain via _fill_multi_mech => multi_mech_planner.solve.
+    # Proves Phase C's dispatch wires the K3 backend into the unified pipeline.
+    print("\n[dispatch] T20 end-to-end via solve():")
+    try:
+        t20 = F.get_fixture("T20")
+        got = solve(t20.problem_view())
+        cond15 = (got.get("verdict") == "ROUTABLE"
+                  and got.get("routed") == 1
+                  and got.get("n_vias", 0) == 2
+                  and got.get("n_mechanisms", 0) == 2
+                  and got.get("phase_c", {}).get("case") == "multi_mech")
+        ok &= cond15
+        print(f"  {'ok ' if cond15 else 'XX '}T20 solve(): verdict="
+              f"{got.get('verdict')} routed={got.get('routed')} n_vias="
+              f"{got.get('n_vias')} n_mechanisms={got.get('n_mechanisms')} "
+              f"chain={got.get('via_chain')} "
+              f"case={got.get('phase_c', {}).get('case')}")
+    except KeyError:
+        print("  -- T20 not registered (skip)")
 
     print("\n" + "=" * 72)
     print("phase_c self-test: " + ("ALL PASS" if ok else "FAILURES PRESENT"))
