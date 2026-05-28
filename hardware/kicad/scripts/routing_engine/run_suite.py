@@ -330,6 +330,37 @@ def _polyline_hits_rect(poly, rect):
     return False
 
 
+def _seg_rect_min_dist(x1, y1, x2, y2, rx_min, ry_min, rx_max, ry_max):
+    """EXACT minimum Euclidean distance from segment (x1,y1)-(x2,y2) to AABB.
+    Returns 0 if they intersect. Used by the T13 anti-liar witness check so an
+    HONEST diagonal route past an obstacle is not falsely rejected by the
+    conservative AABB heuristic. Matches maze_router._seg_aabb_min_dist."""
+    if _seg_intersects_rect(x1, y1, x2, y2, rx_min, ry_min, rx_max, ry_max):
+        return 0.0
+    import math as _m
+    def _seg_pt_dist_sq(ax, ay, bx, by, px, py):
+        dx, dy = bx - ax, by - ay
+        L2 = dx * dx + dy * dy
+        if L2 < 1e-18:
+            return (px - ax) ** 2 + (py - ay) ** 2
+        t = ((px - ax) * dx + (py - ay) * dy) / L2
+        t = max(0.0, min(1.0, t))
+        cx = ax + t * dx
+        cy = ay + t * dy
+        return (px - cx) ** 2 + (py - cy) ** 2
+    def _pt_rect_dist_sq(px, py):
+        ddx = max(rx_min - px, 0.0, px - rx_max)
+        ddy = max(ry_min - py, 0.0, py - ry_max)
+        return ddx * ddx + ddy * ddy
+    best = min(_pt_rect_dist_sq(x1, y1), _pt_rect_dist_sq(x2, y2))
+    for cx, cy in ((rx_min, ry_min), (rx_max, ry_min),
+                   (rx_max, ry_max), (rx_min, ry_max)):
+        d = _seg_pt_dist_sq(x1, y1, x2, y2, cx, cy)
+        if d < best:
+            best = d
+    return _m.sqrt(best)
+
+
 def _seg_intersects_rect(x1, y1, x2, y2, rx_min, ry_min, rx_max, ry_max):
     """Liang-Barsky segment-vs-AABB clip. Returns True if the segment enters the
     rectangle interior (strict)."""
@@ -560,11 +591,125 @@ def _selfcheck_T11(fx, msgs):
     return ok
 
 
+def _selfcheck_T13(fx, msgs):
+    """T13 — long-path through obstacles (maze-router gate). Re-derive the
+    routability + the witness path's correctness WITHOUT any solver:
+      (a) the witness path's endpoints match the pin coords,
+      (b) the witness path is OCTILINEAR (axis or 45° diagonal — no acute angles),
+      (c) every leg clears every body keep-out by ≥ (trace_w/2 + clearance) margin,
+      (d) the direct (straight-line) S->E path DOES intersect each body
+          (proving the multi-bend topology is FORCED, not cosmetic),
+      (e) reported witness_length / witness_n_corners match the recomputed values.
+    """
+    gt = fx.ground_truth
+    ok = True
+    wit = gt.witness
+    path = wit["path"]
+    trace_w = wit["trace_width_mm"]
+    clearance = wit["clearance_mm"]
+    margin = trace_w / 2.0 + clearance
+
+    # (a) endpoints match the two pins.
+    start_pin = fx.pin(fx.nets[0].pin_ids[0])
+    end_pin = fx.pin(fx.nets[0].pin_ids[1])
+    ok &= _assert(
+        abs(path[0][0] - start_pin.x_mm) < 1e-6
+        and abs(path[0][1] - start_pin.y_mm) < 1e-6,
+        f"witness start {path[0]} == start pin {(start_pin.x_mm, start_pin.y_mm)}",
+        msgs)
+    ok &= _assert(
+        abs(path[-1][0] - end_pin.x_mm) < 1e-6
+        and abs(path[-1][1] - end_pin.y_mm) < 1e-6,
+        f"witness end {path[-1]} == end pin {(end_pin.x_mm, end_pin.y_mm)}",
+        msgs)
+
+    # (b) octilinear: every segment is axis-aligned or |dx|==|dy| (45°).
+    all_octi = True
+    for (x1, y1), (x2, y2) in zip(path, path[1:]):
+        dx, dy = abs(x2 - x1), abs(y2 - y1)
+        if dx < 1e-9 and dy < 1e-9:
+            all_octi = False
+            break
+        if dx < 1e-9 or dy < 1e-9 or abs(dx - dy) < 1e-9:
+            continue
+        all_octi = False
+        break
+    ok &= _assert(all_octi, "every witness segment is octilinear "
+                            "(H, V, or 45° — no acute angles by construction)", msgs)
+
+    # (c) clearance HARD: every leg clears every body inflated by `margin`.
+    bodies = [o for o in fx.obstacles if o.kind == "body"]
+    all_clear = True
+    bad_leg = None
+    for (x1, y1), (x2, y2) in zip(path, path[1:]):
+        seg_x_min = min(x1, x2) - margin
+        seg_y_min = min(y1, y2) - margin
+        seg_x_max = max(x1, x2) + margin
+        seg_y_max = max(y1, y2) + margin
+        for o in bodies:
+            if (seg_x_max <= o.x_min or seg_x_min >= o.x_max
+                    or seg_y_max <= o.y_min or seg_y_min >= o.y_max):
+                continue
+            all_clear = False
+            bad_leg = ((x1, y1), (x2, y2), o.id)
+            break
+        if not all_clear:
+            break
+    ok &= _assert(all_clear,
+                  f"every witness leg clears every body by ≥ {margin}mm "
+                  f"(inflated AABB test); failed at {bad_leg}",
+                  msgs)
+
+    # (d) the direct straight line MUST hit at least one body (forced detour).
+    direct_hits = sum(
+        1 for o in bodies
+        if _seg_intersects_rect(start_pin.x_mm, start_pin.y_mm,
+                                 end_pin.x_mm, end_pin.y_mm,
+                                 o.x_min, o.y_min, o.x_max, o.y_max))
+    ok &= _assert(direct_hits == len(bodies),
+                  f"direct line intersects all {len(bodies)} bodies "
+                  f"(hits={direct_hits}) => multi-bend detour is FORCED, not "
+                  "cosmetic — the bound topology is genuine", msgs)
+
+    # (e) recomputed metrics match the stored ground truth.
+    rec_length = sum(
+        ((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5
+        for a, b in zip(path, path[1:]))
+    rec_corners = sum(
+        1 for i in range(1, len(path) - 1)
+        if (path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1])
+        != (path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]))
+    ok &= _assert(abs(rec_length - gt.metrics["witness_length_mm"]) < 1e-3,
+                  f"recomputed witness_length {rec_length:.4f} == stored "
+                  f"{gt.metrics['witness_length_mm']}", msgs)
+    ok &= _assert(rec_corners == gt.metrics["witness_n_corners"],
+                  f"recomputed witness_n_corners {rec_corners} == stored "
+                  f"{gt.metrics['witness_n_corners']}", msgs)
+    # The min-length lower bound is the |S-E| Manhattan-projection lower bound
+    # (any routable path has length >= horizontal span).
+    ok &= _assert(rec_length >= gt.metrics["min_length_mm"],
+                  f"witness length {rec_length:.4f} >= min_length_mm "
+                  f"{gt.metrics['min_length_mm']} (lower-bound respected)",
+                  msgs)
+    ok &= _assert(gt.metrics["max_n_vias"] == 0,
+                  "max_n_vias == 0 (single-layer detour is feasible — vias not "
+                  "needed; an over-eager A* that adds vias still passes only if "
+                  "n_vias stays at 0 for the THIS shape)", msgs)
+    ok &= _assert(gt.metrics["direct_line_blocked"] is True,
+                  "direct_line_blocked == True (ground truth declares the "
+                  "forced-detour topology)", msgs)
+    ok &= _assert(gt.verdict == "ROUTABLE",
+                  "verdict ROUTABLE (a feasible octilinear detour EXISTS — "
+                  "witness path encodes one)", msgs)
+    return ok
+
+
 _SELFCHECKS = {
     "T1": _selfcheck_T1, "T2": _selfcheck_T2, "T3": _selfcheck_T3,
     "T4": _selfcheck_T4, "T5": _selfcheck_T5, "T6": _selfcheck_T6,
     "T7": _selfcheck_T7, "T8": _selfcheck_T8, "T9": _selfcheck_T9,
     "T10": _selfcheck_T10, "T11": _selfcheck_T11,
+    "T13": _selfcheck_T13,
 }
 
 
@@ -641,6 +786,10 @@ def _key_metric_str(fx):
     if name == "T11":
         return (f"internal={m['n_internal']} (no door) + crossing={m['n_crossing']} "
                 f"== door_supply={m['door_supply']} => ROUTABLE")
+    if name == "T13":
+        return (f"long-path through {3} bodies; witness length="
+                f"{m['witness_length_mm']}mm, bends={m['witness_n_corners']}, "
+                f"vias=0 (the maze-router gate)")
     return ""
 
 
@@ -727,6 +876,12 @@ def _expected_for(fx):
         # all 5 nets route (2 crossing via doors + 3 internal within-zone). A
         # planner that force-assigned all to doors would route < 5 (strand 3).
         exp["routed_nets"] = m["routed_nets"]     # == 5
+    elif fx.name == "T13":
+        # the maze router routes the single long-path net (== 1). length is
+        # bounded BELOW by min_length_mm (must be at least the horizontal span);
+        # n_vias must stay at 0 (single-layer detour is feasible — vias add cost).
+        exp["routed"] = m["routed"]               # == 1
+        exp["n_vias"] = m["max_n_vias"]           # == 0
     return exp
 
 
@@ -738,6 +893,12 @@ def _special_checks(fx, got):
     phase is the fix): a `greedy` block with greedy_routes < global_routes AND a
     non-empty stranded_nets. Without this, claiming ROUTABLE-under-global is not
     backed by the necessity argument and the case FAILS.
+
+    T13: the solver must produce a `path` (or `segments`) that ACTUALLY clears
+    every body obstacle and connects the two pins (anti-liar gate). Without
+    geometric proof, claiming ROUTABLE is unbacked — the case FAILS. This is
+    the engine analogue of run_suite._selfcheck_T13's witness verification
+    applied to the SOLVER OUTPUT rather than the FIXTURE ground truth.
     """
     notes = []
     if fx.name in ("T3", "T4"):
@@ -753,7 +914,76 @@ def _special_checks(fx, got):
         notes.append(f"greedy {gr} < global {gl}, stranded={strand} "
                      f"=> {'PASS (greedy strand proven)' if ok else 'FAIL'}")
         return ok, notes
+    if fx.name == "T13":
+        # Anti-liar geometric witness check: the solver must produce a path —
+        # either a `path` polyline (list of points) OR a `segments` list (the
+        # maze_router native form) OR explicit start->end via segments. Then we
+        # verify endpoints, octilinear shape, AND HARD-clearance vs every body.
+        path = _solver_path_for_T13(got)
+        if not path or len(path) < 2:
+            return False, ["T13 anti-liar: no geometric path returned "
+                           "(need 'path' polyline or 'segments' — claimed-routed "
+                           "without a witness is a LIAR pattern; rejected)"]
+        # Endpoints
+        net = fx.nets[0]
+        sp = fx.pin(net.pin_ids[0])
+        ep = fx.pin(net.pin_ids[1])
+        end_ok = (abs(path[0][0] - sp.x_mm) < 1e-3
+                  and abs(path[0][1] - sp.y_mm) < 1e-3
+                  and abs(path[-1][0] - ep.x_mm) < 1e-3
+                  and abs(path[-1][1] - ep.y_mm) < 1e-3)
+        if not end_ok:
+            return False, [f"T13 anti-liar: path endpoints {path[0]},{path[-1]} "
+                           f"!= pins {(sp.x_mm, sp.y_mm)},{(ep.x_mm, ep.y_mm)}"]
+        # Octilinear (axis or 45°), no acute angles by construction.
+        for (x1, y1), (x2, y2) in zip(path, path[1:]):
+            dx, dy = abs(x2 - x1), abs(y2 - y1)
+            if dx < 1e-6 and dy < 1e-6:
+                return False, [f"T13 anti-liar: zero-length segment in path"]
+            if not (dx < 1e-6 or dy < 1e-6 or abs(dx - dy) < 1e-6):
+                return False, [f"T13 anti-liar: non-octilinear segment "
+                               f"({x1},{y1})->({x2},{y2}) — acute-angle risk"]
+        # HARD clearance vs every body keep-out — EXACT Euclidean segment-to-rect
+        # min distance (not the conservative AABB; matches the maze router's
+        # native check so an honest routable solution is not falsely rejected).
+        margin = 0.20 / 2.0 + 0.20  # trace 0.20 + clearance 0.20mm (default)
+        bodies = [o for o in fx.obstacles if o.kind == "body"]
+        for (x1, y1), (x2, y2) in zip(path, path[1:]):
+            for o in bodies:
+                d = _seg_rect_min_dist(x1, y1, x2, y2,
+                                       o.x_min, o.y_min, o.x_max, o.y_max)
+                if d < margin - 1e-6:
+                    return False, [
+                        f"T13 anti-liar: segment ({x1},{y1})->({x2},{y2}) "
+                        f"clears body {o.id} by only {d:.4f}mm "
+                        f"(need ≥{margin}mm) — LIAR rejected"]
+        notes.append(f"T13 geometric witness: {len(path)-1} segments, "
+                     f"endpoints match, octilinear, clears all "
+                     f"{len(bodies)} bodies by ≥{margin}mm Euclidean => PASS")
     return True, notes
+
+
+def _solver_path_for_T13(got):
+    """Extract a polyline of (x,y) tuples from the T13 solver output. Accepts
+    either an explicit `path` (list of points) or a `segments` list (the
+    maze_router native form — list of {p1, p2, layer} dicts or Segment dataclass
+    instances). Returns None if no path is encodable."""
+    if "path" in got and isinstance(got["path"], list):
+        return [tuple(p) for p in got["path"]]
+    segs = got.get("segments")
+    if not segs:
+        return None
+    pts = []
+    for s in segs:
+        # Accept dataclass Segment OR dict.
+        p1 = getattr(s, "p1", None) or s.get("p1") if hasattr(s, "get") else getattr(s, "p1", None)
+        p2 = getattr(s, "p2", None) or s.get("p2") if hasattr(s, "get") else getattr(s, "p2", None)
+        if p1 is None or p2 is None:
+            return None
+        if not pts or pts[-1] != tuple(p1):
+            pts.append(tuple(p1))
+        pts.append(tuple(p2))
+    return pts
 
 
 def assert_problem_view_has_no_answer(view):
@@ -787,7 +1017,7 @@ def run_solver(spec, cases=None):
         unknown = want - {f.name for f in all_fx}
         if unknown:
             raise SystemExit(f"--cases: unknown case(s) {sorted(unknown)}; "
-                             f"valid = T1..T9")
+                             f"valid = {sorted(f.name for f in all_fx)}")
         sel = [f for f in all_fx if f.name in want]
     else:
         sel = all_fx
