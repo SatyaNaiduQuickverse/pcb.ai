@@ -177,10 +177,11 @@ reaches In2 (a signal layer on the 10L stackup).
   envelope: standard microvia + blind/buried add-on, ONLY on J18+J19).
 
 **NARROWEST possible scope** — blind F-In2 vias are permitted ONLY on these
-**4 specific J18/J19 signal pins** (CH1 only; 4 nets, 4 pins, one blind via
-per pin). The canonical .kicad_pcb net names carry the schematic `_CH1`
-channel suffix (J18+J19 are the CH1 instances of the MCU + gate-driver; the
-CH2/3/4 mirrors at J28+J29/J38+J39/J48+J49 are NOT in this whitelist).
+**specific J18/J19 signal pins** (CH1 only; 5 nets, 7 sanctioned net+pin
+landings, one blind via per pin). The canonical .kicad_pcb net names carry
+the schematic `_CH1` channel suffix (J18+J19 are the CH1 instances of the
+MCU + gate-driver; the CH2/3/4 mirrors at J28+J29/J38+J39/J48+J49 are NOT
+in this whitelist).
 
 | Net (canonical .kicad_pcb name) | Logical signal | Footprint | Pin # | Rationale |
 |---|---|---|---|---|
@@ -188,23 +189,42 @@ CH2/3/4 mirrors at J28+J29/J38+J39/J48+J49 are NOT in this whitelist).
 | `PWM_INHB_CH1` | PWM_INHB | J18 | 19 | PWM input high B — residual escape on J18 east side |
 | `SWDIO_CH1` | SWDIO | J18 | 23 | SWD data — residual escape on J18 east side |
 | `PWM_INLA_CH1` | PWM_INLA | J18 | 15 | PWM input low A — residual escape on J18 south side |
+| `PWM_INHB_CH1` | PWM_INHB | J19 | 23 | partner pin of `PWM_INHB_CH1` at J18.19 — J19-end blind escape (lever D 2026-05-28) |
+| `PWM_INLA_CH1` | PWM_INLA | J19 | 1  | partner pin of `PWM_INLA_CH1` at J18.15 — J19-end blind escape (lever D 2026-05-28) |
+| `GLB_CH1`      | GLB      | J19 | 10 | gate-driver low B output — new net+pin; closes J19_S overflow residual (lever D 2026-05-28) |
 
-These 4 are the exact set the CH1 STEP-8b worker analysis identified as
-needing In2 (a signal layer) to escape; on the 10L stackup the only way to
-get a F.Cu pin to In2 in one structure is a blind F.Cu↔In2 via. The existing
-microvia F.Cu↔In1 class is RETAINED for nets whose return-path / GND-stitch
-need is what the microvia delivers (and where the signal escape is via the
-standard fanout band, not via-in-pad).
+The first 4 entries are the original CH1 STEP-8b worker-analysis set
+(needing In2 to escape; on the 10L stackup the only way to get a F.Cu pin
+to In2 in one structure is a blind F.Cu↔In2 via). The last 3 entries are
+the **2026-05-28 lever D additions** for CH1 30/30 — Phase 3 PR #227 left
+5 residuals; 3 of them blocked because their J19-end pin had no blind
+supply (J18-end was already net-WL and escapes worked; J19-end nets
+competed for fully-consumed std slots). Adding the J19-end pin entries
+(net-WL already permitted PWM_INHB/PWM_INLA blind by net-name; GLB
+required a new net-WL entry too) unblocks 3 of the 5 residuals. Same
+OQ-020 fab class (drill 0.15mm / pad 0.30mm / annular 0.075mm / hole
+clearance 0.10mm, above fab min with §5c FoS — never cut-to-cut), zero
+marginal fab cost (stays inside the +$2-5/board JLC HDI blind/buried
+envelope Sai cleared 2026-05-28). The existing microvia F.Cu↔In1 class
+is RETAINED for nets whose return-path / GND-stitch need is what the
+microvia delivers (and where the signal escape is via the standard
+fanout band, not via-in-pad).
 
 **Whitelist scope is BINDING**: blind F.Cu↔In2 vias on ANY pin not in the
-above 4 = FAIL `audit_hdi_via_in_pad.py` (layer + whitelist check). Adding
-a 5th pin requires Sai cost-OK + update to this section + audit re-lock.
+above 7 landings = FAIL `audit_hdi_via_in_pad.py` (layer + whitelist
+check). Adding a new pin requires Sai cost-OK + update to this section +
+audit re-lock.
 
 **DRU enforcement**: `hardware/kicad/pcbai_fpv4in1.kicad_dru` carries a
 blind-via geometry rule scoped to vias with the new dimensions (drill
-0.15mm) AND on the 4 named nets only — `==` net-name comparison per
+0.15mm) AND on the 5 named nets only — `==` net-name comparison per
 [[reference-kicad-dru-libeval-crash]] (KiCad 9.0.2 libeval SIGTRAPs on
-`=~` regex; only `==` is headless-safe).
+`=~` regex; only `==` is headless-safe). KiCad libeval cannot reliably
+condition on pin number; per-pin enforcement is documentary (this table
++ `audit_hdi_via_in_pad.BLIND_F_IN2_SANCTIONED_LANDINGS`) — the DRU's
+net-name set is the binding fab gate. The 2 PWM_INHB / PWM_INLA J19-end
+partner pins required NO DRU edit (the net names were already in the
+condition); only `GLB_CH1` was added to the net condition for lever D.
 
 ### Enforcement gates
 - `hardware/kicad/scripts/audit_hdi_via_in_pad.py` — verifies HDI vias only on whitelist

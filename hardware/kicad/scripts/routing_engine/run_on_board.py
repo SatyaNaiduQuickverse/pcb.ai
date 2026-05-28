@@ -163,18 +163,23 @@ except Exception:  # pragma: no cover - RC is always present in repo
     RC = None
     _HAVE_RC = False
 
-# OQ-020 ACTIVATE 2026-05-28: the 4-net whitelist for blind F.Cu↔In2 (the
+# OQ-020 ACTIVATE 2026-05-28: the net-whitelist for blind F.Cu↔In2 (the
 # layer-aware HDI lever that DOES reach a signal layer — In2 — on the locked
 # 10L stackup). Source-of-truth: BOARD_INVARIANTS §"HDI Class extension:
 # blind/buried F.Cu↔In2" + audit_hdi_via_in_pad.BLIND_F_IN2_NET_WHITELIST +
 # pcbai_fpv4in1.kicad_dru "HDI blind F-In2" rule set. Re-imported lazily
 # from the audit module so the SSoT is the audit (which the JLC DRC also
 # enforces); failing back to a hardcoded tuple keeps this module importable
-# on hosts without pcbnew (the audit imports pcbnew at module load).
+# on hosts without pcbnew (the audit imports pcbnew at module load). The
+# fallback tuple is DELIBERATELY MINIMAL and bare-logical-names — the only
+# live source is the audit's BLIND_F_IN2_NET_WHITELIST (canonical _CH1
+# suffixed names). 2026-05-28 lever D grew the SSoT 4 → 5 nets (added
+# GLB_CH1); the fallback is intentionally not maintained to enforce the
+# audit-import path (any host that needs the verdict has pcbnew).
 try:
     from audit_hdi_via_in_pad import BLIND_F_IN2_NET_WHITELIST  # type: ignore
 except Exception:
-    BLIND_F_IN2_NET_WHITELIST = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA")
+    BLIND_F_IN2_NET_WHITELIST = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA", "GLB")
 
 
 MODELLING_ASSUMPTIONS = [
@@ -197,7 +202,8 @@ MODELLING_ASSUMPTIONS = [
     "= emitted for ledger honesty but DROPPED from signal-escape supply by the "
     "layer-aware engine (engine v1 counted it naively — the OQ-020 bug). "
     "HDI blind/buried F.Cu↔In2 (target=In2=SIGNAL) = the OQ-020 ACTIVATE lever, "
-    "available ONLY for the 4 whitelisted nets (BSTB/PWM_INHB/SWDIO/PWM_INLA) "
+    "available ONLY for the whitelisted nets (BSTB/PWM_INHB/SWDIO/PWM_INLA/GLB; "
+    "5 nets at 7 sanctioned net+pin landings per 2026-05-28 lever D) "
     "per BOARD_INVARIANTS; one blind via per pin (via-in-pad). Power/NC/"
     "unconnected pins consume no escape slot.",
     "OBSTACLES = none fabricated: In1/In3/In7 GND + In5 +VMOTOR planes are "

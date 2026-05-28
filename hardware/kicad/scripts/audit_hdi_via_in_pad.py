@@ -4,15 +4,20 @@ audit_hdi_via_in_pad.py — HDI via-in-pad whitelist enforcement (G_HDI_VIA_IN_P
 
 Master 2026-05-27 R26 HDI dispatch (CH1 STEP-6 unblock).
 Master 2026-05-28 OQ-020 ACTIVATE extension: accept blind F.Cu↔In2 vias on
-the 4-net BSTB/PWM_INHB/SWDIO/PWM_INLA whitelist (the OQ-020 lever per
+the BSTB/PWM_INHB/SWDIO/PWM_INLA/GLB whitelist (the OQ-020 lever per
 BOARD_INVARIANTS §"HDI Class extension: blind/buried F.Cu↔In2").
+Master 2026-05-28 CH1 30/30 LEVER D extension (Phase 3 PR #227 follow-up):
+added GLB_CH1 to the net-whitelist (J19.10 escape) + DOCUMENTED the J19-end
+partner-pin landings for PWM_INHB_CH1 (J19.23) + PWM_INLA_CH1 (J19.1) —
+those 2 nets were already net-whitelisted at J18 pins; the partner-pin docs
+make the J19 landings explicit. Same OQ-020 fab class, zero marginal cost.
 
 Verifies that ONLY whitelisted footprints (J18, J19) have via-in-pad
 placements. This audit preserves the cost envelope: Sai cost-cleared
 +$2-3/board for HDI Class 2 (epoxy fill + plate-over) on J18 + J19 only,
-+$2-5/board for the blind/buried F-In2 class on the 4 named nets ONLY;
-any via-in-pad on other components / pins would silently expand the HDI
-scope and inflate cost.
++$2-5/board for the blind/buried F-In2 class on the 5 named nets ONLY
+(7 sanctioned net+pin landings); any via-in-pad on other components / pins
+would silently expand the HDI scope and inflate cost.
 
 Definition of "HDI via-in-pad" (what this audit checks):
   A via whose:
@@ -29,16 +34,24 @@ Whitelist (footprints):
   J18 (AT32F421 QFN-32, 0.5mm pitch) — south-edge BEMF + PWM escape
   J19 (DRV8300 QFN-24, 0.5mm pitch) — driver fan-out escape
 
-Whitelist (blind F.Cu↔In2 vias — OQ-020 ACTIVATE 2026-05-28):
-  Only the 4 named nets on J18/J19 — BSTB.J19.17, PWM_INHB.J18.19,
-  SWDIO.J18.23, PWM_INLA.J18.15. A blind F-In2 via on any OTHER net = FAIL
-  (cost scope creep beyond Sai's +$2-5/board envelope).
+Whitelist (blind F.Cu↔In2 vias — OQ-020 ACTIVATE 2026-05-28; extended
+lever D same day):
+  The 5 named nets on J18/J19 — 7 sanctioned net+pin landings:
+    BSTB_CH1     @ J19.17 (original)
+    PWM_INHB_CH1 @ J18.19 (original)
+    SWDIO_CH1    @ J18.23 (original)
+    PWM_INLA_CH1 @ J18.15 (original)
+    PWM_INHB_CH1 @ J19.23 (lever D — partner of J18.19, net already WL)
+    PWM_INLA_CH1 @ J19.1  (lever D — partner of J18.15, net already WL)
+    GLB_CH1      @ J19.10 (lever D — new net + new pin)
+  A blind F-In2 via on any OTHER net = FAIL (cost scope creep beyond
+  Sai's +$2-5/board envelope).
 
 PASS criteria:
   - Every HDI via (drill ≤ 0.15mm OR type MICROVIA) lies inside a J18 or
     J19 SMD pad bbox.
   - Every BLIND_BURIED via with F.Cu↔In2 layer span (the OQ-020 class) is
-    on one of the 4 whitelisted nets AND inside a J18 or J19 SMD pad bbox.
+    on one of the 5 whitelisted nets AND inside a J18 or J19 SMD pad bbox.
 
 FAIL criteria:
   - Any HDI via outside J18/J19 SMD pads (cost scope creep).
@@ -71,7 +84,7 @@ except ImportError:
 HDI_VIA_IN_PAD_WHITELIST = ("J18", "J19")
 
 # OQ-020 ACTIVATE 2026-05-28 (Sai cost-OK): blind F.Cu↔In2 via class scoped
-# to the 4 named residual escape nets ONLY. Must stay in sync with the
+# to the named residual escape nets ONLY. Must stay in sync with the
 # BOARD_INVARIANTS §"HDI Class extension: blind/buried F.Cu↔In2" table and
 # the pcbai_fpv4in1.kicad_dru "HDI blind F-In2" rule set. The audit checks
 # canonical .kicad_pcb net names (the binding identity post-kinet2pcb). The
@@ -80,15 +93,48 @@ HDI_VIA_IN_PAD_WHITELIST = ("J18", "J19")
 # This is the NARROWEST scope per Sai's cost envelope. Expanding to
 # CH2/CH3/CH4 requires Sai cost-OK + a new PR (the engine code path is
 # already generic across subsystems — only the whitelist is CH1-scoped).
+#
+# 2026-05-28 EXTENSION (CH1 30/30 lever D, Phase 3 PR #227 follow-up — Sai
+# cost-OK same OQ-020 envelope): added GLB_CH1 (new net) and DOCUMENTED the
+# J19-end partner pin locations for PWM_INHB_CH1 (J19.23) + PWM_INLA_CH1
+# (J19.1) — those two nets were already net-whitelisted, so the audit already
+# accepts blind F-In2 at their J19 partner pins; the extension makes the
+# net+pin locations explicit in BOARD_INVARIANTS for fab traceability and
+# adds GLB_CH1 to the net-whitelist so the J19.10 escape becomes blind-
+# eligible (closes the J19_S overflow residual). Same fab class (Class-2
+# HDI blind/buried F.Cu↔In2, drill 0.15mm / pad 0.30mm / annular 0.075mm),
+# zero marginal fab cost. Total whitelist: 5 nets, 7 sanctioned net+pin
+# landings. See ROUTING_LESSONS.md L13 + BOARD_INVARIANTS HDI extension
+# table for the full landing roster.
 BLIND_F_IN2_NET_WHITELIST = (
     "BSTB_CH1", "PWM_INHB_CH1", "SWDIO_CH1", "PWM_INLA_CH1",
+    "GLB_CH1",   # 2026-05-28 lever D — J19.10 escape (new net add)
 )
 
 # The schematic-logical signal names (pre-channel-suffix) — kept for cross-
 # reference to BOARD_INVARIANTS + DRU which document the signals by their
 # logical names. NOT used for matching (matching is exact-string against
 # canonical .kicad_pcb names per [[reference-kicad-dru-libeval-crash]]).
-BLIND_F_IN2_LOGICAL_SIGNALS = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA")
+BLIND_F_IN2_LOGICAL_SIGNALS = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA", "GLB")
+
+# 2026-05-28 lever D: sanctioned (net, footprint, pin) landings — the
+# fab-traceable roster of permitted blind F.Cu↔In2 vias. The audit's
+# enforcement is net-name-only (matching the DRU which also is net-name-
+# only — KiCad libeval pre-v9.0.3 can't condition on pin number per
+# [[reference-kicad-dru-libeval-crash]]). This tuple is documentary —
+# read by the master gate to verify the worker's emitted blind vias land
+# on a sanctioned pin (in addition to net-name being whitelisted).
+# Cross-ref BOARD_INVARIANTS §"HDI Class extension: blind/buried F.Cu↔In2".
+BLIND_F_IN2_SANCTIONED_LANDINGS = (
+    ("BSTB_CH1",      "J19", "17"),
+    ("PWM_INHB_CH1",  "J18", "19"),
+    ("SWDIO_CH1",     "J18", "23"),
+    ("PWM_INLA_CH1",  "J18", "15"),
+    # 2026-05-28 lever D additions:
+    ("PWM_INHB_CH1",  "J19", "23"),   # partner of J18.19 (already net-WL)
+    ("PWM_INLA_CH1",  "J19", "1"),    # partner of J18.15 (already net-WL)
+    ("GLB_CH1",       "J19", "10"),   # new net+pin (closes J19_S overflow)
+)
 
 # Via-center-inside-pad tolerance — accommodates grid-snap rounding from
 # router emission (router places via at pad center but pcbnew internal

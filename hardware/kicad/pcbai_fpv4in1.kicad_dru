@@ -160,19 +160,31 @@
 #   - annular ring 0.075mm (≥ board std 0.10mm AFTER plate-over; FoS over 0.05)
 #   - hole clearance 0.10mm (= existing HDI; relaxed only inside whitelist)
 #
-# Whitelist scope: ONLY the 4 named net-pin pairs (BSTB.J19.17, PWM_INHB.
-# J18.19, SWDIO.J18.23, PWM_INLA.J18.15). Net-name == comparison (KiCad
-# 9.0.2 libeval SIGTRAPs on =~ regex per [[reference-kicad-dru-libeval-
-# crash]]; only == is safe headless). DRU rule-pick takes most-restrictive,
-# so the blind-via geometry MUST be permitted by net-name; on any OTHER
-# net, A.Hole=0.15mm falls into the >0.15mm-and-<=0.20mm band where the
-# rule below does NOT apply (the "Standard via" band starts at >0.20mm),
-# so an off-whitelist blind via fails the via_diameter rule's 0.50mm min.
+# Whitelist scope: 7 named net-pin landings (BSTB.J19.17, PWM_INHB.J18.19,
+# SWDIO.J18.23, PWM_INLA.J18.15, PWM_INHB.J19.23, PWM_INLA.J19.1,
+# GLB.J19.10). DRU is NET-NAME-only ( == ) because KiCad 9.0.2 libeval
+# SIGTRAPs on =~ regex AND cannot condition on pin number reliably per
+# [[reference-kicad-dru-libeval-crash]]; only == is safe headless. The
+# 5-net whitelist (BSTB_CH1 / PWM_INHB_CH1 / SWDIO_CH1 / PWM_INLA_CH1 /
+# GLB_CH1) is the union of the unique net names across the 7 landings.
+# Per-pin enforcement is handled in BOARD_INVARIANTS + audit_hdi_via_in_pad
+# .BLIND_F_IN2_SANCTIONED_LANDINGS roster (documentary; the DRU + audit
+# net-name check is the binding fab gate). DRU rule-pick takes most-
+# restrictive, so the blind-via geometry MUST be permitted by net-name;
+# on any OTHER net, A.Hole=0.15mm falls into the >0.15mm-and-<=0.20mm band
+# where the rule below does NOT apply (the "Standard via" band starts at
+# >0.20mm), so an off-whitelist blind via fails the via_diameter rule's
+# 0.50mm min.
+#
+# 2026-05-28 LEVER D extension: GLB_CH1 added to the 5-net whitelist; the
+# two PWM_INHB/PWM_INLA J19-end partner pins were already net-WL covered.
+# Same OQ-020 fab class (drill 0.15mm / pad 0.30mm / annular 0.075mm /
+# hole clearance 0.10mm), zero marginal fab cost (same Class-2 HDI bill).
 #
 # Net names are the canonical post-kinet2pcb names (per the CH1 schematic
 # which suffixes per-channel signals as _CHn): BSTB_CH1, PWM_INHB_CH1,
-# SWDIO_CH1, PWM_INLA_CH1. SCOPE: CH1 ONLY (where the OQ-020 wall was
-# diagnosed; Sai cost-OK envelope is CH1-specific). Expanding to CH2/3/4
+# SWDIO_CH1, PWM_INLA_CH1, GLB_CH1. SCOPE: CH1 ONLY (where the OQ-020 wall
+# was diagnosed; Sai cost-OK envelope is CH1-specific). Expanding to CH2/3/4
 # requires Sai cost-OK + new PR + BOARD_INVARIANT_HASH re-lock under
 # [methodology-change] tag. The logical signal names appear in
 # BOARD_INVARIANTS + audit_hdi_via_in_pad.BLIND_F_IN2_LOGICAL_SIGNALS as
@@ -180,17 +192,17 @@
 
 (rule "HDI blind F-In2 via diameter (whitelist)"
   (constraint via_diameter (min 0.30mm))
-  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1')"))
+  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1')"))
 
 (rule "HDI blind F-In2 hole size (whitelist)"
   (constraint hole_size (min 0.15mm))
-  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1')"))
+  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1')"))
 
 (rule "HDI blind F-In2 annular width (whitelist)"
   (constraint annular_width (min 0.075mm))
-  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1')"))
+  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1')"))
 
 (rule "HDI blind F-In2 hole clearance (whitelist)"
   (constraint hole_clearance (min 0.10mm))
-  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1')"))
+  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1')"))
 
