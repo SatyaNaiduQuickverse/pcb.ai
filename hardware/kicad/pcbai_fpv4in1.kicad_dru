@@ -181,28 +181,34 @@
 # Same OQ-020 fab class (drill 0.15mm / pad 0.30mm / annular 0.075mm /
 # hole clearance 0.10mm), zero marginal fab cost (same Class-2 HDI bill).
 #
+# 2026-05-28 LEVER G extension: KILL_RAIL_N_CH1 added to the now-6-net
+# whitelist (CH1 30/30 last residual). J19.8 per-layer clearance 0.383mm
+# is OPEN after lever c (GLC In2 detour) + lever F (per-class halo); the
+# only missing piece was net-name whitelist entry. Same OQ-020 fab class,
+# zero marginal fab cost — 8 sanctioned landings total.
+#
 # Net names are the canonical post-kinet2pcb names (per the CH1 schematic
 # which suffixes per-channel signals as _CHn): BSTB_CH1, PWM_INHB_CH1,
-# SWDIO_CH1, PWM_INLA_CH1, GLB_CH1. SCOPE: CH1 ONLY (where the OQ-020 wall
-# was diagnosed; Sai cost-OK envelope is CH1-specific). Expanding to CH2/3/4
-# requires Sai cost-OK + new PR + BOARD_INVARIANT_HASH re-lock under
-# [methodology-change] tag. The logical signal names appear in
-# BOARD_INVARIANTS + audit_hdi_via_in_pad.BLIND_F_IN2_LOGICAL_SIGNALS as
+# SWDIO_CH1, PWM_INLA_CH1, GLB_CH1, KILL_RAIL_N_CH1. SCOPE: CH1 ONLY (where
+# the OQ-020 wall was diagnosed; Sai cost-OK envelope is CH1-specific).
+# Expanding to CH2/3/4 requires Sai cost-OK + new PR + BOARD_INVARIANT_HASH
+# re-lock under [methodology-change] tag. The logical signal names appear
+# in BOARD_INVARIANTS + audit_hdi_via_in_pad.BLIND_F_IN2_LOGICAL_SIGNALS as
 # cross-reference.
 
 (rule "HDI blind F-In2 via diameter (whitelist)"
   (constraint via_diameter (min 0.30mm))
-  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1')"))
+  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1' || A.NetName == 'KILL_RAIL_N_CH1')"))
 
 (rule "HDI blind F-In2 hole size (whitelist)"
   (constraint hole_size (min 0.15mm))
-  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1')"))
+  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1' || A.NetName == 'KILL_RAIL_N_CH1')"))
 
 (rule "HDI blind F-In2 annular width (whitelist)"
   (constraint annular_width (min 0.075mm))
-  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1')"))
+  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1' || A.NetName == 'KILL_RAIL_N_CH1')"))
 
 (rule "HDI blind F-In2 hole clearance (whitelist)"
   (constraint hole_clearance (min 0.10mm))
-  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1')"))
+  (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1' || A.NetName == 'KILL_RAIL_N_CH1')"))
 

@@ -177,7 +177,7 @@ reaches In2 (a signal layer on the 10L stackup).
   envelope: standard microvia + blind/buried add-on, ONLY on J18+J19).
 
 **NARROWEST possible scope** — blind F-In2 vias are permitted ONLY on these
-**specific J18/J19 signal pins** (CH1 only; 5 nets, 7 sanctioned net+pin
+**specific J18/J19 signal pins** (CH1 only; 6 nets, 8 sanctioned net+pin
 landings, one blind via per pin). The canonical .kicad_pcb net names carry
 the schematic `_CH1` channel suffix (J18+J19 are the CH1 instances of the
 MCU + gate-driver; the CH2/3/4 mirrors at J28+J29/J38+J39/J48+J49 are NOT
@@ -192,46 +192,56 @@ in this whitelist).
 | `PWM_INHB_CH1` | PWM_INHB | J19 | 23 | partner pin of `PWM_INHB_CH1` at J18.19 — J19-end blind escape (lever D 2026-05-28) |
 | `PWM_INLA_CH1` | PWM_INLA | J19 | 1  | partner pin of `PWM_INLA_CH1` at J18.15 — J19-end blind escape (lever D 2026-05-28) |
 | `GLB_CH1`      | GLB      | J19 | 10 | gate-driver low B output — new net+pin; closes J19_S overflow residual (lever D 2026-05-28) |
+| `KILL_RAIL_N_CH1` | KILL_RAIL_N | J19 | 8  | DRV nSLEEP / kill-rail — new net+pin; closes CH1 30/30 LAST residual after lever c (GLC In2 detour) + lever F (per-class halo) opened J19.8 to 0.383mm per-layer clearance (lever G 2026-05-28) |
 
 The first 4 entries are the original CH1 STEP-8b worker-analysis set
 (needing In2 to escape; on the 10L stackup the only way to get a F.Cu pin
-to In2 in one structure is a blind F.Cu↔In2 via). The last 3 entries are
-the **2026-05-28 lever D additions** for CH1 30/30 — Phase 3 PR #227 left
-5 residuals; 3 of them blocked because their J19-end pin had no blind
-supply (J18-end was already net-WL and escapes worked; J19-end nets
-competed for fully-consumed std slots). Adding the J19-end pin entries
-(net-WL already permitted PWM_INHB/PWM_INLA blind by net-name; GLB
-required a new net-WL entry too) unblocks 3 of the 5 residuals. Same
-OQ-020 fab class (drill 0.15mm / pad 0.30mm / annular 0.075mm / hole
-clearance 0.10mm, above fab min with §5c FoS — never cut-to-cut), zero
-marginal fab cost (stays inside the +$2-5/board JLC HDI blind/buried
-envelope Sai cleared 2026-05-28). The existing microvia F.Cu↔In1 class
-is RETAINED for nets whose return-path / GND-stitch need is what the
-microvia delivers (and where the signal escape is via the standard
-fanout band, not via-in-pad).
+to In2 in one structure is a blind F.Cu↔In2 via). Entries 5-7 are the
+**2026-05-28 lever D additions** for CH1 30/30 — Phase 3 PR #227 left 5
+residuals; 3 of them blocked because their J19-end pin had no blind
+supply. Entry 8 is the **2026-05-28 lever G addition** — after lever c
+(GLC In2 detour, PR #227 8922420) opened J19.8 per-layer clearance to
+0.383mm and lever F (per-class halo, PR #231 fd52f40) honored it,
+KILL_RAIL_N_CH1 at J19.8 was the last CH1 residual blocked solely on
+missing whitelist entry (via_class_for_span returned None for every L2
+because microvia_F_In1 lands on In1=GND and blind_F_In2 required the
+net to be in BLIND_F_IN2_NET_WHITELIST — not present, refused). Adding
+KILL_RAIL_N_CH1.J19.8 → router emits blind F.Cu↔In2 at J19.8 → escape to
+In2 → cooperative/maze routes onward to D38/R76/D37 on B.Cu, closing
+CH1 30/30.
+
+Same OQ-020 fab class across all 8 landings (drill 0.15mm / pad 0.30mm /
+annular 0.075mm / hole clearance 0.10mm, all above fab min with §5c FoS
+— never cut-to-cut), zero marginal fab cost (stays inside the +$2-5/board
+JLC HDI blind/buried envelope Sai cleared 2026-05-28). The existing
+microvia F.Cu↔In1 class is RETAINED for nets whose return-path / GND-
+stitch need is what the microvia delivers (and where the signal escape is
+via the standard fanout band, not via-in-pad).
 
 **Whitelist scope is BINDING**: blind F.Cu↔In2 vias on ANY pin not in the
-above 7 landings = FAIL `audit_hdi_via_in_pad.py` (layer + whitelist
+above 8 landings = FAIL `audit_hdi_via_in_pad.py` (layer + whitelist
 check). Adding a new pin requires Sai cost-OK + update to this section +
 audit re-lock.
 
 **DRU enforcement**: `hardware/kicad/pcbai_fpv4in1.kicad_dru` carries a
 blind-via geometry rule scoped to vias with the new dimensions (drill
-0.15mm) AND on the 5 named nets only — `==` net-name comparison per
+0.15mm) AND on the 6 named nets only — `==` net-name comparison per
 [[reference-kicad-dru-libeval-crash]] (KiCad 9.0.2 libeval SIGTRAPs on
 `=~` regex; only `==` is headless-safe). KiCad libeval cannot reliably
 condition on pin number; per-pin enforcement is documentary (this table
 + `audit_hdi_via_in_pad.BLIND_F_IN2_SANCTIONED_LANDINGS`) — the DRU's
 net-name set is the binding fab gate. The 2 PWM_INHB / PWM_INLA J19-end
 partner pins required NO DRU edit (the net names were already in the
-condition); only `GLB_CH1` was added to the net condition for lever D.
+condition); `GLB_CH1` was added to the net condition for lever D;
+`KILL_RAIL_N_CH1` was added for lever G.
 
 ### Enforcement gates
 - `hardware/kicad/scripts/audit_hdi_via_in_pad.py` — verifies HDI vias only on whitelist
-  (extended 2026-05-28 to accept blind F.Cu↔In2 vias on the 4 net whitelist
-  above, in addition to the existing microvia F.Cu↔In1 acceptance)
+  (extended 2026-05-28 to accept blind F.Cu↔In2 vias on the 6 net whitelist
+  above [4 OQ-020 ACTIVATE + GLB_CH1 lever D + KILL_RAIL_N_CH1 lever G],
+  in addition to the existing microvia F.Cu↔In1 acceptance)
 - `hardware/kicad/pcbai_fpv4in1.kicad_dru` — relaxes DRC for HDI sizes (scoped to `A.Hole <= 0.15mm`),
-  + new blind F.Cu↔In2 geometry rule scoped to the 4 net names above
+  + new blind F.Cu↔In2 geometry rule scoped to the 6 net names above
 - `route_subsystem_cooperative.HDI_VIA_IN_PAD_REFS` — router whitelist constant
 - `hardware/kicad/scripts/routing_engine/phase_a.py` — LAYER-AWARE escape supply
   (`side_supply` drops plane-bottoming via classes from supply; T12 fixture
