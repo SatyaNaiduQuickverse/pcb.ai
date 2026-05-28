@@ -109,12 +109,21 @@ def _emit_one(board, net_name, x_mm, y_mm, l_from, l_to, is_hdi):
 
 
 def test_classifier_ssoT():
-    """(5) Classifier reads the same whitelist as the audit."""
+    """(5) Classifier reads the same whitelist as the audit.
+
+    2026-05-28 lever D extension: whitelist grew 4 → 5 nets (added GLB_CH1).
+    The SSoT check asserts strict equality between router + audit + count == 5
+    so any future drift (e.g. router-side hard-code, audit-side typo) fails
+    fast. The 7-landing per-pin roster is documentary
+    (BLIND_F_IN2_SANCTIONED_LANDINGS) — DRU + audit are net-name only."""
     router_wl = set(blind_f_in2_net_whitelist())
     audit_wl = set(audit_mod.BLIND_F_IN2_NET_WHITELIST)
-    ok = router_wl == audit_wl and len(router_wl) == 4
+    expected = {"BSTB_CH1", "PWM_INHB_CH1", "SWDIO_CH1", "PWM_INLA_CH1",
+                "GLB_CH1"}
+    ok = router_wl == audit_wl == expected and len(router_wl) == 5
     print(f"  [{'OK' if ok else 'BAD'}] SSoT: router whitelist == audit "
-          f"whitelist = {sorted(router_wl)}")
+          f"whitelist = {sorted(router_wl)} (expected 5; "
+          f"lever D added GLB_CH1)")
     return ok
 
 
@@ -131,9 +140,14 @@ def test_classifier_table():
         (F_CU, IN2_CU, "SWDIO_CH1",   True,  "blind_F_In2"),
         (F_CU, IN2_CU, "PWM_INLA_CH1",True,  "blind_F_In2"),
         (IN2_CU, F_CU, "BSTB_CH1",    True,  "blind_F_In2"),
+        # 2026-05-28 lever D: GLB_CH1 added to net whitelist.
+        (F_CU, IN2_CU, "GLB_CH1",     True,  "blind_F_In2"),
+        (IN2_CU, F_CU, "GLB_CH1",     True,  "blind_F_In2"),
         # Non-whitelisted nets at HDI cell with F-In2 span = REFUSED.
         (F_CU, IN2_CU, "FOOBAR_CH1",  True,  None),
         (F_CU, IN2_CU, "BSTB",        True,  None),    # missing _CH1 suffix
+        (F_CU, IN2_CU, "GLA_CH1",     True,  None),    # GLA NOT in WL (only GLB)
+        (F_CU, IN2_CU, "GLC_CH1",     True,  None),    # GLC NOT in WL (only GLB)
         # Other HDI spans = REFUSED (e.g. F-In4, F-In8, In2-B).
         (F_CU, IN4_CU, "ANY",         True,  None),
         (F_CU, B_CU,   "ANY",         True,  None),
@@ -204,12 +218,25 @@ def test_emit_whitelist_blind_f_in2():
 
 
 def test_emit_all_4_whitelist_nets():
-    """(1+5) All 4 whitelist nets emit BLIND_BURIED F.Cu↔In2."""
+    """(1+5) All 7 sanctioned (net, pin) landings emit BLIND_BURIED F.Cu↔In2.
+
+    2026-05-28 lever D extension: added 3 J19-pin landings —
+      - PWM_INHB_CH1 @ J19.23 (partner of J18.19; net already net-WL)
+      - PWM_INLA_CH1 @ J19.1  (partner of J18.15; net already net-WL)
+      - GLB_CH1      @ J19.10 (NEW net + NEW pin; closes J19_S residual)
+    All 7 landings must emit VIATYPE_BLIND_BURIED + F.Cu↔In2.Cu pair +
+    drill 0.15mm / pad 0.30mm. Pin coordinates verified on canonical
+    placed board (env OQ020_TEST_BOARD)."""
     cases = [
+        # --- original 4 (locked 2026-05-28 OQ-020 ACTIVATE) ---
         ("BSTB_CH1",    "J19.17", 26.137, 61.770),
         ("PWM_INHB_CH1","J18.19", 34.188, 66.750),
         ("SWDIO_CH1",   "J18.23", 34.188, 64.750),
         ("PWM_INLA_CH1","J18.15", 33.000, 68.438),
+        # --- 2026-05-28 lever D additions (3 J19-end pins) ---
+        ("PWM_INHB_CH1","J19.23", 23.450, 60.582),
+        ("PWM_INLA_CH1","J19.1",  22.262, 61.270),
+        ("GLB_CH1",     "J19.10", 24.450, 64.457),
     ]
     ok = True
     breakdown = []
@@ -223,13 +250,23 @@ def test_emit_all_4_whitelist_nets():
         vt = via.GetViaType()
         good = (vt == pcbnew.VIATYPE_BLIND_BURIED and
                 {via.TopLayer(), via.BottomLayer()} == {F_CU, IN2_CU})
+        # Geometry check: drill 0.15mm + pad 0.30mm (the OQ-020 spec).
+        drill_mm = via.GetDrill() / 1e6
+        try:
+            pad_mm = via.GetWidth(F_CU) / 1e6
+        except TypeError:
+            pad_mm = via.GetWidth() / 1e6
+        good_geom = (abs(drill_mm - BLIND_F_IN2_DRILL_MM) < 1e-6 and
+                     abs(pad_mm - BLIND_F_IN2_DIAM_MM) < 1e-6)
+        good &= good_geom
         ok &= good
         breakdown.append(
             f"{net}@{pad_label}: VIATYPE={vt}=BLIND_BURIED, "
-            f"layers=({via.TopLayer()},{via.BottomLayer()})=F↔In2 "
+            f"layers=({via.TopLayer()},{via.BottomLayer()})=F↔In2, "
+            f"drill={drill_mm}mm, pad={pad_mm}mm "
             f"{'OK' if good else 'BAD'}")
-    print(f"  [{'OK' if ok else 'BAD'}] (1+5) ALL 4 WHITELIST NETS emit "
-          f"BLIND_BURIED F.Cu↔In2:")
+    print(f"  [{'OK' if ok else 'BAD'}] (1+5) ALL 7 SANCTIONED LANDINGS "
+          f"(5 nets × 7 pins; lever D 2026-05-28) emit BLIND_BURIED F.Cu↔In2:")
     for line in breakdown:
         print(f"      {line}")
     return ok
@@ -397,7 +434,8 @@ def main():
     results.append(("classifier table", test_classifier_table()))
     results.append(("via_span_layers", test_span_layers()))
     results.append(("(1) WHITELIST blind F-In2", test_emit_whitelist_blind_f_in2()))
-    results.append(("(1+5) all 4 WL nets", test_emit_all_4_whitelist_nets()))
+    results.append(("(1+5) all 7 WL landings (4 orig + 3 lever D)",
+                    test_emit_all_4_whitelist_nets()))
     results.append(("(2) NEGATIVE refuse", test_emit_negative_non_whitelist()))
     results.append(("(2+4) audit catches forced off-WL",
                     test_emit_negative_audit_catches_forced()))
@@ -410,8 +448,9 @@ def main():
         print(f"  {'PASS' if p else 'FAIL'}: {name}")
     print("=" * 72)
     if n_pass == n:
-        print(f"RESULT: PASS — {n_pass}/{n} tests pass; OQ-020 EMITTER (v8) "
-              f"correctly emits BLIND_BURIED F.Cu↔In2 for the 4 whitelist nets, "
+        print(f"RESULT: PASS — {n_pass}/{n} tests pass; OQ-020 EMITTER (v8 + "
+              f"2026-05-28 lever D) correctly emits BLIND_BURIED F.Cu↔In2 "
+              f"for all 5 whitelist nets at all 7 sanctioned landings, "
               f"REFUSES non-whitelist spans, and preserves existing via classes.")
         return 0
     print(f"RESULT: FAIL — {n_pass}/{n} tests pass; OQ-020 EMITTER (v8) has "
