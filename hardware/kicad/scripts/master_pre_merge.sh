@@ -814,6 +814,69 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G_J1: targeted-ripup provenance (R36; CH1 30/30 lever J; PR — this PR)
+# Every targeted-ripup commit logs blocked_net + conflict_set + rerouted +
+# shorts_pre/post. Vacuous-PASS when no targeted-ripup attempted.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_targeted_ripup_provenance.py" ]]; then
+  run_gate "G_J1_targeted_ripup_provenance" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_targeted_ripup_provenance.py'" true
+else
+  echo "[G_J1_targeted_ripup_provenance] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_J2: targeted-ripup cascade depth ≤ 2 (R37; CH1 30/30 lever J)
+# Walks the cross-entry rip-edge graph, fails if any chain exceeds depth 2.
+# Vacuous-PASS when no entries.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_ripup_cascade_depth.py" ]]; then
+  run_gate "G_J2_ripup_cascade_depth" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_ripup_cascade_depth.py'" true
+else
+  echo "[G_J2_ripup_cascade_depth] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_J3: frozen-banked-nets preserved (R38; CH1 30/30 lever J)
+# Power planes / +BATT / validated per-channel power / KILL broadcasts
+# CANNOT be ripped. Verifies code-side SSoT == doc-side SSoT and that no
+# committed entry ripped a frozen net.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_frozen_banked_nets_preserved.py" ]]; then
+  run_gate "G_J3_frozen_banked_nets" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_frozen_banked_nets_preserved.py'" true
+else
+  echo "[G_J3_frozen_banked_nets] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_J4: phase-symmetric ripup mirror (R39; CH1 30/30 lever J)
+# Phase-A/B/C symmetric nets (GLA/GLB/GLC etc.) ripped → mirror across
+# A+B+C OR explicit deviation_log_ref to a real file. Preserves R19 /
+# OQ-019 commutation-loop symmetry.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_symmetric_ripup_mirror.py" ]]; then
+  run_gate "G_J4_symmetric_ripup_mirror" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_symmetric_ripup_mirror.py'" true
+else
+  echo "[G_J4_symmetric_ripup_mirror] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
+# G_J5: targeted-ripup shorts delta ≤ 0 (R-J5; CH1 30/30 lever J)
+# Carries forward the v6/v7/F/I shorts-gate semantics — every committed
+# targeted ripup has shorts_post ≤ shorts_pre. Shorts-rolled-back entries
+# must record both numbers (not silently abandoned).
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_ripup_shorts_delta_zero.py" ]]; then
+  run_gate "G_J5_ripup_shorts_delta_zero" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_ripup_shorts_delta_zero.py'" true
+else
+  echo "[G_J5_ripup_shorts_delta_zero] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G_HDI_VIA_IN_PAD: HDI via-in-pad cost-scope whitelist (PR #207)
 # Any HDI microvia (≤0.15mm drill) in an SMD pad must be on the J18/J19
 # QFN whitelist (cost envelope). Board-wide whitelist check — no staged

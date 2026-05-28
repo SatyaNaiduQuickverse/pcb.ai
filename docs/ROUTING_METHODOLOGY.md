@@ -83,6 +83,53 @@ Classical routers optimize abstract overflow counts with pure logic. OURS puts R
 - **Sim-execution + provenance + sanity gates** (`audit_sim_execution.py`, `audit_sim_artifact_provenance.py`, `audit_sim_result_sanity.py`).
 - **CH1 is the route template; CH2/3/4 are PURE transforms** (mirror_X / mirror_Y per `BOARD_INVARIANTS.md` §Symmetry pairs + §mirror_primitive), never hand-laid (R19; `[[feedback-symmetry-preserves-work]]`; L2). The global plan must be mirror-consistent.
 
+### PHASE C addendum — TARGETED RIPUP-REBUILD (CH1 30/30 lever J, 2026-05-28)
+
+> **Added 2026-05-28** per master locked decisions after the cooperative router's 24-simultaneous-net cap diagnosis (worker empirical PR #227: 24-net plateau across 6 invocation strategies; BSTB add-on-top = 25/30 ceiling; 5 functionally-critical residuals: PWM_INHB, PWM_INLA, GLB, KILL_RAIL_N, SWDIO). Sai-approved with explicit guidance: "have strong validation and audit gates. we have rules system, you just need to add stuff there." This section EXTENDS Phase C (it does not replace it); the global ripup behaviour of `route_subsystem_cooperative.py` remains intact and is the default; targeted ripup is an OPT-IN escalation when global ripup has plateaued AND specific blocked nets are functionally critical.
+
+**Root cause being addressed**. Cooperative PathFinder negotiates *redistribution when slack exists* but cannot manufacture capacity that is absent. When 24 nets all want the same J18/J19 escape via-slots and a 25th asks for a slot already consumed by a foreigner X that ALSO has alternate paths, global ripup keeps X in place (its total cost is low) and the 25th plateaus. Targeted ripup identifies X as the SPECIFIC conflict and surgically rips ONLY X, routing the blocked net on its preferred path, then re-routing X on its alternate. This is the lever-J insight: the global cost function never "sees" the asymmetry that X has slack while the blocked net does not.
+
+**The 6-step algorithm** (binding; implemented in `hardware/kicad/scripts/targeted_ripup.py` + the `--enable-targeted-ripup` path in `route_subsystem_cooperative.py`):
+
+1. **Corridor-conflict identification** — for blocked net N, compute its IDEAL path (clearance to placement obstacles ONLY, ignoring foreign copper). Walk the path. Identify foreign nets whose tracks/vias actually intersect the corridor — that set is the **conflict set**.
+2. **Minimum-conflict-set selection** — choose smallest subset of the conflict set whose removal clears N. Heuristic (`rank_conflict_set_for_rip`): rank by ALTERNATIVE-RE-ROUTE COUNT proxy = priority class (low priority ⇒ many alternates ⇒ rip first); break ties by net criticality (debug > digital_bus > analog > motor > safety — rip debug first, protect safety). Frozen-banked-nets (R38) and nets with priority ≥ blocked-priority are EXCLUDED from the candidate set up front.
+3. **Pre-ripup feasibility check** (Sai expansion 2026-05-28, the "no wasted rips" gate) — lightweight reachability (`feasibility_alt_reroute_count_proxy`): confirm each conflict-set net HAS an alternative re-route path. If any conflict-set net has zero alternatives, ABORT the ripup attempt for N (rolling back the candidate selection); we cannot fix N this way.
+4. **Surgical rip → route N → re-route foreigners** — ATOMIC operation: rip ONLY the selected conflict subset, route N on its preferred path treating the ripped corridor as free, then re-route each ripped foreigner treating N as a fixed obstacle. Use the existing Phase-C primitives (`find_path_astar`, `path_to_segments`, per-class halo from lever F).
+5. **Cascade-bounded recursion** — if a re-route of a ripped foreigner X requires its own rip of a tertiary net Z, allow ONCE (depth=2). Beyond → ABORT, full rollback. The provenance entry records `cascade_depth`; R37 / G_J2 enforces ≤ 2.
+6. **Atomic commit / rollback** — all-or-nothing: SHORTS_post − SHORTS_pre ≤ 0 AND every ripped foreigner re-routes successfully, OR full rollback to pre-attempt state. Either outcome writes a provenance entry (R36) — silent abandonment forbidden.
+
+**Net-criticality scoring** (the Sai expansion; SSoT in `targeted_ripup.NET_CRITICALITY`):
+
+| Class | Priority | Examples | Role |
+|---|---|---|---|
+| SAFETY | 100 | `KILL_*`, `KILL_RAIL_N` | NEVER rip (only ROUTE FIRST); protect |
+| MOTOR_CONTROL | 80 | `PWM_*`, `GL[ABC]`, `GH[ABC]`, `BST[ABC]`, `MOTOR_[ABC]` | Route early; rip-as-last-resort |
+| ANALOG_SENSE | 70 | `BEMF_[ABC]`, `SHUNT_*`, `*_CURR_*`, `VREF*`, `I_TRIP_N` | Route early; analog noise margin |
+| BULK_SIGNAL | 40 | default | Normal |
+| DIGITAL_BUS | 50 | `DSHOT_*`, `TLM_*`, `*_RAIL_*` | Mid-tier |
+| DEBUG | 20 | `SWDIO`, `SWCLK`, `SWO`, `TP*`, `BOOT0` | RIP FIRST; ample alternates |
+
+Priority drives BOTH (a) net-processing order (high first — route safety + motor before debug) AND (b) rip ranking (low first — rip debug before motor; protect safety).
+
+**Hard rules** (R36-R39 + G_J1-G_J5; full statements in `docs/RULES_MANIFEST.md`):
+
+| Rule | One-liner | Audit |
+|---|---|---|
+| R36 | Every targeted-ripup commit logs blocked-net + conflict set + re-route mapping | G_J1 `audit_targeted_ripup_provenance.py` |
+| R37 | Cascade depth ≤ 2 (rip→route→re-route allowed once; deeper aborts) | G_J2 `audit_ripup_cascade_depth.py` |
+| R38 | Frozen-banked-nets (power planes, +BATT, validated BEC + per-channel power, KILL broadcasts) CANNOT be ripped | G_J3 `audit_frozen_banked_nets_preserved.py` |
+| R39 | Phase-symmetric ripup → mirror across A+B+C peers OR explicitly log deviation with R19 loop-L verification | G_J4 `audit_symmetric_ripup_mirror.py` |
+| R-J5 | SHORTS delta ≤ 0 across every commit (the v6/v7/F/I shorts-gate, carried forward) | G_J5 `audit_ripup_shorts_delta_zero.py` |
+
+Plus the carrying-forward HARD RULES already in §0b: frozen-routes-set preserved (the `--no-rip-routed` discipline, carried forward), atomic commit, FoS preserved (re-routed nets keep clearances + annular + per-class halos per §5b/§5c), per-class halo applied to re-routes (lever F, the cooperative router shorts-gate fix).
+
+**Where targeted ripup fits in the §0b/§5b/§5c discipline**:
+- Phase A still gates feasibility up front. Targeted ripup is NOT a way to route an INFEASIBLE Phase A board; it's a way to break the 24-simultaneous cap inside an otherwise-feasible Phase C region.
+- Geometry policy §5b is unchanged: targeted ripup emits the same octilinear-default + teardrops + sim-driven-fillet primitives.
+- FoS §5c is unchanged: routed-process FoS (doors/corridors ≤ 75-80% fill) still applies; targeted ripup is the surgical lever inside that envelope, not a license to push it past 80%.
+
+The companion fixture **T17** in `hardware/kicad/scripts/routing_engine/fixtures.py` proves the capability adds something real: a small synthetic case where global ripup converges at N-1 routed (a net N blocked by a specific foreign X that global cost-min keeps in place) BUT targeted ripup identifies X as the precise conflict, surgically rips X, routes N, re-routes X on an alt path → N/N achieved. T17's ground truth is provable by construction (the topology encodes the asymmetry); the adversarial "rip-everything" liar (rip all foreign, route N alone) FAILS T17 on the frozen-routes-preserved rule.
+
 ### Honest gaps (carried from `DEEP_RESEARCH_2026-05-28` §13)
 
 Classical channel/river theory ports as PARADIGM not literal algorithm (we are 10L not row-based); HDI micro-via stacks are barely in VLSI literature (our full-stack-via discipline is MORE specialized than textbooks); SI constraints are HARD for us vs soft in EDA tools; genuine geometric infeasibility at 0.5mm QFN pitch where the right deliverable is a correct VERDICT not a heroic route; Pi memory forces subsystem-scoped global routing (`[[feedback-pi-bounded-subsystem-scope]]` — coarse-gcell global on Pi, fine detailed A* is the x86 Phase-7 op); R19 symmetry sits outside standard routing theory.
@@ -393,5 +440,5 @@ All must PASS on master HEAD post-merge.
 ## ROUTING_METHODOLOGY_HASH
 
 ```
-ROUTING_METHODOLOGY_HASH = 08c9e7f34d4530c8f2e9f5784661e1501c8854c1e168854b19a259f2b56c0894
+ROUTING_METHODOLOGY_HASH = b8cfcc8d472e194cf2a70db161040df30dd3f7a1e89726a46c02aebd85674bc9
 ```
