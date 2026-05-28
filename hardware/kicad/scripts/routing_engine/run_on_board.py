@@ -174,12 +174,15 @@ except Exception:  # pragma: no cover - RC is always present in repo
 # fallback tuple is DELIBERATELY MINIMAL and bare-logical-names — the only
 # live source is the audit's BLIND_F_IN2_NET_WHITELIST (canonical _CH1
 # suffixed names). 2026-05-28 lever D grew the SSoT 4 → 5 nets (added
-# GLB_CH1); the fallback is intentionally not maintained to enforce the
-# audit-import path (any host that needs the verdict has pcbnew).
+# GLB_CH1); 2026-05-28 lever G grew the SSoT 5 → 6 nets (added
+# KILL_RAIL_N_CH1); the fallback is intentionally not maintained to
+# enforce the audit-import path (any host that needs the verdict has
+# pcbnew).
 try:
     from audit_hdi_via_in_pad import BLIND_F_IN2_NET_WHITELIST  # type: ignore
 except Exception:
-    BLIND_F_IN2_NET_WHITELIST = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA", "GLB")
+    BLIND_F_IN2_NET_WHITELIST = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA", "GLB",
+                                  "KILL_RAIL_N")
 
 
 MODELLING_ASSUMPTIONS = [
@@ -202,10 +205,10 @@ MODELLING_ASSUMPTIONS = [
     "= emitted for ledger honesty but DROPPED from signal-escape supply by the "
     "layer-aware engine (engine v1 counted it naively — the OQ-020 bug). "
     "HDI blind/buried F.Cu↔In2 (target=In2=SIGNAL) = the OQ-020 ACTIVATE lever, "
-    "available ONLY for the whitelisted nets (BSTB/PWM_INHB/SWDIO/PWM_INLA/GLB; "
-    "5 nets at 7 sanctioned net+pin landings per 2026-05-28 lever D) "
-    "per BOARD_INVARIANTS; one blind via per pin (via-in-pad). Power/NC/"
-    "unconnected pins consume no escape slot.",
+    "available ONLY for the whitelisted nets (BSTB/PWM_INHB/SWDIO/PWM_INLA/GLB/"
+    "KILL_RAIL_N; 6 nets at 8 sanctioned net+pin landings per 2026-05-28 lever D "
+    "+ lever G) per BOARD_INVARIANTS; one blind via per pin (via-in-pad). "
+    "Power/NC/unconnected pins consume no escape slot.",
     "OBSTACLES = none fabricated: In1/In3/In7 GND + In5 +VMOTOR planes are "
     "continuous in CH1 (no measured CH1-zone plane split) — conservative/honest.",
     "LAYERS = 10L stackup (F.Cu/In1=GND/In2/In3=GND/In4=BEMF/In5=+VMOTOR/In6=SW/"

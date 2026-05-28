@@ -103,19 +103,31 @@ HDI_VIA_IN_PAD_WHITELIST = ("J18", "J19")
 # adds GLB_CH1 to the net-whitelist so the J19.10 escape becomes blind-
 # eligible (closes the J19_S overflow residual). Same fab class (Class-2
 # HDI blind/buried F.Cu↔In2, drill 0.15mm / pad 0.30mm / annular 0.075mm),
-# zero marginal fab cost. Total whitelist: 5 nets, 7 sanctioned net+pin
+# zero marginal fab cost.
+#
+# 2026-05-28 EXTENSION (CH1 30/30 lever G, last residual after lever F per-
+# class halo + lever c GLC In2 detour): adds KILL_RAIL_N_CH1 (new net) at
+# J19.8. Per-layer clearance at J19.8 = 0.383mm (OPEN), but no blind F-In2
+# class was offered for KILL_RAIL_N because the net was missing from this
+# whitelist; via_class_for_span returned None and the cooperative router
+# refused F.Cu↔In2 emission. One-pin addition restores supply → router
+# emits blind F.Cu↔In2 at J19.8 → escape to In2 → cooperative/maze
+# completes to D38/R76/D37 on B.Cu. Same OQ-020 fab class, zero marginal
+# fab cost. Total whitelist post-lever-G: 6 nets, 8 sanctioned net+pin
 # landings. See ROUTING_LESSONS.md L13 + BOARD_INVARIANTS HDI extension
 # table for the full landing roster.
 BLIND_F_IN2_NET_WHITELIST = (
     "BSTB_CH1", "PWM_INHB_CH1", "SWDIO_CH1", "PWM_INLA_CH1",
-    "GLB_CH1",   # 2026-05-28 lever D — J19.10 escape (new net add)
+    "GLB_CH1",          # 2026-05-28 lever D — J19.10 escape (new net add)
+    "KILL_RAIL_N_CH1",  # 2026-05-28 lever G — J19.8 escape (last residual)
 )
 
 # The schematic-logical signal names (pre-channel-suffix) — kept for cross-
 # reference to BOARD_INVARIANTS + DRU which document the signals by their
 # logical names. NOT used for matching (matching is exact-string against
 # canonical .kicad_pcb names per [[reference-kicad-dru-libeval-crash]]).
-BLIND_F_IN2_LOGICAL_SIGNALS = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA", "GLB")
+BLIND_F_IN2_LOGICAL_SIGNALS = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA", "GLB",
+                                "KILL_RAIL_N")
 
 # 2026-05-28 lever D: sanctioned (net, footprint, pin) landings — the
 # fab-traceable roster of permitted blind F.Cu↔In2 vias. The audit's
@@ -126,14 +138,16 @@ BLIND_F_IN2_LOGICAL_SIGNALS = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA", "GLB")
 # on a sanctioned pin (in addition to net-name being whitelisted).
 # Cross-ref BOARD_INVARIANTS §"HDI Class extension: blind/buried F.Cu↔In2".
 BLIND_F_IN2_SANCTIONED_LANDINGS = (
-    ("BSTB_CH1",      "J19", "17"),
-    ("PWM_INHB_CH1",  "J18", "19"),
-    ("SWDIO_CH1",     "J18", "23"),
-    ("PWM_INLA_CH1",  "J18", "15"),
+    ("BSTB_CH1",        "J19", "17"),
+    ("PWM_INHB_CH1",    "J18", "19"),
+    ("SWDIO_CH1",       "J18", "23"),
+    ("PWM_INLA_CH1",    "J18", "15"),
     # 2026-05-28 lever D additions:
-    ("PWM_INHB_CH1",  "J19", "23"),   # partner of J18.19 (already net-WL)
-    ("PWM_INLA_CH1",  "J19", "1"),    # partner of J18.15 (already net-WL)
-    ("GLB_CH1",       "J19", "10"),   # new net+pin (closes J19_S overflow)
+    ("PWM_INHB_CH1",    "J19", "23"),   # partner of J18.19 (already net-WL)
+    ("PWM_INLA_CH1",    "J19", "1"),    # partner of J18.15 (already net-WL)
+    ("GLB_CH1",         "J19", "10"),   # new net+pin (closes J19_S overflow)
+    # 2026-05-28 lever G addition (CH1 30/30 last residual):
+    ("KILL_RAIL_N_CH1", "J19", "8"),    # new net+pin (closes last residual)
 )
 
 # Via-center-inside-pad tolerance — accommodates grid-snap rounding from
