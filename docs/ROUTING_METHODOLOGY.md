@@ -2,7 +2,7 @@
 
 **Single source of truth.** All routing scripts read from this.
 
-Hash: ROUTING_METHODOLOGY_HASH = (TBD)
+**Hash**: see bottom (ROUTING_METHODOLOGY_HASH); change requires explicit PR tagged `[methodology-change]`.
 
 ---
 
@@ -390,4 +390,8 @@ All must PASS on master HEAD post-merge.
 
 ---
 
-ROUTING_METHODOLOGY_HASH = (placeholder; computed by `audit_routing_system.py --write` after lock)
+## ROUTING_METHODOLOGY_HASH
+
+```
+ROUTING_METHODOLOGY_HASH = 08c9e7f34d4530c8f2e9f5784661e1501c8854c1e168854b19a259f2b56c0894
+```
