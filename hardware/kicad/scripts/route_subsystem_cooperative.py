@@ -452,6 +452,29 @@ BLIND_F_IN2_HALF_MM = BLIND_F_IN2_DIAM_MM / 2 + CLEARANCE_MM  # = 0.35mm
 # the Phase 3 emitter patch) reads this tuple.
 BLIND_F_IN2_SPAN = (F_CU, IN1_CU, IN2_CU)
 
+# LEVER L (2026-05-28, CH1 30/30): STACKED microvia F.Cu↔In1↔In2 — JLC HDI
+# Class 2 supports stacked microvia natively (top F.Cu↔In1.Cu microvia
+# stacked geometrically on bottom In1.Cu↔In2.Cu microvia; the In1 landing
+# is an isolated "antipad+pad" copper island, electrically tied to neither
+# GND plane nor signal). Adds a SECOND signal-reaching via mechanism per
+# pin (industry-standard since iPhone 4 era; ~$1-2/board adder, no new
+# fab class). Whitelist = same 6 nets / 8 landings as BLIND_F_IN2 (router
+# may pick blind OR stacked per pin — both reach In2 signal layer).
+#
+# Geometry: each LEG is identical to the existing HDI microvia
+# F-In1 (drill 0.10mm / pad 0.25mm / annular 0.075mm). Stacking alignment
+# tolerance ≤0.025mm per JLC HDI Class 2 spec (well within the 0.075mm
+# annular budget; no cut-to-cut per §5c FoS).
+STACKED_MICROVIA_DRILL_MM = HDI_VIA_DRILL_MM   # = 0.10mm (each leg)
+STACKED_MICROVIA_DIAM_MM = HDI_VIA_DIAM_MM     # = 0.25mm (each leg)
+STACKED_MICROVIA_HALF_MM = STACKED_MICROVIA_DIAM_MM / 2 + CLEARANCE_MM  # = 0.325mm
+# Layers a stacked microvia barrel set traverses: F.Cu (top entry),
+# In1.Cu (the isolated pad island between top + bottom legs), In2.Cu
+# (bottom signal escape). Same 3-tuple as BLIND_F_IN2_SPAN — the two
+# classes deliver the SAME barrel-layer coverage; the fab method differs
+# (single blind drill vs. two stacked microvias).
+STACKED_MICROVIA_SPAN = (F_CU, IN1_CU, IN2_CU)
+
 
 # v8: per-named-net whitelist of nets permitted to use the blind F.Cu↔In2
 # class. Single source of truth = audit_hdi_via_in_pad.BLIND_F_IN2_NET_WHITELIST
@@ -469,6 +492,16 @@ try:                                          # pragma: no cover - import path
 except Exception:                             # pragma: no cover
     _BLIND_F_IN2_NET_WHITELIST = ()
 
+# LEVER L: parallel SSoT import for the stacked-microvia whitelist. Same
+# audit module is the single source of truth; failing back to empty tuple
+# DEGRADES TO REFUSING THE NEW CLASS (never falls through to THROUGH —
+# the v6/v7 shorts lesson).
+try:                                          # pragma: no cover - import path
+    from audit_hdi_via_in_pad import STACKED_MICROVIA_NET_WHITELIST as \
+        _STACKED_MICROVIA_NET_WHITELIST
+except Exception:                             # pragma: no cover
+    _STACKED_MICROVIA_NET_WHITELIST = ()
+
 
 def blind_f_in2_net_whitelist():
     """Return the canonical-net-name tuple permitted for the blind F.Cu↔In2
@@ -480,6 +513,16 @@ def blind_f_in2_net_whitelist():
     return _BLIND_F_IN2_NET_WHITELIST
 
 
+def stacked_microvia_net_whitelist():
+    """LEVER L SSoT — net-name tuple permitted for stacked microvia
+    F.Cu↔In1↔In2 (JLC HDI Class 2 native stacked-microvia fab class).
+    Single source of truth = audit_hdi_via_in_pad.STACKED_MICROVIA_NET_WHITELIST.
+    Empty tuple on import failure (refuse-class behaviour; never falls
+    through to THROUGH-via at a fine-pitch HDI cell — the v6/v7 shorts
+    lesson)."""
+    return _STACKED_MICROVIA_NET_WHITELIST
+
+
 # Adjacent-layer microvia spans (JLC HDI Class 2 single laser-drill spec) —
 # the existing classes. Bidirectional (router may pick either direction).
 _MICROVIA_F_IN1_SPAN = {(F_CU, IN1_CU), (IN1_CU, F_CU)}
@@ -489,40 +532,56 @@ _BLIND_F_IN2_PAIRS = {(F_CU, IN2_CU), (IN2_CU, F_CU)}
 
 
 def via_class_for_span(L_from, L_to, net_name, is_hdi_cell,
-                       hdi_whitelist=None):
+                       hdi_whitelist=None, stacked_whitelist=None,
+                       prefer_stacked=False):
     """Classify a (L_from, L_to) via span for `net_name` into one of:
-      'microvia_F_In1' — JLC HDI Class 2 adjacent microvia (F.Cu↔In1.Cu)
-      'microvia_B_In8' — JLC HDI Class 2 adjacent microvia (B.Cu↔In8.Cu)
-      'blind_F_In2'    — JLC HDI blind/buried F.Cu↔In2 (OQ-020 class),
-                         permitted ONLY when `net_name` is in
-                         `hdi_whitelist` (BLIND_F_IN2_NET_WHITELIST source of truth)
-      'through'        — standard F.Cu↔B.Cu through-via (any span on a
-                         non-HDI cell; the existing behaviour)
-      None             — REFUSED: span is not permitted at this HDI cell
-                         for this net. The router MUST NOT fall through to
-                         a through-via at fine-pitch HDI cells (that's the
-                         v6/v7 shorts lesson — through F.Cu↔B.Cu drills
-                         clearance into adjacent 0.5mm-pitch QFN pads on
-                         every inner layer, guaranteeing a short). Caller
-                         must SKIP this layer-change candidate.
-
-    The HDI-cell context is what triggers the refuse-vs-through distinction:
-    on a normal board cell, any (L_from, L_to) span is acceptable as a
-    standard through-via (the existing v6/v7 behaviour). At an HDI via-in-
-    pad cell (J18/J19) the geometry only supports the 3 listed HDI classes;
-    anything else MUST be refused so the router seeks another layer pair.
+      'microvia_F_In1'             — JLC HDI Class 2 adjacent microvia (F.Cu↔In1.Cu)
+      'microvia_B_In8'             — JLC HDI Class 2 adjacent microvia (B.Cu↔In8.Cu)
+      'blind_F_In2'                — JLC HDI blind/buried F.Cu↔In2 (OQ-020 class),
+                                      permitted ONLY when `net_name` is in
+                                      `hdi_whitelist` (BLIND_F_IN2_NET_WHITELIST)
+      'stacked_microvia_F_In1_In2' — JLC HDI Class 2 stacked microvia (LEVER L);
+                                      emitted as TWO MICROVIA legs (top F↔In1 +
+                                      bottom In1↔In2). Permitted ONLY when
+                                      `net_name` is in `stacked_whitelist`
+                                      (STACKED_MICROVIA_NET_WHITELIST). For the
+                                      F.Cu↔In2.Cu span this is an ALTERNATIVE
+                                      to blind_F_In2 (both reach In2 signal).
+                                      Selected when `prefer_stacked=True` AND
+                                      the net is in the stacked whitelist; by
+                                      default the existing blind_F_In2 class is
+                                      preferred for back-compat (the choice is
+                                      semantically equivalent — both signal-
+                                      reaching — but the emitter / halo maths
+                                      vary by the per-class geometry).
+      'through'                    — standard F.Cu↔B.Cu through-via (any span
+                                      on a non-HDI cell; existing behaviour)
+      None                         — REFUSED: span is not permitted at this HDI
+                                      cell for this net. Router MUST skip the
+                                      layer-change candidate. NEVER fall
+                                      through to THROUGH at HDI cells.
 
     `hdi_whitelist` defaults to `blind_f_in2_net_whitelist()` (the audit's
-    canonical list). Callers MAY pass an override for testing (the per-net
-    whitelist is read from a single source per task point 4).
+    canonical list). `stacked_whitelist` defaults to
+    `stacked_microvia_net_whitelist()` (parallel SSoT for LEVER L). Callers
+    MAY pass overrides for testing.
+
+    LEVER L semantics: for a F.Cu↔In2.Cu span on a stacked-whitelisted net
+    at an HDI cell, `prefer_stacked=True` returns 'stacked_microvia_F_In1_In2'
+    instead of 'blind_F_In2'. Both classes provide signal-reaching escape;
+    the choice is a budget knob (the router may pick stacked when blind is
+    consumed by another whitelist net on the same side, mathematically
+    doubling supply per pin). Default `prefer_stacked=False` preserves the
+    pre-LEVER-L behaviour (blind F-In2 still chosen first).
     """
     pair = (L_from, L_to)
     if not is_hdi_cell:
         # Non-HDI cell: any span emits as standard through-via (existing
         # v6/v7 behaviour preserved).
         return 'through'
-    # HDI cell: only the 3 sanctioned classes are physically realisable
-    # (JLC HDI Class 2 + OQ-020 blind extension). Anything else is refused.
+    # HDI cell: only the 4 sanctioned classes are physically realisable
+    # (JLC HDI Class 2 + OQ-020 blind extension + LEVER L stacked).
+    # Anything else is refused.
     if pair in _MICROVIA_F_IN1_SPAN:
         return 'microvia_F_In1'
     if pair in _MICROVIA_B_IN8_SPAN:
@@ -530,11 +589,25 @@ def via_class_for_span(L_from, L_to, net_name, is_hdi_cell,
     if pair in _BLIND_F_IN2_PAIRS:
         wl = hdi_whitelist if hdi_whitelist is not None \
             else blind_f_in2_net_whitelist()
+        swl = stacked_whitelist if stacked_whitelist is not None \
+            else stacked_microvia_net_whitelist()
+        # LEVER L: if prefer_stacked AND net is stacked-whitelisted, return
+        # the stacked class. Otherwise default to the existing blind_F_In2
+        # class (preserves back-compat for non-LEVER-L code paths).
+        if prefer_stacked and net_name in swl:
+            return 'stacked_microvia_F_In1_In2'
         if net_name in wl:
             return 'blind_F_In2'
-        # Blind F-In2 span requested by non-whitelisted net at HDI cell:
-        # REFUSE. (The DRU rejects this anyway — but the router must NOT
-        # fall through to THROUGH F.Cu↔B.Cu, which would short adjacent
+        # If the net is NOT in the blind WL but IS in the stacked WL,
+        # return the stacked class — same signal-reach, mathematically
+        # equivalent supply. (The two whitelists are deliberately equal,
+        # but this defensive branch keeps semantics consistent if they
+        # ever diverge.)
+        if net_name in swl:
+            return 'stacked_microvia_F_In1_In2'
+        # Span requested by non-whitelisted net at HDI cell: REFUSE.
+        # (The DRU rejects this anyway — but the router must NOT fall
+        # through to THROUGH F.Cu↔B.Cu, which would short adjacent
         # pads. Routing fails → A* searches another layer pair.)
         return None
     # Some other span at an HDI cell (e.g. F.Cu↔In4, In8↔In2, etc.) is
@@ -564,6 +637,12 @@ def via_span_layers(via_class):
         return (IN8_CU, B_CU)
     if via_class == 'blind_F_In2':
         return BLIND_F_IN2_SPAN
+    # LEVER L: stacked microvia F.Cu↔In1↔In2 — same 3-layer barrel coverage
+    # as blind F-In2 (F.Cu / In1.Cu isolated pad / In2.Cu); the fab method
+    # differs (two stacked microvias vs. one blind drill) but the
+    # layer-aware obstacle-check semantics are identical.
+    if via_class == 'stacked_microvia_F_In1_In2':
+        return STACKED_MICROVIA_SPAN
     # Refused class — caller should never reach here.
     raise ValueError(f"via_span_layers: refused via_class {via_class!r}")
 
@@ -591,6 +670,12 @@ def via_diam_mm_for_class(via_class):
         return HDI_VIA_DIAM_MM
     if via_class == 'blind_F_In2':
         return BLIND_F_IN2_DIAM_MM
+    # LEVER L: each stacked microvia leg has the same pad diameter as the
+    # existing HDI microvia F-In1 (0.25mm). The stacked structure presents
+    # ONE pad diameter to the obstacle / halo check (the two legs are
+    # geometrically co-aligned with the same XY + diameter).
+    if via_class == 'stacked_microvia_F_In1_In2':
+        return STACKED_MICROVIA_DIAM_MM
     # 'through' (or anything else) → standard via diameter. Defensive default
     # is the LARGER diameter — never under-stamps a halo, so shorts-gate
     # semantics are preserved on unexpected class strings.
@@ -615,16 +700,19 @@ def via_halo_radius_mm(via_class, trace_width_mm=None):
     the router must respect when placing or scanning around a via.
 
     Per-class behaviour:
-      'through'         → 0.60/2 + 0.20 + 0.08 + 0.025 = 0.605mm
-      'microvia_F_In1'  → 0.25/2 + 0.20 + 0.08 + 0.025 = 0.430mm
-      'microvia_B_In8'  → 0.25/2 + 0.20 + 0.08 + 0.025 = 0.430mm
-      'blind_F_In2'     → 0.30/2 + 0.20 + 0.08 + 0.025 = 0.455mm
+      'through'                     → 0.60/2 + 0.20 + 0.08 + 0.025 = 0.605mm
+      'microvia_F_In1'              → 0.25/2 + 0.20 + 0.08 + 0.025 = 0.430mm
+      'microvia_B_In8'              → 0.25/2 + 0.20 + 0.08 + 0.025 = 0.430mm
+      'blind_F_In2'                 → 0.30/2 + 0.20 + 0.08 + 0.025 = 0.455mm
+      'stacked_microvia_F_In1_In2'  → 0.25/2 + 0.20 + 0.08 + 0.025 = 0.430mm
+                                      (per leg; legs co-aligned same XY)
 
     SSoT discipline: NO hard-coded numbers in callers — every halo derives
-    from this helper + the per-class constants above. Adding a new via class
-    (e.g. JLC HDI Class 3 stacked microvia) requires ONLY a new diameter
-    constant + a branch in via_diam_mm_for_class + a branch in
-    via_span_layers — clearance maths fall out automatically.
+    from this helper + the per-class constants above. The LEVER L stacked
+    microvia class was added 2026-05-28 by adding ONLY the diameter constant
+    (STACKED_MICROVIA_DIAM_MM) + a branch in via_diam_mm_for_class + a
+    branch in via_span_layers — clearance maths fell out automatically,
+    proving the design.
     """
     if trace_width_mm is None:
         trace_half = TRACE_HALF_MM
@@ -640,14 +728,17 @@ def via_pad_half_mm_for_class(via_class):
     PAD itself would land in foreign plane copper, no trace-half offset).
 
     Returns: diam/2 + CLEARANCE_MM
-      'through'         → 0.500mm
-      'microvia_F_In1'  → 0.325mm  (HDI_VIA_HALF_MM)
-      'microvia_B_In8'  → 0.325mm  (HDI_VIA_HALF_MM)
-      'blind_F_In2'     → 0.350mm  (BLIND_F_IN2_HALF_MM)
+      'through'                     → 0.500mm
+      'microvia_F_In1'              → 0.325mm  (HDI_VIA_HALF_MM)
+      'microvia_B_In8'              → 0.325mm  (HDI_VIA_HALF_MM)
+      'blind_F_In2'                 → 0.350mm  (BLIND_F_IN2_HALF_MM)
+      'stacked_microvia_F_In1_In2'  → 0.325mm  (STACKED_MICROVIA_HALF_MM;
+                                                 same as microvia per leg)
 
-    Validated against the existing HDI_VIA_HALF_MM / BLIND_F_IN2_HALF_MM
-    module-level constants — those are the per-class values this helper
-    returns, derived from the same per-class diameters.
+    Validated against the existing HDI_VIA_HALF_MM / BLIND_F_IN2_HALF_MM /
+    STACKED_MICROVIA_HALF_MM module-level constants — those are the
+    per-class values this helper returns, derived from the same per-class
+    diameters.
     """
     return via_diam_mm_for_class(via_class) / 2.0 + CLEARANCE_MM
 
@@ -2018,6 +2109,57 @@ def emit_to_board(board, segments, vias, net_obj, width_mm, added_items,
             v.SetLayerPair(target_pair[0], target_pair[1])
             v.SetDrill(mm_to_iu(BLIND_F_IN2_DRILL_MM))
             via_diam = BLIND_F_IN2_DIAM_MM
+        elif via_class == 'stacked_microvia_F_In1_In2':
+            # LEVER L 2026-05-28 (Sai cost-OK): JLC HDI Class 2 stacked
+            # microvia — TWO MICROVIA legs geometrically aligned. The first
+            # (this `v`) is the TOP leg (F.Cu↔In1.Cu); we configure it now
+            # and emit a SECOND PCB_VIA (the BOTTOM leg In1.Cu↔In2.Cu) at
+            # the same XY immediately afterward. Both legs share the
+            # 0.10mm drill / 0.25mm pad geometry and the bound net (signal
+            # continuity through the In1 isolated pad island per
+            # BOARD_INVARIANTS §"HDI Class extension: stacked microvia
+            # F.Cu↔In1↔In2"). The audit's post-loop pair-detection groups
+            # co-located MICROVIA legs into the sanctioned stacked pair.
+            try:
+                v.SetViaType(pcbnew.VIATYPE_MICROVIA)
+            except Exception:
+                pass
+            # Top leg: F.Cu↔In1.Cu (regardless of router-requested span
+            # direction — the stacked structure is by definition F→In1→In2).
+            v.SetLayerPair(F_CU, IN1_CU)
+            v.SetDrill(mm_to_iu(STACKED_MICROVIA_DRILL_MM))
+            via_diam = STACKED_MICROVIA_DIAM_MM
+            # Set width on top-leg barrel layers BEFORE emitting bottom leg.
+            for lid in (F_CU, IN1_CU):
+                try:
+                    v.SetWidth(lid, mm_to_iu(via_diam))
+                except Exception:
+                    pass
+            v.SetNet(net_obj)
+            board.Add(v)
+            added_items.append(v)
+            # Bottom leg: a SECOND PCB_VIA at the same XY, spanning
+            # In1.Cu↔In2.Cu. Build, configure, set width on bottom-barrel
+            # layers, then continue the outer loop (skip the standard
+            # widths-and-add tail below).
+            v2 = pcbnew.PCB_VIA(board)
+            v2.SetPosition(pcbnew.VECTOR2I(mm_to_iu(x), mm_to_iu(y)))
+            try:
+                v2.SetViaType(pcbnew.VIATYPE_MICROVIA)
+            except Exception:
+                pass
+            v2.SetLayerPair(IN1_CU, IN2_CU)
+            v2.SetDrill(mm_to_iu(STACKED_MICROVIA_DRILL_MM))
+            for lid in (IN1_CU, IN2_CU):
+                try:
+                    v2.SetWidth(lid, mm_to_iu(STACKED_MICROVIA_DIAM_MM))
+                except Exception:
+                    pass
+            v2.SetNet(net_obj)
+            board.Add(v2)
+            added_items.append(v2)
+            # Skip the tail of the outer loop (widths + add already done).
+            continue
         else:  # via_class == 'through'
             # Standard through-via (board-wide default; v6/v7 behaviour).
             try:

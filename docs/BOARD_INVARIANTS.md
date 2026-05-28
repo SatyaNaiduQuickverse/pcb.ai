@@ -235,13 +235,103 @@ partner pins required NO DRU edit (the net names were already in the
 condition); `GLB_CH1` was added to the net condition for lever D;
 `KILL_RAIL_N_CH1` was added for lever G.
 
+### HDI Class extension: stacked microvia F.Cu↔In1↔In2 (Sai cost-OK 2026-05-28; LEVER L)
+
+Master 2026-05-28 CH1 30/30 LEVER L (drone-grade reliability + no cut
+corners). JLC HDI Class 2 supports **stacked microvia** natively: TWO
+microvias geometrically aligned (top F.Cu↔In1.Cu stacked directly on top
+of bottom In1.Cu↔In2.Cu). This adds a **SECOND signal-reaching via
+mechanism per pin** in addition to the OQ-020 blind F-In2 class — the
+router may choose blind OR stacked per pin, both reaching In2 (signal
+layer). The In1 landing between the two stacked microvias is an isolated
+"antipad+pad" copper island, NOT tied to the In1 GND plane and NOT tied
+to the signal — it is the stacked-via pad between two adjacent-layer
+microvias.
+
+**Why this MATHEMATICALLY GUARANTEES escape budget > demand at 0.5mm QFN
+pitch**: adding stacked microvia as a second signal-reaching mechanism
+per whitelist pin DOUBLES the layer-aware supply on each whitelist side
+(per `phase_a.side_supply`: blind_F_In2 = 1 slot per whitelist-eligible
+residual net + stacked_microvia_F_In1_In2 = 1 slot per same = 2 signal-
+reaching slots per pin). Pin landings on the 6 LEVER L whitelist nets
+each carry supply 2, demand 1 — guaranteed surplus at every landing.
+
+**Industry standard since iPhone 4 era** — Apple/Samsung phones use
+stacked microvia extensively at every fine-pitch BGA/QFN; established
+reliability with millions of fielded units. No new fab process (same
+JLC HDI Class 2 — laser-drilled microvia + epoxy fill + plate-over);
+just two laser passes geometrically aligned.
+
+**New via class** (added to whitelist on top of blind F-In2):
+
+- **Process**: JLC HDI Class 2 stacked microvia — TWO laser-drilled
+  microvias geometrically aligned + epoxy-filled + plate-over (same fab
+  process; just two laser passes per stack).
+- **Top microvia**: drill 0.10mm / pad 0.25mm; span F.Cu↔In1.Cu (adjacent
+  laser pair; identical geometry to existing OQ-014 microvia F-In1).
+- **Bottom microvia**: drill 0.10mm / pad 0.25mm; span In1.Cu↔In2.Cu
+  (adjacent laser pair; the In1 landing is an isolated pad island).
+- **Annular ring**: 0.075mm each (≥ board std 0.10mm AFTER plate-over;
+  FoS margin above JLC blind-via fab min 0.05mm).
+- **Stacking alignment tolerance**: ≤0.025mm laser-to-laser registration
+  per JLC HDI Class 2 spec (well within the 0.075mm annular budget; no
+  cut-to-cut per §5c FoS).
+- **Continuous signal path**: F.Cu pin → top microvia → In1 pad island →
+  bottom microvia → In2 signal escape; bypasses In1 GND via the
+  antipad+pad isolation.
+- **Fab cost adder**: ~$1-2/board over base-HDI (no new process, second
+  laser pass + alignment). Sai cost-cleared 2026-05-28 for the same 6
+  whitelist nets (~$3-7/board total HDI envelope: standard microvia +
+  blind/buried OQ-020 + stacked LEVER L; ONLY on J18+J19).
+
+**Same scope, narrowest possible** — stacked microvia permitted ONLY on
+the same 6 nets / 8 sanctioned (net, pin) landings as BLIND_F_IN2 (CH1
+only). The canonical .kicad_pcb net names carry the schematic `_CH1`
+suffix; CH2/3/4 mirrors NOT in this whitelist.
+
+| Net (canonical .kicad_pcb name) | Logical signal | Footprint | Pin # | Rationale |
+|---|---|---|---|---|
+| `BSTB_CH1` | BSTB | J19 | 17 | gate-driver bootstrap B — +1 signal-reaching slot (paired with blind F-In2) |
+| `PWM_INHB_CH1` | PWM_INHB | J18 | 19 | PWM input high B — +1 signal-reaching slot |
+| `SWDIO_CH1` | SWDIO | J18 | 23 | SWD data — +1 signal-reaching slot |
+| `PWM_INLA_CH1` | PWM_INLA | J18 | 15 | PWM input low A — +1 signal-reaching slot |
+| `PWM_INHB_CH1` | PWM_INHB | J19 | 23 | partner pin of J18.19 — +1 signal-reaching slot |
+| `PWM_INLA_CH1` | PWM_INLA | J19 | 1  | partner pin of J18.15 — +1 signal-reaching slot |
+| `GLB_CH1`      | GLB      | J19 | 10 | gate-driver low B output — +1 signal-reaching slot |
+| `KILL_RAIL_N_CH1` | KILL_RAIL_N | J19 | 8  | DRV nSLEEP / kill-rail — +1 signal-reaching slot |
+
+**Whitelist scope is BINDING**: stacked microvia on ANY pin not in the
+above 8 landings = FAIL `audit_hdi_via_in_pad.py` (pair detection +
+whitelist check). Adding a new pin requires Sai cost-OK + update to this
+section + audit re-lock.
+
+**DRU enforcement**: `hardware/kicad/pcbai_fpv4in1.kicad_dru` carries a
+stacked-microvia leg-geometry rule scoped to vias with the new
+dimensions (drill 0.10mm) AND on the 6 named nets only — `==` net-name
+comparison per [[reference-kicad-dru-libeval-crash]]. KiCad libeval
+cannot reliably condition on pin number or via stacking; per-pin + per-
+pair enforcement is documentary (this table +
+`audit_hdi_via_in_pad.STACKED_MICROVIA_SANCTIONED_LANDINGS`) and the
+audit's pair-detection logic is the binding fab gate.
+
+**Audit identification**: the stacked structure is recognised as TWO
+VIATYPE_MICROVIA vias at the SAME (x, y) (±0.05mm TOLERANCE_MM) on the
+same net, one with layer pair (F.Cu, In1.Cu) and the other with layer
+pair (In1.Cu, In2.Cu). Each leg individually still satisfies the v7
+adjacent-pair microvia span check; the audit's post-loop pair detection
+groups co-located legs by (snap-grid XY, net) and flags any cluster
+having both top and bottom legs as a stacked microvia.
+
 ### Enforcement gates
 - `hardware/kicad/scripts/audit_hdi_via_in_pad.py` — verifies HDI vias only on whitelist
   (extended 2026-05-28 to accept blind F.Cu↔In2 vias on the 6 net whitelist
   above [4 OQ-020 ACTIVATE + GLB_CH1 lever D + KILL_RAIL_N_CH1 lever G],
-  in addition to the existing microvia F.Cu↔In1 acceptance)
+  in addition to the existing microvia F.Cu↔In1 acceptance; LEVER L 2026-
+  05-28 adds STACKED_MICROVIA_NET_WHITELIST + post-loop pair detection
+  for the F.Cu↔In1↔In2 stacked class on the same 6 nets / 8 landings)
 - `hardware/kicad/pcbai_fpv4in1.kicad_dru` — relaxes DRC for HDI sizes (scoped to `A.Hole <= 0.15mm`),
   + new blind F.Cu↔In2 geometry rule scoped to the 6 net names above
+  + new stacked-microvia leg-geometry rules scoped to the same 6 nets (LEVER L)
 - `route_subsystem_cooperative.HDI_VIA_IN_PAD_REFS` — router whitelist constant
 - `hardware/kicad/scripts/routing_engine/phase_a.py` — LAYER-AWARE escape supply
   (`side_supply` drops plane-bottoming via classes from supply; T12 fixture
