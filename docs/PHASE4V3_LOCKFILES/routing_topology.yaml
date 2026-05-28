@@ -11,7 +11,7 @@
 #
 # Changes require PR title tag `[methodology-change]` and recompute
 # ROUTING_TOPOLOGY_HASH via `audit_routing_system.py --write`.
-# ROUTING_TOPOLOGY_HASH = 61ed71b5c676e5733cc47deb3a8360a714221b033024c171ba9a337bd04e373f
+# ROUTING_TOPOLOGY_HASH = fdcac20bfb80fb9e7ec0b71a9667fa3d32e6a72fafd21de2b6ba8c600357274f
 
 version: 1
 created: 2026-05-25
