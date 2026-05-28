@@ -184,6 +184,19 @@ except Exception:
     BLIND_F_IN2_NET_WHITELIST = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA", "GLB",
                                   "KILL_RAIL_N")
 
+# LEVER L 2026-05-28 (Sai cost-OK; drone-grade reliability + no cut corners):
+# the parallel net whitelist for the JLC HDI Class 2 STACKED microvia
+# F.Cu↔In1↔In2 fab class. Adds a SECOND signal-reaching via mechanism per
+# whitelist pin (in addition to the OQ-020 blind F-In2 class) — mathematically
+# DOUBLES the layer-aware supply on each whitelist side. Same SSoT import
+# discipline as BLIND_F_IN2_NET_WHITELIST above (audit module is the truth;
+# minimal bare-name fallback for pcbnew-less hosts).
+try:
+    from audit_hdi_via_in_pad import STACKED_MICROVIA_NET_WHITELIST  # type: ignore
+except Exception:
+    STACKED_MICROVIA_NET_WHITELIST = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA",
+                                       "GLB", "KILL_RAIL_N")
+
 
 MODELLING_ASSUMPTIONS = [
     "PINS = all CH1-zone footprint pads + J18(QFN-32 pins 1-32) + J19(HVQFN-24 "
@@ -247,6 +260,13 @@ class _SideModel:
     # whose net name is in BLIND_F_IN2_NET_WHITELIST.
     blind_f_in2_supply: int = 0   # per-side OQ-020 blind F-In2 capacity (signal)
     blind_f_in2_nets: tuple = ()  # the residual nets entitled to a blind F-In2
+    # LEVER L 2026-05-28: STACKED microvia F.Cu↔In1↔In2 (signal-reaching,
+    # parallel mechanism). Same 6 whitelist nets as blind F-In2 (so a
+    # whitelist pin gets +1 blind slot AND +1 stacked slot = 2 signal-
+    # reaching slots per pin — mathematically doubling supply at fine-pitch
+    # QFN escape and guaranteeing supply > demand at every landing).
+    stacked_microvia_supply: int = 0   # per-side LEVER L stacked microvia capacity
+    stacked_microvia_nets: tuple = ()  # residual nets entitled to a stacked microvia
 
 
 def _classify_sides(board, ref, n_sig, residual_nets, routed_nets):
@@ -327,6 +347,15 @@ def _classify_sides(board, ref, n_sig, residual_nets, routed_nets):
         blind_eligible = tuple(sorted(n for n in resid
                                       if n in BLIND_F_IN2_NET_WHITELIST))
         blind_supply = len(blind_eligible)
+        # LEVER L 2026-05-28: stacked microvia F.Cu↔In1↔In2 supply — same
+        # per-net-reservation semantics as blind F-In2 (one slot per
+        # residual net whose name is on the LEVER L whitelist; whitelists
+        # are deliberately equal so each whitelist pin gets +1 stacked +
+        # +1 blind = 2 signal-reaching slots per pin). Per-side supply =
+        # # of residual nets on this side in the LEVER L whitelist.
+        stacked_eligible = tuple(sorted(
+            n for n in resid if n in STACKED_MICROVIA_NET_WHITELIST))
+        stacked_supply = len(stacked_eligible)
         out.append(_SideModel(
             ic_side=f"{ref}_{s}",
             n_pins=len(ps),
@@ -340,6 +369,8 @@ def _classify_sides(board, ref, n_sig, residual_nets, routed_nets):
             residual_nets=resid,
             blind_f_in2_supply=blind_supply,
             blind_f_in2_nets=blind_eligible,
+            stacked_microvia_supply=stacked_supply,
+            stacked_microvia_nets=stacked_eligible,
         ))
     return out
 
@@ -483,6 +514,22 @@ def extract_problem(board_path, subsystem="CH1"):
                 f"{sm.ic_side}_HDIblind_FIn2_{i}", 0.0, 0.0, sm.ic_side,
                 hdi_only=True, target_layer="In2",
                 via_class="blind_F_In2"))
+        # LEVER L 2026-05-28: the STACKED microvia F.Cu↔In1↔In2 class —
+        # SIGNAL-targeting, parallel mechanism. Available only for nets on
+        # the STACKED_MICROVIA_NET_WHITELIST (same 6 nets as blind F-In2 —
+        # whitelists are deliberately equal so each whitelist pin gets +1
+        # blind slot AND +1 stacked slot, doubling signal-reaching supply
+        # at the whitelist landings). Industry-standard fab class since
+        # iPhone 4 era (Apple/Samsung use stacked microvia at fine-pitch
+        # BGA/QFN with millions of fielded units of established reliability);
+        # ~$1-2/board adder; no new fab process — same Class-2 HDI laser-
+        # drilled microvia + epoxy fill + plate-over, just two laser passes
+        # geometrically aligned (top F.Cu↔In1 stacked on bottom In1↔In2).
+        for i in range(sm.stacked_microvia_supply):
+            via_slots.append(F.ViaSlot(
+                f"{sm.ic_side}_HDIstacked_FIn1In2_{i}", 0.0, 0.0, sm.ic_side,
+                hdi_only=True, target_layer="In2",
+                via_class="stacked_microvia_F_In1_In2"))
 
     # ---- DOORS: BOARD_INVARIANTS CH1 I/O ports + In8 escape door -----------
     doors = _ch1_doors()

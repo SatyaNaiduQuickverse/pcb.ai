@@ -703,7 +703,14 @@ def _slot_reaches_signal(fx, vs):
 # the per-side whitelist demand cap; std-overflow of OTHER nets MUST NOT eat
 # into these per-net reservations (the bug T14 catches; canonical d4ab0f2
 # J19_N PWM_INHB regression). Centralised here so the policy is one constant.
-PER_NET_RESERVED_VIA_CLASSES = frozenset(("blind_F_In2",))
+# LEVER L 2026-05-28: stacked_microvia_F_In1_In2 joins blind_F_In2 as a
+# per-named-net reservation class (one slot per whitelist-eligible residual
+# net per side; the driver emits parallel slots so the whitelist landings
+# get supply 2 — blind + stacked — DOUBLING signal-reaching capacity at
+# whitelist pins; protected from std overflow consumption by the same T14
+# fix that protects blind_F_In2 slots).
+PER_NET_RESERVED_VIA_CLASSES = frozenset(("blind_F_In2",
+                                           "stacked_microvia_F_In1_In2"))
 
 
 def _slot_is_per_net_reserved(vs):

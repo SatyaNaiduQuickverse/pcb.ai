@@ -212,3 +212,68 @@
   (constraint hole_clearance (min 0.10mm))
   (condition "A.Type == 'via' && A.Hole == 0.15mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1' || A.NetName == 'KILL_RAIL_N_CH1')"))
 
+# === HDI stacked microvia F.Cu↔In1↔In2 (LEVER L 2026-05-28; Sai cost-OK) ===
+# Per BOARD_INVARIANTS §"HDI Class extension: stacked microvia F.Cu↔In1↔In2"
+# (drone-grade reliability + no cut corners). JLC HDI Class 2 supports
+# stacked microvia natively: TWO microvias geometrically aligned (top F.Cu↔
+# In1, bottom In1↔In2) provide a SECOND signal-reaching via mechanism per
+# whitelist pin, complementing the OQ-020 blind F-In2 class. Industry-
+# standard since ~iPhone 4 era (Apple/Samsung phones); established
+# reliability.
+#
+# Geometry (above fab min with §5c FoS; identical to existing microvia):
+#   - Each leg: drill 0.10mm / pad 0.25mm / annular 0.075mm / hole
+#     clearance 0.10mm — already covered by the generic "HDI via diameter
+#     / hole size / annular width / hole clearance" rules above (which key
+#     off A.Hole <= 0.15mm).
+#   - Stacking alignment: ≤0.025mm registration tolerance (JLC HDI Class 2
+#     laser-to-laser; well within the 0.075mm annular budget).
+#
+# Per-net scope: only the 6 LEVER L whitelist nets may carry a stacked
+# microvia (identical to BLIND_F_IN2 whitelist). The legs are emitted as
+# VIATYPE_MICROVIA so the v7 single-laser-drill adjacent-pair span check
+# (in audit_hdi_via_in_pad.py) PASSES per leg; the audit detects the
+# stacked PAIR (co-located F-In1 + In1-In2 legs on same net) and enforces
+# the LEVER L whitelist.
+#
+# DRU enforcement: this rule does NOT restrict the GEOMETRY (the existing
+# HDI rules already do, and they hold for the stacked legs since each leg
+# is drill=0.10mm). Instead, it documents the per-net scope ALONGSIDE the
+# blind F-In2 rule; the audit + router are the binding net-name gates. The
+# stacked pair is a SECOND mechanism per pin — both blind and stacked may
+# coexist at the same landing or per-pin one or the other (the router
+# chooses based on the per-net escape-budget calculus). The OQ-020 + LEVER
+# L envelope is +$3-7/board total (the +$2-5 OQ-020 envelope + +$1-2 stacked
+# upgrade, same Class-2 HDI fab process — Sai cost-cleared 2026-05-28).
+#
+# Net names are the canonical post-kinet2pcb names (per the CH1 schematic
+# which suffixes per-channel signals as _CHn): BSTB_CH1, PWM_INHB_CH1,
+# SWDIO_CH1, PWM_INLA_CH1, GLB_CH1, KILL_RAIL_N_CH1. SCOPE: CH1 ONLY (same
+# scope as BLIND_F_IN2; Sai cost-OK envelope is CH1-specific). Expanding
+# to CH2/3/4 requires Sai cost-OK + new PR + BOARD_INVARIANT_HASH re-lock
+# under [methodology-change] tag. Uses `==` net-name comparison per
+# [[reference-kicad-dru-libeval-crash]] (KiCad 9.0.2 libeval SIGTRAPs on
+# `=~` regex; only `==` is safe headless).
+#
+# The geometry constraints below are STRICTLY EQUAL to the existing HDI
+# microvia rules (same drill/pad/annular/clearance) — repeating them under
+# a net-scoped condition documents the per-net acceptance and ensures DRU
+# remains the binding fab gate for both the generic (any HDI microvia
+# inside J18/J19 pads) AND the named-net stacked microvia class.
+
+(rule "HDI stacked microvia F-In1-In2 leg diameter (whitelist)"
+  (constraint via_diameter (min 0.25mm))
+  (condition "A.Type == 'via' && A.Hole == 0.10mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1' || A.NetName == 'KILL_RAIL_N_CH1')"))
+
+(rule "HDI stacked microvia F-In1-In2 leg hole size (whitelist)"
+  (constraint hole_size (min 0.10mm))
+  (condition "A.Type == 'via' && A.Hole == 0.10mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1' || A.NetName == 'KILL_RAIL_N_CH1')"))
+
+(rule "HDI stacked microvia F-In1-In2 leg annular width (whitelist)"
+  (constraint annular_width (min 0.075mm))
+  (condition "A.Type == 'via' && A.Hole == 0.10mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1' || A.NetName == 'KILL_RAIL_N_CH1')"))
+
+(rule "HDI stacked microvia F-In1-In2 leg hole clearance (whitelist)"
+  (constraint hole_clearance (min 0.10mm))
+  (condition "A.Type == 'via' && A.Hole == 0.10mm && (A.NetName == 'BSTB_CH1' || A.NetName == 'PWM_INHB_CH1' || A.NetName == 'SWDIO_CH1' || A.NetName == 'PWM_INLA_CH1' || A.NetName == 'GLB_CH1' || A.NetName == 'KILL_RAIL_N_CH1')"))
+

@@ -62,6 +62,11 @@ from route_subsystem_cooperative import (
     via_halo_radius_mm, via_diam_mm_for_class, via_pad_half_mm_for_class,
     CLEARANCE_MM, TRACE_HALF_MM, GRID_SLOP_MM,
     HDI_VIA_HALF_MM, BLIND_F_IN2_HALF_MM,
+    # LEVER L (CH1 30/30 stacked microvia F↔In1↔In2) — drill/pad/half/span
+    # constants + SSoT whitelist accessor.
+    STACKED_MICROVIA_DRILL_MM, STACKED_MICROVIA_DIAM_MM,
+    STACKED_MICROVIA_HALF_MM, STACKED_MICROVIA_SPAN,
+    stacked_microvia_net_whitelist,
 )
 import audit_hdi_via_in_pad as audit_mod
 
@@ -846,6 +851,469 @@ def test_lever_I_hdi_geom_refuses_real_through_short():
     return ok
 
 
+# ─── LEVER L (CH1 30/30 stacked microvia F↔In1↔In2) — emit + classify tests ─
+#
+# Background: LEVER L adds a SECOND signal-reaching via mechanism per
+# whitelist pin — JLC HDI Class 2 stacked microvia (TWO MICROVIA legs
+# geometrically aligned: top F.Cu↔In1.Cu + bottom In1.Cu↔In2.Cu, with the
+# In1 landing as an isolated antipad+pad island). Mathematically doubles
+# the signal-reaching supply on whitelist pins (blind_F_In2 = 1 slot + LEVER
+# L stacked = 1 slot per pin = 2 slots per whitelist landing). Industry-
+# standard since iPhone 4 era; ~$1-2/board adder, no new fab class.
+#
+# Validation (5 tests below):
+#   (L1) SSoT: router stacked whitelist == audit STACKED_MICROVIA_NET_WHITELIST
+#   (L2) classifier: F↔In2 + stacked-WL net + prefer_stacked = stacked class
+#   (L3) classifier: F↔In2 + non-WL net = REFUSED (no through fall-through)
+#   (L4) emit: stacked class emits TWO VIATYPE_MICROVIA legs at same XY
+#        spanning (F.Cu, In1.Cu) + (In1.Cu, In2.Cu), drill 0.10mm + pad 0.25mm
+#        each, on the whitelist net. Verify per leg.
+#   (L5) emit: ALL 8 sanctioned (net, pin) landings emit stacked correctly.
+#   (L6) halo + span SSoT: via_halo_radius_mm('stacked_...') == HDI microvia
+#        halo (per-leg pad 0.25mm); via_span_layers returns the F/In1/In2
+#        3-tuple; via_diam_mm_for_class returns STACKED_MICROVIA_DIAM_MM.
+
+def test_lever_L_ssoT():
+    """(L1) Router stacked whitelist mirrors audit's
+    STACKED_MICROVIA_NET_WHITELIST exactly (SSoT discipline)."""
+    router_wl = set(stacked_microvia_net_whitelist())
+    audit_wl = set(audit_mod.STACKED_MICROVIA_NET_WHITELIST)
+    expected = {"BSTB_CH1", "PWM_INHB_CH1", "SWDIO_CH1", "PWM_INLA_CH1",
+                "GLB_CH1", "KILL_RAIL_N_CH1"}
+    ok = router_wl == audit_wl == expected and len(router_wl) == 6
+    print(f"  [{'OK' if ok else 'BAD'}] (L1) SSoT: router stacked whitelist "
+          f"== audit whitelist = {sorted(router_wl)} (expected 6)")
+    return ok
+
+
+def test_lever_L_classifier_stacked_class():
+    """(L2) F↔In2 + stacked-WL net + prefer_stacked=True returns
+    'stacked_microvia_F_In1_In2' class instead of blind_F_In2."""
+    cases = [
+        # (L_from, L_to, net, prefer_stacked, expected)
+        (F_CU, IN2_CU, "BSTB_CH1",         True,  "stacked_microvia_F_In1_In2"),
+        (F_CU, IN2_CU, "PWM_INHB_CH1",     True,  "stacked_microvia_F_In1_In2"),
+        (F_CU, IN2_CU, "SWDIO_CH1",        True,  "stacked_microvia_F_In1_In2"),
+        (F_CU, IN2_CU, "PWM_INLA_CH1",     True,  "stacked_microvia_F_In1_In2"),
+        (F_CU, IN2_CU, "GLB_CH1",          True,  "stacked_microvia_F_In1_In2"),
+        (F_CU, IN2_CU, "KILL_RAIL_N_CH1",  True,  "stacked_microvia_F_In1_In2"),
+        (IN2_CU, F_CU, "BSTB_CH1",         True,  "stacked_microvia_F_In1_In2"),
+        # prefer_stacked=False preserves the OQ-020 default (blind_F_In2).
+        (F_CU, IN2_CU, "BSTB_CH1",         False, "blind_F_In2"),
+        (F_CU, IN2_CU, "PWM_INHB_CH1",     False, "blind_F_In2"),
+    ]
+    ok = True
+    for (lf, lt, n, ps, exp) in cases:
+        got = via_class_for_span(lf, lt, n, is_hdi_cell=True, prefer_stacked=ps)
+        good = got == exp
+        ok &= good
+        if not good:
+            print(f"  [BAD] via_class_for_span({lf},{lt},{n!r},prefer_stacked={ps}) "
+                  f"= {got!r}, expected {exp!r}")
+    print(f"  [{'OK' if ok else 'BAD'}] (L2) classifier: stacked class "
+          f"returned for F↔In2 + WL + prefer_stacked; blind default preserved")
+    return ok
+
+
+def test_lever_L_classifier_negative():
+    """(L3) F↔In2 + non-WL net at HDI cell = REFUSED (None) — no
+    fall-through to through-via (v6/v7 shorts lesson preserved)."""
+    cases = [
+        ("FOOBAR_CH1", True),
+        ("BSTB", True),
+        ("GLA_CH1", True),
+        ("KILL_RAIL_N", True),
+        ("KILL_RAIL_N_CH2", True),
+        ("FOOBAR_CH1", False),
+        ("GLC_CH1", False),
+    ]
+    ok = True
+    for (n, ps) in cases:
+        got = via_class_for_span(F_CU, IN2_CU, n, is_hdi_cell=True,
+                                  prefer_stacked=ps)
+        good = got is None
+        ok &= good
+        if not good:
+            print(f"  [BAD] via_class_for_span(F,In2,{n!r},prefer_stacked={ps}) "
+                  f"= {got!r}, expected None (REFUSED — no through fall-through)")
+    print(f"  [{'OK' if ok else 'BAD'}] (L3) classifier: F↔In2 + non-WL = REFUSED")
+    return ok
+
+
+def _emit_stacked(board, net_name, x_mm, y_mm):
+    """Call emit_to_board for ONE stacked microvia at (x_mm, y_mm) on
+    `net_name` (whitelist-eligible). Returns (legs_added, exception_str)
+    where legs_added is the list of PCB_VIAs added (expect 2 legs)."""
+    net_obj = _ensure_net(board, net_name)
+    grid = SyntheticGrid(is_hdi=True)
+    segments = []
+    vias = [(x_mm, y_mm)]
+    # Drive the stacked class via the v8 emitter — uses via_class_for_span
+    # with the F.Cu↔In2.Cu span. We must thread prefer_stacked through the
+    # classifier (the emitter calls via_class_for_span internally without
+    # prefer_stacked). For the LEVER L emit test we shim the classifier by
+    # monkey-patching emit_to_board's resolver to prefer_stacked=True for
+    # the duration of this call — done by temporarily replacing
+    # rsc.via_class_for_span with a partial-applied version.
+    via_target_layers = {(round(x_mm, 3), round(y_mm, 3)): (F_CU, IN2_CU)}
+    added = []
+    orig_via_class_for_span = rsc.via_class_for_span
+    def _vcs_prefer_stacked(L_from, L_to, net_name, is_hdi_cell, **kwargs):
+        return orig_via_class_for_span(L_from, L_to, net_name,
+                                        is_hdi_cell=is_hdi_cell,
+                                        prefer_stacked=True, **kwargs)
+    rsc.via_class_for_span = _vcs_prefer_stacked
+    try:
+        emit_to_board(board, segments, vias, net_obj, width_mm=0.15,
+                       added_items=added,
+                       hdi_via_cells=grid.hdi_via_cells, grid=grid,
+                       via_target_layers=via_target_layers)
+    except ValueError as e:
+        rsc.via_class_for_span = orig_via_class_for_span
+        return None, str(e)
+    finally:
+        rsc.via_class_for_span = orig_via_class_for_span
+    legs = [it for it in added if isinstance(it, pcbnew.PCB_VIA)]
+    return legs, None
+
+
+def test_lever_L_emit_stacked_pair():
+    """(L4) emit on a whitelist net produces TWO MICROVIA legs at same XY
+    spanning (F.Cu, In1.Cu) + (In1.Cu, In2.Cu), drill 0.10mm + pad 0.25mm
+    each, on the bound net."""
+    board = pcbnew.LoadBoard(str(PLACED_BOARD))
+    legs, err = _emit_stacked(board, "BSTB_CH1", x_mm=26.137, y_mm=61.770)
+    if err:
+        print(f"  [BAD] (L4) stacked emit raised: {err}")
+        return False
+    if legs is None or len(legs) != 2:
+        print(f"  [BAD] (L4) expected 2 legs, got {len(legs) if legs else 0}")
+        return False
+    layer_pairs = sorted([tuple(sorted((l.TopLayer(), l.BottomLayer())))
+                          for l in legs])
+    expected_pairs = sorted([tuple(sorted((F_CU, IN1_CU))),
+                              tuple(sorted((IN1_CU, IN2_CU)))])
+    ok_pairs = layer_pairs == expected_pairs
+    ok_types = all(l.GetViaType() == pcbnew.VIATYPE_MICROVIA for l in legs)
+    ok_drill = all(abs(l.GetDrill() / 1e6 - STACKED_MICROVIA_DRILL_MM) < 1e-6
+                   for l in legs)
+    # pad: read width on the top layer of each leg.
+    pads_ok = True
+    for l in legs:
+        try:
+            pad_mm = l.GetWidth(l.TopLayer()) / 1e6
+        except TypeError:
+            pad_mm = l.GetWidth() / 1e6
+        if abs(pad_mm - STACKED_MICROVIA_DIAM_MM) > 1e-6:
+            pads_ok = False
+    ok = ok_pairs and ok_types and ok_drill and pads_ok
+    print(f"  [{'OK' if ok else 'BAD'}] (L4) STACKED emit (BSTB_CH1 @ J19.17): "
+          f"2 MICROVIA legs, layer_pairs={layer_pairs}, "
+          f"types={[l.GetViaType() for l in legs]} "
+          f"(expected {pcbnew.VIATYPE_MICROVIA} × 2), drill+pad ok")
+    return ok
+
+
+def test_lever_L_emit_all_8_landings():
+    """(L5) all 8 sanctioned (net, pin) landings emit stacked correctly."""
+    cases = [
+        ("BSTB_CH1",        "J19.17", 26.137, 61.770),
+        ("PWM_INHB_CH1",    "J18.19", 34.188, 66.750),
+        ("SWDIO_CH1",       "J18.23", 34.188, 64.750),
+        ("PWM_INLA_CH1",    "J18.15", 33.000, 68.438),
+        ("PWM_INHB_CH1",    "J19.23", 23.450, 60.582),
+        ("PWM_INLA_CH1",    "J19.1",  22.262, 61.270),
+        ("GLB_CH1",         "J19.10", 24.450, 64.457),
+        ("KILL_RAIL_N_CH1", "J19.8",  23.450, 64.457),
+    ]
+    ok = True
+    breakdown = []
+    for (net, pad_label, x, y) in cases:
+        board = pcbnew.LoadBoard(str(PLACED_BOARD))
+        legs, err = _emit_stacked(board, net, x, y)
+        if err or legs is None or len(legs) != 2:
+            ok = False
+            breakdown.append(f"{net}@{pad_label}: FAIL "
+                             f"({err or f'{len(legs) if legs else 0} legs'})")
+            continue
+        # Both legs must be MICROVIA, drill 0.10, pad 0.25, layer-pair set
+        # is {(F,In1), (In1,In2)}.
+        layer_pairs = sorted([tuple(sorted((l.TopLayer(), l.BottomLayer())))
+                              for l in legs])
+        expected_pairs = sorted([tuple(sorted((F_CU, IN1_CU))),
+                                  tuple(sorted((IN1_CU, IN2_CU)))])
+        good = (layer_pairs == expected_pairs and
+                all(l.GetViaType() == pcbnew.VIATYPE_MICROVIA for l in legs))
+        ok &= good
+        breakdown.append(f"{net}@{pad_label}: legs={len(legs)} "
+                         f"layer_pairs={layer_pairs} "
+                         f"{'OK' if good else 'BAD'}")
+    print(f"  [{'OK' if ok else 'BAD'}] (L5) ALL 8 SANCTIONED LANDINGS emit "
+          f"STACKED MICROVIA F.Cu↔In1↔In2 (2 legs × 8 pins = 16 microvias):")
+    for line in breakdown:
+        print(f"      {line}")
+    return ok
+
+
+def test_lever_L_halo_and_span():
+    """(L6) per-class halo / span / diam helpers all return LEVER L geometry."""
+    # via_diam_mm_for_class
+    got_diam = via_diam_mm_for_class('stacked_microvia_F_In1_In2')
+    ok_diam = abs(got_diam - STACKED_MICROVIA_DIAM_MM) < 1e-9
+    # via_halo_radius_mm — per-leg formula matches microvia halo (same diam)
+    expected_halo = (STACKED_MICROVIA_DIAM_MM / 2 + CLEARANCE_MM
+                     + TRACE_HALF_MM + GRID_SLOP_MM)
+    got_halo = via_halo_radius_mm('stacked_microvia_F_In1_In2')
+    ok_halo = abs(got_halo - expected_halo) < 1e-9
+    # via_pad_half_mm_for_class — matches STACKED_MICROVIA_HALF_MM constant
+    got_pad_half = via_pad_half_mm_for_class('stacked_microvia_F_In1_In2')
+    ok_pad_half = abs(got_pad_half - STACKED_MICROVIA_HALF_MM) < 1e-9
+    # via_span_layers — F.Cu / In1 / In2 (same as blind_F_In2)
+    got_span = via_span_layers('stacked_microvia_F_In1_In2')
+    ok_span = got_span == STACKED_MICROVIA_SPAN
+    ok = ok_diam and ok_halo and ok_pad_half and ok_span
+    print(f"  [{'OK' if ok else 'BAD'}] (L6) per-class helpers: "
+          f"diam={got_diam}mm (exp {STACKED_MICROVIA_DIAM_MM}), "
+          f"halo={got_halo:.3f}mm (exp {expected_halo:.3f}), "
+          f"pad_half={got_pad_half}mm (exp {STACKED_MICROVIA_HALF_MM}), "
+          f"span={got_span} (exp {STACKED_MICROVIA_SPAN})")
+    return ok
+
+
+# ─── v11 (CH1 30/30 lever K1 + K2) tests ──────────────────────────────────
+#
+# K1: adjacent-HDI pad-edge clearance vs FoS target.
+# K2: per-leaf MST rejoin retries + provenance.
+#
+# These tests verify the v11 patches at the API level (no full board route).
+# K1 tests exercise the hdi_via_blocked_geom pad-edge path; K2 tests exercise
+# is_compatible_hdi_via + MST_LEAF_RETRY_CAP + the partial-MST provenance
+# helper.
+
+def test_lever_K1_compat_helper():
+    """(K1a) is_compatible_hdi_via classifies the 4 sanctioned classes
+    correctly: blind_F_In2 and the two microvia classes are compatible
+    (known pad geometry); through is NOT compatible (falls through to the
+    existing halo path — shorts-gate intact). None / unknown class is also
+    NOT compatible.
+    """
+    cases = [
+        ("microvia_F_In1", True),
+        ("microvia_B_In8", True),
+        ("blind_F_In2",   True),
+        ("through",       False),
+        (None,            False),
+        ("garbage",       False),
+    ]
+    ok = True
+    for cls, expected in cases:
+        got = rsc.is_compatible_hdi_via(cls)
+        good = (got == expected)
+        ok &= good
+        print(f"  [{'OK' if good else 'BAD'}] (K1a) is_compatible_hdi_via"
+              f"({cls!r}) = {got} (expected {expected})")
+    return ok
+
+
+def test_lever_K1_pad_edge_accept_at_fos():
+    """(K1b) hdi_via_blocked_geom ACCEPTS a blind_F_In2 candidate vs an
+    adjacent blind_F_In2 foreign via at 0.5mm pitch (pad-edge = 0.20mm =
+    FoS target). Pre-K1 halo refused this case; K1 accepts at the
+    boundary.
+
+    Distance setup:
+       foreign  pad_half = 0.15 (blind_F_In2)
+       candidate pad_half = 0.15 (blind_F_In2)
+       D = 0.50mm  → pad_edge = 0.50 − 0.15 − 0.15 = 0.20mm = CLEARANCE_MM
+       Pre-K1 halo required = 0.15 + 0.15 + 0.20 = 0.50mm; at D=0.50−1e-3
+       pre-K1 would refuse (off by 1e-3 grid slop epsilon).
+       K1 path: pad_edge_clearance ≥ FoS target → ACCEPT.
+    """
+    fx, fy = 20.0, 70.0
+    cand_x, cand_y = fx + 0.50, fy
+    _, router, _ = _build_synthetic_state_with_foreign_via(
+        foreign_diam_mm=BLIND_F_IN2_DIAM_MM, foreign_xy=(fx, fy))
+    g = router.grid
+    ci, cj = g.xy_to_ij(cand_x, cand_y)
+    span = list(rsc.via_span_layers('blind_F_In2'))
+    blk, reason = g.hdi_via_blocked_geom(
+        ci, cj, netname="BSTB_CH1", span_layers=span,
+        via_class='blind_F_In2')
+    ok = (not blk)
+    print(f"  [{'OK' if ok else 'BAD'}] (K1b) blind_F_In2 cand vs adjacent "
+          f"blind_F_In2 foreign at 0.5mm pitch: blocked={blk} reason={reason!r} "
+          f"(pad-edge=0.20mm = FoS target; K1 ACCEPT)")
+    return ok
+
+
+def test_lever_K1_pad_edge_refuse_below_fos():
+    """(K1c) hdi_via_blocked_geom REFUSES when pad-edge clearance falls
+    BELOW the FoS target — proves K1 enforces the §5c 'no cut-to-cut' bound
+    strictly (no silent relaxation past the target).
+
+    Distance setup: foreign 0.30 + candidate 0.30 at D = 0.40mm:
+       pad_edge = 0.40 − 0.15 − 0.15 = 0.10mm < FoS target 0.20mm → REFUSE.
+    """
+    fx, fy = 20.0, 70.0
+    cand_x, cand_y = fx + 0.40, fy
+    _, router, _ = _build_synthetic_state_with_foreign_via(
+        foreign_diam_mm=BLIND_F_IN2_DIAM_MM, foreign_xy=(fx, fy))
+    g = router.grid
+    ci, cj = g.xy_to_ij(cand_x, cand_y)
+    span = list(rsc.via_span_layers('blind_F_In2'))
+    blk, reason = g.hdi_via_blocked_geom(
+        ci, cj, netname="BSTB_CH1", span_layers=span,
+        via_class='blind_F_In2')
+    ok = blk
+    print(f"  [{'OK' if ok else 'BAD'}] (K1c) blind_F_In2 cand vs blind_F_In2 "
+          f"foreign at D=0.40mm: blocked={blk} reason={reason!r} "
+          f"(pad-edge=0.10mm < FoS 0.20mm; K1 REFUSE — strict bound)")
+    return ok
+
+
+def test_lever_K1_through_unchanged():
+    """(K1d) K1 must NOT relax through-via clearances. A through-via
+    candidate vs an adjacent 0.5mm-pitch HDI foreign still goes through
+    the existing halo-overlap rule (which correctly refuses; through is
+    incompatible per is_compatible_hdi_via).
+
+    This is the shorts-gate integrity test: K1 only loosens for KNOWN-
+    geometry HDI classes; through-vias keep the conservative halo.
+    """
+    fx, fy = 20.0, 70.0
+    cand_x, cand_y = fx + 0.50, fy
+    _, router, _ = _build_synthetic_state_with_foreign_via(
+        foreign_diam_mm=BLIND_F_IN2_DIAM_MM, foreign_xy=(fx, fy))
+    g = router.grid
+    ci, cj = g.xy_to_ij(cand_x, cand_y)
+    span = list(rsc.ALL_COPPER_LAYERS)
+    blk, reason = g.hdi_via_blocked_geom(
+        ci, cj, netname="BSTB_CH1", span_layers=span,
+        via_class='through')
+    # Through candidate (pad_half=0.30) vs blind foreign (diam=0.30):
+    # required = 0.30/2 + 0.30 + 0.20 = 0.65mm; D=0.50 < 0.65 → REFUSE.
+    # K1 does NOT loosen this (candidate_class=through not compatible).
+    ok = blk
+    print(f"  [{'OK' if ok else 'BAD'}] (K1d) THROUGH cand vs blind_F_In2 "
+          f"foreign at D=0.50mm: blocked={blk} reason={reason!r} "
+          f"(K1 unchanged for through — shorts-gate intact)")
+    return ok
+
+
+def test_lever_K2_retry_cap_constant():
+    """(K2a) MST_LEAF_RETRY_CAP is exposed as a module constant and == 3.
+    SSoT discipline — the audit (audit_partial_mst_provenance.py) reads
+    this value as the cascade bound; a drift would silently weaken the
+    bound.
+    """
+    cap = rsc.MST_LEAF_RETRY_CAP
+    ok = (cap == 3)
+    print(f"  [{'OK' if ok else 'BAD'}] (K2a) MST_LEAF_RETRY_CAP = {cap} "
+          f"(expected 3 — cascade bound SSoT)")
+    return ok
+
+
+def test_lever_K2_provenance_dir_constant():
+    """(K2b) PARTIAL_MST_PROVENANCE_DIR_REL is exposed and matches the
+    audit's expected path. SSoT — the audit reads from the same dir.
+    """
+    expected = "sims/routing_provenance/partial_mst"
+    got = rsc.PARTIAL_MST_PROVENANCE_DIR_REL
+    ok = (got == expected)
+    print(f"  [{'OK' if ok else 'BAD'}] (K2b) PARTIAL_MST_PROVENANCE_DIR_REL "
+          f"= {got!r} (expected {expected!r})")
+    return ok
+
+
+def test_lever_K2_provenance_writer_round_trip():
+    """(K2c) flush_partial_mst_provenance() writes a JSON file with the
+    expected schema; audit_partial_mst_provenance.audit() loads it and
+    PASSES (correct schema → no R40 violation). Round-trip proves the
+    writer + audit are in lock-step.
+    """
+    import tempfile
+    import audit_partial_mst_provenance as aud
+    # Stand up a minimal router-like object with the writer methods.
+    class _Stub:
+        pass
+    stub = _Stub()
+    # Call the unbound functions with stub as the explicit self —
+    # avoids the descriptor double-binding bug.
+    rsc.CooperativeRouter._record_partial_mst(
+        stub, "KILL_RAIL_K2_TEST",
+        # pad_info: tuples in the (ref, padname, x, y, cells, layers, sx, sy) shape
+        # (or compatible — the writer only needs ref+padname).
+        [("D38", "2", 0.0, 0.0, set(), [], 0.5, 0.5),
+         ("R76", "2", 2.0, 0.0, set(), [], 0.5, 0.5),
+         ("D37", "2", 4.0, 0.0, set(), [], 0.5, 0.5),
+         ("J19", "8", 2.0, 2.0, set(), [], 0.5, 0.5)],
+        routed_paths=[[(0, 0, 0)], [(1, 0, 0)]],
+        failed_pairs=[("J19.8", "D38.2")],
+        retries_per_leaf={0: 1, 1: 1, 2: 3},
+        failed_pair_pads={("J19.8", "D38.2"): (2.0, 2.0, 0.0, 0.0)},
+    )
+    # Use a temp dir as the repo root so we don't pollute real sims/.
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        written = rsc.CooperativeRouter.flush_partial_mst_provenance(
+            stub, repo_root=td_path, board_sha="abc123def456")
+        # Verify the file exists + audit passes
+        ok_written = len(written) == 1 and Path(written[0]).exists()
+        rc = aud.audit(td_path, verbose=False)
+        ok_audit = (rc == 0)
+        # Also verify the file contents — schema
+        if ok_written:
+            import json as _json
+            content = _json.loads(Path(written[0]).read_text())
+            ok_schema = (
+                content.get("schema_version") == 1
+                and content.get("netname") == "KILL_RAIL_K2_TEST"
+                and isinstance(content.get("retries_per_leaf"), dict)
+                and content["retries_per_leaf"].get("2") == 3
+                and isinstance(content.get("failed_pad_pairs"), list)
+                and content["failed_pad_pairs"][0] == ["J19.8", "D38.2"]
+            )
+        else:
+            ok_schema = False
+    ok = ok_written and ok_audit and ok_schema
+    print(f"  [{'OK' if ok else 'BAD'}] (K2c) provenance round-trip: "
+          f"written={ok_written} audit_pass={ok_audit} schema_ok={ok_schema}")
+    return ok
+
+
+def test_lever_K2_provenance_audit_rejects_over_cap():
+    """(K2d) audit_partial_mst_provenance REJECTS an entry whose
+    retries_per_leaf exceeds the cap (the synthetic "skip-cap LIAR").
+    Verifies R40 cascade bound is ENFORCED by the audit, not just
+    documented.
+    """
+    import tempfile, json as _json
+    import audit_partial_mst_provenance as aud
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        d = td_path / "sims/routing_provenance/partial_mst"
+        d.mkdir(parents=True, exist_ok=True)
+        # Synthetic over-cap entry — retry = 5 > cap 3
+        (d / "abc_KILL_RAIL_OVERCAP.json").write_text(_json.dumps({
+            "schema_version": 1,
+            "netname": "KILL_RAIL_OVERCAP",
+            "timestamp_iso": "2026-05-28T00:00:00+00:00",
+            "board_sha": "abc",
+            "pad_refs": ["A.1", "B.1", "C.1"],
+            "routed_edges": 1,
+            "failed_pad_pairs": [["A.1", "B.1"]],
+            "retries_per_leaf": {"0": 5},   # > cap 3 — the LIE
+            "reason": "synthetic over-cap liar",
+        }))
+        rc = aud.audit(td_path, verbose=False)
+    # Audit MUST FAIL (rc != 0) on the over-cap entry.
+    ok = (rc != 0)
+    print(f"  [{'OK' if ok else 'BAD'}] (K2d) audit rejects synthetic "
+          f"over-cap entry (retry=5 > cap=3): rc={rc} "
+          f"({'PASS' if ok else 'FAIL — audit missed the violation'})")
+    return ok
+
+
 def main():
     if not PLACED_BOARD.exists():
         print(f"FAIL: board {PLACED_BOARD} not found")
@@ -854,6 +1322,10 @@ def main():
     print("test_emit_blind_f_in2 — synthetic OQ-020 EMITTER patch (v8)")
     print("                       + v9 per-via-class halo radius (CH1 30/30 F)")
     print("                       + v10 foreign-via actual-diam (CH1 30/30 I)")
+    print("                       + v11 LEVER L stacked microvia (CH1 30/30 L)")
+    print("                       + v11 adjacent-HDI pad-edge K1 +")
+    print("                             MST completion + provenance K2")
+    print("                             (CH1 30/30 K1+K2 this PR)")
     print(f"  board: {PLACED_BOARD}")
     print(f"  audit: {HERE / 'audit_hdi_via_in_pad.py'}")
     print("=" * 72)
@@ -887,6 +1359,37 @@ def main():
                     test_lever_I_hdi_geom_accepts_legit_microvia()))
     results.append(("(I3) hdi_geom refuses real through short (shorts-gate intact)",
                     test_lever_I_hdi_geom_refuses_real_through_short()))
+    # LEVER L (CH1 30/30) stacked microvia F↔In1↔In2 — 6 new tests.
+    results.append(("(L1) SSoT: stacked whitelist == audit",
+                    test_lever_L_ssoT()))
+    results.append(("(L2) classifier returns stacked class",
+                    test_lever_L_classifier_stacked_class()))
+    results.append(("(L3) classifier refuses non-WL (no through fall-through)",
+                    test_lever_L_classifier_negative()))
+    results.append(("(L4) emit stacked pair (2 MICROVIA legs)",
+                    test_lever_L_emit_stacked_pair()))
+    results.append(("(L5) ALL 8 sanctioned landings emit stacked",
+                    test_lever_L_emit_all_8_landings()))
+    results.append(("(L6) per-class halo/span/diam helpers (SSoT)",
+                    test_lever_L_halo_and_span()))
+    # v11 (CH1 30/30 K1) adjacent-HDI pad-edge clearance tests.
+    results.append(("(K1a) is_compatible_hdi_via helper",
+                    test_lever_K1_compat_helper()))
+    results.append(("(K1b) pad-edge ACCEPT at FoS target",
+                    test_lever_K1_pad_edge_accept_at_fos()))
+    results.append(("(K1c) pad-edge REFUSE below FoS target",
+                    test_lever_K1_pad_edge_refuse_below_fos()))
+    results.append(("(K1d) through-via unchanged (shorts-gate intact)",
+                    test_lever_K1_through_unchanged()))
+    # v11 (CH1 30/30 K2) MST completion + provenance tests.
+    results.append(("(K2a) MST_LEAF_RETRY_CAP SSoT constant",
+                    test_lever_K2_retry_cap_constant()))
+    results.append(("(K2b) PARTIAL_MST_PROVENANCE_DIR_REL SSoT constant",
+                    test_lever_K2_provenance_dir_constant()))
+    results.append(("(K2c) provenance writer + audit round-trip",
+                    test_lever_K2_provenance_writer_round_trip()))
+    results.append(("(K2d) audit rejects over-cap entry (LIAR)",
+                    test_lever_K2_provenance_audit_rejects_over_cap()))
     print("=" * 72)
     n_pass = sum(1 for (_, p) in results if p)
     n = len(results)
@@ -894,7 +1397,10 @@ def main():
         print(f"  {'PASS' if p else 'FAIL'}: {name}")
     print("=" * 72)
     if n_pass == n:
-        print(f"RESULT: PASS — {n_pass}/{n} tests pass; OQ-020 EMITTER (v8 + "
+        print(f"RESULT: PASS — {n_pass}/{n} tests pass; LEVER L (CH1 30/30 "
+              f"stacked microvia F↔In1↔In2): SSoT discipline + classifier + "
+              f"REFUSE-non-WL + 2-leg emit + 8-landing emit + per-class halo "
+              f"all green. OQ-020 EMITTER (v8 + "
               f"2026-05-28 lever D + 2026-05-28 lever G) correctly emits "
               f"BLIND_BURIED F.Cu↔In2 for all 6 whitelist nets at all 8 "
               f"sanctioned landings, REFUSES non-whitelist spans, preserves "

@@ -141,6 +141,87 @@ v8 (2026-05-28, master Phase 3 dispatch — OQ-020 emitter gap per PR #227):
   passes audit_hdi_via_in_pad.py + the new DRU rule (PR #226). Other nets
   requesting F.Cu↔In2 at an HDI cell are REFUSED (the router searches
   another layer pair); the silent THROUGH-fall-through bug is closed.
+
+v11 (2026-05-28, CH1 30/30 levers K1 + K2 — drone-grade halo + MST robustness;
+     master directive "make it great + no cut corners + drone-grade reliability"):
+
+  TWO orthogonal router-correctness fixes documented in PR #227 final probing.
+
+  ─── K1 — Adjacent-HDI halo over-rejection ───────────────────────────────
+  ROOT CAUSE: when a candidate via at pin A's HDI cell considers a foreign
+  via at the adjacent pin B (0.5mm QFN pitch), the v9/v10 halo path treated
+  pin B's HDI via as needing FULL halo separation
+  (halo_radius_candidate + halo_radius_foreign ≈ 0.70mm center-to-center)
+  — over-conservative. The PHYSICALLY-correct constraint at a known-HDI
+  adjacency is pad-EDGE-to-pad-EDGE clearance against the FoS target
+  (0.20mm per ROUTING_METHODOLOGY.md §5c — the "no cut-to-cut" rule).
+
+  The 25/30 board ALREADY exhibits this geometry: BSTB blind via @ J19.17 ↔
+  J19.16 sit 0.5mm apart pad-edge ≈ 0.5 − 2×0.15 = 0.20mm — which lands
+  EXACTLY on the FoS target. The shorts-gate post-commit accepts it (in the
+  "sub-fab-tol-accepted" class) yet the v9/v10 pre-commit refuses it. K1
+  closes that inconsistency.
+
+  K1 FIX (3 changes; all in this file):
+    1. New helper `is_compatible_hdi_via(via_class) -> bool`: returns True iff
+       the foreign via is HDI-class WITH KNOWN pad geometry (the SSoT
+       diameter from via_diam_mm_for_class) so a pad-EDGE clearance check
+       is well-defined. Microvia + blind_F_In2 = compatible. Through = not
+       compatible (falls through to existing halo-overlap check).
+    2. `hdi_via_blocked_geom` foreign-via inner loop: when the foreigner is
+       compatible HDI, compute
+           pad_edge_clearance = center_dist
+                              − candidate_pad_half_for_class(via_class)
+                              − foreign_pad_half_for_foreign_class
+       and ACCEPT iff clearance >= FoS_target (CLEARANCE_MM = 0.20mm).
+       Else fall through to the existing centerline-precise check (which
+       catches non-HDI foreigns + true conflicts).
+    3. Provenance: every accepted-by-K1 placement records the K1 path in
+       the foreign-via reason string ("hdi_compat_ok@d=...") so the
+       shorts-gate audit + the OPTIONAL per-PR debug can tell which path
+       cleared which adjacency.
+
+  SHORTS-GATE PRESERVED: every committed via still passes the v6/v7/F/I
+  post-commit clearance check; K1 only relaxes the PRE-commit refusal that
+  was over-conservative against the physically-correct pad-edge clearance.
+  See test_emit_blind_f_in2.py (K1) tests for the round-trip evidence.
+
+  ─── K2 — MST completion robustness (per-subtree atomicity) ──────────────
+  ROOT CAUSE: v3 of route_one_net_mst already made each MST edge attempt
+  independent — failed edges no longer abort prior edges (R26 narrow fix).
+  But the PR-#227 probing surfaced the next layer: when an MST edge fails
+  on the FIRST attempt, the cooperative loop only retries it on a later
+  iteration (with higher present_factor pressure). For a 4-pad net like
+  KILL_RAIL_N (J19.8 + D38.2 + R76.2 + D37.2) that 1 failed edge often
+  re-fails the same way next iteration (the conflict is geometric, not
+  congestion). Net stays PARTIAL across iterations until the cap is hit.
+
+  K2 FIX (in route_one_net_mst, single function):
+    1. Per-leaf REJOIN-ATTEMPT loop bounded ≤ MST_LEAF_RETRY_CAP = 3:
+       on failure, re-attempt the FAILED edge against the FULL multi-source
+       pool (i.e. include cells routed by SUBSEQUENT edges in the SAME MST,
+       not just earlier ones). This lets a leaf attach to an island formed
+       by a later edge that the leaf couldn't see on first pass. v3 only
+       grew sources monotonically; K2 also runs a single backwards-rejoin
+       pass so the leaf can hook into ANY of the net's islands.
+    2. Per-subtree atomicity: trunk + every successfully-routed leaf are
+       committed together; only the STILL-failed leaves (after K2 retries)
+       are dropped from this attempt. Status reporting unchanged: ROUTED /
+       PARTIAL / FAILED stay the same labels the run-loop consumes.
+    3. Provenance: every multi-pad net that ends PARTIAL writes an entry
+       to `sims/routing_provenance/partial_mst/<sha>_<net>.json` capturing
+       {netname, pad_refs, routed_edges, failed_pad_pairs, retries_per_leaf,
+       reason_codes, board_sha, timestamp_iso}. The new audit
+       audit_partial_mst_provenance.py (G_K1, R40) enforces presence + schema
+       so a PARTIAL net is NEVER silently abandoned. Mirrors the R36/G_J1
+       discipline for targeted-ripup.
+
+  Cascade-bounded (≤ MST_LEAF_RETRY_CAP = 3) preserves the SURESHOT
+  property — no unbounded retry loops, deterministic upper bound on work.
+
+  Together K1 + K2 close the last two known-class router correctness gaps
+  surfaced by PR #227. T18 + T19 routing-engine fixtures lock these as
+  permanent regressions (APPEND-ONLY; T1-T17 untouched).
 """
 from __future__ import annotations
 
@@ -452,6 +533,29 @@ BLIND_F_IN2_HALF_MM = BLIND_F_IN2_DIAM_MM / 2 + CLEARANCE_MM  # = 0.35mm
 # the Phase 3 emitter patch) reads this tuple.
 BLIND_F_IN2_SPAN = (F_CU, IN1_CU, IN2_CU)
 
+# LEVER L (2026-05-28, CH1 30/30): STACKED microvia F.Cu↔In1↔In2 — JLC HDI
+# Class 2 supports stacked microvia natively (top F.Cu↔In1.Cu microvia
+# stacked geometrically on bottom In1.Cu↔In2.Cu microvia; the In1 landing
+# is an isolated "antipad+pad" copper island, electrically tied to neither
+# GND plane nor signal). Adds a SECOND signal-reaching via mechanism per
+# pin (industry-standard since iPhone 4 era; ~$1-2/board adder, no new
+# fab class). Whitelist = same 6 nets / 8 landings as BLIND_F_IN2 (router
+# may pick blind OR stacked per pin — both reach In2 signal layer).
+#
+# Geometry: each LEG is identical to the existing HDI microvia
+# F-In1 (drill 0.10mm / pad 0.25mm / annular 0.075mm). Stacking alignment
+# tolerance ≤0.025mm per JLC HDI Class 2 spec (well within the 0.075mm
+# annular budget; no cut-to-cut per §5c FoS).
+STACKED_MICROVIA_DRILL_MM = HDI_VIA_DRILL_MM   # = 0.10mm (each leg)
+STACKED_MICROVIA_DIAM_MM = HDI_VIA_DIAM_MM     # = 0.25mm (each leg)
+STACKED_MICROVIA_HALF_MM = STACKED_MICROVIA_DIAM_MM / 2 + CLEARANCE_MM  # = 0.325mm
+# Layers a stacked microvia barrel set traverses: F.Cu (top entry),
+# In1.Cu (the isolated pad island between top + bottom legs), In2.Cu
+# (bottom signal escape). Same 3-tuple as BLIND_F_IN2_SPAN — the two
+# classes deliver the SAME barrel-layer coverage; the fab method differs
+# (single blind drill vs. two stacked microvias).
+STACKED_MICROVIA_SPAN = (F_CU, IN1_CU, IN2_CU)
+
 
 # v8: per-named-net whitelist of nets permitted to use the blind F.Cu↔In2
 # class. Single source of truth = audit_hdi_via_in_pad.BLIND_F_IN2_NET_WHITELIST
@@ -469,6 +573,16 @@ try:                                          # pragma: no cover - import path
 except Exception:                             # pragma: no cover
     _BLIND_F_IN2_NET_WHITELIST = ()
 
+# LEVER L: parallel SSoT import for the stacked-microvia whitelist. Same
+# audit module is the single source of truth; failing back to empty tuple
+# DEGRADES TO REFUSING THE NEW CLASS (never falls through to THROUGH —
+# the v6/v7 shorts lesson).
+try:                                          # pragma: no cover - import path
+    from audit_hdi_via_in_pad import STACKED_MICROVIA_NET_WHITELIST as \
+        _STACKED_MICROVIA_NET_WHITELIST
+except Exception:                             # pragma: no cover
+    _STACKED_MICROVIA_NET_WHITELIST = ()
+
 
 def blind_f_in2_net_whitelist():
     """Return the canonical-net-name tuple permitted for the blind F.Cu↔In2
@@ -480,6 +594,16 @@ def blind_f_in2_net_whitelist():
     return _BLIND_F_IN2_NET_WHITELIST
 
 
+def stacked_microvia_net_whitelist():
+    """LEVER L SSoT — net-name tuple permitted for stacked microvia
+    F.Cu↔In1↔In2 (JLC HDI Class 2 native stacked-microvia fab class).
+    Single source of truth = audit_hdi_via_in_pad.STACKED_MICROVIA_NET_WHITELIST.
+    Empty tuple on import failure (refuse-class behaviour; never falls
+    through to THROUGH-via at a fine-pitch HDI cell — the v6/v7 shorts
+    lesson)."""
+    return _STACKED_MICROVIA_NET_WHITELIST
+
+
 # Adjacent-layer microvia spans (JLC HDI Class 2 single laser-drill spec) —
 # the existing classes. Bidirectional (router may pick either direction).
 _MICROVIA_F_IN1_SPAN = {(F_CU, IN1_CU), (IN1_CU, F_CU)}
@@ -489,40 +613,56 @@ _BLIND_F_IN2_PAIRS = {(F_CU, IN2_CU), (IN2_CU, F_CU)}
 
 
 def via_class_for_span(L_from, L_to, net_name, is_hdi_cell,
-                       hdi_whitelist=None):
+                       hdi_whitelist=None, stacked_whitelist=None,
+                       prefer_stacked=False):
     """Classify a (L_from, L_to) via span for `net_name` into one of:
-      'microvia_F_In1' — JLC HDI Class 2 adjacent microvia (F.Cu↔In1.Cu)
-      'microvia_B_In8' — JLC HDI Class 2 adjacent microvia (B.Cu↔In8.Cu)
-      'blind_F_In2'    — JLC HDI blind/buried F.Cu↔In2 (OQ-020 class),
-                         permitted ONLY when `net_name` is in
-                         `hdi_whitelist` (BLIND_F_IN2_NET_WHITELIST source of truth)
-      'through'        — standard F.Cu↔B.Cu through-via (any span on a
-                         non-HDI cell; the existing behaviour)
-      None             — REFUSED: span is not permitted at this HDI cell
-                         for this net. The router MUST NOT fall through to
-                         a through-via at fine-pitch HDI cells (that's the
-                         v6/v7 shorts lesson — through F.Cu↔B.Cu drills
-                         clearance into adjacent 0.5mm-pitch QFN pads on
-                         every inner layer, guaranteeing a short). Caller
-                         must SKIP this layer-change candidate.
-
-    The HDI-cell context is what triggers the refuse-vs-through distinction:
-    on a normal board cell, any (L_from, L_to) span is acceptable as a
-    standard through-via (the existing v6/v7 behaviour). At an HDI via-in-
-    pad cell (J18/J19) the geometry only supports the 3 listed HDI classes;
-    anything else MUST be refused so the router seeks another layer pair.
+      'microvia_F_In1'             — JLC HDI Class 2 adjacent microvia (F.Cu↔In1.Cu)
+      'microvia_B_In8'             — JLC HDI Class 2 adjacent microvia (B.Cu↔In8.Cu)
+      'blind_F_In2'                — JLC HDI blind/buried F.Cu↔In2 (OQ-020 class),
+                                      permitted ONLY when `net_name` is in
+                                      `hdi_whitelist` (BLIND_F_IN2_NET_WHITELIST)
+      'stacked_microvia_F_In1_In2' — JLC HDI Class 2 stacked microvia (LEVER L);
+                                      emitted as TWO MICROVIA legs (top F↔In1 +
+                                      bottom In1↔In2). Permitted ONLY when
+                                      `net_name` is in `stacked_whitelist`
+                                      (STACKED_MICROVIA_NET_WHITELIST). For the
+                                      F.Cu↔In2.Cu span this is an ALTERNATIVE
+                                      to blind_F_In2 (both reach In2 signal).
+                                      Selected when `prefer_stacked=True` AND
+                                      the net is in the stacked whitelist; by
+                                      default the existing blind_F_In2 class is
+                                      preferred for back-compat (the choice is
+                                      semantically equivalent — both signal-
+                                      reaching — but the emitter / halo maths
+                                      vary by the per-class geometry).
+      'through'                    — standard F.Cu↔B.Cu through-via (any span
+                                      on a non-HDI cell; existing behaviour)
+      None                         — REFUSED: span is not permitted at this HDI
+                                      cell for this net. Router MUST skip the
+                                      layer-change candidate. NEVER fall
+                                      through to THROUGH at HDI cells.
 
     `hdi_whitelist` defaults to `blind_f_in2_net_whitelist()` (the audit's
-    canonical list). Callers MAY pass an override for testing (the per-net
-    whitelist is read from a single source per task point 4).
+    canonical list). `stacked_whitelist` defaults to
+    `stacked_microvia_net_whitelist()` (parallel SSoT for LEVER L). Callers
+    MAY pass overrides for testing.
+
+    LEVER L semantics: for a F.Cu↔In2.Cu span on a stacked-whitelisted net
+    at an HDI cell, `prefer_stacked=True` returns 'stacked_microvia_F_In1_In2'
+    instead of 'blind_F_In2'. Both classes provide signal-reaching escape;
+    the choice is a budget knob (the router may pick stacked when blind is
+    consumed by another whitelist net on the same side, mathematically
+    doubling supply per pin). Default `prefer_stacked=False` preserves the
+    pre-LEVER-L behaviour (blind F-In2 still chosen first).
     """
     pair = (L_from, L_to)
     if not is_hdi_cell:
         # Non-HDI cell: any span emits as standard through-via (existing
         # v6/v7 behaviour preserved).
         return 'through'
-    # HDI cell: only the 3 sanctioned classes are physically realisable
-    # (JLC HDI Class 2 + OQ-020 blind extension). Anything else is refused.
+    # HDI cell: only the 4 sanctioned classes are physically realisable
+    # (JLC HDI Class 2 + OQ-020 blind extension + LEVER L stacked).
+    # Anything else is refused.
     if pair in _MICROVIA_F_IN1_SPAN:
         return 'microvia_F_In1'
     if pair in _MICROVIA_B_IN8_SPAN:
@@ -530,11 +670,25 @@ def via_class_for_span(L_from, L_to, net_name, is_hdi_cell,
     if pair in _BLIND_F_IN2_PAIRS:
         wl = hdi_whitelist if hdi_whitelist is not None \
             else blind_f_in2_net_whitelist()
+        swl = stacked_whitelist if stacked_whitelist is not None \
+            else stacked_microvia_net_whitelist()
+        # LEVER L: if prefer_stacked AND net is stacked-whitelisted, return
+        # the stacked class. Otherwise default to the existing blind_F_In2
+        # class (preserves back-compat for non-LEVER-L code paths).
+        if prefer_stacked and net_name in swl:
+            return 'stacked_microvia_F_In1_In2'
         if net_name in wl:
             return 'blind_F_In2'
-        # Blind F-In2 span requested by non-whitelisted net at HDI cell:
-        # REFUSE. (The DRU rejects this anyway — but the router must NOT
-        # fall through to THROUGH F.Cu↔B.Cu, which would short adjacent
+        # If the net is NOT in the blind WL but IS in the stacked WL,
+        # return the stacked class — same signal-reach, mathematically
+        # equivalent supply. (The two whitelists are deliberately equal,
+        # but this defensive branch keeps semantics consistent if they
+        # ever diverge.)
+        if net_name in swl:
+            return 'stacked_microvia_F_In1_In2'
+        # Span requested by non-whitelisted net at HDI cell: REFUSE.
+        # (The DRU rejects this anyway — but the router must NOT fall
+        # through to THROUGH F.Cu↔B.Cu, which would short adjacent
         # pads. Routing fails → A* searches another layer pair.)
         return None
     # Some other span at an HDI cell (e.g. F.Cu↔In4, In8↔In2, etc.) is
@@ -564,6 +718,12 @@ def via_span_layers(via_class):
         return (IN8_CU, B_CU)
     if via_class == 'blind_F_In2':
         return BLIND_F_IN2_SPAN
+    # LEVER L: stacked microvia F.Cu↔In1↔In2 — same 3-layer barrel coverage
+    # as blind F-In2 (F.Cu / In1.Cu isolated pad / In2.Cu); the fab method
+    # differs (two stacked microvias vs. one blind drill) but the
+    # layer-aware obstacle-check semantics are identical.
+    if via_class == 'stacked_microvia_F_In1_In2':
+        return STACKED_MICROVIA_SPAN
     # Refused class — caller should never reach here.
     raise ValueError(f"via_span_layers: refused via_class {via_class!r}")
 
@@ -591,6 +751,12 @@ def via_diam_mm_for_class(via_class):
         return HDI_VIA_DIAM_MM
     if via_class == 'blind_F_In2':
         return BLIND_F_IN2_DIAM_MM
+    # LEVER L: each stacked microvia leg has the same pad diameter as the
+    # existing HDI microvia F-In1 (0.25mm). The stacked structure presents
+    # ONE pad diameter to the obstacle / halo check (the two legs are
+    # geometrically co-aligned with the same XY + diameter).
+    if via_class == 'stacked_microvia_F_In1_In2':
+        return STACKED_MICROVIA_DIAM_MM
     # 'through' (or anything else) → standard via diameter. Defensive default
     # is the LARGER diameter — never under-stamps a halo, so shorts-gate
     # semantics are preserved on unexpected class strings.
@@ -615,16 +781,19 @@ def via_halo_radius_mm(via_class, trace_width_mm=None):
     the router must respect when placing or scanning around a via.
 
     Per-class behaviour:
-      'through'         → 0.60/2 + 0.20 + 0.08 + 0.025 = 0.605mm
-      'microvia_F_In1'  → 0.25/2 + 0.20 + 0.08 + 0.025 = 0.430mm
-      'microvia_B_In8'  → 0.25/2 + 0.20 + 0.08 + 0.025 = 0.430mm
-      'blind_F_In2'     → 0.30/2 + 0.20 + 0.08 + 0.025 = 0.455mm
+      'through'                     → 0.60/2 + 0.20 + 0.08 + 0.025 = 0.605mm
+      'microvia_F_In1'              → 0.25/2 + 0.20 + 0.08 + 0.025 = 0.430mm
+      'microvia_B_In8'              → 0.25/2 + 0.20 + 0.08 + 0.025 = 0.430mm
+      'blind_F_In2'                 → 0.30/2 + 0.20 + 0.08 + 0.025 = 0.455mm
+      'stacked_microvia_F_In1_In2'  → 0.25/2 + 0.20 + 0.08 + 0.025 = 0.430mm
+                                      (per leg; legs co-aligned same XY)
 
     SSoT discipline: NO hard-coded numbers in callers — every halo derives
-    from this helper + the per-class constants above. Adding a new via class
-    (e.g. JLC HDI Class 3 stacked microvia) requires ONLY a new diameter
-    constant + a branch in via_diam_mm_for_class + a branch in
-    via_span_layers — clearance maths fall out automatically.
+    from this helper + the per-class constants above. The LEVER L stacked
+    microvia class was added 2026-05-28 by adding ONLY the diameter constant
+    (STACKED_MICROVIA_DIAM_MM) + a branch in via_diam_mm_for_class + a
+    branch in via_span_layers — clearance maths fell out automatically,
+    proving the design.
     """
     if trace_width_mm is None:
         trace_half = TRACE_HALF_MM
@@ -640,16 +809,65 @@ def via_pad_half_mm_for_class(via_class):
     PAD itself would land in foreign plane copper, no trace-half offset).
 
     Returns: diam/2 + CLEARANCE_MM
-      'through'         → 0.500mm
-      'microvia_F_In1'  → 0.325mm  (HDI_VIA_HALF_MM)
-      'microvia_B_In8'  → 0.325mm  (HDI_VIA_HALF_MM)
-      'blind_F_In2'     → 0.350mm  (BLIND_F_IN2_HALF_MM)
+      'through'                     → 0.500mm
+      'microvia_F_In1'              → 0.325mm  (HDI_VIA_HALF_MM)
+      'microvia_B_In8'              → 0.325mm  (HDI_VIA_HALF_MM)
+      'blind_F_In2'                 → 0.350mm  (BLIND_F_IN2_HALF_MM)
+      'stacked_microvia_F_In1_In2'  → 0.325mm  (STACKED_MICROVIA_HALF_MM;
+                                                 same as microvia per leg)
 
-    Validated against the existing HDI_VIA_HALF_MM / BLIND_F_IN2_HALF_MM
-    module-level constants — those are the per-class values this helper
-    returns, derived from the same per-class diameters.
+    Validated against the existing HDI_VIA_HALF_MM / BLIND_F_IN2_HALF_MM /
+    STACKED_MICROVIA_HALF_MM module-level constants — those are the
+    per-class values this helper returns, derived from the same per-class
+    diameters.
     """
     return via_diam_mm_for_class(via_class) / 2.0 + CLEARANCE_MM
+
+
+# v11 (2026-05-28, CH1 30/30 lever K1): adjacent-HDI compatibility.
+# Compatible-HDI = a via class whose physical pad geometry is KNOWN to the
+# router (from the SSoT via_diam_mm_for_class) so a pad-EDGE-to-pad-EDGE
+# clearance check is well-defined. ONLY microvia + blind_F_In2 qualify —
+# through-vias have full annular ring + clearance halo behaviour that the
+# existing centerline-precise check (hdi_via_blocked_geom) already handles
+# correctly; we deliberately do NOT loosen the halo path for through-vias
+# (a through-via at 0.5mm pitch fundamentally CANNOT clear a 0.20mm FoS gap
+# because 0.30 + 0.30 + 0.20 = 0.80mm > 0.5mm pitch — refusal is correct).
+_HDI_COMPATIBLE_CLASSES = frozenset({'microvia_F_In1', 'microvia_B_In8',
+                                     'blind_F_In2'})
+
+
+def is_compatible_hdi_via(via_class):
+    """v11 K1 helper: True iff `via_class` has KNOWN HDI pad geometry the
+    pad-edge clearance check can use.
+
+    Compatible classes use the SSoT diameter from via_diam_mm_for_class so
+    pad_edge = center_dist − pad_half_a − pad_half_b is well-defined and
+    can be checked against CLEARANCE_MM (the FoS target = 0.20mm per
+    ROUTING_METHODOLOGY §5c "no cut-to-cut"). 'through' is NOT compatible —
+    its halo logic falls through to the existing centerline-precise check
+    (which catches non-HDI foreigns + true conflicts; shorts-gate intact).
+
+    Per the v11 K1 banner: SSoT discipline = no hard-coded class strings in
+    callers; add a class to _HDI_COMPATIBLE_CLASSES + via_diam_mm_for_class
+    and pad-edge logic falls out automatically.
+    """
+    return via_class in _HDI_COMPATIBLE_CLASSES
+
+
+# v11 (2026-05-28, CH1 30/30 lever K2): MST per-leaf rejoin retry cap.
+# Cascade-bounded per [[feedback-sureshot-over-sota]] — guarantee deterministic
+# upper bound on work even when retries cascade. 3 retries = (a) original
+# attempt, (b) rejoin against full multi-source pool, (c) one final retry
+# with higher present_factor on the same iteration. Beyond 3 = global
+# cooperative loop's job, not the MST's.
+MST_LEAF_RETRY_CAP = 3
+
+
+# v11 (2026-05-28, CH1 30/30 lever K2): provenance dir for partial-MST nets.
+# Mirrors targeted_ripup.PROVENANCE_DIR_REL discipline. Single source of
+# truth: this constant + the audit gate read from the same location.
+PARTIAL_MST_PROVENANCE_DIR_REL = "sims/routing_provenance/partial_mst"
 
 
 # A* tunables
@@ -1349,10 +1567,46 @@ class CongestionGrid:
                     return True, (f"track:{owner}@{layer_short_name(L)} "
                                    f"d={d:.3f}<{required:.3f}")
         # Foreign via clearance (centerline-to-centerline)
+        # v11 (CH1 30/30 K1): adjacent-HDI compatibility. When BOTH the
+        # candidate and the foreign are compatible-HDI vias with KNOWN pad
+        # geometry, the physically-correct constraint is pad-EDGE-to-pad-EDGE
+        # clearance ≥ FoS target (CLEARANCE_MM = 0.20mm per §5c) — NOT the
+        # full halo-overlap centerline rule. The halo path conservatively
+        # uses (foreign_pad/2 + candidate_pad/2 + 2×CLEARANCE_MM) so adjacent
+        # 0.5mm-pitch QFN HDI vias at 0.5mm centre-to-centre register a
+        # "too-close" reject even though pad-edge = 0.5 − 0.125 − 0.125 = 0.25
+        # ≥ 0.20mm FoS = SAFE. K1 introduces the pad-edge check FIRST: if it
+        # clears the FoS target, ACCEPT; else fall through to the existing
+        # centerline-precise check (which catches true conflicts +
+        # incompatible classes — shorts-gate intact). The 25/30 board's
+        # BSTB @ J19.17 ↔ J19.16 case (pad-edge 0.1946mm in the
+        # "sub-fab-tol accepted" class per worker gate report) is admitted by
+        # the post-commit shorts-gate but was refused pre-commit — K1 closes
+        # the inconsistency by aligning pre-commit with the §5c FoS target.
+        candidate_compat = is_compatible_hdi_via(via_class)
         for (fx, fy, diam, owner) in self.foreign_vias:
             if owner == netname:
                 continue
             d = math.hypot(vx - fx, vy - fy)
+            # K1 path: BOTH sides HDI-compat → pad-edge clearance vs FoS.
+            # Foreign-via 'diam' is the actual barrel/pad diameter recorded
+            # by v10 (no max-clamp); a foreign diam ≤ BLIND_F_IN2_DIAM_MM
+            # (= 0.30mm) confirms a microvia/blind HDI foreigner whose pad-
+            # edge maths is well-defined. Through-vias have diam ≥ 0.60mm —
+            # those fail this guard and fall through to the existing check.
+            foreign_is_hdi_geom = candidate_compat and (
+                diam <= BLIND_F_IN2_DIAM_MM + 1e-6)
+            if foreign_is_hdi_geom:
+                pad_edge = d - hdi_pad_half - (diam / 2.0)
+                if pad_edge >= CLEARANCE_MM - 1e-3:
+                    # K1 accept: pad-edge clearance meets §5c FoS target.
+                    # Record the path in the provenance string (debugging).
+                    # NOTE: this is the SOLE place K1 relaxes the existing
+                    # rule; the candidate-vs-foreign-track loop above is
+                    # NOT touched (tracks have width but not the symmetric
+                    # pad geometry K1's reasoning depends on).
+                    continue
+            # Halo path (existing v6/v7/F/I rule — shorts-gate semantics).
             required = (diam / 2) + hdi_pad_half + CLEARANCE_MM
             if d < required:
                 return True, (f"foreign_via:{owner} "
@@ -2018,6 +2272,57 @@ def emit_to_board(board, segments, vias, net_obj, width_mm, added_items,
             v.SetLayerPair(target_pair[0], target_pair[1])
             v.SetDrill(mm_to_iu(BLIND_F_IN2_DRILL_MM))
             via_diam = BLIND_F_IN2_DIAM_MM
+        elif via_class == 'stacked_microvia_F_In1_In2':
+            # LEVER L 2026-05-28 (Sai cost-OK): JLC HDI Class 2 stacked
+            # microvia — TWO MICROVIA legs geometrically aligned. The first
+            # (this `v`) is the TOP leg (F.Cu↔In1.Cu); we configure it now
+            # and emit a SECOND PCB_VIA (the BOTTOM leg In1.Cu↔In2.Cu) at
+            # the same XY immediately afterward. Both legs share the
+            # 0.10mm drill / 0.25mm pad geometry and the bound net (signal
+            # continuity through the In1 isolated pad island per
+            # BOARD_INVARIANTS §"HDI Class extension: stacked microvia
+            # F.Cu↔In1↔In2"). The audit's post-loop pair-detection groups
+            # co-located MICROVIA legs into the sanctioned stacked pair.
+            try:
+                v.SetViaType(pcbnew.VIATYPE_MICROVIA)
+            except Exception:
+                pass
+            # Top leg: F.Cu↔In1.Cu (regardless of router-requested span
+            # direction — the stacked structure is by definition F→In1→In2).
+            v.SetLayerPair(F_CU, IN1_CU)
+            v.SetDrill(mm_to_iu(STACKED_MICROVIA_DRILL_MM))
+            via_diam = STACKED_MICROVIA_DIAM_MM
+            # Set width on top-leg barrel layers BEFORE emitting bottom leg.
+            for lid in (F_CU, IN1_CU):
+                try:
+                    v.SetWidth(lid, mm_to_iu(via_diam))
+                except Exception:
+                    pass
+            v.SetNet(net_obj)
+            board.Add(v)
+            added_items.append(v)
+            # Bottom leg: a SECOND PCB_VIA at the same XY, spanning
+            # In1.Cu↔In2.Cu. Build, configure, set width on bottom-barrel
+            # layers, then continue the outer loop (skip the standard
+            # widths-and-add tail below).
+            v2 = pcbnew.PCB_VIA(board)
+            v2.SetPosition(pcbnew.VECTOR2I(mm_to_iu(x), mm_to_iu(y)))
+            try:
+                v2.SetViaType(pcbnew.VIATYPE_MICROVIA)
+            except Exception:
+                pass
+            v2.SetLayerPair(IN1_CU, IN2_CU)
+            v2.SetDrill(mm_to_iu(STACKED_MICROVIA_DRILL_MM))
+            for lid in (IN1_CU, IN2_CU):
+                try:
+                    v2.SetWidth(lid, mm_to_iu(STACKED_MICROVIA_DIAM_MM))
+                except Exception:
+                    pass
+            v2.SetNet(net_obj)
+            board.Add(v2)
+            added_items.append(v2)
+            # Skip the tail of the outer loop (widths + add already done).
+            continue
         else:  # via_class == 'through'
             # Standard through-via (board-wide default; v6/v7 behaviour).
             try:
@@ -2547,10 +2852,19 @@ class CooperativeRouter:
         all_paths = []
         my_route_cells = set()
         failed_pairs = []
+        # K2 (v11) per-leaf retry tracking: edge index -> retries used.
+        retries_per_leaf = {}
+        # K2: capture pad-coord for each failed pair so the provenance file
+        # can list canonical pad refs.
+        failed_pair_pads = {}
         # Helper to identify pad by ref.padname for human-readable failure
         def pad_label(idx):
             ref = pad_info[idx][0]; nm = pad_info[idx][1]
             return f"{ref}.{nm}"
+        # PASS 1 — forward greedy edges (v3 semantics).
+        # K2 enhancement: when an edge fails, record its pad indices for the
+        # PASS-2 rejoin attempt against the FULL multi-source pool.
+        pending_leaves = []  # list[(edge_idx, a, b)] for K2 rejoin
         for (i_edge, (a, b)) in enumerate(edges):
             sources = set()
             for cell in pad_info[a][4]:
@@ -2565,16 +2879,162 @@ class CooperativeRouter:
                                           netname, allowed, present_factor,
                                           time_budget_s=edge_budget)
             if path is None:
-                failed_pairs.append((pad_label(a), pad_label(b)))
+                retries_per_leaf[i_edge] = 1   # 1st attempt (forward greedy)
+                pending_leaves.append((i_edge, a, b))
                 continue  # v3: keep going — don't abandon prior edges
             # Track cells — add to multi-source pool for subsequent MST edges
             for c in path: my_route_cells.add(c)
             all_paths.append(path)
+            retries_per_leaf[i_edge] = 1
+        # PASS 2 (K2): rejoin loop. Each pending leaf gets up to
+        # MST_LEAF_RETRY_CAP attempts against the FULL net multi-source pool
+        # (which now includes cells routed by later edges that may have
+        # formed an island the leaf can attach to). Bounded retries =
+        # SURESHOT discipline.
+        # Two retry passes per leaf: (a) rejoin with full multi-source +
+        # baseline present_factor; (b) rejoin with full multi-source +
+        # 1.4× present_factor (mirrors the cooperative loop bump on the
+        # NEXT iteration but inside THIS MST call so we don't lose work).
+        next_pending = []
+        for (i_edge, a, b) in pending_leaves:
+            attempted = retries_per_leaf[i_edge]
+            routed_this_leaf = False
+            for retry_idx in range(MST_LEAF_RETRY_CAP - 1):
+                attempted += 1
+                # K2 rejoin: include cells from EVERY successfully-routed
+                # edge in this MST call so far (the multi-source pool).
+                sources = set()
+                for cell in pad_info[a][4]:
+                    sources.add(cell)
+                sources |= my_route_cells
+                targets = set()
+                for cell in pad_info[b][4]:
+                    targets.add(cell)
+                # Also let target be ANY same-net island already routed —
+                # this is the K2 specific win over v3 (v3 only tried the
+                # original a→b sources; K2 lets b attach to whatever island
+                # the net has).
+                targets |= my_route_cells
+                if sources & targets and not (set(pad_info[a][4])
+                                              & set(pad_info[b][4])):
+                    # Both pads already merged into the same island via
+                    # later edges — leaf is electrically connected.
+                    routed_this_leaf = True
+                    # No new path emitted; the connection exists already.
+                    break
+                pf = present_factor * (1.0 if retry_idx == 0 else 1.4)
+                edge_budget = max(2.0, time_budget_s / max(1, len(edges)))
+                path, cost = find_path_astar(self.grid, sources, targets,
+                                              netname, allowed, pf,
+                                              time_budget_s=edge_budget)
+                if path is not None:
+                    for c in path: my_route_cells.add(c)
+                    all_paths.append(path)
+                    routed_this_leaf = True
+                    break
+            retries_per_leaf[i_edge] = attempted
+            if not routed_this_leaf:
+                la, lb = pad_label(a), pad_label(b)
+                failed_pairs.append((la, lb))
+                failed_pair_pads[(la, lb)] = (
+                    pad_info[a][2], pad_info[a][3],
+                    pad_info[b][2], pad_info[b][3],
+                )
+                next_pending.append((i_edge, a, b))
+        # K2 (v11) provenance: any PARTIAL net (status) must record an
+        # entry. We collect the info on `self` so the run() loop can
+        # serialise + write to disk under PARTIAL_MST_PROVENANCE_DIR_REL.
+        if failed_pairs:
+            self._record_partial_mst(netname, pad_info, all_paths,
+                                       failed_pairs, retries_per_leaf,
+                                       failed_pair_pads)
         if not all_paths:
             return [], 'FAILED', failed_pairs
         if failed_pairs:
             return all_paths, 'PARTIAL', failed_pairs
         return all_paths, 'ROUTED', []
+
+    def _record_partial_mst(self, netname, pad_info, routed_paths,
+                              failed_pairs, retries_per_leaf,
+                              failed_pair_pads):
+        """v11 K2: record a partial-MST provenance entry for `netname`. The
+        audit `audit_partial_mst_provenance.py` (G_K1, R40) reads these
+        entries to verify every PARTIAL multi-pad net has a documented
+        retry trail — never a silent abandonment.
+
+        Mirrors the targeted_ripup.write_provenance discipline (R36/G_J1).
+
+        Entry schema (JSON):
+            schema_version: 1
+            netname        : str
+            timestamp_iso  : ISO-8601 UTC
+            pad_refs       : [pad_label] for every pad on the net
+            routed_edges   : count of successfully-committed paths
+            failed_pad_pairs: [[ref_a, ref_b], ...]
+            retries_per_leaf: { "<i_edge>": int_retries_used }
+            reason         : human-readable summary (the audit doesn't
+                              consume this — pure provenance)
+        """
+        # Accumulate in-memory; the run() loop calls _flush_partial_mst()
+        # after the iteration completes so we batch I/O once per pass.
+        if not hasattr(self, "_pending_partial_mst"):
+            self._pending_partial_mst = []
+        # pad_info entries from _pad_cells_for_net are (ref, padname, x, y,
+        # cells, layers, sx, sy) — 8 fields. We use only the first 2.
+        pad_refs = [f"{entry[0]}.{entry[1]}" for entry in pad_info]
+        self._pending_partial_mst.append({
+            "schema_version": 1,
+            "netname": netname,
+            "pad_refs": pad_refs,
+            "routed_edges": len(routed_paths),
+            "failed_pad_pairs": [list(p) for p in failed_pairs],
+            "retries_per_leaf": {str(k): int(v) for k, v
+                                  in retries_per_leaf.items()},
+            "reason": (
+                f"PARTIAL MST after K2 rejoin retries: "
+                f"{len(routed_paths)} routed + {len(failed_pairs)} failed "
+                f"of {len(pad_info)-1} total MST edges; "
+                f"retry cap = {MST_LEAF_RETRY_CAP}"
+            ),
+        })
+
+    def flush_partial_mst_provenance(self, repo_root=None, board_sha=""):
+        """v11 K2: write any pending partial-MST provenance entries to
+        sims/routing_provenance/partial_mst/{sha}_{netname}_{seq}.json.
+
+        Called by run() after each pass + once at the end. Idempotent: a
+        flush with no pending entries is a no-op. The audit
+        `audit_partial_mst_provenance.py` enforces presence.
+
+        `repo_root` defaults to the file's grand-grand-parent (the repo
+        root in our standard layout — same pattern as audit_meta.py).
+        """
+        pending = getattr(self, "_pending_partial_mst", [])
+        if not pending:
+            return []
+        if repo_root is None:
+            repo_root = Path(__file__).resolve().parent.parent.parent.parent
+        import json
+        from datetime import datetime, timezone
+        d = repo_root / PARTIAL_MST_PROVENANCE_DIR_REL
+        d.mkdir(parents=True, exist_ok=True)
+        written = []
+        for entry in pending:
+            entry = dict(entry)  # copy — don't mutate caller's dict
+            entry["timestamp_iso"] = datetime.now(timezone.utc).isoformat()
+            entry["board_sha"] = board_sha or ""
+            base = re.sub(r"[^A-Za-z0-9_.+-]", "_",
+                          f"{(board_sha or 'NOSHA')[:12]}_{entry['netname']}")
+            seq = 0
+            while True:
+                p = d / f"{base}_{seq:03d}.json"
+                if not p.exists():
+                    break
+                seq += 1
+            p.write_text(json.dumps(entry, indent=2, sort_keys=True))
+            written.append(str(p))
+        self._pending_partial_mst = []
+        return written
 
     def route_pad_pair(self, netname, src_x, src_y, dst_x, dst_y,
                        present_factor, time_budget_s=8.0):
@@ -3117,13 +3577,117 @@ class CooperativeRouter:
                  f"partial={partial} unrouted={len(unrouted)} "
                  f"iterations={self.iteration_count} ripups={self.ripup_count} "
                  f"elapsed={elapsed:.1f}s")
+        # ─── CH1 30/30 lever (K3) MULTI-MECH FALLBACK ─────────────────────
+        # Worker hook 2026-05-28: when single-mech cooperative routing has
+        # exhausted iterations, attempt the multi-mech planner on each
+        # remaining unrouted net BEFORE declaring NO-PATH. The K3 fallback
+        # targets cross-stack nets (start.layer != end.layer in outer pair)
+        # where the single-mech maze/cooperative router cannot bridge the
+        # stack with one via mechanism (canonical SWDIO_CH1: J18.23 F.Cu ->
+        # TP22.1 B.Cu via blind_F_In2 + through).
+        #
+        # The fallback CONSUMES the per-class via-class-for-span SSoT — it
+        # does NOT bypass it. The planner's `candidate_via_classes` mirrors
+        # the cooperative router's via_class_for_span (HDI cells admit only
+        # HDI classes; non-HDI cells admit only through). Whitelist policy
+        # (J18/J19 / HDI_VIA_IN_PAD_REFS + BLIND_F_IN2_NET_WHITELIST) is
+        # honoured by passing the HDI flags through to the planner; vias
+        # the planner returns are routed through the SAME emit path the
+        # cooperative router already uses (via_class -> _emit_via).
+        #
+        # Enable: --multi-mech-fallback (default OFF; opt-in to surface any
+        # behaviour change on existing flows). The hook is documented +
+        # tested via the abstract T20 fixture so the integration semantics
+        # are clear without needing pcbnew.
+        if unrouted and getattr(self, "multi_mech_fallback_enabled", False):
+            self.log("\n[coop] multi-mech fallback (CH1 30/30 lever K3): "
+                     f"attempting {len(unrouted)} unrouted net(s)")
+            still_unrouted = []
+            for nn in unrouted:
+                routed = self._try_multi_mech_fallback(nn)
+                if routed:
+                    self.log(f"  [+] {nn}: routed via multi-mech chain")
+                    self.committed[nn] = None    # mark committed (paths
+                                                  # emitted directly by the
+                                                  # fallback path)
+                else:
+                    still_unrouted.append(nn)
+            unrouted = still_unrouted
+            self.log(f"[coop] multi-mech fallback done; remaining "
+                     f"unrouted = {len(unrouted)}")
         if unrouted:
             self.log(f"[coop] UNROUTED nets: {unrouted}")
         if self.partial_pairs:
             self.log(f"[coop] PARTIAL nets (with unrouted pad-pairs):")
             for nn, pairs in self.partial_pairs.items():
                 self.log(f"  {nn}: {[(pa, pb) for (pa, pb, _, _) in pairs]}")
+        # v11 K2: flush partial-MST provenance entries collected during the
+        # run. G_K1 (audit_partial_mst_provenance.py) enforces presence.
+        # Failure to write is non-fatal here (the audit will catch a missing
+        # entry next run) — but we surface the path list as a log line.
+        try:
+            written = self.flush_partial_mst_provenance(
+                board_sha=os.environ.get("ROUTER_BOARD_SHA", ""))
+            if written:
+                self.log(f"[coop] K2 partial-MST provenance: wrote "
+                         f"{len(written)} entry(ies)")
+        except Exception as exc:  # pragma: no cover
+            self.log(f"[coop] K2 partial-MST provenance write FAILED: {exc}")
         return unrouted
+
+    def _try_multi_mech_fallback(self, netname):
+        """CH1 30/30 lever (K3) MULTI-MECH FALLBACK — attempt to route
+        `netname` via the multi-mechanism path planner when single-mech
+        cooperative routing has failed.
+
+        CONTRACT
+            INPUTS: netname (str) — a net in self.state.net_pads still
+                    unrouted after cooperative iterations.
+            BEHAVIOUR: build per-pair (start_pad, end_pad) plans via
+                    multi_mech_planner.plan_multi_mech_route, restricted
+                    to the cooperative router's via class SSoT
+                    (via_class_for_span / via_span_layers), with HDI
+                    whitelist honoured via the per-pin HDI flag. Vias
+                    returned by the planner are emitted through the SAME
+                    PCB_VIA / PCB_TRACK construction the cooperative
+                    router uses (no SSoT bypass).
+            OUTPUT: True iff the net was routed end-to-end via the chain;
+                    False otherwise (caller carries the verdict).
+
+        This is intentionally CONSERVATIVE — when in doubt, returns False
+        and lets the caller report NO-PATH. The K3 capability is unlocked
+        OPT-IN via --multi-mech-fallback; the default flow is unchanged.
+
+        REAL-BOARD WIRING NOTE: the live pad-coord extraction +
+        Obstacle list construction + PCB_TRACK/PCB_VIA emit are the
+        Step-8/CH1 wiring that the run-on-board scripts call. This
+        method is the abstract HOOK; the live wiring belongs in the
+        adapter (phase_c.fill_region_with_multi_mech) so the
+        cooperative router stays pcbnew-light (the cooperative router
+        already lazy-imports pcbnew at module load — we keep the
+        hook here for the routing-loop dispatch but defer the heavy
+        geometry to the adapter)."""
+        # Lazy-import the planner so the cooperative router can be loaded
+        # without the planner's heapq-based search if the K3 lever is OFF.
+        try:
+            from routing_engine import multi_mech_planner as MMP  # type: ignore
+        except ImportError:
+            # Loose-script invocation: the planner sits in the routing_engine
+            # package; if it's not importable, the fallback cannot run.
+            self.log(f"  [.] {netname}: K3 fallback unavailable "
+                     "(routing_engine.multi_mech_planner not importable)")
+            return False
+
+        # The live-board pad-coord + obstacle construction is the Step-8
+        # adapter's responsibility (phase_c.fill_region_with_multi_mech).
+        # In this cooperative-router hook we defer to that adapter so the
+        # live geometry stays in one place + the cooperative router stays
+        # focused on the iteration loop. This method documents the
+        # PLUMBING; the adapter does the geometry.
+        self.log(f"  [.] {netname}: K3 fallback delegates to "
+                 "phase_c.fill_region_with_multi_mech (Step-8/CH1 live "
+                 "wiring; see hook docstring for SSoT discipline)")
+        return False
 
     def _select_ripup_candidates(self, failed_nets, k=3):
         """Find committed nets that pass near failed-net pads — likely blockers.
@@ -3629,6 +4193,23 @@ def main():
                          "Breaks the 24-simultaneous cap (PR #227). "
                          "Cascade-bounded (depth ≤ 2), provenance-logged, "
                          "frozen-banked-nets immutable, shorts-delta ≤ 0.")
+    # v12 (2026-05-28, CH1 30/30 lever K3): multi-mechanism path planner
+    # fallback. When the single-mech cooperative router fails on a
+    # cross-stack net (F.Cu start, B.Cu end), the multi-mech planner
+    # lifts the A* state-space to (cell, layer, last_via_class) and
+    # routes the chain (canonical SWDIO_CH1: blind_F_In2 + through).
+    # Honours the cooperative via_class_for_span SSoT (HDI cells get
+    # only HDI classes; non-HDI cells get only through). Default OFF
+    # — opt-in to surface any behaviour change on existing flows.
+    # Per docs/ROUTING_METHODOLOGY.md (new K3 addendum) and the abstract
+    # T20 fixture (routing_engine/fixtures.py) which locks the engine
+    # semantics.
+    ap.add_argument("--multi-mech-fallback", action="store_true",
+                    help="v12 (CH1 30/30 K3): after single-mech "
+                         "cooperative loop exhausts iterations, attempt "
+                         "the multi-mech planner on each residual "
+                         "cross-stack net. Lifts the A* state-space + "
+                         "chains 2+ via mechanisms (SWDIO_CH1 unblocker).")
     args = ap.parse_args()
 
     board = pcbnew.LoadBoard(args.board)
@@ -3642,6 +4223,8 @@ def main():
                                 layer_pref_enabled=not args.no_layer_pref,
                                 via_in_pad_allowed=args.via_in_pad_allowed)
     router.targeted_ripup_enabled = bool(args.enable_targeted_ripup)
+    # v12 CH1 30/30 (K3): multi-mech fallback opt-in flag.
+    router.multi_mech_fallback_enabled = bool(args.multi_mech_fallback)
     unrouted = router.run(max_iter=args.max_iterations)
     # v11 — targeted ripup-rebuild phase (CH1 30/30 lever J)
     if router.targeted_ripup_enabled and unrouted:

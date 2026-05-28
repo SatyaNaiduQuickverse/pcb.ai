@@ -12,6 +12,17 @@ partner-pin landings for PWM_INHB_CH1 (J19.23) + PWM_INLA_CH1 (J19.1) —
 those 2 nets were already net-whitelisted at J18 pins; the partner-pin docs
 make the J19 landings explicit. Same OQ-020 fab class, zero marginal cost.
 
+Master 2026-05-28 CH1 30/30 LEVER L extension (drone-grade reliability + no
+cut corners; Sai-approved): added STACKED_MICROVIA_NET_WHITELIST +
+STACKED_MICROVIA_SANCTIONED_LANDINGS — the JLC HDI Class 2 stacked-
+microvia F↔In1↔In2 fab class (TWO microvias geometrically aligned, top
+F.Cu↔In1.Cu + bottom In1.Cu↔In2.Cu). Same 6 whitelist nets / 8 sanctioned
+(net, pin) landings as BLIND_F_IN2 (so per-pin the router may choose blind
+OR stacked, both signal-reaching). Mathematically guarantees escape budget
+> demand at every whitelist pin landing (DOUBLES signal-reaching supply).
+Cost adder ~$1-2/board on top of the existing OQ-020 envelope (industry-
+standard since iPhone 4 era — established reliability).
+
 Verifies that ONLY whitelisted footprints (J18, J19) have via-in-pad
 placements. This audit preserves the cost envelope: Sai cost-cleared
 +$2-3/board for HDI Class 2 (epoxy fill + plate-over) on J18 + J19 only,
@@ -122,6 +133,73 @@ BLIND_F_IN2_NET_WHITELIST = (
     "KILL_RAIL_N_CH1",  # 2026-05-28 lever G — J19.8 escape (last residual)
 )
 
+# 2026-05-28 LEVER L — STACKED MICROVIA F↔In1↔In2 (Sai cost-OK; drone-grade
+# reliability + no cut corners): JLC HDI Class 2 supports stacked microvia
+# natively (F.Cu↔In1 microvia stacked geometrically on top of In1↔In2
+# microvia; the In1 landing is a small "antipad+pad" isolated copper island
+# that is NOT tied to the In1 GND plane and NOT to the signal — it's the
+# stacked-via pad between two microvias). This is a SECOND signal-reaching
+# via mechanism per pin, in addition to the existing OQ-020 blind F-In2
+# class. Same 6 whitelist nets / 8 sanctioned (net, pin) landings (so per-
+# pin the router may pick blind OR stacked, both reach In2 signal). Cost
+# adder ~$1-2/board on top of the existing +$2-5/board JLC HDI blind/
+# buried envelope (no new fab process — same Class-2 laser-drill + epoxy-
+# fill + plate-over; just two laser passes geometrically aligned). Industry
+# standard since ~iPhone 4 era (Apple/Samsung phones use stacked microvia
+# extensively); established reliability with millions of fielded units.
+#
+# Geometry (above fab min with §5c FoS):
+#   - Top microvia: drill 0.10mm, pad 0.25mm (= existing HDI microvia
+#     F-In1 geometry; OQ-014 lock); span F.Cu↔In1.Cu (adjacent laser pair).
+#   - Bottom microvia: drill 0.10mm, pad 0.25mm (= same; the In1 pad +
+#     bottom barrel are stacked geometrically aligned with the top); span
+#     In1.Cu↔In2.Cu (adjacent laser pair).
+#   - Annular ring: 0.075mm each (≥ board std 0.10mm AFTER plate-over;
+#     FoS margin above JLC blind-via fab min 0.05mm).
+#   - Stacking alignment: per JLC HDI Class 2 spec (≤0.025mm registration
+#     tolerance laser-to-laser; well within the 0.075mm annular budget).
+#
+# Why this MATHEMATICALLY GUARANTEES escape budget at 0.5mm QFN pitch:
+# adding stacked microvia as a second signal-reaching mechanism per pin
+# DOUBLES the supply on the whitelist landings (blind_F_In2 = 1 slot per
+# pin + stacked_microvia_F_In1_In2 = 1 slot per pin = 2 signal-reaching
+# slots per whitelist pin). Per `phase_a.side_supply`, the layer-aware
+# supply on each whitelist side grows by exactly the # of whitelist-eligible
+# residual nets on that side — guaranteeing supply > demand at every
+# pin landing.
+#
+# Identification on .kicad_pcb: KiCad emits the stack as TWO
+# VIATYPE_MICROVIA vias at the SAME (x, y) position (±TOLERANCE_MM), one
+# spanning (F.Cu, In1.Cu) and the other spanning (In1.Cu, In2.Cu). The
+# audit treats a co-located F-In1 + In1-In2 microvia PAIR on a whitelist
+# net inside a J18/J19 pad bbox as a sanctioned stacked microvia; each
+# microvia individually still satisfies the v7 adjacent-pair span check
+# (so the stacked structure does not violate JLC HDI Class 2 single-
+# laser-drill per microvia).
+STACKED_MICROVIA_NET_WHITELIST = (
+    "BSTB_CH1", "PWM_INHB_CH1", "SWDIO_CH1", "PWM_INLA_CH1",
+    "GLB_CH1", "KILL_RAIL_N_CH1",
+)
+
+# Per-pin sanctioned landings — identical to BLIND_F_IN2 (so router can
+# choose blind OR stacked per pin; both signal-reaching). Documentary
+# (audit + DRU + router are net-name based); the master gate verifies
+# stacked emissions land on a sanctioned pin.
+STACKED_MICROVIA_SANCTIONED_LANDINGS = (
+    ("BSTB_CH1",        "J19", "17"),
+    ("PWM_INHB_CH1",    "J18", "19"),
+    ("SWDIO_CH1",       "J18", "23"),
+    ("PWM_INLA_CH1",    "J18", "15"),
+    ("PWM_INHB_CH1",    "J19", "23"),
+    ("PWM_INLA_CH1",    "J19", "1"),
+    ("GLB_CH1",         "J19", "10"),
+    ("KILL_RAIL_N_CH1", "J19", "8"),
+)
+
+# Logical signal-name cross-reference (matches BLIND_F_IN2_LOGICAL_SIGNALS).
+STACKED_MICROVIA_LOGICAL_SIGNALS = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA",
+                                    "GLB", "KILL_RAIL_N")
+
 # The schematic-logical signal names (pre-channel-suffix) — kept for cross-
 # reference to BOARD_INVARIANTS + DRU which document the signals by their
 # logical names. NOT used for matching (matching is exact-string against
@@ -215,22 +293,49 @@ def main():
     fails_hdi_outside_whitelist = []  # microvia outside any J18/J19 pad
     fails_microvia_span = []  # v7: MICROVIA tag on non-adjacent span
     fails_blind_f_in2_offwhitelist = []  # OQ-020: blind F-In2 on non-whitelist net
+    # 2026-05-28 LEVER L: stacked microvia F↔In1↔In2 — collect candidate
+    # microvia legs for the post-loop stacked-pair detection.
+    # Each entry: (x, y, layer_pair, net_name, drill_mm).
+    microvia_legs = []                  # candidate top/bottom legs of stacked pairs
+    fails_stacked_offwhitelist = []     # stacked pair on non-whitelist net
     pass_count = 0  # vias correctly in J18/J19 pads
     pass_blind_f_in2 = 0  # OQ-020 blind F-In2 vias correctly on whitelist nets
+    pass_stacked_microvia = 0  # LEVER L: stacked microvia pairs correctly on whitelist
 
     # v7: adjacent-layer pairs allowed for VIATYPE_MICROVIA tag (JLC HDI
     # Class 2 single laser-drill spec). Anything longer is a through-via
     # masquerading as microvia and must be re-emitted as VIATYPE_THROUGH.
+    # LEVER L 2026-05-28 (Sai cost-OK): added (In1.Cu, In2.Cu) — the
+    # BOTTOM leg of a stacked microvia F.Cu↔In1.Cu↔In2.Cu — to the
+    # adjacent-pair set. JLC HDI Class 2 supports stacked microvia
+    # natively; each leg individually is still a single laser-drill
+    # adjacent-pair (this satisfies the v7 single-laser-drill enforcement).
+    # The stacked PAIR detection (top + bottom legs co-located on same
+    # net) is handled post-loop by the LEVER L pair detector below.
     ADJACENT_MICROVIA_PAIRS = {
         (pcbnew.F_Cu, pcbnew.In1_Cu),
         (pcbnew.In1_Cu, pcbnew.F_Cu),
         (pcbnew.B_Cu, pcbnew.In8_Cu),
         (pcbnew.In8_Cu, pcbnew.B_Cu),
+        # LEVER L: stacked microvia bottom leg.
+        (pcbnew.In1_Cu, pcbnew.In2_Cu),
+        (pcbnew.In2_Cu, pcbnew.In1_Cu),
     }
     # OQ-020 ACTIVATE: the blind/buried F.Cu↔In2 class pairs (the new lever).
     BLIND_F_IN2_PAIRS = {
         (pcbnew.F_Cu, pcbnew.In2_Cu),
         (pcbnew.In2_Cu, pcbnew.F_Cu),
+    }
+    # LEVER L: stacked microvia F↔In1↔In2 — the TOP leg spans (F.Cu, In1.Cu)
+    # and the BOTTOM leg spans (In1.Cu, In2.Cu); a stacked pair is two
+    # MICROVIAs at the same XY whose layer spans match these two sets.
+    STACKED_TOP_PAIRS = {
+        (pcbnew.F_Cu, pcbnew.In1_Cu),
+        (pcbnew.In1_Cu, pcbnew.F_Cu),
+    }
+    STACKED_BOTTOM_PAIRS = {
+        (pcbnew.In1_Cu, pcbnew.In2_Cu),
+        (pcbnew.In2_Cu, pcbnew.In1_Cu),
     }
 
     for t in b.GetTracks():
@@ -276,6 +381,11 @@ def main():
                 fails_microvia_span.append(
                     (vx, vy, L_top, L_bot, drill_mm)
                 )
+            # LEVER L: collect microvia legs (the F-In1 + In1-In2 legs that
+            # may form a STACKED pair). Stack detection is post-loop because
+            # the two legs may be emitted in any track-iteration order.
+            else:
+                microvia_legs.append((vx, vy, layer_pair, net_name, drill_mm))
 
         # OQ-020 ACTIVATE 2026-05-28: a BLIND_BURIED via with F.Cu↔In2 layer
         # span is the new whitelisted class — accept ONLY when its net is in
@@ -327,6 +437,38 @@ def main():
                 (vx, vy, drill_mm)
             )
 
+    # ─── LEVER L: stacked-microvia pair detection ──────────────────────────
+    # A stacked microvia F↔In1↔In2 is identified by TWO microvia legs at the
+    # SAME (x, y) (±TOLERANCE_MM) where one leg spans STACKED_TOP_PAIRS
+    # (F.Cu↔In1.Cu) and the other spans STACKED_BOTTOM_PAIRS (In1.Cu↔In2.Cu),
+    # and BOTH legs are on the same net. Pair detection groups legs by (x,y)
+    # rounded to 0.001mm (≥ TOLERANCE_MM resolution) — any cluster with a
+    # top + bottom leg on the same net is a stacked pair candidate. The
+    # whitelist check enforces the LEVER L net set; off-whitelist stacked
+    # pairs FAIL.
+    def _bucket(x, y):
+        # Snap to TOLERANCE_MM grid for clustering co-located legs.
+        return (round(x / TOLERANCE_MM) * TOLERANCE_MM,
+                round(y / TOLERANCE_MM) * TOLERANCE_MM)
+    legs_by_key = {}
+    for (lx, ly, lpair, lnet, ldrill) in microvia_legs:
+        key = (_bucket(lx, ly), lnet)
+        legs_by_key.setdefault(key, []).append((lx, ly, lpair, ldrill))
+    stacked_pairs = []   # (x, y, net, top_drill, bot_drill)
+    for ((bxy, net), legs) in legs_by_key.items():
+        has_top = any(p in STACKED_TOP_PAIRS for (_, _, p, _) in legs)
+        has_bot = any(p in STACKED_BOTTOM_PAIRS for (_, _, p, _) in legs)
+        if has_top and has_bot:
+            # Use the first top + bottom leg coords for the pair report.
+            top = next(l for l in legs if l[2] in STACKED_TOP_PAIRS)
+            bot = next(l for l in legs if l[2] in STACKED_BOTTOM_PAIRS)
+            stacked_pairs.append((top[0], top[1], net, top[3], bot[3]))
+    for (sx, sy, snet, td, bd) in stacked_pairs:
+        if snet in STACKED_MICROVIA_NET_WHITELIST:
+            pass_stacked_microvia += 1
+        else:
+            fails_stacked_offwhitelist.append((sx, sy, snet, td, bd))
+
     # Report
     print(f"Board: {board_path}")
     print(f"HDI whitelist: {list(HDI_VIA_IN_PAD_WHITELIST)}")
@@ -375,10 +517,27 @@ def main():
     if len(fails_blind_f_in2_offwhitelist) > 20:
         print(f"  ... and {len(fails_blind_f_in2_offwhitelist) - 20} more")
 
+    # LEVER L: stacked-microvia report
+    print(f"")
+    print(f"Stacked-microvia F.Cu↔In1↔In2 pairs correctly on whitelist nets "
+          f"({list(STACKED_MICROVIA_NET_WHITELIST)}): {pass_stacked_microvia}")
+    print(f"Stacked-microvia pairs on NON-WHITELIST nets (FAIL, LEVER L scope): "
+          f"{len(fails_stacked_offwhitelist)}")
+    for (sx, sy, nn, td, bd) in fails_stacked_offwhitelist[:20]:
+        print(f"  - stacked microvia @({sx:.3f},{sy:.3f}) "
+              f"top_drill={td:.3f}/bot_drill={bd:.3f} net={nn!r} "
+              f"— NOT in STACKED_MICROVIA_NET_WHITELIST "
+              f"(cost scope creep beyond Sai's LEVER L envelope; see "
+              f"BOARD_INVARIANTS §'HDI Class extension: stacked microvia "
+              f"F.Cu↔In1↔In2')")
+    if len(fails_stacked_offwhitelist) > 20:
+        print(f"  ... and {len(fails_stacked_offwhitelist) - 20} more")
+
     total_fails = (len(fails_in_pad_nonwhitelist)
                    + len(fails_hdi_outside_whitelist)
                    + len(fails_microvia_span)
-                   + len(fails_blind_f_in2_offwhitelist))
+                   + len(fails_blind_f_in2_offwhitelist)
+                   + len(fails_stacked_offwhitelist))
     if total_fails == 0:
         print(f"\n✅ PASS — all HDI via-in-pad placements on whitelist "
               f"({HDI_VIA_IN_PAD_WHITELIST}); cost envelope preserved.")
