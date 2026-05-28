@@ -959,6 +959,217 @@ _SELFCHECKS = {
 }
 
 
+# ============================================================================
+# T15 — PER-LAYER OBSTACLE FILTER (CH1 30/30 (E) engine-correctness lockfile).
+# APPEND-ONLY block (2026-05-28): new selfcheck + harness-dispatch wrappers
+# that delegate to the existing T1-T14 functions unchanged. The T1-T14
+# function bodies above and the original _SELFCHECKS dict assignment stay
+# byte-identical (diff-stat shows only ADDITIONS in run_suite.py for T15).
+# ============================================================================
+
+def _selfcheck_T15(fx, msgs):
+    """T15 — PER-LAYER OBSTACLE FILTER (the CH1 30/30 (E) engine-correctness
+    lockfile). The bug-witness is end-to-end:
+      (a) the obstacle's `layers` field is SET (the engine refactor's new
+          field is actually exercised — not a no-op fixture);
+      (b) the witness path's endpoints match the pin coords on F.Cu;
+      (c) under the PER-LAYER FILTER the witness segment clears every
+          F.Cu-applicable body (here: zero applicable bodies) — ROUTABLE;
+      (d) under a 2D-LAYER-AGNOSTIC LIAR filter (force every obstacle to
+          apply on every layer) the same F.Cu segment INTERSECTS the body
+          AABB — proving the bug class is REAL on this fixture and a
+          regression to the 2D filter would FAIL the maze on T15;
+      (e) INVOKES `maze_router.solve` DIRECTLY and asserts the engine emits
+          verdict=ROUTABLE, routed=1, n_vias=0 with a witness polyline
+          that connects S→E on F.Cu and clears every F.Cu-applicable body
+          by ≥ (trace/2 + clearance) Euclidean distance.
+    """
+    gt = fx.ground_truth
+    ok = True
+    wit = gt.witness
+    path = wit["path"]
+    trace_w = wit["trace_width_mm"]
+    clearance = wit["clearance_mm"]
+    margin = trace_w / 2.0 + clearance
+    route_layer = wit["layer"]
+
+    # (a) the per-layer filter is actually exercised — at least one
+    # obstacle has a non-None `layers` field. Without this the fixture is
+    # degenerate (would also pass a 2D-agnostic maze) — the bug class is
+    # not provoked. We assert it loudly.
+    bodies = [o for o in fx.obstacles if o.kind == "body"]
+    layer_attributed = [o for o in bodies if o.layers is not None]
+    ok &= _assert(len(layer_attributed) >= 1,
+                  f"at least 1 body obstacle has Obstacle.layers set "
+                  f"(layer-attributed bodies = {len(layer_attributed)}/"
+                  f"{len(bodies)}) — the engine refactor's per-layer "
+                  "filter IS exercised by this fixture (not a no-op)",
+                  msgs)
+    # The In2.Cu-only body, specifically (the construction proof claim).
+    in2_only = [o for o in layer_attributed if o.layers == frozenset({"In2.Cu"})]
+    ok &= _assert(len(in2_only) >= 1,
+                  f"the BODY_IN2 obstacle has layers=={{'In2.Cu'}} "
+                  f"(matches: {len(in2_only)}) — the per-layer obstacle is "
+                  "ATTRIBUTED to In2.Cu only, exactly what the bug class "
+                  "requires (a body whose xy footprint coincides with the "
+                  "F.Cu route but that physically does NOT block F.Cu)", msgs)
+
+    # (b) endpoints match the two pins, on F.Cu.
+    start_pin = fx.pin(fx.nets[0].pin_ids[0])
+    end_pin = fx.pin(fx.nets[0].pin_ids[1])
+    ok &= _assert(
+        abs(path[0][0] - start_pin.x_mm) < 1e-6
+        and abs(path[0][1] - start_pin.y_mm) < 1e-6,
+        f"witness start {path[0]} == start pin "
+        f"{(start_pin.x_mm, start_pin.y_mm)}", msgs)
+    ok &= _assert(
+        abs(path[-1][0] - end_pin.x_mm) < 1e-6
+        and abs(path[-1][1] - end_pin.y_mm) < 1e-6,
+        f"witness end {path[-1]} == end pin "
+        f"{(end_pin.x_mm, end_pin.y_mm)}", msgs)
+    ok &= _assert(start_pin.layer == route_layer == end_pin.layer == "F.Cu",
+                  f"both pin layers == witness layer == F.Cu (start="
+                  f"{start_pin.layer}, end={end_pin.layer}, "
+                  f"wit={route_layer}) — single-layer route, no via", msgs)
+
+    # (c) PER-LAYER filter: bodies that apply on the route's layer.
+    def _applies_on(o, layer):
+        # Mirror of maze_router._obstacle_applies_to_layer (kept inline so
+        # the selfcheck stays import-self-sufficient on the engine bug
+        # class — no maze_router dep for this re-derivation).
+        if o.layers is None:
+            return True
+        return layer in o.layers
+
+    f_cu_bodies = [o for o in bodies if _applies_on(o, route_layer)]
+    ok &= _assert(len(f_cu_bodies) == gt.metrics["f_cu_applicable_bodies"]
+                  == 0,
+                  f"under PER-LAYER filter, F.Cu-applicable bodies = "
+                  f"{len(f_cu_bodies)} == 0 (stored "
+                  f"{gt.metrics['f_cu_applicable_bodies']}) — the only body "
+                  "is In2.Cu-only and is correctly SKIPPED on the F.Cu "
+                  "route, so the F.Cu path is clear by construction", msgs)
+
+    # The witness leg literally clears every applicable body (trivially true
+    # since there are zero applicable F.Cu bodies; we verify by EXACT
+    # segment-to-rect min distance for closure, no AABB shortcut).
+    all_clear = True
+    bad_leg = None
+    for (x1, y1), (x2, y2) in zip(path, path[1:]):
+        for o in f_cu_bodies:
+            d = _seg_rect_min_dist(x1, y1, x2, y2,
+                                   o.x_min, o.y_min, o.x_max, o.y_max)
+            if d < margin - 1e-9:
+                all_clear = False
+                bad_leg = ((x1, y1), (x2, y2), o.id, d)
+                break
+        if not all_clear:
+            break
+    ok &= _assert(all_clear,
+                  f"every F.Cu witness leg clears every F.Cu-applicable body "
+                  f"by ≥ {margin}mm (exact Euclidean seg-to-rect distance); "
+                  f"failed at {bad_leg}", msgs)
+
+    # (d) 2D-LAYER-AGNOSTIC LIAR filter: simulate the pre-fix bug by
+    # treating every obstacle as full-stack. The same F.Cu segment then
+    # INTERSECTS the body AABB — proving the bug class is real on this
+    # fixture and a regression to the 2D filter would FAIL the maze on T15.
+    liar_f_cu_bodies = list(bodies)  # liar: every body applies on every layer
+    ok &= _assert(len(liar_f_cu_bodies) == gt.metrics["liar_f_cu_applicable_bodies"]
+                  == 1,
+                  f"under 2D-AGNOSTIC LIAR filter, F.Cu-applicable bodies = "
+                  f"{len(liar_f_cu_bodies)} == 1 (stored "
+                  f"{gt.metrics['liar_f_cu_applicable_bodies']}) — the pre-"
+                  "fix bug WRONGLY applies the In2.Cu-only body to F.Cu too",
+                  msgs)
+    liar_blocked = False
+    liar_witness = None
+    for (x1, y1), (x2, y2) in zip(path, path[1:]):
+        for o in liar_f_cu_bodies:
+            d = _seg_rect_min_dist(x1, y1, x2, y2,
+                                   o.x_min, o.y_min, o.x_max, o.y_max)
+            if d < margin - 1e-9:
+                liar_blocked = True
+                liar_witness = (o.id, round(d, 6))
+                break
+        if liar_blocked:
+            break
+    ok &= _assert(liar_blocked,
+                  f"under the 2D-AGNOSTIC LIAR filter, the F.Cu witness "
+                  f"segment INTERSECTS the body AABB ({liar_witness}) — "
+                  f"the bug class IS real on T15, so a regression to the "
+                  "2D filter (ignoring Obstacle.layers) makes the maze "
+                  "report INFEASIBLE on this fixture (the lockfile fires)",
+                  msgs)
+    ok &= _assert(gt.metrics["liar_verdict"] == "INFEASIBLE",
+                  "stored liar_verdict == INFEASIBLE (the 2D-agnostic maze "
+                  "would WRONGLY reject T15; per-layer maze correctly "
+                  "ROUTES it)", msgs)
+
+    # (e) INVOKE the engine directly on T15 and assert ROUTABLE end-to-end.
+    try:
+        from . import maze_router as _MR   # type: ignore
+    except ImportError:                    # pragma: no cover — script-mode
+        import os as _os
+        import sys as _sys
+        _here = _os.path.dirname(_os.path.abspath(__file__))
+        if _here not in _sys.path:
+            _sys.path.insert(0, _here)
+        import maze_router as _MR          # type: ignore
+    eng_out = _MR.solve(fx.problem_view())
+    ok &= _assert(eng_out.get("verdict") == "ROUTABLE",
+                  f"engine end-to-end verdict {eng_out.get('verdict')!r} == "
+                  "'ROUTABLE' on T15 — the per-layer filter routes the F.Cu "
+                  "net cleanly past the In2.Cu-only obstacle", msgs)
+    ok &= _assert(eng_out.get("routed") == 1,
+                  f"engine routed=={eng_out.get('routed')} == 1 (the single "
+                  "F.Cu long-path net is routed)", msgs)
+    ok &= _assert(eng_out.get("n_vias") == 0,
+                  f"engine n_vias=={eng_out.get('n_vias')} == 0 (the F.Cu "
+                  "route is single-layer — no via needed past the In2.Cu "
+                  "obstacle)", msgs)
+    # The engine also returns a witness path; verify it clears every
+    # F.Cu-applicable body (defensive — mirrors _special_checks T13 anti-liar).
+    eng_path = eng_out.get("path") or []
+    eng_segs = eng_out.get("segments") or []
+    ok &= _assert(len(eng_path) >= 2 or len(eng_segs) >= 1,
+                  f"engine returned a witness path/segments "
+                  f"({len(eng_path)} pts, {len(eng_segs)} segs)", msgs)
+    eng_clear = True
+    bad = None
+    if eng_path:
+        for (x1, y1), (x2, y2) in zip(eng_path, eng_path[1:]):
+            for o in f_cu_bodies:
+                d = _seg_rect_min_dist(x1, y1, x2, y2,
+                                       o.x_min, o.y_min, o.x_max, o.y_max)
+                if d < margin - 1e-9:
+                    eng_clear = False
+                    bad = (o.id, round(d, 6))
+                    break
+            if not eng_clear:
+                break
+    ok &= _assert(eng_clear,
+                  f"engine witness path clears every F.Cu-applicable body "
+                  f"by ≥ {margin}mm (zero applicable here ⇒ trivially clear); "
+                  f"failed at {bad}", msgs)
+    ok &= _assert(gt.verdict == "ROUTABLE",
+                  "stored ground-truth verdict ROUTABLE (per-layer filter "
+                  "preserves the F.Cu route past the In2.Cu-only obstacle)",
+                  msgs)
+    return ok
+
+
+# Append T15 selfcheck to the dispatch dict via dict assignment so the
+# original _SELFCHECKS = {...} literal stays byte-identical.
+_SELFCHECKS["T15"] = _selfcheck_T15
+
+# The harness-dispatch wrappers (_expected_for / _accepted_verdicts /
+# _key_metric_str / _special_checks) for T15 are appended at the END of
+# this module — they MUST run AFTER those originals are defined (which
+# happens below `run_self_check` / `run_list`). See the "T15 harness-
+# dispatch wrappers" block near the end of the file.
+
+
 def run_self_check():
     print("=" * 72)
     print("ROUTING ENGINE — T1-T9 GROUND-TRUTH SELF-CHECK")
@@ -1375,6 +1586,129 @@ def run_solver(spec, cases=None):
     total = len(sel)
     print(f"SOLVER RESULT: {n_pass}/{total} cases PASS against ground truth.")
     return 0 if n_pass == total else 1
+
+
+# ============================================================================
+# T15 harness-dispatch wrappers — APPEND-ONLY (CH1 30/30 (E) lockfile).
+# Each wrapper delegates T1-T14 to the original function (captured here as
+# `_*_T1_T14` aliases) and handles T15 inline. The original `_expected_for`,
+# `_accepted_verdicts`, `_key_metric_str`, `_special_checks` bodies above
+# stay byte-identical (diff-stat: T15 additions only).
+# `run_solver` / `run_list` call these by BARE NAME at module scope, so
+# rebinding the module global swaps the function in place transparently.
+# ============================================================================
+
+_expected_for_T1_T14 = _expected_for
+
+
+def _expected_for_T15_wrapped(fx):
+    """APPEND-ONLY: delegate T1-T14 to the original; handle T15 here.
+
+    T15 — per-layer obstacle filter. The maze must route the single F.Cu
+    net past the In2.Cu-only obstacle. Harness-scored metrics:
+        routed = 1   (the one long-path net is routed),
+        n_vias = 0   (single F.Cu layer — no via needed).
+    A regression to the 2D-agnostic filter would report INFEASIBLE
+    (verdict mismatch) AND fail the routed/n_vias scoring.
+    """
+    if fx.name == "T15":
+        m = fx.ground_truth.metrics
+        return {"routed": m["routed"], "n_vias": m["max_n_vias"]}
+    return _expected_for_T1_T14(fx)
+
+
+_expected_for = _expected_for_T15_wrapped
+
+
+_accepted_verdicts_T1_T14 = _accepted_verdicts
+
+
+def _accepted_verdicts_T15_wrapped(fx):
+    if fx.name == "T15":
+        # Per-layer maze must emit ROUTABLE on T15. A 2D-agnostic regression
+        # would emit INFEASIBLE (NOT in the accepted set) — FAILS T15.
+        return {"ROUTABLE"}
+    return _accepted_verdicts_T1_T14(fx)
+
+
+_accepted_verdicts = _accepted_verdicts_T15_wrapped
+
+
+_key_metric_str_T1_T14 = _key_metric_str
+
+
+def _key_metric_str_T15_wrapped(fx):
+    if fx.name == "T15":
+        m = fx.ground_truth.metrics
+        return (f"per-layer body on In2.Cu blocks F.Cu route in xy projection "
+                f"(witness len={m['witness_length_mm']}mm, vias=0); "
+                f"PER-LAYER filter ⇒ ROUTABLE, 2D-AGNOSTIC liar ⇒ "
+                f"{m['liar_verdict']} (the engine-correctness lockfile)")
+    return _key_metric_str_T1_T14(fx)
+
+
+_key_metric_str = _key_metric_str_T15_wrapped
+
+
+_special_checks_T1_T14 = _special_checks
+
+
+def _special_checks_T15_wrapped(fx, got):
+    if fx.name == "T15":
+        # Anti-liar geometric witness check (the engine analogue of
+        # _selfcheck_T15 (c)+(e)): the solver must produce a path that
+        # (i) endpoints match the pins, (ii) is OCTILINEAR (single straight
+        # F.Cu segment), (iii) clears every F.Cu-applicable body by
+        # ≥ (trace/2 + clearance) Euclidean. Without geometric proof,
+        # claiming ROUTABLE is unbacked — the case FAILS.
+        notes = []
+        path = _solver_path_for_T13(got)   # re-use the T13 path extractor
+        if not path or len(path) < 2:
+            return False, ["T15 anti-liar: no geometric path returned "
+                           "(need 'path' polyline or 'segments' — claimed-"
+                           "routed without a witness is a LIAR pattern)"]
+        net = fx.nets[0]
+        sp = fx.pin(net.pin_ids[0])
+        ep = fx.pin(net.pin_ids[1])
+        end_ok = (abs(path[0][0] - sp.x_mm) < 1e-3
+                  and abs(path[0][1] - sp.y_mm) < 1e-3
+                  and abs(path[-1][0] - ep.x_mm) < 1e-3
+                  and abs(path[-1][1] - ep.y_mm) < 1e-3)
+        if not end_ok:
+            return False, [f"T15 anti-liar: path endpoints {path[0]},"
+                           f"{path[-1]} != pins {(sp.x_mm, sp.y_mm)},"
+                           f"{(ep.x_mm, ep.y_mm)}"]
+        for (x1, y1), (x2, y2) in zip(path, path[1:]):
+            dx, dy = abs(x2 - x1), abs(y2 - y1)
+            if dx < 1e-6 and dy < 1e-6:
+                return False, ["T15 anti-liar: zero-length segment in path"]
+            if not (dx < 1e-6 or dy < 1e-6 or abs(dx - dy) < 1e-6):
+                return False, [f"T15 anti-liar: non-octilinear segment "
+                               f"({x1},{y1})->({x2},{y2}) — acute-angle risk"]
+        # PER-LAYER filter check: only F.Cu-applicable bodies count.
+        margin = 0.20 / 2.0 + 0.20  # trace 0.20 + clearance 0.20mm
+        bodies = [o for o in fx.obstacles if o.kind == "body"]
+        f_cu_bodies = [o for o in bodies
+                       if o.layers is None or "F.Cu" in o.layers]
+        for (x1, y1), (x2, y2) in zip(path, path[1:]):
+            for o in f_cu_bodies:
+                d = _seg_rect_min_dist(x1, y1, x2, y2,
+                                       o.x_min, o.y_min, o.x_max, o.y_max)
+                if d < margin - 1e-6:
+                    return False, [
+                        f"T15 anti-liar: segment ({x1},{y1})->({x2},{y2}) "
+                        f"clears F.Cu-applicable body {o.id} by only "
+                        f"{d:.4f}mm (need ≥{margin}mm) — LIAR rejected"]
+        notes.append(f"T15 geometric witness: {len(path)-1} segments, "
+                     f"endpoints match, octilinear, clears all "
+                     f"{len(f_cu_bodies)} F.Cu-applicable bodies (of "
+                     f"{len(bodies)} total — per-layer filter applied) "
+                     f"by ≥{margin}mm => PASS")
+        return True, notes
+    return _special_checks_T1_T14(fx, got)
+
+
+_special_checks = _special_checks_T15_wrapped
 
 
 def main(argv=None):
