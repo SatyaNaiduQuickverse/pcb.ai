@@ -456,6 +456,96 @@ def reconcile_reachability(fx):
 
 
 # ----------------------------------------------------------------------------
+# NET TOPOLOGY CLASSIFICATION — INTERNAL vs CROSSING (the FIX2 root change).
+# ----------------------------------------------------------------------------
+# A net is CROSSING iff it must traverse a SUBSYSTEM-BOUNDARY door (an I/O port):
+# an endpoint sits AT / passes THROUGH a door (the door is the boundary mouth).
+# Otherwise the net is INTERNAL — escape / within-zone governed, needing NO door.
+# Only CROSSING nets are bipartite-assigned to doors + counted against door
+# capacity. INTERNAL nets are EXCLUDED from the door ledger (they consume no door
+# supply, are NEVER "stranded" by door shortage). This removes the phantom
+# feasible=False + phantom stranded nets the real board exposed (the engine used
+# to force-assign EVERY routable net to a door, oversubscribing a door supply that
+# only the genuine boundary-crossing nets actually consume). The primitive lives
+# HERE in phase_a so BOTH Phase A's door ledger AND Phase B's planner consume the
+# SAME classification (phase_b re-exports it).
+#
+# CLASSIFICATION (native, from the INPUT-ONLY Problem; generic — not CH1-special):
+#   1. DECLARED door-routed: a net with non-empty `feasible_doors` is, BY THE
+#      CONSTRUCTION, a door-routed net (T3/T4 — their nets are declared to traverse
+#      a corridor door). CROSSING. (Preserves T3/T4 exactly.)
+#   2. DECLARED via `Door.passes`: a door may name the nets reserved to pass it
+#      (BOARD_INVARIANTS I/O-port signal lists). A net named in any door's `passes`
+#      is CROSSING.
+#   3. GEOMETRIC at/through a door: a net with a pin sitting AT/THROUGH a door's
+#      I/O-port footprint (within the door's half-width + tolerance of the door
+#      coordinate) traverses that boundary mouth. CROSSING.
+#   4. EXPLICIT override: a caller that measured crossing from richer context than
+#      the abstract Problem carries (the real-board driver knows which nets have a
+#      pad OUTSIDE the subsystem zone — the true boundary-crossing signal) may pass
+#      `crossing_override` (iterable of net_ids). When given it is AUTHORITATIVE
+#      (the engine still owns the door ledger + feasibility math).
+#   Everything else is INTERNAL.
+# ----------------------------------------------------------------------------
+
+# A pin counts as sitting AT a door's I/O port if it lies within the door's
+# (half-width + tolerance) of the door coordinate (the door is a finite-width
+# boundary mouth). Generous-but-bounded: a boundary I/O pad is physically at the
+# port; an internal component pad is not. Pure geometry; no router.
+_DOOR_PIN_TOL_MM = 0.5  # ±0.5mm I/O-port placement tolerance (BOARD_INVARIANTS)
+
+
+def _pin_at_door(problem, pin, door) -> bool:
+    """True iff `pin` sits AT/THROUGH `door`'s I/O-port footprint: within the
+    door's (half-width + tolerance) of the door coordinate. Counting geometry."""
+    reach = door.width_mm / 2.0 + _DOOR_PIN_TOL_MM
+    return (abs(pin.x_mm - door.x_mm) <= reach
+            and abs(pin.y_mm - door.y_mm) <= reach)
+
+
+def classify_net_topology(problem, crossing_override=None):
+    """Classify every net INTERNAL vs CROSSING (see section banner).
+
+    Returns (crossing: set[str], internal: set[str]). CROSSING nets traverse a
+    subsystem-boundary door; INTERNAL nets are escape/within-zone governed and
+    consume NO door capacity. `crossing_override` (iterable of net_ids), when
+    given, is AUTHORITATIVE — the engine trusts the caller's measured boundary
+    crossings (the real-board driver's pad-outside-zone signal) and the rest are
+    INTERNAL.
+    """
+    net_ids = [n.net_id for n in problem.nets]
+    if crossing_override is not None:
+        cross = {nid for nid in net_ids if nid in set(crossing_override)}
+        return cross, set(net_ids) - cross
+    cross = set()
+    passes_nets = set()
+    for d in problem.doors:
+        passes_nets.update(d.passes)
+    for net in problem.nets:
+        # (1) declared door-routed.
+        if net.feasible_doors:
+            cross.add(net.net_id)
+            continue
+        # (2) declared via Door.passes.
+        if net.net_id in passes_nets:
+            cross.add(net.net_id)
+            continue
+        # (3) geometric: any pin sits at/through a door I/O port.
+        at_door = False
+        for pid in net.pin_ids:
+            try:
+                p = problem.pin(pid)
+            except KeyError:
+                continue
+            if any(_pin_at_door(problem, p, d) for d in problem.doors):
+                at_door = True
+                break
+        if at_door:
+            cross.add(net.net_id)
+    return cross, set(net_ids) - cross
+
+
+# ----------------------------------------------------------------------------
 # ESCAPE LEDGER (per-IC-side via-slot demand vs supply — the T9/J18-J19 model).
 # ROUTING_METHODOLOGY §0b Phase A item 2; DEEP_RESEARCH decision table.
 # ----------------------------------------------------------------------------
@@ -464,7 +554,7 @@ def reconcile_reachability(fx):
 class EscapeSideLedger:
     ic_side: str
     demand: int                 # nets that must escape this side
-    supply_std: int             # standard (non-HDI) via slots
+    supply_std: int             # standard (non-HDI) via slots REMAINING for demand
     supply_hdi: int             # additional HDI-only via slots
     overflow_std: int           # max(0, demand - supply_std)
     overflow_hdi: int           # max(0, demand - (supply_std + supply_hdi))
@@ -475,19 +565,34 @@ class EscapeSideLedger:
     headroom_ok_all: bool       # demand <= FoS*(all slots)
 
 
-def escape_ledger(fx):
-    """Build per-IC-side via-slot demand/supply ledgers. Demand = nets routed
-    through each IC side's slots. In the abstract fixtures (T9) every escape net
-    maps 1:1 to one slot on the named ic_side, so DEMAND per side = #nets that
-    need a slot on that side = #escape nets (the fixture has all on one side).
+def make_side_ledger(ic_side, demand, supply_std, supply_hdi):
+    """Construct an EscapeSideLedger from raw demand + supply, computing the
+    overflow + §5c FoS-headroom fields ONCE in the engine. This is the single
+    source of the per-side overflow math — used by `escape_ledger` (native
+    derivation) AND by callers that supply MEASURED demand/supply from real
+    geometry (the real-board driver), so the two cannot drift. `supply_std` is
+    the REMAINING std supply (already-consumed slots have been deducted by the
+    caller / by `escape_ledger`'s consumed model)."""
+    std, hdi, dem = supply_std, supply_hdi, demand
+    return EscapeSideLedger(
+        ic_side=ic_side,
+        demand=dem,
+        supply_std=std,
+        supply_hdi=hdi,
+        overflow_std=max(0, dem - std),
+        overflow_hdi=max(0, dem - (std + hdi)),
+        headroom_supply_std=FOS_ROUTING_CAPACITY * std,
+        headroom_ok_std=dem <= FOS_ROUTING_CAPACITY * std + 1e-9,
+        headroom_supply_all=FOS_ROUTING_CAPACITY * (std + hdi),
+        headroom_ok_all=dem <= FOS_ROUTING_CAPACITY * (std + hdi) + 1e-9,
+    )
 
-    We attribute demand to a side from the via_slots' ic_side: every net in a
-    fixture that HAS via_slots is an escape net needing one slot on that side
-    (the T9 construction). Returns {ic_side: EscapeSideLedger}.
-    """
-    if not fx.via_slots:
-        return {}
-    # Sides present in the supply.
+
+def side_supply(fx):
+    """Per-IC-side via-slot SUPPLY, grouped from the inputs. Returns
+    {ic_side: {"std": int, "hdi": int}} — std (hdi_only=False) + HDI-only slots
+    per side. The single source of the supply count for both `escape_ledger` and
+    Phase B's via pre-assignment."""
     sides = {}
     for vs in fx.via_slots:
         sides.setdefault(vs.ic_side, {"std": 0, "hdi": 0})
@@ -495,35 +600,105 @@ def escape_ledger(fx):
             sides[vs.ic_side]["hdi"] += 1
         else:
             sides[vs.ic_side]["std"] += 1
-    # Demand: in the T9 escape model each net needs exactly one slot on the side.
-    # When the fixture has a single ic_side, all escape nets target it.
+    return sides
+
+
+def net_escape_side(fx):
+    """Attribute each escape net to ONE ic_side: the side whose via-slot field is
+    NEAREST the net's pin centroid (exact, deterministic counting; NOT a router).
+    Single source of the per-net side mapping (used by `escape_demand_by_side` for
+    the ledger AND by Phase B's via pre-assignment). Returns {net_id: ic_side} for
+    nets that map to a side ({} when there are no via_slots)."""
+    sides = side_supply(fx)
+    if not sides:
+        return {}
+    side_centroid = {}
+    for s in sides:
+        xs = [vs.x_mm for vs in fx.via_slots if vs.ic_side == s]
+        ys = [vs.y_mm for vs in fx.via_slots if vs.ic_side == s]
+        side_centroid[s] = (sum(xs) / len(xs), sum(ys) / len(ys))
+    side_list = sorted(sides)
+    out = {}
+    for net in fx.nets:
+        if not net.pin_ids:
+            continue
+        xs = [fx.pin(p).x_mm for p in net.pin_ids]
+        ys = [fx.pin(p).y_mm for p in net.pin_ids]
+        cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
+        # Nearest side by centroid distance; tie-break by side id (deterministic).
+        best = min(side_list,
+                   key=lambda s: ((side_centroid[s][0] - cx) ** 2
+                                  + (side_centroid[s][1] - cy) ** 2, s))
+        out[net.net_id] = best
+    return out
+
+
+def escape_demand_by_side(fx):
+    """PER-IC-SIDE escape demand, attributed NATIVELY from geometry (generalises
+    the single-side T9 count to the multi-side board — the FIX1 root change).
+
+    Each escape net is attributed to ONE ic_side (its nearest via-slot field, via
+    `net_escape_side`). For the single-side fixture (T9) every net maps to the
+    only side, so demand == #nets there (the prior behaviour, preserved). For a
+    multi-IC-side board each net counts against the ONE side it physically
+    escapes — so the WORST side governs the verdict (averaging-masks-local-
+    failure), instead of every side seeing all nets (the old over-count).
+
+    Returns {ic_side: int}. Sides with via supply but no nearest net get demand 0.
+    """
+    sides = side_supply(fx)
+    demand = {s: 0 for s in sides}
+    for side in net_escape_side(fx).values():
+        demand[side] += 1
+    return demand
+
+
+def escape_ledger(fx, demand_by_side=None, consumed_by_side=None):
+    """Build per-IC-side via-slot demand/supply ledgers — the T9/J18-J19 escape
+    model, NATIVELY per-side (the FIX1 generalisation of the multi-side case).
+
+    SUPPLY  : grouped per ic_side from the via_slots (std = hdi_only=False;
+              hdi = hdi_only=True), via `side_supply`.
+    REMAINING-capacity model: `consumed_by_side[side]` = std slots ALREADY
+              consumed by already-routed nets on that side; the binding std
+              supply for the REMAINING demand is max(0, std_total - consumed).
+              Callers with a real board pass this (the 24/30 routed nets consumed
+              their fanout slots); fixtures omit it (consumed = 0). The HDI supply
+              is likewise reduced by what routed+remaining-std already covers when
+              consumed is given, so HDI is the residual escalation lever.
+    DEMAND  : per side, attributed NATIVELY from geometry via
+              `escape_demand_by_side` (each net counts against the ONE side it
+              escapes). A caller MAY override with a MEASURED `demand_by_side`
+              (the real-board driver measures residual demand per side from the
+              live geometry) — the engine still owns the overflow/verdict math.
+
+    The WORST side (max overflow) governs the verdict (`_decide_verdict`), per
+    [[reference-averaging-masks-local-failure]]. Returns {ic_side: EscapeSideLedger}.
+    """
+    if not fx.via_slots:
+        return {}
+    sides = side_supply(fx)
+    if demand_by_side is None:
+        demand_by_side = escape_demand_by_side(fx)
+    consumed_by_side = consumed_by_side or {}
     ledgers = {}
-    n_nets = len(fx.nets)
-    only_side = len(sides) == 1
     for side, sup in sides.items():
-        demand = n_nets if only_side else _demand_for_side(fx, side)
-        std = sup["std"]
-        hdi = sup["hdi"]
-        ledgers[side] = EscapeSideLedger(
-            ic_side=side,
-            demand=demand,
-            supply_std=std,
-            supply_hdi=hdi,
-            overflow_std=max(0, demand - std),
-            overflow_hdi=max(0, demand - (std + hdi)),
-            headroom_supply_std=FOS_ROUTING_CAPACITY * std,
-            headroom_ok_std=demand <= FOS_ROUTING_CAPACITY * std + 1e-9,
-            headroom_supply_all=FOS_ROUTING_CAPACITY * (std + hdi),
-            headroom_ok_all=demand <= FOS_ROUTING_CAPACITY * (std + hdi) + 1e-9,
-        )
+        demand = int(demand_by_side.get(side, 0))
+        std_total = sup["std"]
+        hdi_total = sup["hdi"]
+        consumed = int(consumed_by_side.get(side, 0))
+        # REMAINING std supply after already-routed nets consumed their slots.
+        std_remaining = max(0, std_total - consumed)
+        # HDI residual: one microvia per slot, minus what routed + remaining-std
+        # already cover (only meaningful when a consumed model is supplied; with
+        # consumed == 0 this is just the declared hdi_total, the T9 behaviour).
+        if consumed:
+            hdi_remaining = max(0, hdi_total - max(0, consumed - std_total))
+        else:
+            hdi_remaining = hdi_total
+        ledgers[side] = make_side_ledger(side, demand, std_remaining,
+                                         hdi_remaining)
     return ledgers
-
-
-def _demand_for_side(fx, side):
-    """Fallback demand attribution for multi-side fixtures (none ship today):
-    count nets whose pins sit nearest this side. Conservative = all nets when we
-    cannot localise."""
-    return len(fx.nets)
 
 
 # ----------------------------------------------------------------------------
@@ -563,7 +738,8 @@ def door_ledgers(fx, door_load):
 # `problem` is the INPUT-ONLY view (run_suite Problem) — no ground_truth visible.
 # ----------------------------------------------------------------------------
 
-def solve(problem):
+def solve(problem, demand_by_side=None, consumed_by_side=None,
+          crossing_override=None):
     """Phase A capacity + escape pre-check. Returns the harness-scored dict +
     a 'ledger' / 'verdict' / 'greedy' block (the proof). Routes NOTHING — counts.
 
@@ -576,6 +752,13 @@ def solve(problem):
       overflow      : escape-ledger overflow with std resources (T9; 0 only HDI).
     Plus a rich 'ledger' (door + escape), 'greedy' strand report, and the verdict
     rationale — the EVIDENCE the verdict is real.
+
+    `demand_by_side`/`consumed_by_side`: optional caller-MEASURED per-side escape
+    demand + already-consumed std slots (the real-board driver measures these from
+    the live geometry). When None the engine derives demand natively from
+    geometry (nearest-side attribution) with consumed == 0 (the fixture path). The
+    fixture harness calls `solve(problem)` with no extra args, so the abstract
+    fixtures (T9/T10) exercise the NATIVE per-side derivation end-to-end.
     """
     fx = problem  # the Problem view exposes the same fixture INPUT fields
 
@@ -589,6 +772,16 @@ def solve(problem):
 
     net_ids = [n.net_id for n in fx.nets]
 
+    # FIX2: the door bipartite + greedy + door ledger run over the CROSSING nets
+    # ONLY (those that traverse a subsystem-boundary door). INTERNAL nets are
+    # escape/within-zone governed — they consume NO door capacity and are never
+    # "stranded" by door shortage (the real-board phantom strand). For the
+    # abstract door fixtures (T3/T4) every net is declared door-routed => crossing,
+    # so the door analysis is unchanged.
+    crossing_set, _internal_set = classify_net_topology(
+        fx, crossing_override=crossing_override)
+    door_net_ids = [nid for nid in net_ids if nid in crossing_set]
+
     # Per-net door "cost" for greedy = Euclidean distance from the net's pin
     # CENTROID to the door (shortest-first greed: a net prefers its NEAREST
     # reachable door — the locally-cheap choice). Computed purely from inputs.
@@ -601,26 +794,27 @@ def solve(problem):
     # the ONLY net able to use → that net is stranded. Tiebreak: input order
     # (stable) so the construction is reproducible.
     greedy_order = sorted(
-        net_ids,
+        door_net_ids,
         key=lambda nid: (-len(effective_feasible.get(nid, ())),
                          net_ids.index(nid)))
 
-    # ---- 3. FEASIBILITY (SURESHOT bipartite max-flow) -------------------
+    # ---- 3. FEASIBILITY (SURESHOT bipartite max-flow; CROSSING nets only) ---
     has_doors = bool(fx.doors)
     if has_doors:
-        feas = feasible_assignment(net_ids, effective_feasible, door_cap)
+        feas = feasible_assignment(door_net_ids, effective_feasible, door_cap)
         dl = door_ledgers(fx, feas["door_load"])
     else:
         feas = None
         dl = {}
 
-    # ---- 4. ESCAPE LEDGER (per-IC-side via slots; T9) -------------------
-    esc = escape_ledger(fx)
+    # ---- 4. ESCAPE LEDGER (per-IC-side via slots; T9/T10) ---------------
+    esc = escape_ledger(fx, demand_by_side=demand_by_side,
+                        consumed_by_side=consumed_by_side)
 
-    # ---- 5. GREEDY-STRAND detection (T3/T4) -----------------------------
+    # ---- 5. GREEDY-STRAND detection (T3/T4; CROSSING nets only) ---------
     if has_doors:
         greedy_routes, greedy_assign, stranded = greedy_assignment(
-            net_ids, effective_feasible, door_cap,
+            door_net_ids, effective_feasible, door_cap,
             net_door_cost=net_door_cost, net_order=greedy_order)
         global_routes = feas["matched"]
     else:

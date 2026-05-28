@@ -159,6 +159,15 @@ FOS_ROUTING_CAPACITY = PA.FOS_ROUTING_CAPACITY
 
 
 # ============================================================================
+# 0. NET TOPOLOGY CLASSIFICATION — INTERNAL vs CROSSING (the FIX2 root change)
+# ============================================================================
+# The classification PRIMITIVE lives in phase_a (the lower module both Phase A's
+# solve AND Phase B's planner consume — single source, no duplication). Re-export
+# it here under the Phase B name so the planner reads naturally.
+classify_net_topology = PA.classify_net_topology
+
+
+# ============================================================================
 # 1. THE GENERIC GRAPH MODEL
 # ============================================================================
 
@@ -213,6 +222,8 @@ class RoutingGraph:
     edges: List[GraphEdge]                       # supply + demand edges
     net_feasible: Dict[str, Tuple[str, ...]]     # net_id -> reachable door ids
     net_via_sides: Dict[str, Tuple[str, ...]]    # net_id -> ic_side(s) it escapes
+    crossing_nets: Tuple[str, ...] = ()          # nets traversing a boundary door
+    internal_nets: Tuple[str, ...] = ()          # escape/within-zone-governed nets
 
     # ---- convenience views (Phase C consumes these) ----------------------
     def doors(self) -> List[GraphNode]:
@@ -248,7 +259,7 @@ def _pin_node_key(pin_id: str) -> str:
     return f"pin:{pin_id}"
 
 
-def build_routing_graph(problem) -> RoutingGraph:
+def build_routing_graph(problem, crossing_override=None) -> RoutingGraph:
     """Build the GENERIC graph from the INPUT-ONLY Problem.
 
     NODES:
@@ -261,16 +272,23 @@ def build_routing_graph(problem) -> RoutingGraph:
 
     EDGES:
       - "supply" edge per door / via_site declaring its capacity
-      - "demand" edge per (net, reachable-door) pair, using the net's EFFECTIVE
-        feasible set (Phase A's declared/inferred reconciliation — single source
-        of the reachability math, NOT re-derived here)
+      - "demand" edge per (CROSSING net, reachable-door) pair — ONLY nets that
+        traverse a subsystem-boundary door (classify_net_topology) get door demand
+        edges; INTERNAL nets are escape/within-zone governed and consume NO door
+        capacity (the FIX2 root change — removes the phantom strand). The reachable
+        doors use the net's EFFECTIVE feasible set (Phase A's declared/inferred
+        reconciliation — single source of the reachability math, NOT re-derived).
       - "demand" edge per (escape-net, via_site) pair, for escape nets whose
         ic_side the via_site serves
+
+    `crossing_override` (iterable of net_ids), when given, is the authoritative
+    crossing set (the real-board driver's measured pad-outside-zone signal).
 
     This is COMPUTED from inputs; nothing hardcoded. Returns a RoutingGraph.
     """
     nodes: Dict[str, GraphNode] = {}
     edges: List[GraphEdge] = []
+    crossing_set, internal_set = classify_net_topology(problem, crossing_override)
 
     # ---- pin nodes -------------------------------------------------------
     for p in problem.pins:
@@ -304,33 +322,39 @@ def build_routing_graph(problem) -> RoutingGraph:
             (("ic_side", vs.ic_side), ("hdi_only", vs.hdi_only)))
         edges.append(GraphEdge("supply", key, key, 1))
 
-    # ---- net DEMAND edges (reachability) ---------------------------------
+    # ---- net DEMAND edges (reachability) — CROSSING nets ONLY ------------
     # Reuse Phase A's reconciliation as the SINGLE SOURCE of net->door
     # reachability (declared/inferred cross-check); do NOT re-derive it here.
+    # FIX2: only CROSSING nets (those that traverse a boundary door) get door
+    # demand edges + count against door capacity. INTERNAL nets are escape/within-
+    # zone governed — they get NO door edge (net_feasible == () for them).
     if problem.doors:
         effective_feasible, _reports = PA.reconcile_reachability(problem)
     else:
         effective_feasible = {}
     net_feasible: Dict[str, Tuple[str, ...]] = {}
     for net in problem.nets:
-        feas = tuple(effective_feasible.get(net.net_id, ()))
+        if net.net_id in crossing_set:
+            feas = tuple(effective_feasible.get(net.net_id, ()))
+        else:
+            feas = ()        # INTERNAL: no door demand
         net_feasible[net.net_id] = feas
         tok = f"net:{net.net_id}"
         for door_id in feas:
             edges.append(GraphEdge("demand", tok, _door_node_key(door_id), 1))
 
     # ---- escape (via-site) demand edges ----------------------------------
-    # In the abstract escape model (T9 / J18-J19) each escape net needs one slot
-    # on its ic_side. With a single ic_side in the supply, every net is an escape
-    # net for that side; this generalises to per-side attribution on the real
-    # board (phase_a._demand_for_side is the hook). We add demand edges from each
-    # escape net to EVERY via_site serving its side (the planner picks one).
+    # Each escape net needs one slot on its ic_side. The net->side mapping is the
+    # SAME native per-net nearest-side attribution Phase A's ledger uses
+    # (PA.net_escape_side) — single source, so the via pre-assignment and the
+    # escape ledger agree on which side a net escapes. This GENERALISES the old
+    # single-side-only handling to the multi-IC-side board (FIX1). We add demand
+    # edges from each escape net to EVERY via_site serving its side (planner picks).
     net_via_sides: Dict[str, Tuple[str, ...]] = {}
     if problem.via_slots:
-        sides = {vs.ic_side for vs in problem.via_slots}
-        only_side = next(iter(sides)) if len(sides) == 1 else None
+        side_of = PA.net_escape_side(problem)
         for net in problem.nets:
-            side = only_side  # single-side fixtures; real board localises per net
+            side = side_of.get(net.net_id)
             if side is None:
                 net_via_sides[net.net_id] = ()
                 continue
@@ -341,7 +365,9 @@ def build_routing_graph(problem) -> RoutingGraph:
                     edges.append(GraphEdge("demand", tok, _via_node_key(vs.id), 1))
 
     return RoutingGraph(nodes=nodes, edges=edges,
-                        net_feasible=net_feasible, net_via_sides=net_via_sides)
+                        net_feasible=net_feasible, net_via_sides=net_via_sides,
+                        crossing_nets=tuple(sorted(crossing_set)),
+                        internal_nets=tuple(sorted(internal_set)))
 
 
 # ============================================================================
@@ -486,6 +512,11 @@ class GlobalPlan:
     routed_nets: int = 0
     vias_required: int = 0
     rationale: str = ""
+    # FIX2: net topology — CROSSING nets traverse a boundary door (in the door
+    # ledger); INTERNAL nets are escape/within-zone governed (NOT in the door
+    # ledger, consume no door capacity).
+    crossing_nets: tuple = ()
+    internal_nets: tuple = ()
 
     @staticmethod
     def schema_doc() -> str:
@@ -521,6 +552,8 @@ class GlobalPlan:
             "greedy": dict(self.greedy),
             "escape_ledger": dict(self.escape_ledger),
             "rationale": self.rationale,
+            "crossing_nets": list(self.crossing_nets),
+            "internal_nets": list(self.internal_nets),
             "doors": {
                 did: {
                     "door_id": dp.door_id,
@@ -543,13 +576,18 @@ class GlobalPlan:
 # ============================================================================
 
 def greedy_vs_global(problem, net_feasible: Dict[str, Tuple[str, ...]],
-                     door_cap: Dict[str, int], global_routes: int) -> dict:
+                     door_cap: Dict[str, int], global_routes: int,
+                     net_ids=None) -> dict:
     """Demonstrate the GLOBAL plan beats the naive GREEDY (the proof the global
     phase is necessary — T3/T4 / the CH1 24/30 trap). Reuse phase_a's greedy
     simulator + its least-constrained-first ordering + nearest-door cost (the
     precise v1->v8 cooperative-router failure mode). Returns the greedy block the
-    plan + harness consume."""
-    net_ids = [n.net_id for n in problem.nets]
+    plan + harness consume.
+
+    `net_ids` defaults to ALL nets; callers pass the CROSSING-net subset (FIX2) so
+    the greedy/global comparison is over the door-routed nets only."""
+    if net_ids is None:
+        net_ids = [n.net_id for n in problem.nets]
     # Same ordering anti-pattern Phase A uses: least-constrained (most doors)
     # first, so a loose net grabs the scarce shared resource a constrained net
     # is the only one able to use. Tie-break by input order (reproducible).
@@ -607,13 +645,15 @@ def _build_door_plans(problem, graph, net_to_door, net_layers,
     return door_plans, headroom_exceeded
 
 
-def plan(problem) -> GlobalPlan:
+def plan(problem, crossing_override=None, demand_by_side=None,
+         consumed_by_side=None) -> GlobalPlan:
     """Build the GLOBAL PLAN by COMPOSING the merged modules.
 
     Pipeline (each step reuses an already-validated module — no re-implementation):
+      0. classify_net_topology (this file)         — INTERNAL vs CROSSING (FIX2)
       1. build_routing_graph(problem)              — the generic graph (this file)
-      2. Phase A feasible_assignment (max-flow)    — HARD feasibility GATE + the
-         global net->door assignment witness (phase_a.py)
+      2. Phase A feasible_assignment (max-flow)    — HARD feasibility GATE over the
+         CROSSING nets ONLY + the global net->door assignment witness (phase_a.py)
       3. escape_ledger (phase_a.py)                — per-IC-side via demand/supply
       4. _decide_verdict (phase_a.py)              — engine verdict from the ledger
       5. layer_assignment (layer_assign.py)        — per-net layers (SURESHOT)
@@ -622,17 +662,24 @@ def plan(problem) -> GlobalPlan:
       8. greedy_vs_global (phase_a.py)             — the necessity proof (T3/T4)
       9. FoS headroom flag per door (§5c)          — tight-plan honest report
 
+    `crossing_override`/`demand_by_side`/`consumed_by_side`: optional caller-
+    measured signals (the real-board driver) — when None they are derived natively
+    from the Problem. The engine still owns all feasibility/overflow/verdict math.
+
     Returns a GlobalPlan. Hard-feasibility (Phase A) is the GATE; headroom is a
     PREFERENCE flag — a hard-feasible boundary plan (T3/T4) is emitted with
     headroom_exceeded=True, never refused.
     """
-    graph = build_routing_graph(problem)
+    graph = build_routing_graph(problem, crossing_override=crossing_override)
     net_ids = [n.net_id for n in problem.nets]
     door_cap = {d.id: d.capacity_tracks for d in problem.doors}
+    # FIX2: door bipartite + greedy run over CROSSING nets ONLY (internal nets
+    # consume no door capacity, are never stranded by door shortage).
+    crossing_ids = [nid for nid in net_ids if nid in set(graph.crossing_nets)]
 
     # ---- 2. Phase A HARD feasibility + global assignment witness ----------
     if problem.doors:
-        feas = PA.feasible_assignment(net_ids, graph.net_feasible, door_cap)
+        feas = PA.feasible_assignment(crossing_ids, graph.net_feasible, door_cap)
         net_to_door = dict(feas["assignment"])
         feasible = feas["feasible"]
         global_routes = feas["matched"]
@@ -643,10 +690,11 @@ def plan(problem) -> GlobalPlan:
         global_routes = len(net_ids)
 
     # ---- 3 + 4. escape ledger + engine verdict (Phase A) ------------------
-    esc = PA.escape_ledger(problem)
+    esc = PA.escape_ledger(problem, demand_by_side=demand_by_side,
+                           consumed_by_side=consumed_by_side)
     if problem.doors:
         greedy_block = greedy_vs_global(problem, graph.net_feasible, door_cap,
-                                        global_routes)
+                                        global_routes, net_ids=crossing_ids)
         greedy_routes = greedy_block["greedy_routes"]
         stranded = greedy_block["stranded_nets"]
     else:
@@ -657,6 +705,17 @@ def plan(problem) -> GlobalPlan:
         stranded = []
     verdict, routed_nets, overflow_std, rationale = PA._decide_verdict(
         problem, feas, esc, global_routes, greedy_routes, stranded)
+
+    # FIX2: in the door (non-escape) case, a feasible plan routes the CROSSING
+    # nets through doors (global_routes) AND the INTERNAL nets within-zone (no
+    # door). The total routed count is crossing-matched + #internal — so a plan
+    # with internal nets is not under-reported as routing only the door-matched
+    # crossing nets (the phantom-strand artifact). The escape (via_slots) verdict
+    # path keeps its own routed_nets (escape-governed).
+    if problem.doors and not esc:
+        n_internal = len(net_ids) - len(crossing_ids)
+        if feas is not None and feas["feasible"]:
+            routed_nets = global_routes + n_internal
 
     # ---- 5. layer assignment (SURESHOT coloring) --------------------------
     net_layers, la = assign_layers(problem)
@@ -683,6 +742,8 @@ def plan(problem) -> GlobalPlan:
         routed_nets=routed_nets,
         vias_required=vias_required,
         rationale=rationale,
+        crossing_nets=graph.crossing_nets,
+        internal_nets=graph.internal_nets,
     )
 
 
@@ -742,11 +803,20 @@ def solve(problem):
     # ---- T3/T4-style: door-based global plan ----------------------------
     gp = plan(fx)
 
+    # The scored `overflow` metric: for an ESCAPE case (via_slots present, e.g.
+    # T9/T10) it is the WORST-side std-resource overflow (the binding shortage,
+    # per averaging-masks-local-failure); for a pure door case (T3/T4/T11) it is
+    # the door overflow total. Single source = the same number Phase A reports.
+    if fx.via_slots and gp.escape_ledger:
+        overflow = max(L["overflow_std"] for L in gp.escape_ledger.values())
+    else:
+        overflow = _door_overflow_total(fx, gp)
+
     return {
         # harness-scored keys -------------------------------------------------
         "verdict": gp.verdict,
         "routed_nets": gp.routed_nets,        # == global_routes (plan routes all)
-        "overflow": _door_overflow_total(fx, gp),
+        "overflow": overflow,
         # greedy proof (T3/T4 _special_checks) --------------------------------
         "greedy": {
             "greedy_routes": gp.greedy.get("greedy_routes"),

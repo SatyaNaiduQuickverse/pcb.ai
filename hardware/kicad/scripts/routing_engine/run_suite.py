@@ -447,10 +447,124 @@ def _selfcheck_T9(fx, msgs):
     return ok
 
 
+def _selfcheck_T10(fx, msgs):
+    """T10 — multi-IC-side escape. Re-derive each side's demand/supply/overflow
+    from the via_slots + per-net nearest-side attribution (NO solver), prove the
+    WORST side governs, and prove that AVERAGING the sides would WRONGLY mask the
+    bottleneck side."""
+    gt = fx.ground_truth
+    ok = True
+    # Per-side supply by counting via_slots (independent of any engine code).
+    sides = {}
+    for vs in fx.via_slots:
+        sides.setdefault(vs.ic_side, {"std": 0, "hdi": 0})
+        sides[vs.ic_side]["hdi" if vs.hdi_only else "std"] += 1
+    # Per-side via-field centroid + nearest-side demand attribution (re-derived).
+    centroid = {}
+    for s in sides:
+        xs = [vs.x_mm for vs in fx.via_slots if vs.ic_side == s]
+        ys = [vs.y_mm for vs in fx.via_slots if vs.ic_side == s]
+        centroid[s] = (sum(xs) / len(xs), sum(ys) / len(ys))
+    side_list = sorted(sides)
+    demand = {s: 0 for s in sides}
+    for net in fx.nets:
+        xs = [fx.pin(p).x_mm for p in net.pin_ids]
+        ys = [fx.pin(p).y_mm for p in net.pin_ids]
+        cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
+        best = min(side_list,
+                   key=lambda s: ((centroid[s][0] - cx) ** 2
+                                  + (centroid[s][1] - cy) ** 2, s))
+        demand[best] += 1
+    ok &= _assert(demand.get("J20_N") == 3 and demand.get("J20_E") == 2,
+                  f"re-derived per-side demand {demand} == N:3 E:2 "
+                  "(each net to its nearest side)", msgs)
+    ovf_std = {s: max(0, demand[s] - sides[s]["std"]) for s in sides}
+    ovf_hdi = {s: max(0, demand[s] - (sides[s]["std"] + sides[s]["hdi"]))
+               for s in sides}
+    ok &= _assert(ovf_std["J20_N"] == 1 and ovf_hdi["J20_N"] == 0,
+                  f"side N: overflow_std {ovf_std['J20_N']}==1, "
+                  f"overflow_hdi {ovf_hdi['J20_N']}==0 (HDI closes it)", msgs)
+    ok &= _assert(ovf_std["J20_E"] == 0,
+                  f"side E: overflow_std {ovf_std['J20_E']}==0 (slack)", msgs)
+    worst = max(side_list, key=lambda s: (ovf_std[s], ovf_hdi[s]))
+    ok &= _assert(worst == "J20_N",
+                  f"worst side (max overflow) == {worst} == J20_N (governs)", msgs)
+    # The AVERAGING trap: avg demand vs avg std supply hides the bottleneck.
+    avg_demand = sum(demand.values()) / len(demand)            # 2.5
+    avg_std = sum(s["std"] for s in sides.values()) / len(sides)  # 2.5
+    avg_overflow = max(0, avg_demand - avg_std)                # 0 (WRONG)
+    ok &= _assert(avg_overflow == 0 and ovf_std[worst] == 1,
+                  f"averaging says overflow {avg_overflow} (ROUTABLE) but the "
+                  f"WORST side has overflow {ovf_std[worst]} (NEEDS-HDI) — "
+                  "averaging masks the bottleneck => per-side counting NECESSARY",
+                  msgs)
+    ok &= _assert(gt.verdict == "NEEDS-HDI",
+                  "verdict NEEDS-HDI (worst-side overflow_std 1, closed by HDI)",
+                  msgs)
+    ok &= _assert(gt.metrics["overflow_no_hdi"] == ovf_std[worst] == 1,
+                  "stored worst-side overflow == 1", msgs)
+    # HDI witness is a bijection nets<->slots (each net to a distinct slot).
+    slot_of = gt.alt_witness["slot_of"]
+    ok &= _assert(len(set(slot_of.values())) == len(slot_of) == len(fx.nets),
+                  "HDI witness is a bijection nets<->slots (no slot reused)", msgs)
+    return ok
+
+
+def _selfcheck_T11(fx, msgs):
+    """T11 — internal-vs-crossing classification. Re-derive the classification
+    from the fixture (a net is CROSSING iff declared via feasible_doors OR a pin
+    sits at a door I/O port; else INTERNAL), prove ONLY the crossing nets count
+    against the doors (crossing demand == door supply => feasible), and prove the
+    naive all-to-doors planner would over-subscribe."""
+    gt = fx.ground_truth
+    ok = True
+    door_cap = {d.id: d.capacity_tracks for d in fx.doors}
+    door_supply = sum(door_cap.values())
+    # Re-derive crossing vs internal independently (geometry + declaration).
+    def pin_at_any_door(pin):
+        for d in fx.doors:
+            reach = d.width_mm / 2.0 + 0.5
+            if abs(pin.x_mm - d.x_mm) <= reach and abs(pin.y_mm - d.y_mm) <= reach:
+                return True
+        return False
+    crossing, internal = [], []
+    for net in fx.nets:
+        is_cross = bool(net.feasible_doors) or any(
+            pin_at_any_door(fx.pin(p)) for p in net.pin_ids)
+        (crossing if is_cross else internal).append(net.net_id)
+    ok &= _assert(sorted(internal) == ["int1", "int2", "int3"],
+                  f"re-derived INTERNAL nets {sorted(internal)} == 3 interior "
+                  "nets (no door)", msgs)
+    ok &= _assert(sorted(crossing) == ["x1", "x2"],
+                  f"re-derived CROSSING nets {sorted(crossing)} == 2 boundary "
+                  "nets (each at a door I/O port)", msgs)
+    ok &= _assert(len(crossing) == door_supply == 2,
+                  f"crossing demand {len(crossing)} == door supply {door_supply} "
+                  "=> a feasible door assignment EXISTS", msgs)
+    # Crossing assignment witness: each crossing net to a feasible door, in cap.
+    glob = gt.witness["crossing_assignment"]
+    ok &= _assert(_assignment_feasible(fx, glob)
+                  and _assignment_within_capacity(fx, glob)
+                  and set(glob) == set(crossing),
+                  "crossing assignment routes both crossing nets feasibly within "
+                  "door capacity (x1->D_A, x2->D_B)", msgs)
+    # The naive all-to-doors trap: forcing ALL nets onto the doors over-subscribes.
+    naive_demand = len(fx.nets)        # 5
+    ok &= _assert(naive_demand > door_supply,
+                  f"all-to-doors demand {naive_demand} > door supply "
+                  f"{door_supply} => a force-assign-all planner OVER-SUBSCRIBES "
+                  "(phantom strand) — classification is NECESSARY", msgs)
+    ok &= _assert(gt.verdict == "ROUTABLE",
+                  "verdict ROUTABLE (only the 2 crossing nets gate the doors; "
+                  "the 3 internal nets are escape/within-zone governed)", msgs)
+    return ok
+
+
 _SELFCHECKS = {
     "T1": _selfcheck_T1, "T2": _selfcheck_T2, "T3": _selfcheck_T3,
     "T4": _selfcheck_T4, "T5": _selfcheck_T5, "T6": _selfcheck_T6,
     "T7": _selfcheck_T7, "T8": _selfcheck_T8, "T9": _selfcheck_T9,
+    "T10": _selfcheck_T10, "T11": _selfcheck_T11,
 }
 
 
@@ -470,8 +584,9 @@ def run_self_check():
             mark = "  ok " if status == "PASS" else "  XX "
             print(f"{mark}{m}")
     print("\n" + "=" * 72)
+    n = len(F.all_fixtures())
     if all_ok:
-        print("SELF-CHECK: ALL 9 FIXTURES PASS — ground truth is provable, "
+        print(f"SELF-CHECK: ALL {n} FIXTURES PASS — ground truth is provable, "
               "self-consistent, witness-backed.")
         return 0
     print("SELF-CHECK: FAILURES PRESENT — fixtures are NOT trustworthy. FIX.")
@@ -519,6 +634,13 @@ def _key_metric_str(fx):
     if name == "T9":
         return (f"demand={m['demand_nets']} > supply={m['supply_via_slots_no_hdi']} "
                 f"=> overflow={m['overflow_no_hdi']} (HDI: overflow=0)")
+    if name == "T10":
+        return (f"worst side {m['worst_side']}: demand={m['demand_N']} > "
+                f"std={m['supply_std_N']} => overflow={m['overflow_std_N']} "
+                f"(side E slack; averaging would mask it)")
+    if name == "T11":
+        return (f"internal={m['n_internal']} (no door) + crossing={m['n_crossing']} "
+                f"== door_supply={m['door_supply']} => ROUTABLE")
     return ""
 
 
@@ -562,6 +684,12 @@ def _accepted_verdicts(fx):
         return {"CONDITIONAL", "ROUTABLE"}
     if fx.name == "T9":
         return {"INFEASIBLE", "NEEDS-HDI"}
+    if fx.name == "T10":
+        # multi-side escape: worst side has overflow_std>0 but HDI closes it =>
+        # NEEDS-HDI is the precise engine reading; INFEASIBLE accepted as the
+        # base "infeasible with std vias" label (same reconciliation as T9).
+        return {"INFEASIBLE", "NEEDS-HDI"}
+    # T11 base verdict is ROUTABLE (no lever) — only that.
     return {gt.verdict}
 
 
@@ -591,6 +719,14 @@ def _expected_for(fx):
         exp["crossings"] = 0
     elif fx.name == "T9":
         exp["overflow"] = m["overflow_no_hdi"]
+    elif fx.name == "T10":
+        # the worst-side std-resource overflow (the binding shortage) — proves
+        # the engine counted PER SIDE and took the worst, not the average.
+        exp["overflow"] = m["overflow_no_hdi"]   # == 1 (worst side N)
+    elif fx.name == "T11":
+        # all 5 nets route (2 crossing via doors + 3 internal within-zone). A
+        # planner that force-assigned all to doors would route < 5 (strand 3).
+        exp["routed_nets"] = m["routed_nets"]     # == 5
     return exp
 
 

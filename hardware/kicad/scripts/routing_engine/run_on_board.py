@@ -205,7 +205,8 @@ class _SideModel:
     std_total: int        # standard dog-bone fanout vias that fit the side span
     routed_consumed: int  # std slots ALREADY consumed by already-routed sig nets
     std_slots: int        # REMAINING std supply = max(0, std_total - consumed)
-    hdi_slots: int        # HDI via-in-pad supply still available (per-pin microvia)
+    hdi_total: int        # HDI via-in-pad TOTAL supply (per-pin microvia, n_pins-std_total)
+    hdi_slots: int        # HDI via-in-pad supply still available (REMAINING)
     demand: int           # residual nets needing to escape this side
     residual_nets: tuple  # the residual net ids on this side
 
@@ -266,8 +267,10 @@ def _classify_sides(board, ref, n_sig, residual_nets, routed_nets):
         consumed = len({p[1] for p in ps if p[1] in routed_nets})
         std_remaining = max(0, std_total - consumed)
         resid = tuple(sorted({p[1] for p in ps if p[1] in residual_nets}))
-        # HDI via-in-pad: one per pin; remaining after routed + remaining-std.
-        hdi = max(0, len(ps) - consumed - std_remaining)
+        # HDI via-in-pad TOTAL = one per pin minus the std fanout band (n_pins -
+        # std_total); REMAINING = total minus what routed beyond std already used.
+        hdi_total = max(0, len(ps) - std_total)
+        hdi_remaining = max(0, len(ps) - consumed - std_remaining)
         out.append(_SideModel(
             ic_side=f"{ref}_{s}",
             n_pins=len(ps),
@@ -275,7 +278,8 @@ def _classify_sides(board, ref, n_sig, residual_nets, routed_nets):
             std_total=std_total,
             routed_consumed=consumed,
             std_slots=std_remaining,
-            hdi_slots=hdi,
+            hdi_total=hdi_total,
+            hdi_slots=hdi_remaining,
             demand=len(resid),
             residual_nets=resid,
         ))
@@ -383,12 +387,16 @@ def extract_problem(board_path, subsystem="CH1"):
     for ref, n_sig in (("J18", 32), ("J19", 24)):
         side_models.extend(
             _classify_sides(board, ref, n_sig, residual_set, routed_set))
+    # Emit the TOTAL per-side supply (std_total std + hdi_total HDI). The engine's
+    # REMAINING-capacity model (escape_ledger consumed_by_side) deducts the slots
+    # already consumed by routed nets — so the driver feeds raw geometry SUPPLY +
+    # the measured CONSUMED count, and the engine owns the remaining-supply math.
     via_slots = []
     for sm in side_models:
-        for i in range(sm.std_slots):
+        for i in range(sm.std_total):
             via_slots.append(F.ViaSlot(f"{sm.ic_side}_STD{i}", 0.0, 0.0,
                                        sm.ic_side, hdi_only=False))
-        for i in range(sm.hdi_slots):
+        for i in range(sm.hdi_total):
             via_slots.append(F.ViaSlot(f"{sm.ic_side}_HDI{i}", 0.0, 0.0,
                                        sm.ic_side, hdi_only=True))
 
@@ -477,80 +485,64 @@ def _stackup_10L():
 # verdict — run Phase A (+ Phase B if routable), print the ledger.
 # ----------------------------------------------------------------------------
 
-def real_escape_ledger(meta):
-    """Build the per-IC-side escape ledger with REAL demand attribution.
+def _measured_side_inputs(meta):
+    """Translate the driver's geometry MEASUREMENT (the per-IC-side _SideModel
+    extracted from the real board) into the two engine inputs the now-native
+    `phase_a.escape_ledger` / `phase_b.plan` accept:
 
-    WHY NOT PA.escape_ledger DIRECTLY: phase_a.escape_ledger is multi-side-naive —
-    for a single ic_side it correctly sets demand = #nets, but for the MULTI-SIDE
-    real board (8 sides across J18+J19) it falls back to `_demand_for_side` which
-    conservatively returns ALL nets per side (it has no net->side geometry). That
-    would over-count demand 33× per side and is NOT the real escape demand.
+      demand_by_side[side]   = residual nets that must STILL escape that side
+                               (the 24/30 wall demand the driver measured per side)
+      consumed_by_side[side] = std fanout slots ALREADY consumed by the routed
+                               nets on that side (so the engine's REMAINING-
+                               capacity model deducts them natively)
 
-    The REAL demand on a side is the number of nets whose ESCAPE PIN physically
-    sits on that side AND still need to escape — i.e. the RESIDUAL nets (the 27
-    routed nets have already escaped; their vias are placed). We measured this
-    per side in `extract_problem` (_SideModel.demand / .residual_nets). Here we
-    build the engine's OWN `EscapeSideLedger` dataclass with that real demand, so
-    the engine's verdict logic (`PA._decide_verdict`) consumes a TRUTHFUL ledger.
-    We supply the measured demand; the engine decides the verdict — the bridge
-    boundary is honest (geometry in, verdict out)."""
-    led = {}
-    for sm in meta["side_models"]:
-        std, hdi, dem = sm.std_slots, sm.hdi_slots, sm.demand
-        led[sm.ic_side] = PA.EscapeSideLedger(
-            ic_side=sm.ic_side,
-            demand=dem,
-            supply_std=std,
-            supply_hdi=hdi,
-            overflow_std=max(0, dem - std),
-            overflow_hdi=max(0, dem - (std + hdi)),
-            headroom_supply_std=PA.FOS_ROUTING_CAPACITY * std,
-            headroom_ok_std=dem <= PA.FOS_ROUTING_CAPACITY * std + 1e-9,
-            headroom_supply_all=PA.FOS_ROUTING_CAPACITY * (std + hdi),
-            headroom_ok_all=dem <= PA.FOS_ROUTING_CAPACITY * (std + hdi) + 1e-9,
-        )
-    return led
+    This is the ONLY escape math left in the driver — and it is pure geometry
+    MEASUREMENT (which net's pin is on which side, how many already routed), NOT
+    ledger/verdict logic. The engine owns the overflow + verdict (geometry in,
+    verdict out). The per-side std/HDI SUPPLY itself is the via_slots the driver
+    emitted into the Problem (side_supply reads them), so the engine derives the
+    REMAINING std supply = std_total(from via_slots) - consumed here."""
+    demand_by_side = {sm.ic_side: sm.demand for sm in meta["side_models"]}
+    consumed_by_side = {sm.ic_side: sm.routed_consumed
+                        for sm in meta["side_models"]}
+    return demand_by_side, consumed_by_side
 
 
 def verdict(board_path, subsystem="CH1"):
-    """Run Phase A on the extracted Problem; print VERDICT + demand-vs-supply
+    """Run the ENGINE on the extracted Problem; print VERDICT + demand-vs-supply
     LEDGER per door + per J18/J19 IC-side escape. Run Phase B IF routable. Return
-    (phase_a_result, phase_b_result_or_None, meta)."""
+    (phase_a_result, phase_b_result_or_None, meta).
+
+    THIN DRIVER (Step 8a.5): the per-side escape ledger + the internal/crossing
+    distinction the driver used to compute LOCALLY now live in the engine
+    (phase_a.escape_ledger per-side + REMAINING-capacity model; phase_b
+    classify_net_topology). The driver only MEASURES the geometry inputs
+    (demand_by_side / consumed_by_side / crossing_nets) and hands them to the
+    engine — there is NO driver-side ledger math and NO verdict override."""
     problem, meta = extract_problem(board_path, subsystem)
+    demand_by_side, consumed_by_side = _measured_side_inputs(meta)
+    crossing = meta.get("crossing_nets", [])
 
     _print_header(problem, meta)
 
     # ---- PHASE A: the capacity + escape pre-check (the VERDICT) -------------
-    # Run the engine's full solve for the DOOR ledger + greedy-strand analysis,
-    # then OVERRIDE the escape ledger + verdict with the REAL per-side demand
-    # (PA.escape_ledger is multi-side-naive — see real_escape_ledger docstring).
-    a = PA.solve(problem)
-    esc = real_escape_ledger(meta)
-    g = a["greedy"]
-    v, routed_nets, overflow_std, rationale = PA._decide_verdict(
-        problem, None, esc, g["global_routes"], g["greedy_routes"],
-        g["stranded_nets"])
-    a["verdict"] = v
-    a["routed_nets"] = routed_nets
-    a["overflow"] = overflow_std
-    a["rationale"] = rationale
-    a["escape_ledger"] = {k: vars(L) for k, L in esc.items()}
+    # Native per-side escape ledger: feed the MEASURED per-side residual demand +
+    # the std slots already consumed by routed nets; the engine derives REMAINING
+    # std supply, the worst-side overflow, and the verdict (no driver override).
+    a = PA.solve(problem, demand_by_side=demand_by_side,
+                 consumed_by_side=consumed_by_side,
+                 crossing_override=crossing)
     print()
     print(PA.format_report(f"{subsystem} (real board)", a))
     print()
-    # HONEST DISCLOSURE about the DOOR ledger: the engine's door bipartite assigns
-    # ALL routable nets to doors (it has no internal/crossing distinction). On the
-    # real board only the CROSSING nets actually traverse a door; INTERNAL nets
-    # route inside CH1 and are escape-governed. So the door demand printed above
-    # over-counts (33 nets vs 1 true door-crossing net) — the door ledger is
-    # INFORMATIONAL ONLY here and does NOT drive the verdict (via_slots present =>
-    # escape ledger governs). The 4 "stranded" greedy nets are this same artifact
-    # (door supply 29 < 33 forced-through nets), NOT a real escape strand.
-    cross = meta.get("crossing_nets", [])
-    print(f"  DOOR-LEDGER CAVEAT: door demand above force-assigns all "
-          f"{len(problem.nets)} nets to doors; only {len(cross)} net(s) {cross} "
-          f"actually CROSS a CH1 boundary. Doors are INFORMATIONAL here; the "
-          f"binding constraint is the QFN escape (via-slot ledger below).")
+    # The door ledger now reflects ONLY the genuine CROSSING nets (the engine
+    # classifies internal vs crossing; the driver passes the measured boundary-
+    # crossing set as the authoritative override). No phantom stranded nets.
+    print(f"  DOOR LEDGER: {len(crossing)} CROSSING net(s) {crossing} traverse a "
+          f"CH1 boundary door; the other {len(problem.nets) - len(crossing)} "
+          f"net(s) are INTERNAL (escape/within-zone governed) and consume NO door "
+          f"capacity — they are NOT bipartite-assigned to doors (no phantom "
+          f"strand). The binding constraint is the QFN escape (via-slot ledger).")
     print()
 
     # ---- The escape ledger headline (the binding answer) -------------------
@@ -567,20 +559,14 @@ def verdict(board_path, subsystem="CH1"):
         print(f"PHASE A verdict {a['verdict']} is routable (HDI lever applies) — "
               "running Phase B GLOBAL PLAN...")
         print("=" * 72)
-        gp = PB.plan(problem)
-        # PB.plan recomputes the multi-side-NAIVE escape ledger internally (same
-        # _demand_for_side limitation as Phase A). Override its verdict +
-        # escape_ledger with the REAL per-side ledger so the plan's headline
-        # verdict is the SAME single source of truth as Phase A (the door/layer/
-        # ordering plan PB built is independent of the escape ledger and is kept).
-        gp.verdict = a["verdict"]
-        gp.rationale = a["rationale"]
-        gp.escape_ledger = {k: vars(L) for k, L in esc.items()}
+        # Phase B natively classifies internal/crossing (crossing override = the
+        # driver's measured boundary set) AND uses the same per-side escape ledger
+        # (measured demand + consumed). The verdict is the engine's — no override.
+        gp = PB.plan(problem, crossing_override=crossing,
+                     demand_by_side=demand_by_side,
+                     consumed_by_side=consumed_by_side)
         b = gp
         print(PB.format_plan(f"{subsystem} (real board)", problem, gp))
-        print("  NOTE: Phase B's door/layer/ordering plan is escape-ledger-"
-              "independent; verdict + escape_ledger overridden with the REAL "
-              "per-side demand (single source of truth = Phase A).")
     else:
         print()
         print("=" * 72)
