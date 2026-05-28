@@ -20,9 +20,20 @@ References:
 - Pozar, "Microwave Engineering", §3.3 for stripline impedance.
 - Erickson + Maksimović, "Fundamentals of Power Electronics" 3rd ed, §2.3
   for buck-converter inductor ripple.
+- Paul, "Inductance: Loop and Partial" (Wiley 2010), §5.2 (two-wire / go-return
+  loop external inductance) — the commutation-loop-L primitive.
+- Howard Johnson + Graham, "High-Speed Digital Design", Ch.5 (loop inductance
+  & the ~1nH/mm rule-of-thumb sanity bound) + Ch.4 (propagation delay vs εr_eff).
+- Brooks, "PCB Currents: How They Flow, How They React" (2013), Ch. on
+  current density at trace bends (sharp 90° interior-corner crowding vs the
+  mitered/filleted corner) — the current-crowding primitive.
 """
 
 import math
+
+# Physical constants (SI).
+MU0 = 4 * math.pi * 1e-7      # vacuum permeability, H/m
+C0 = 299792458.0             # speed of light in vacuum, m/s
 
 
 # ─── Ampacity (IPC-2152) ──────────────────────────────────────────────────
@@ -175,6 +186,160 @@ def buck_output_ripple_V(delta_I_L, ESR, f_sw, C_out):
     return V_pp_ESR + V_pp_C
 
 
+# ─── Commutation loop inductance (Paul; Howard Johnson) ────────────────────
+
+def loop_inductance_nH(length_mm, spacing_mm, width_mm, height_mm=None):
+    """Self-inductance of a current loop modelled as a go/return (two-wire) pair.
+
+    PHYSICS: A commutation loop (HS-FET drain → SW node → LS-FET → shunt → bus
+    cap → back) is electrically a go-conductor and a return-conductor carrying
+    equal-and-opposite current, separated by `spacing_mm`, of length `length_mm`.
+    The external (loop) inductance of such a pair of length l, center-to-center
+    spacing s, equivalent round-conductor diameter d is (Paul, "Inductance:
+    Loop and Partial" §5.2; the two-wire transmission-line loop):
+
+        L = (μ₀/π) · l · acosh(s/d)        [H]
+
+    where for a flat PCB trace of width w the equivalent round-wire diameter is
+    taken as d = w (geometric-mean-radius ≈ w/2 for a thin flat conductor — the
+    standard flat-to-round equivalence used in Paul §3.6 / Grover). When the
+    go/return are on opposite layers (a vertical loop), pass `height_mm` and the
+    plate separation governs `s` instead (s := dielectric height).
+
+    This is the 0.1953 nH/phase CLASS metric: it is the PROXY (fast inner loop)
+    that ranks candidate FET-cluster geometries; the BINDING loop-L verdict comes
+    from the strong sim (openEMS / Q3D-class extraction). acosh(s/d) requires
+    s >= d (return cannot be inside the conductor); we clamp the degenerate case.
+
+    Args:
+        length_mm:  loop conductor length (the go path length).
+        spacing_mm: center-to-center go↔return separation (horizontal loop), OR
+                    ignored when height_mm given (vertical/interlayer loop).
+        width_mm:   trace width (equivalent round-conductor diameter d = width).
+        height_mm:  optional dielectric height for an interlayer go/return loop;
+                    when given, s := height_mm (the vertical separation governs).
+
+    Returns:
+        Loop inductance in nanohenries (nH).
+
+    Cite: Paul §5.2 (two-wire loop); Howard Johnson HSDD Ch.5 (~1nH/mm sanity).
+    """
+    if length_mm <= 0 or width_mm <= 0:
+        return 0.0
+    s = height_mm if height_mm is not None else spacing_mm
+    d = width_mm
+    # Physical floor: return must be outside the conductor. acosh domain s/d >= 1.
+    ratio = max(s / d, 1.0 + 1e-12)
+    L_H = (MU0 / math.pi) * (length_mm * 1e-3) * math.acosh(ratio)
+    return L_H * 1e9
+
+
+# ─── Corner current-density crowding (Brooks, PCB Currents) ────────────────
+
+def corner_current_crowding_factor(bend_angle_deg, inner_radius_mm, width_mm):
+    """Peak/average current-density ratio at a trace bend (the inner-edge crowd).
+
+    PHYSICS (Brooks, "PCB Currents", bend-current chapter): at a sharp interior
+    corner the current takes the shortest path and crowds against the INNER edge,
+    so the local current density J_peak exceeds the straight-trace average J_avg.
+    A miter (45° chamfer) or fillet (rounded inner corner) lengthens the inner
+    path and redistributes the current, driving the ratio back toward 1.0. This
+    is WHY high-current corners get a sim-driven local fillet (ROUTING_METHODOLOGY
+    §5b) rather than a sharp 90° — concentrated J means a local hot-spot + higher
+    local ampacity demand than the trace width nominally supports.
+
+    Model (closed-form proxy, monotone + calibrated to Brooks' qualitative result):
+      * No bend (0°)                 → factor 1.0 (uniform).
+      * Sharp 90° interior, r = 0    → factor ≈ 2.0 (Brooks: inner-edge crowd ~2×).
+      * factor scales with bend severity sin(θ/2) (θ=0 → 0, θ=180 (U-turn) → max),
+        and is RELIEVED by the inner fillet radius normalised to trace width:
+            crowd = 1 + (θ_severity) · 1 / (1 + r/w)
+        where θ_severity = 2·sin(θ/2) caps the sharp-90 case at +1.0 (→ 2.0 total)
+        and a fillet r = w halves the excess; r ≫ w → ~1.0 (uniform, the goal).
+
+    Args:
+        bend_angle_deg: interior turn angle (0 = straight, 90 = right angle,
+                        180 = full reversal). Negative/under-0 clamped to 0.
+        inner_radius_mm: radius of the inner-corner fillet (0 = sharp corner;
+                        a 45° chamfer is modelled as r ≈ width/2 equivalent).
+        width_mm:       trace width.
+
+    Returns:
+        Dimensionless crowding factor J_peak / J_avg (>= 1.0). 1.0 = no crowd;
+        a high-current corner with factor f effectively needs f× the local
+        ampacity headroom — the engine's trigger to fillet that corner.
+
+    Cite: Brooks "PCB Currents" (current distribution at right-angle vs mitered
+    corners); conformal-mapping right-angle-bend analysis (qualitative match).
+    """
+    if width_mm <= 0:
+        return 1.0
+    theta = max(0.0, min(180.0, bend_angle_deg))
+    if theta == 0.0:
+        return 1.0
+    # Severity in [0, 2]; 2·sin(45°)=1.414 at 90°, but we normalise so a SHARP
+    # 90° (r=0) yields exactly 2.0 (Brooks' ~2× inner-edge crowd) — divide by
+    # sin(45°) so the 90°/r=0 anchor lands on +1.0 excess.
+    severity = 2.0 * math.sin(math.radians(theta / 2.0)) / (2.0 * math.sin(math.radians(45.0)))
+    relief = 1.0 / (1.0 + (inner_radius_mm / width_mm))
+    return 1.0 + severity * relief
+
+
+# ─── Propagation delay + length-match skew (Howard Johnson HSDD) ───────────
+
+def propagation_delay_ps(length_mm, eps_eff, line_type="microstrip", εr=None):
+    """Trace propagation delay from length + effective permittivity.
+
+    PHYSICS: a signal propagates at v = c / sqrt(εr_eff), so the one-way delay of
+    a trace of length l is t_pd = l · sqrt(εr_eff) / c (Howard Johnson HSDD Ch.4).
+    For MICROSTRIP the field is partly in air, so εr_eff ≈ (εr + 1)/2 (first-order;
+    the Hammerstad εr_eff above is exact). For STRIPLINE the field is fully in the
+    dielectric, so εr_eff = εr. Pass `eps_eff` directly, OR pass `εr` + `line_type`
+    to use the first-order estimate.
+
+    Known sanity (FR4): microstrip ≈ 5.4 ps/mm (~140 ps/inch), stripline ≈ 6.9
+    ps/mm (~176 ps/inch).
+
+    Args:
+        length_mm: trace length.
+        eps_eff:   effective relative permittivity (overrides the εr estimate).
+        line_type: "microstrip" | "stripline" (only used when eps_eff is None).
+        εr:        bulk dielectric εr (used to estimate eps_eff when eps_eff None).
+
+    Returns:
+        One-way propagation delay in picoseconds (ps).
+
+    Cite: Howard Johnson & Graham, "High-Speed Digital Design" Ch.4.
+    """
+    if length_mm <= 0:
+        return 0.0
+    if eps_eff is None:
+        if εr is None:
+            raise ValueError("provide eps_eff, or εr to estimate it")
+        eps_eff = εr if line_type == "stripline" else (εr + 1.0) / 2.0
+    if eps_eff <= 0:
+        raise ValueError(f"eps_eff must be > 0, got {eps_eff}")
+    return (length_mm * 1e-3) * math.sqrt(eps_eff) / C0 * 1e12
+
+
+def length_skew_ps(length_a_mm, length_b_mm, eps_eff, line_type="microstrip", εr=None):
+    """Propagation-delay skew between two traces (e.g. a matched diff/bus pair).
+
+    PHYSICS: skew = |t_pd(a) − t_pd(b)|. Two traces sharing the same stack (same
+    εr_eff) skew purely by length: Δt = |Δl| · sqrt(εr_eff)/c. This is the
+    T7-class length-match metric — the engine meanders the shorter trace until
+    the skew is within the timing budget (ROUTING_METHODOLOGY §3 length-match).
+
+    Returns:
+        Skew in picoseconds (ps). 0 ⇒ perfectly matched.
+
+    Cite: Howard Johnson & Graham, "High-Speed Digital Design" Ch.4 (skew = Δl·t_pd).
+    """
+    ta = propagation_delay_ps(length_a_mm, eps_eff, line_type, εr)
+    tb = propagation_delay_ps(length_b_mm, eps_eff, line_type, εr)
+    return abs(ta - tb)
+
+
 # ─── Self-test ─────────────────────────────────────────────────────────────
 
 def _self_test():
@@ -212,11 +377,57 @@ def _self_test():
     V_pp = buck_output_ripple_V(dI, ESR=2e-3, f_sw=600e3, C_out=22e-6)
     assert 0.010 < V_pp < 0.020, f"Buck ripple sanity: {V_pp*1000:.2f}mV (expected 10-20mV with both ESR + C reactance contributions)"
 
+    # ── NEW PRIMITIVE 1: loop_inductance_nH (Paul §5.2; Howard Johnson Ch.5) ──
+    # A tight commutation loop (go/return) is sub-nH (the 0.1953nH/phase class).
+    L_tight = loop_inductance_nH(length_mm=0.5, spacing_mm=0.4, width_mm=0.3)
+    assert 0.10 < L_tight < 0.30, f"tight commutation loop: {L_tight:.4f}nH (expected 0.1-0.3, the 0.1953/phase class)"
+    # Howard Johnson ~1nH/mm sanity bound: a 10mm loosely-spaced loop ~ several nH.
+    L_loose = loop_inductance_nH(length_mm=10.0, spacing_mm=1.0, width_mm=0.3)
+    assert 3.0 < L_loose < 12.0, f"loose 10mm loop: {L_loose:.3f}nH (~1nH/mm class per HJ Ch.5)"
+    # Monotone: bigger loop ⇒ more inductance (physics sanity).
+    assert loop_inductance_nH(10, 1, 0.3) > loop_inductance_nH(1, 1, 0.3), "loop-L must grow with length"
+    assert loop_inductance_nH(5, 1.0, 0.3) > loop_inductance_nH(5, 0.4, 0.3), "loop-L must grow with spacing (looser return = worse)"
+    # Interlayer (vertical) loop: height governs the separation.
+    L_vert = loop_inductance_nH(length_mm=5.0, spacing_mm=99.0, width_mm=0.3, height_mm=0.2)
+    L_vert_ref = loop_inductance_nH(length_mm=5.0, spacing_mm=0.2, width_mm=0.3)
+    assert abs(L_vert - L_vert_ref) < 1e-9, "interlayer height_mm must override spacing_mm"
+
+    # ── NEW PRIMITIVE 2: corner_current_crowding_factor (Brooks PCB Currents) ──
+    # Straight (no bend) ⇒ uniform, factor 1.0.
+    assert abs(corner_current_crowding_factor(0, 0.0, 0.5) - 1.0) < 1e-9, "no bend ⇒ crowd 1.0"
+    # Sharp 90° interior corner, r=0 ⇒ ~2× (Brooks inner-edge crowd).
+    c90 = corner_current_crowding_factor(90, 0.0, 0.5)
+    assert abs(c90 - 2.0) < 1e-9, f"sharp 90° r=0 should be ~2.0× (Brooks), got {c90:.4f}"
+    # A fillet r == width halves the excess crowd (2.0 → 1.5).
+    c90_fillet = corner_current_crowding_factor(90, 0.5, 0.5)
+    assert abs(c90_fillet - 1.5) < 1e-9, f"90° with r=w should halve excess (→1.5), got {c90_fillet:.4f}"
+    # Generous fillet (r ≫ w) ⇒ crowd → ~1.0 (the fillet GOAL).
+    c90_big = corner_current_crowding_factor(90, 5.0, 0.5)
+    assert c90_big < 1.10, f"generous fillet should approach uniform, got {c90_big:.4f}"
+    # Monotone: sharper bend ⇒ more crowd at fixed r.
+    assert corner_current_crowding_factor(135, 0.0, 0.5) > corner_current_crowding_factor(90, 0.0, 0.5), "sharper bend = more crowd"
+
+    # ── NEW PRIMITIVE 3: propagation_delay_ps / length_skew_ps (Howard Johnson) ──
+    # FR4 microstrip ≈ 5.4 ps/mm; 25.4mm (1 inch) ≈ 138 ps (140-150 ps/inch class).
+    tpd_us = propagation_delay_ps(length_mm=25.4, eps_eff=None, line_type="microstrip", εr=4.3)
+    assert 130 < tpd_us < 155, f"microstrip 1-inch FR4 t_pd: {tpd_us:.1f}ps (expected ~138, 140-150 ps/inch)"
+    # Stripline is slower (full dielectric): ≈ 6.9 ps/mm.
+    tpd_sl = propagation_delay_ps(length_mm=1.0, eps_eff=None, line_type="stripline", εr=4.3)
+    assert 6.5 < tpd_sl < 7.3, f"stripline 1mm FR4 t_pd: {tpd_sl:.2f}ps (expected ~6.9)"
+    assert tpd_sl > propagation_delay_ps(1.0, eps_eff=None, line_type="microstrip", εr=4.3), "stripline slower than microstrip"
+    # Skew: 2mm length mismatch on FR4 microstrip ≈ 10.9 ps.
+    skew = length_skew_ps(50.0, 52.0, eps_eff=None, line_type="microstrip", εr=4.3)
+    assert 9.0 < skew < 13.0, f"2mm microstrip skew: {skew:.2f}ps (expected ~10.9)"
+    assert length_skew_ps(50, 50, eps_eff=2.65) == 0.0, "equal lengths ⇒ zero skew"
+
     print("✅ physics_primitives self-test PASS")
     print(f"   1A 1oz outer trace: {w:.3f}mm")
     print(f"   1.6mm/0.8mm/FR4 microstrip Z0: {z:.1f}Ω")
     print(f"   280A 3oz internal needs: {w280:.0f}mm trace (use plane)")
     print(f"   TPS5430-class buck V_pp: {V_pp*1000:.2f}mV (within 7.6% of validated 2.85mV)")
+    print(f"   [NEW] tight commutation loop-L: {L_tight:.4f}nH (0.1953/phase class); loose 10mm: {L_loose:.2f}nH")
+    print(f"   [NEW] corner crowding: sharp-90°={c90:.2f}× | filleted(r=w)={c90_fillet:.2f}× | generous fillet={c90_big:.2f}×")
+    print(f"   [NEW] prop delay: 1-inch microstrip={tpd_us:.1f}ps | 1mm stripline={tpd_sl:.2f}ps | 2mm skew={skew:.2f}ps")
 
 
 if __name__ == "__main__":
