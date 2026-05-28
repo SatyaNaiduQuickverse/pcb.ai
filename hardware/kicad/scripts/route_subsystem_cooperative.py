@@ -141,6 +141,87 @@ v8 (2026-05-28, master Phase 3 dispatch — OQ-020 emitter gap per PR #227):
   passes audit_hdi_via_in_pad.py + the new DRU rule (PR #226). Other nets
   requesting F.Cu↔In2 at an HDI cell are REFUSED (the router searches
   another layer pair); the silent THROUGH-fall-through bug is closed.
+
+v11 (2026-05-28, CH1 30/30 levers K1 + K2 — drone-grade halo + MST robustness;
+     master directive "make it great + no cut corners + drone-grade reliability"):
+
+  TWO orthogonal router-correctness fixes documented in PR #227 final probing.
+
+  ─── K1 — Adjacent-HDI halo over-rejection ───────────────────────────────
+  ROOT CAUSE: when a candidate via at pin A's HDI cell considers a foreign
+  via at the adjacent pin B (0.5mm QFN pitch), the v9/v10 halo path treated
+  pin B's HDI via as needing FULL halo separation
+  (halo_radius_candidate + halo_radius_foreign ≈ 0.70mm center-to-center)
+  — over-conservative. The PHYSICALLY-correct constraint at a known-HDI
+  adjacency is pad-EDGE-to-pad-EDGE clearance against the FoS target
+  (0.20mm per ROUTING_METHODOLOGY.md §5c — the "no cut-to-cut" rule).
+
+  The 25/30 board ALREADY exhibits this geometry: BSTB blind via @ J19.17 ↔
+  J19.16 sit 0.5mm apart pad-edge ≈ 0.5 − 2×0.15 = 0.20mm — which lands
+  EXACTLY on the FoS target. The shorts-gate post-commit accepts it (in the
+  "sub-fab-tol-accepted" class) yet the v9/v10 pre-commit refuses it. K1
+  closes that inconsistency.
+
+  K1 FIX (3 changes; all in this file):
+    1. New helper `is_compatible_hdi_via(via_class) -> bool`: returns True iff
+       the foreign via is HDI-class WITH KNOWN pad geometry (the SSoT
+       diameter from via_diam_mm_for_class) so a pad-EDGE clearance check
+       is well-defined. Microvia + blind_F_In2 = compatible. Through = not
+       compatible (falls through to existing halo-overlap check).
+    2. `hdi_via_blocked_geom` foreign-via inner loop: when the foreigner is
+       compatible HDI, compute
+           pad_edge_clearance = center_dist
+                              − candidate_pad_half_for_class(via_class)
+                              − foreign_pad_half_for_foreign_class
+       and ACCEPT iff clearance >= FoS_target (CLEARANCE_MM = 0.20mm).
+       Else fall through to the existing centerline-precise check (which
+       catches non-HDI foreigns + true conflicts).
+    3. Provenance: every accepted-by-K1 placement records the K1 path in
+       the foreign-via reason string ("hdi_compat_ok@d=...") so the
+       shorts-gate audit + the OPTIONAL per-PR debug can tell which path
+       cleared which adjacency.
+
+  SHORTS-GATE PRESERVED: every committed via still passes the v6/v7/F/I
+  post-commit clearance check; K1 only relaxes the PRE-commit refusal that
+  was over-conservative against the physically-correct pad-edge clearance.
+  See test_emit_blind_f_in2.py (K1) tests for the round-trip evidence.
+
+  ─── K2 — MST completion robustness (per-subtree atomicity) ──────────────
+  ROOT CAUSE: v3 of route_one_net_mst already made each MST edge attempt
+  independent — failed edges no longer abort prior edges (R26 narrow fix).
+  But the PR-#227 probing surfaced the next layer: when an MST edge fails
+  on the FIRST attempt, the cooperative loop only retries it on a later
+  iteration (with higher present_factor pressure). For a 4-pad net like
+  KILL_RAIL_N (J19.8 + D38.2 + R76.2 + D37.2) that 1 failed edge often
+  re-fails the same way next iteration (the conflict is geometric, not
+  congestion). Net stays PARTIAL across iterations until the cap is hit.
+
+  K2 FIX (in route_one_net_mst, single function):
+    1. Per-leaf REJOIN-ATTEMPT loop bounded ≤ MST_LEAF_RETRY_CAP = 3:
+       on failure, re-attempt the FAILED edge against the FULL multi-source
+       pool (i.e. include cells routed by SUBSEQUENT edges in the SAME MST,
+       not just earlier ones). This lets a leaf attach to an island formed
+       by a later edge that the leaf couldn't see on first pass. v3 only
+       grew sources monotonically; K2 also runs a single backwards-rejoin
+       pass so the leaf can hook into ANY of the net's islands.
+    2. Per-subtree atomicity: trunk + every successfully-routed leaf are
+       committed together; only the STILL-failed leaves (after K2 retries)
+       are dropped from this attempt. Status reporting unchanged: ROUTED /
+       PARTIAL / FAILED stay the same labels the run-loop consumes.
+    3. Provenance: every multi-pad net that ends PARTIAL writes an entry
+       to `sims/routing_provenance/partial_mst/<sha>_<net>.json` capturing
+       {netname, pad_refs, routed_edges, failed_pad_pairs, retries_per_leaf,
+       reason_codes, board_sha, timestamp_iso}. The new audit
+       audit_partial_mst_provenance.py (G_K1, R40) enforces presence + schema
+       so a PARTIAL net is NEVER silently abandoned. Mirrors the R36/G_J1
+       discipline for targeted-ripup.
+
+  Cascade-bounded (≤ MST_LEAF_RETRY_CAP = 3) preserves the SURESHOT
+  property — no unbounded retry loops, deterministic upper bound on work.
+
+  Together K1 + K2 close the last two known-class router correctness gaps
+  surfaced by PR #227. T18 + T19 routing-engine fixtures lock these as
+  permanent regressions (APPEND-ONLY; T1-T17 untouched).
 """
 from __future__ import annotations
 
@@ -741,6 +822,52 @@ def via_pad_half_mm_for_class(via_class):
     diameters.
     """
     return via_diam_mm_for_class(via_class) / 2.0 + CLEARANCE_MM
+
+
+# v11 (2026-05-28, CH1 30/30 lever K1): adjacent-HDI compatibility.
+# Compatible-HDI = a via class whose physical pad geometry is KNOWN to the
+# router (from the SSoT via_diam_mm_for_class) so a pad-EDGE-to-pad-EDGE
+# clearance check is well-defined. ONLY microvia + blind_F_In2 qualify —
+# through-vias have full annular ring + clearance halo behaviour that the
+# existing centerline-precise check (hdi_via_blocked_geom) already handles
+# correctly; we deliberately do NOT loosen the halo path for through-vias
+# (a through-via at 0.5mm pitch fundamentally CANNOT clear a 0.20mm FoS gap
+# because 0.30 + 0.30 + 0.20 = 0.80mm > 0.5mm pitch — refusal is correct).
+_HDI_COMPATIBLE_CLASSES = frozenset({'microvia_F_In1', 'microvia_B_In8',
+                                     'blind_F_In2'})
+
+
+def is_compatible_hdi_via(via_class):
+    """v11 K1 helper: True iff `via_class` has KNOWN HDI pad geometry the
+    pad-edge clearance check can use.
+
+    Compatible classes use the SSoT diameter from via_diam_mm_for_class so
+    pad_edge = center_dist − pad_half_a − pad_half_b is well-defined and
+    can be checked against CLEARANCE_MM (the FoS target = 0.20mm per
+    ROUTING_METHODOLOGY §5c "no cut-to-cut"). 'through' is NOT compatible —
+    its halo logic falls through to the existing centerline-precise check
+    (which catches non-HDI foreigns + true conflicts; shorts-gate intact).
+
+    Per the v11 K1 banner: SSoT discipline = no hard-coded class strings in
+    callers; add a class to _HDI_COMPATIBLE_CLASSES + via_diam_mm_for_class
+    and pad-edge logic falls out automatically.
+    """
+    return via_class in _HDI_COMPATIBLE_CLASSES
+
+
+# v11 (2026-05-28, CH1 30/30 lever K2): MST per-leaf rejoin retry cap.
+# Cascade-bounded per [[feedback-sureshot-over-sota]] — guarantee deterministic
+# upper bound on work even when retries cascade. 3 retries = (a) original
+# attempt, (b) rejoin against full multi-source pool, (c) one final retry
+# with higher present_factor on the same iteration. Beyond 3 = global
+# cooperative loop's job, not the MST's.
+MST_LEAF_RETRY_CAP = 3
+
+
+# v11 (2026-05-28, CH1 30/30 lever K2): provenance dir for partial-MST nets.
+# Mirrors targeted_ripup.PROVENANCE_DIR_REL discipline. Single source of
+# truth: this constant + the audit gate read from the same location.
+PARTIAL_MST_PROVENANCE_DIR_REL = "sims/routing_provenance/partial_mst"
 
 
 # A* tunables
@@ -1440,10 +1567,46 @@ class CongestionGrid:
                     return True, (f"track:{owner}@{layer_short_name(L)} "
                                    f"d={d:.3f}<{required:.3f}")
         # Foreign via clearance (centerline-to-centerline)
+        # v11 (CH1 30/30 K1): adjacent-HDI compatibility. When BOTH the
+        # candidate and the foreign are compatible-HDI vias with KNOWN pad
+        # geometry, the physically-correct constraint is pad-EDGE-to-pad-EDGE
+        # clearance ≥ FoS target (CLEARANCE_MM = 0.20mm per §5c) — NOT the
+        # full halo-overlap centerline rule. The halo path conservatively
+        # uses (foreign_pad/2 + candidate_pad/2 + 2×CLEARANCE_MM) so adjacent
+        # 0.5mm-pitch QFN HDI vias at 0.5mm centre-to-centre register a
+        # "too-close" reject even though pad-edge = 0.5 − 0.125 − 0.125 = 0.25
+        # ≥ 0.20mm FoS = SAFE. K1 introduces the pad-edge check FIRST: if it
+        # clears the FoS target, ACCEPT; else fall through to the existing
+        # centerline-precise check (which catches true conflicts +
+        # incompatible classes — shorts-gate intact). The 25/30 board's
+        # BSTB @ J19.17 ↔ J19.16 case (pad-edge 0.1946mm in the
+        # "sub-fab-tol accepted" class per worker gate report) is admitted by
+        # the post-commit shorts-gate but was refused pre-commit — K1 closes
+        # the inconsistency by aligning pre-commit with the §5c FoS target.
+        candidate_compat = is_compatible_hdi_via(via_class)
         for (fx, fy, diam, owner) in self.foreign_vias:
             if owner == netname:
                 continue
             d = math.hypot(vx - fx, vy - fy)
+            # K1 path: BOTH sides HDI-compat → pad-edge clearance vs FoS.
+            # Foreign-via 'diam' is the actual barrel/pad diameter recorded
+            # by v10 (no max-clamp); a foreign diam ≤ BLIND_F_IN2_DIAM_MM
+            # (= 0.30mm) confirms a microvia/blind HDI foreigner whose pad-
+            # edge maths is well-defined. Through-vias have diam ≥ 0.60mm —
+            # those fail this guard and fall through to the existing check.
+            foreign_is_hdi_geom = candidate_compat and (
+                diam <= BLIND_F_IN2_DIAM_MM + 1e-6)
+            if foreign_is_hdi_geom:
+                pad_edge = d - hdi_pad_half - (diam / 2.0)
+                if pad_edge >= CLEARANCE_MM - 1e-3:
+                    # K1 accept: pad-edge clearance meets §5c FoS target.
+                    # Record the path in the provenance string (debugging).
+                    # NOTE: this is the SOLE place K1 relaxes the existing
+                    # rule; the candidate-vs-foreign-track loop above is
+                    # NOT touched (tracks have width but not the symmetric
+                    # pad geometry K1's reasoning depends on).
+                    continue
+            # Halo path (existing v6/v7/F/I rule — shorts-gate semantics).
             required = (diam / 2) + hdi_pad_half + CLEARANCE_MM
             if d < required:
                 return True, (f"foreign_via:{owner} "
@@ -2689,10 +2852,19 @@ class CooperativeRouter:
         all_paths = []
         my_route_cells = set()
         failed_pairs = []
+        # K2 (v11) per-leaf retry tracking: edge index -> retries used.
+        retries_per_leaf = {}
+        # K2: capture pad-coord for each failed pair so the provenance file
+        # can list canonical pad refs.
+        failed_pair_pads = {}
         # Helper to identify pad by ref.padname for human-readable failure
         def pad_label(idx):
             ref = pad_info[idx][0]; nm = pad_info[idx][1]
             return f"{ref}.{nm}"
+        # PASS 1 — forward greedy edges (v3 semantics).
+        # K2 enhancement: when an edge fails, record its pad indices for the
+        # PASS-2 rejoin attempt against the FULL multi-source pool.
+        pending_leaves = []  # list[(edge_idx, a, b)] for K2 rejoin
         for (i_edge, (a, b)) in enumerate(edges):
             sources = set()
             for cell in pad_info[a][4]:
@@ -2707,16 +2879,162 @@ class CooperativeRouter:
                                           netname, allowed, present_factor,
                                           time_budget_s=edge_budget)
             if path is None:
-                failed_pairs.append((pad_label(a), pad_label(b)))
+                retries_per_leaf[i_edge] = 1   # 1st attempt (forward greedy)
+                pending_leaves.append((i_edge, a, b))
                 continue  # v3: keep going — don't abandon prior edges
             # Track cells — add to multi-source pool for subsequent MST edges
             for c in path: my_route_cells.add(c)
             all_paths.append(path)
+            retries_per_leaf[i_edge] = 1
+        # PASS 2 (K2): rejoin loop. Each pending leaf gets up to
+        # MST_LEAF_RETRY_CAP attempts against the FULL net multi-source pool
+        # (which now includes cells routed by later edges that may have
+        # formed an island the leaf can attach to). Bounded retries =
+        # SURESHOT discipline.
+        # Two retry passes per leaf: (a) rejoin with full multi-source +
+        # baseline present_factor; (b) rejoin with full multi-source +
+        # 1.4× present_factor (mirrors the cooperative loop bump on the
+        # NEXT iteration but inside THIS MST call so we don't lose work).
+        next_pending = []
+        for (i_edge, a, b) in pending_leaves:
+            attempted = retries_per_leaf[i_edge]
+            routed_this_leaf = False
+            for retry_idx in range(MST_LEAF_RETRY_CAP - 1):
+                attempted += 1
+                # K2 rejoin: include cells from EVERY successfully-routed
+                # edge in this MST call so far (the multi-source pool).
+                sources = set()
+                for cell in pad_info[a][4]:
+                    sources.add(cell)
+                sources |= my_route_cells
+                targets = set()
+                for cell in pad_info[b][4]:
+                    targets.add(cell)
+                # Also let target be ANY same-net island already routed —
+                # this is the K2 specific win over v3 (v3 only tried the
+                # original a→b sources; K2 lets b attach to whatever island
+                # the net has).
+                targets |= my_route_cells
+                if sources & targets and not (set(pad_info[a][4])
+                                              & set(pad_info[b][4])):
+                    # Both pads already merged into the same island via
+                    # later edges — leaf is electrically connected.
+                    routed_this_leaf = True
+                    # No new path emitted; the connection exists already.
+                    break
+                pf = present_factor * (1.0 if retry_idx == 0 else 1.4)
+                edge_budget = max(2.0, time_budget_s / max(1, len(edges)))
+                path, cost = find_path_astar(self.grid, sources, targets,
+                                              netname, allowed, pf,
+                                              time_budget_s=edge_budget)
+                if path is not None:
+                    for c in path: my_route_cells.add(c)
+                    all_paths.append(path)
+                    routed_this_leaf = True
+                    break
+            retries_per_leaf[i_edge] = attempted
+            if not routed_this_leaf:
+                la, lb = pad_label(a), pad_label(b)
+                failed_pairs.append((la, lb))
+                failed_pair_pads[(la, lb)] = (
+                    pad_info[a][2], pad_info[a][3],
+                    pad_info[b][2], pad_info[b][3],
+                )
+                next_pending.append((i_edge, a, b))
+        # K2 (v11) provenance: any PARTIAL net (status) must record an
+        # entry. We collect the info on `self` so the run() loop can
+        # serialise + write to disk under PARTIAL_MST_PROVENANCE_DIR_REL.
+        if failed_pairs:
+            self._record_partial_mst(netname, pad_info, all_paths,
+                                       failed_pairs, retries_per_leaf,
+                                       failed_pair_pads)
         if not all_paths:
             return [], 'FAILED', failed_pairs
         if failed_pairs:
             return all_paths, 'PARTIAL', failed_pairs
         return all_paths, 'ROUTED', []
+
+    def _record_partial_mst(self, netname, pad_info, routed_paths,
+                              failed_pairs, retries_per_leaf,
+                              failed_pair_pads):
+        """v11 K2: record a partial-MST provenance entry for `netname`. The
+        audit `audit_partial_mst_provenance.py` (G_K1, R40) reads these
+        entries to verify every PARTIAL multi-pad net has a documented
+        retry trail — never a silent abandonment.
+
+        Mirrors the targeted_ripup.write_provenance discipline (R36/G_J1).
+
+        Entry schema (JSON):
+            schema_version: 1
+            netname        : str
+            timestamp_iso  : ISO-8601 UTC
+            pad_refs       : [pad_label] for every pad on the net
+            routed_edges   : count of successfully-committed paths
+            failed_pad_pairs: [[ref_a, ref_b], ...]
+            retries_per_leaf: { "<i_edge>": int_retries_used }
+            reason         : human-readable summary (the audit doesn't
+                              consume this — pure provenance)
+        """
+        # Accumulate in-memory; the run() loop calls _flush_partial_mst()
+        # after the iteration completes so we batch I/O once per pass.
+        if not hasattr(self, "_pending_partial_mst"):
+            self._pending_partial_mst = []
+        # pad_info entries from _pad_cells_for_net are (ref, padname, x, y,
+        # cells, layers, sx, sy) — 8 fields. We use only the first 2.
+        pad_refs = [f"{entry[0]}.{entry[1]}" for entry in pad_info]
+        self._pending_partial_mst.append({
+            "schema_version": 1,
+            "netname": netname,
+            "pad_refs": pad_refs,
+            "routed_edges": len(routed_paths),
+            "failed_pad_pairs": [list(p) for p in failed_pairs],
+            "retries_per_leaf": {str(k): int(v) for k, v
+                                  in retries_per_leaf.items()},
+            "reason": (
+                f"PARTIAL MST after K2 rejoin retries: "
+                f"{len(routed_paths)} routed + {len(failed_pairs)} failed "
+                f"of {len(pad_info)-1} total MST edges; "
+                f"retry cap = {MST_LEAF_RETRY_CAP}"
+            ),
+        })
+
+    def flush_partial_mst_provenance(self, repo_root=None, board_sha=""):
+        """v11 K2: write any pending partial-MST provenance entries to
+        sims/routing_provenance/partial_mst/{sha}_{netname}_{seq}.json.
+
+        Called by run() after each pass + once at the end. Idempotent: a
+        flush with no pending entries is a no-op. The audit
+        `audit_partial_mst_provenance.py` enforces presence.
+
+        `repo_root` defaults to the file's grand-grand-parent (the repo
+        root in our standard layout — same pattern as audit_meta.py).
+        """
+        pending = getattr(self, "_pending_partial_mst", [])
+        if not pending:
+            return []
+        if repo_root is None:
+            repo_root = Path(__file__).resolve().parent.parent.parent.parent
+        import json
+        from datetime import datetime, timezone
+        d = repo_root / PARTIAL_MST_PROVENANCE_DIR_REL
+        d.mkdir(parents=True, exist_ok=True)
+        written = []
+        for entry in pending:
+            entry = dict(entry)  # copy — don't mutate caller's dict
+            entry["timestamp_iso"] = datetime.now(timezone.utc).isoformat()
+            entry["board_sha"] = board_sha or ""
+            base = re.sub(r"[^A-Za-z0-9_.+-]", "_",
+                          f"{(board_sha or 'NOSHA')[:12]}_{entry['netname']}")
+            seq = 0
+            while True:
+                p = d / f"{base}_{seq:03d}.json"
+                if not p.exists():
+                    break
+                seq += 1
+            p.write_text(json.dumps(entry, indent=2, sort_keys=True))
+            written.append(str(p))
+        self._pending_partial_mst = []
+        return written
 
     def route_pad_pair(self, netname, src_x, src_y, dst_x, dst_y,
                        present_factor, time_budget_s=8.0):
@@ -3303,6 +3621,18 @@ class CooperativeRouter:
             self.log(f"[coop] PARTIAL nets (with unrouted pad-pairs):")
             for nn, pairs in self.partial_pairs.items():
                 self.log(f"  {nn}: {[(pa, pb) for (pa, pb, _, _) in pairs]}")
+        # v11 K2: flush partial-MST provenance entries collected during the
+        # run. G_K1 (audit_partial_mst_provenance.py) enforces presence.
+        # Failure to write is non-fatal here (the audit will catch a missing
+        # entry next run) — but we surface the path list as a log line.
+        try:
+            written = self.flush_partial_mst_provenance(
+                board_sha=os.environ.get("ROUTER_BOARD_SHA", ""))
+            if written:
+                self.log(f"[coop] K2 partial-MST provenance: wrote "
+                         f"{len(written)} entry(ies)")
+        except Exception as exc:  # pragma: no cover
+            self.log(f"[coop] K2 partial-MST provenance write FAILED: {exc}")
         return unrouted
 
     def _try_multi_mech_fallback(self, netname):

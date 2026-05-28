@@ -877,6 +877,20 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G_K1: partial-MST provenance (R40; CH1 30/30 lever K2)
+# Every multi-pad net that ended PARTIAL after K2 per-leaf rejoin retries
+# must have a provenance entry under sims/routing_provenance/partial_mst/.
+# Cascade-bounded: retries per leaf ≤ MST_LEAF_RETRY_CAP = 3. Mirrors the
+# R36/G_J1 discipline for targeted ripup. Vacuous-PASS when no PARTIAL nets.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_partial_mst_provenance.py" ]]; then
+  run_gate "G_K1_partial_mst_provenance" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_partial_mst_provenance.py'" true
+else
+  echo "[G_K1_partial_mst_provenance] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G_HDI_VIA_IN_PAD: HDI via-in-pad cost-scope whitelist (PR #207)
 # Any HDI microvia (≤0.15mm drill) in an SMD pad must be on the J18/J19
 # QFN whitelist (cost envelope). Board-wide whitelist check — no staged
