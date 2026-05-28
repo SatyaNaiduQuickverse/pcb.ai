@@ -567,6 +567,91 @@ def via_span_layers(via_class):
     # Refused class — caller should never reach here.
     raise ValueError(f"via_span_layers: refused via_class {via_class!r}")
 
+
+# v9 (2026-05-28, CH1 30/30 lever F — worker R22 catch on v8 halo over-rejection):
+# Per-via-class diameter lookup. The 4 sanctioned via classes have distinct
+# barrel diameters (per JLC HDI Class 2 fab spec + OQ-020 BOARD_INVARIANTS):
+#   - 'through'         → VIA_DIAM_MM        = 0.60mm (standard F.Cu↔B.Cu)
+#   - 'microvia_F_In1'  → HDI_VIA_DIAM_MM    = 0.25mm (laser-drilled adjacent)
+#   - 'microvia_B_In8'  → HDI_VIA_DIAM_MM    = 0.25mm (laser-drilled adjacent)
+#   - 'blind_F_In2'     → BLIND_F_IN2_DIAM_MM= 0.30mm (blind/buried F.Cu↔In2)
+# Single source of truth = the same per-class constants the emitter
+# (emit_to_board) and own-stamping (commit_paths) already consume — keeps
+# router clearance check + via emission + obstacle stamping in lock-step so
+# the foreign-copper exclusion radius at a candidate cell EXACTLY matches the
+# physical via barrel that would be emitted there.
+def via_diam_mm_for_class(via_class):
+    """Return the physical barrel diameter (mm) for a sanctioned via class.
+
+    'through' → standard (0.60mm). Microvia classes → 0.25mm. Blind F-In2 →
+    0.30mm. Unknown class falls back to standard through diameter (defensive
+    upper bound — preserves v6/v7 shorts-gate behaviour on classifier drift).
+    """
+    if via_class == 'microvia_F_In1' or via_class == 'microvia_B_In8':
+        return HDI_VIA_DIAM_MM
+    if via_class == 'blind_F_In2':
+        return BLIND_F_IN2_DIAM_MM
+    # 'through' (or anything else) → standard via diameter. Defensive default
+    # is the LARGER diameter — never under-stamps a halo, so shorts-gate
+    # semantics are preserved on unexpected class strings.
+    return VIA_DIAM_MM
+
+
+def via_halo_radius_mm(via_class, trace_width_mm=None):
+    """v9 — per-via-class obstacle halo radius (mm) used by:
+      - existing-via obstacle stamping (stamp foreign vias on grid)
+      - own-via obstacle stamping (commit_paths)
+      - candidate-via geometric clearance (hdi_via_blocked_geom — implicit
+        via the via_pad_half_mm_for_class companion below)
+      - own-via re-stamping (_rebuild_grid)
+
+    Returns: diam/2 + CLEARANCE_MM + trace_half + GRID_SLOP_MM
+
+    `trace_width_mm` defaults to 2 × TRACE_HALF_MM (the router's nominal
+    signal trace width, ~0.16mm). Callers stamping foreign vias against a
+    specific track width pass that width explicitly. The halo radius is the
+    centre-to-centre distance at which a foreign trace centerline would just
+    touch the via pad edge + clearance + trace edge — i.e. the minimum gap
+    the router must respect when placing or scanning around a via.
+
+    Per-class behaviour:
+      'through'         → 0.60/2 + 0.20 + 0.08 + 0.025 = 0.605mm
+      'microvia_F_In1'  → 0.25/2 + 0.20 + 0.08 + 0.025 = 0.430mm
+      'microvia_B_In8'  → 0.25/2 + 0.20 + 0.08 + 0.025 = 0.430mm
+      'blind_F_In2'     → 0.30/2 + 0.20 + 0.08 + 0.025 = 0.455mm
+
+    SSoT discipline: NO hard-coded numbers in callers — every halo derives
+    from this helper + the per-class constants above. Adding a new via class
+    (e.g. JLC HDI Class 3 stacked microvia) requires ONLY a new diameter
+    constant + a branch in via_diam_mm_for_class + a branch in
+    via_span_layers — clearance maths fall out automatically.
+    """
+    if trace_width_mm is None:
+        trace_half = TRACE_HALF_MM
+    else:
+        trace_half = trace_width_mm / 2.0
+    return (via_diam_mm_for_class(via_class) / 2.0
+            + CLEARANCE_MM + trace_half + GRID_SLOP_MM)
+
+
+def via_pad_half_mm_for_class(via_class):
+    """v9 — per-via-class via-pad-edge-to-foreign-copper distance (mm). Used
+    by via_blocked_for_net's plane-fill scan (which scans cells where the
+    PAD itself would land in foreign plane copper, no trace-half offset).
+
+    Returns: diam/2 + CLEARANCE_MM
+      'through'         → 0.500mm
+      'microvia_F_In1'  → 0.325mm  (HDI_VIA_HALF_MM)
+      'microvia_B_In8'  → 0.325mm  (HDI_VIA_HALF_MM)
+      'blind_F_In2'     → 0.350mm  (BLIND_F_IN2_HALF_MM)
+
+    Validated against the existing HDI_VIA_HALF_MM / BLIND_F_IN2_HALF_MM
+    module-level constants — those are the per-class values this helper
+    returns, derived from the same per-class diameters.
+    """
+    return via_diam_mm_for_class(via_class) / 2.0 + CLEARANCE_MM
+
+
 # A* tunables
 LAYER_CHANGE_COST = 5.0       # via penalty (was 30 — too high vs free inner layer)
 LAYER_BASE_COST = {           # per-step base cost by layer
@@ -1142,7 +1227,7 @@ class CongestionGrid:
                 # (multiple plane fills with same net on same layer is fine;
                 # different nets shouldn't occur on same layer)
 
-    def hdi_via_blocked_geom(self, i, j, netname, span_layers):
+    def hdi_via_blocked_geom(self, i, j, netname, span_layers, via_class=None):
         """v6: geometric clearance check for an HDI microvia at cell (i,j).
 
         Cell-based obstacle stamps are over-conservative for the small HDI
@@ -1153,19 +1238,35 @@ class CongestionGrid:
         function performs the precise centerline-to-centerline check
         against the stored track_segments_by_layer + foreign_vias arrays.
 
+        v9 (2026-05-28, CH1 30/30 lever F): `via_class` selects the per-
+        class via pad half (microvia 0.125mm / blind_F_In2 0.15mm /
+        through 0.30mm). When None, defaults to HDI_VIA_DIAM_MM/2 (the v6/v7
+        microvia behaviour — preserved for back-compat with callers that
+        haven't been updated). This fixes a v8-residual over-rejection: blind
+        F-In2 vias (0.30mm pad) need a 0.15mm pad-half in the geom check,
+        not the 0.125mm microvia value — and through-via candidates flagged
+        via this code path were silently under-stamped (the v6 path is HDI-
+        only, but the OQ-020 blind class introduced a 0.30mm-pad-on-HDI-cell
+        flavour that this assertion now covers).
+
         Returns (blocked: bool, reason: str). PASS = HDI via fits safely.
         """
         # via center in mm
         vx, vy = self.cell_xy(i, j)
         # Required clearance: foreign track CENTERLINE must be ≥
-        #   (HDI_VIA_HALF (= via_pad/2 + clearance, 0.325mm))
+        #   (via_pad/2 + clearance)
         #   - 0 (we want the closest *edge* to clear; centerline already
         #     accounts for trace_half/2 separately)
         # Actually: foreign trace edge to via edge ≥ CLEARANCE_MM (0.15mm).
         # foreign trace edge = trace_centerline ± (w/2). via edge = via_center ± via_pad/2.
         # Required: |trace_centerline - via_center| ≥ (w/2 + via_pad/2 + CLEARANCE).
         # Foreign via edge: similar with via_diam/2.
-        hdi_pad_half = HDI_VIA_DIAM_MM / 2  # 0.125mm
+        # v9: per-class pad half (was hard-coded HDI_VIA_DIAM_MM/2 = 0.125mm,
+        # which under-stamped blind_F_In2's 0.30mm pad → 0.15mm half).
+        if via_class is not None:
+            hdi_pad_half = via_diam_mm_for_class(via_class) / 2.0
+        else:
+            hdi_pad_half = HDI_VIA_DIAM_MM / 2  # 0.125mm (v6/v7 microvia default)
         for L in span_layers:
             if L not in SIGNAL_LAYERS:
                 continue
@@ -1213,7 +1314,8 @@ class CongestionGrid:
                                        f"@({di},{dj})")
         return False, ""
 
-    def via_blocked_for_net(self, i, j, netname, span_layers=ALL_COPPER_LAYERS):
+    def via_blocked_for_net(self, i, j, netname, span_layers=ALL_COPPER_LAYERS,
+                              via_class=None):
         """v2 fix: A through-via at (i,j) for `netname` is blocked if ANY
         copper layer in span_layers has a foreign-net obstacle within the
         via's pad+clearance halo of (i,j).
@@ -1238,6 +1340,18 @@ class CongestionGrid:
         fit between adjacent 0.5mm-pitch QFN pads where a standard 0.6mm
         via would clearance-violate.
 
+        v9 (2026-05-28, CH1 30/30 lever F): when `via_class` is provided
+        (the router knows the candidate's class from via_class_for_span),
+        the halo radius is computed per-class via via_pad_half_mm_for_class
+        — so a microvia candidate (0.25mm) at a foreign HDI cell uses the
+        0.325mm halo instead of the standard 0.500mm halo. Fixes the v6/v7/v8
+        over-rejection where ANY non-pad-owner net candidating an HDI cell
+        was halo-checked as a 0.60mm through-via (refused legitimate HDI
+        escapes even though the actual placed via would be a 0.25mm microvia
+        well within clearance). When via_class is None (no caller-side
+        classification), falls back to the v6 is_hdi_via-based binary —
+        backward-compatible for callers that haven't been updated.
+
         Returns (blocked: bool, reason: str).
         """
         # v6: detect HDI via-in-pad site at this cell for this net
@@ -1254,11 +1368,20 @@ class CongestionGrid:
             # but as a defense-in-depth second check we also run the
             # cell-based obstacle scan on inner+B.Cu layers below.
             # If EITHER check flags, the via is rejected.
-            geom_blocked, _ = self.hdi_via_blocked_geom(i, j, netname, span_layers)
+            # v9: pass via_class so the geom check uses the per-class pad
+            # half (0.30/2 for blind_F_In2 instead of always 0.25/2).
+            geom_blocked, _ = self.hdi_via_blocked_geom(i, j, netname, span_layers,
+                                                        via_class=via_class)
             if geom_blocked:
                 return True, "hdi_geom_blocked"
             # Fall through to the cell-based scan with HDI-aware skips.
-        if is_hdi_via:
+        # v9: per-class pad-half lookup (SSoT = via_pad_half_mm_for_class).
+        # Backward-compat: when via_class is None, fall back to the v6 binary
+        # (is_hdi_via → HDI_VIA_HALF_MM else standard) so legacy callers see
+        # no behaviour change.
+        if via_class is not None:
+            via_pad_half_mm = via_pad_half_mm_for_class(via_class)
+        elif is_hdi_via:
             # Microvia: 0.25mm pad → HDI_VIA_HALF_MM = 0.325mm clearance
             via_pad_half_mm = HDI_VIA_HALF_MM
         else:
@@ -1471,17 +1594,25 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
     # vias; the via barrel only intersects layers between L_from and L_to,
     # so via_blocked_for_net must scan that subset only. For non-HDI vias
     # we use the original full ALL_COPPER_LAYERS span (signature "full").
-    via_block_cache = {}  # (i, j, sig) -> bool
-    def _via_blocked(i, j, span_layers_tuple=None):
+    # v9 (CH1 30/30 lever F): cache key extended with via_class so the per-
+    # class halo (HDI microvia 0.25 vs blind_F_In2 0.30 vs through 0.60) is
+    # honoured — same (i,j) + same span but different via_class can legitim-
+    # ately yield different blocked verdicts (smaller via = smaller halo =
+    # admits more cells). via_class is mandatory at the caller — the router
+    # already knows it from via_class_for_span at the source cell.
+    via_block_cache = {}  # (i, j, sig, via_class) -> bool
+    def _via_blocked(i, j, span_layers_tuple=None, via_class=None):
         sig = span_layers_tuple if span_layers_tuple is not None else "full"
-        key = (i, j, sig)
+        key = (i, j, sig, via_class)
         v = via_block_cache.get(key)
         if v is None:
             if span_layers_tuple is not None:
                 v, _ = grid.via_blocked_for_net(i, j, netname,
-                                                span_layers=list(span_layers_tuple))
+                                                span_layers=list(span_layers_tuple),
+                                                via_class=via_class)
             else:
-                v, _ = grid.via_blocked_for_net(i, j, netname)
+                v, _ = grid.via_blocked_for_net(i, j, netname,
+                                                via_class=via_class)
             via_block_cache[key] = v
         return v
     # Precompute one representative target for heuristic
@@ -1589,8 +1720,16 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
                 # intersect 2 layers, through spans all). Cached per (i,j,
                 # span-signature) so 2 candidate layer-pairs with the same
                 # span share a single grid scan.
+                # v9 (CH1 30/30 lever F): pass via_class so the halo radius
+                # downstream is per-class — microvia 0.25 vs blind_F_In2 0.30
+                # vs through 0.60 — not always-the-largest. Fixes A* over-
+                # rejection of HDI candidates at cells where the standard
+                # 0.60mm through-via halo refused but the actual 0.25mm
+                # microvia barrel fits with margin (the KILL_RAIL_N at J19.8
+                # symptom).
                 span = via_span_layers(via_class)
-                if _via_blocked(i, j, span_layers_tuple=span):
+                if _via_blocked(i, j, span_layers_tuple=span,
+                                via_class=via_class):
                     continue
                 # via cost: fixed + congestion of both cells
                 # v5: pass netname so cost() can apply per-net-class layer bias
@@ -2502,16 +2641,18 @@ class CooperativeRouter:
                 # so a future bug doesn't silently corrupt the obstacle map.
                 span_layers = (tuple(ALL_COPPER_LAYERS) if via_class is None
                                 else via_span_layers(via_class))
-                if via_class == 'blind_F_In2':
-                    via_diam = BLIND_F_IN2_DIAM_MM
-                elif via_class in ('microvia_F_In1', 'microvia_B_In8'):
-                    via_diam = HDI_VIA_DIAM_MM
-                else:
-                    via_diam = VIA_DIAM_MM
+                # v9 (CH1 30/30 lever F): single source of truth =
+                # via_diam_mm_for_class + via_halo_radius_mm helpers; matches
+                # the geometry the candidate-check halo uses, so OWN-stamp
+                # cannot drift from candidate-clearance check (the lock-step
+                # invariant: what the router considered clear when it placed
+                # the via is what subsequent nets see as obstacle).
+                _stamp_class = via_class if via_class is not None else 'through'
+                via_diam = via_diam_mm_for_class(_stamp_class)
                 # v2 fix: stamp via obstacle on every copper layer in the
                 # via's barrel span (layer-aware per v8). Radius accommodates
                 # foreign-track centerline gap.
-                r = via_diam / 2 + CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM
+                r = via_halo_radius_mm(_stamp_class, trace_width_mm=2 * TRACE_HALF_MM)
                 for layer in span_layers:
                     self._stamp_own_via_obstacle(vx, vy, r, layer, netname)
                 # Also mark as plane-owned by this net on every layer the
@@ -2608,8 +2749,49 @@ class CooperativeRouter:
             if isinstance(t, pcbnew.PCB_VIA):
                 p = t.GetPosition()
                 vx = iu_to_mm(p.x); vy = iu_to_mm(p.y)
-                r = VIA_DIAM_MM / 2 + CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM
-                for layer in ALL_COPPER_LAYERS:
+                # v9 (CH1 30/30 lever F): read the via's actual width from
+                # the board so HDI microvias (0.25mm) and blind F-In2 vias
+                # (0.30mm) re-stamp at their TRUE halo, not the standard
+                # 0.60mm. Over-stamping is benign for OWN-net re-entry
+                # (just admits fewer cells back) but drifts from the
+                # per-class halo used at commit time → keep them in lock-
+                # step. KiCad-9 PCB_VIA.GetWidth(layer); fallback to drill+ring
+                # if layer-keyed signature unavailable.
+                try:
+                    diam = iu_to_mm(t.GetWidth(t.TopLayer()))
+                except (TypeError, Exception):
+                    try:
+                        diam = iu_to_mm(t.GetWidth())
+                    except Exception:
+                        diam = VIA_DIAM_MM
+                # Halo: pad-edge + clearance + foreign-trace-half + slop —
+                # same formula as via_halo_radius_mm (but using the BOARD's
+                # measured diameter rather than a class lookup; via_class is
+                # not authoritative at re-stamp time, the board geometry is).
+                r = diam / 2 + CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM
+                # v9: layer-aware barrel span. THROUGH vias span all layers;
+                # MICROVIA/BLIND only span their actual layer pair (read
+                # from TopLayer/BottomLayer + viatype). Avoids re-stamping a
+                # blind via halo on layers it doesn't reach (consistent with
+                # commit_paths v8 layer-aware stamping).
+                try:
+                    vt = t.GetViaType()
+                    if vt in (pcbnew.VIATYPE_MICROVIA, pcbnew.VIATYPE_BLIND_BURIED):
+                        # Span = the actual layer pair stored on the via.
+                        top_l = t.TopLayer(); bot_l = t.BottomLayer()
+                        # Build the inclusive copper-layer set between them.
+                        a = _STACKUP_INDEX.get(top_l)
+                        b = _STACKUP_INDEX.get(bot_l)
+                        if a is not None and b is not None:
+                            lo, hi = (a, b) if a <= b else (b, a)
+                            span = tuple(STACKUP_ORDER[lo:hi + 1])
+                        else:
+                            span = ALL_COPPER_LAYERS
+                    else:
+                        span = ALL_COPPER_LAYERS
+                except Exception:
+                    span = ALL_COPPER_LAYERS
+                for layer in span:
                     cells_in_halo = self._cells_in_circle(vx, vy, r, layer)
                     for cell in cells_in_halo:
                         self.grid.pad_cells[cell].add(netname)
