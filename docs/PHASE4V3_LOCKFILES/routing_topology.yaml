@@ -11,7 +11,7 @@
 #
 # Changes require PR title tag `[methodology-change]` and recompute
 # ROUTING_TOPOLOGY_HASH via `audit_routing_system.py --write`.
-# ROUTING_TOPOLOGY_HASH = 61ed71b5c676e5733cc47deb3a8360a714221b033024c171ba9a337bd04e373f
+# ROUTING_TOPOLOGY_HASH = fdcac20bfb80fb9e7ec0b71a9667fa3d32e6a72fafd21de2b6ba8c600357274f
 
 version: 1
 created: 2026-05-25
@@ -118,6 +118,113 @@ nets:
     width_mm: 1.0
     ampacity_A: 3
     note: "Analog 3V3 — separate from digital +3V3 for noise isolation per Ott Ch. 18"
+
+  # ---- Tier 2: Switching nodes (per CHn, per phase) ----
+  # The SW node is the HS-FET source / LS-FET drain hub that carries the
+  # full phase current (100A continuous / 280A burst per channel). The
+  # F.Cu↔B.Cu via cluster between HS+LS+motor pad is the ampacity-critical
+  # bottleneck; G_R5 (audit_via_current_capacity.py) reads ampacity_continuous_A
+  # + ampacity_burst_A to compute the required via count vs. actual.
+  # Added 2026-05-28 per `docs/CH1_DRONE_RELIABILITY_SWEEP_2026-05-28.md`
+  # Finding #1 (was a coverage hole — these nets had no ampacity declaration
+  # so G_R5 silently passed at 5/5/6 routed vias against the 100A continuous
+  # requirement).
+
+  MOTOR_A_CH1:
+    tier: 2
+    class: switching-node
+    topology: F.Cu-via-cluster-B.Cu
+    constraint:
+      ampacity_cont_A: 100   # 100A continuous per channel (G_R5 reads this)
+      ampacity_burst_A: 280  # 280A burst per channel (G_R5 reads this)
+
+  MOTOR_B_CH1:
+    tier: 2
+    class: switching-node
+    topology: F.Cu-via-cluster-B.Cu
+    constraint:
+      ampacity_cont_A: 100   # 100A continuous per channel (G_R5 reads this)
+      ampacity_burst_A: 280  # 280A burst per channel (G_R5 reads this)
+
+  MOTOR_C_CH1:
+    tier: 2
+    class: switching-node
+    topology: F.Cu-via-cluster-B.Cu
+    constraint:
+      ampacity_cont_A: 100   # 100A continuous per channel (G_R5 reads this)
+      ampacity_burst_A: 280  # 280A burst per channel (G_R5 reads this)
+
+  MOTOR_A_CH2:
+    tier: 2
+    class: switching-node
+    topology: F.Cu-via-cluster-B.Cu
+    constraint:
+      ampacity_cont_A: 100   # 100A continuous per channel (G_R5 reads this)
+      ampacity_burst_A: 280  # 280A burst per channel (G_R5 reads this)
+
+  MOTOR_B_CH2:
+    tier: 2
+    class: switching-node
+    topology: F.Cu-via-cluster-B.Cu
+    constraint:
+      ampacity_cont_A: 100   # 100A continuous per channel (G_R5 reads this)
+      ampacity_burst_A: 280  # 280A burst per channel (G_R5 reads this)
+
+  MOTOR_C_CH2:
+    tier: 2
+    class: switching-node
+    topology: F.Cu-via-cluster-B.Cu
+    constraint:
+      ampacity_cont_A: 100   # 100A continuous per channel (G_R5 reads this)
+      ampacity_burst_A: 280  # 280A burst per channel (G_R5 reads this)
+
+  MOTOR_A_CH3:
+    tier: 2
+    class: switching-node
+    topology: F.Cu-via-cluster-B.Cu
+    constraint:
+      ampacity_cont_A: 100   # 100A continuous per channel (G_R5 reads this)
+      ampacity_burst_A: 280  # 280A burst per channel (G_R5 reads this)
+
+  MOTOR_B_CH3:
+    tier: 2
+    class: switching-node
+    topology: F.Cu-via-cluster-B.Cu
+    constraint:
+      ampacity_cont_A: 100   # 100A continuous per channel (G_R5 reads this)
+      ampacity_burst_A: 280  # 280A burst per channel (G_R5 reads this)
+
+  MOTOR_C_CH3:
+    tier: 2
+    class: switching-node
+    topology: F.Cu-via-cluster-B.Cu
+    constraint:
+      ampacity_cont_A: 100   # 100A continuous per channel (G_R5 reads this)
+      ampacity_burst_A: 280  # 280A burst per channel (G_R5 reads this)
+
+  MOTOR_A_CH4:
+    tier: 2
+    class: switching-node
+    topology: F.Cu-via-cluster-B.Cu
+    constraint:
+      ampacity_cont_A: 100   # 100A continuous per channel (G_R5 reads this)
+      ampacity_burst_A: 280  # 280A burst per channel (G_R5 reads this)
+
+  MOTOR_B_CH4:
+    tier: 2
+    class: switching-node
+    topology: F.Cu-via-cluster-B.Cu
+    constraint:
+      ampacity_cont_A: 100   # 100A continuous per channel (G_R5 reads this)
+      ampacity_burst_A: 280  # 280A burst per channel (G_R5 reads this)
+
+  MOTOR_C_CH4:
+    tier: 2
+    class: switching-node
+    topology: F.Cu-via-cluster-B.Cu
+    constraint:
+      ampacity_cont_A: 100   # 100A continuous per channel (G_R5 reads this)
+      ampacity_burst_A: 280  # 280A burst per channel (G_R5 reads this)
 
   # ---- Tier 4: Critical analog ----
 

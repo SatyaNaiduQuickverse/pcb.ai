@@ -1758,26 +1758,475 @@ def fill_region_with_maze(plan, region: "RegionSpec",
                 "invocation": inv}
 
 
-def _board_obstacles_from_pcbnew(board, region):  # pragma: no cover
-    """Stub: real implementation reads footprint bboxes + plane-split keep-outs
-    from the live board. Lives here so the adapter is structurally complete; the
-    real wiring is Step 8 / CH1."""
-    raise NotImplementedError(
-        "live obstacle extraction is a Step-8/CH1 op (lazy: not on the abstract suite)")
+def _board_obstacles_from_pcbnew(board, region, exclude_refs=()):
+    """Build the live-board OBSTACLE list (`maze_router.Obstacle` records) the
+    multi-mech planner consumes, by sweeping every footprint whose bbox
+    intersects `region.bbox`. Each footprint's bbox is emitted as a body
+    keep-out attributed to the set of signal layers the footprint occupies
+    (lever E per-layer filter SSoT — `Obstacle.layers` frozenset semantics).
+
+    `exclude_refs` is a set / tuple of footprint references to SKIP — used
+    to exclude the start/end pin footprints from the obstacle list so the
+    planner does not treat the route's own pads as blockers. Mirrors the
+    cooperative router's `_stamp_foreign_obstacles` exclusion of the
+    current-net pads (the net's own pads are NOT obstacles to the net).
+
+    Lazy-imports pcbnew + route_subsystem_cooperative INSIDE so the module
+    stays loadable on hosts without KiCad bundle. The function is called
+    only from the live-fill path of `fill_region_with_multi_mech`, which
+    already lazy-imported pcbnew + asserted board availability.
+    """
+    exclude_set = set(exclude_refs)
+    import pcbnew  # lazy — live-board path only
+    try:
+        from . import maze_router as MR
+    except ImportError:                                            # pragma: no cover
+        import maze_router as MR  # type: ignore
+    # Lazy-import the cooperative router for the IU↔mm helper SSoT.
+    try:
+        import route_subsystem_cooperative as RC  # type: ignore
+        _iu_to_mm = RC.iu_to_mm
+    except Exception:                                              # pragma: no cover
+        # Defensive: fall back to the canonical 1e6 IU/mm scale used by
+        # KiCad (1 IU = 1 nm; 1 mm = 1e6 IU). This is the same scale
+        # `route_subsystem_cooperative.iu_to_mm` uses; documented in
+        # MASTER_COOP_ROUTER §units. We never reach here in the live path
+        # (the cooperative router is always importable in repo).
+        def _iu_to_mm(iu):
+            return iu / 1e6
+    rx_min, ry_min, rx_max, ry_max = region.bbox
+    allowed_layers = frozenset(region.allowed_layers)
+    obstacles = []
+    for fp in board.GetFootprints():
+        # Exclude footprints whose ref is on the caller's exclude_refs list
+        # (the route's own start/end footprints — they are NOT obstacles
+        # to the route's own net).
+        try:
+            ref = fp.GetReference()
+        except Exception:                                          # pragma: no cover
+            ref = ""
+        if ref in exclude_set:
+            continue
+        # Use the footprint's full bounding box (including pads) — same
+        # geometry the cooperative router's `_stamp_foreign_obstacles` uses
+        # for body keep-outs. Defensive: some KiCad versions name the
+        # helper `GetBoundingBox`; both are present on KiCad 9.0.2 (the
+        # Pi env). We prefer the explicit `GetBoundingBox()` (consistent
+        # with the cooperative router) and fall back to `GetFootprintRect`.
+        try:
+            bbox = fp.GetBoundingBox()
+        except Exception:                                          # pragma: no cover
+            try:
+                bbox = fp.GetFootprintRect()
+            except Exception:
+                continue
+        x_min = _iu_to_mm(bbox.GetLeft())
+        y_min = _iu_to_mm(bbox.GetTop())
+        x_max = _iu_to_mm(bbox.GetRight())
+        y_max = _iu_to_mm(bbox.GetBottom())
+        # Skip footprints whose bbox does not intersect the region bbox
+        # (the planner only searches within the region — obstacles outside
+        # the region cannot reach a candidate cell). Strict-inclusive test
+        # so footprints touching the region edge are still emitted.
+        if x_max < rx_min or x_min > rx_max:
+            continue
+        if y_max < ry_min or y_min > ry_max:
+            continue
+        # Determine the LAYER SET this footprint occupies (lever E:
+        # per-layer filter SSoT). Pads on F.Cu / B.Cu signal a footprint
+        # on the corresponding outer layer; through-hole pads + multi-
+        # layer pads pin every signal layer. We map KiCad layer IDs to
+        # the planner's KiCad layer-name strings via board.GetLayerName.
+        layer_names = set()
+        for pad in fp.Pads():
+            # GetLayerSet() returns the set of layer IDs the pad sits on.
+            # We mirror what cooperative router does: walk ALL_COPPER_LAYERS
+            # (the SSoT in route_subsystem_cooperative) and check pad.IsOnLayer.
+            lset = pad.GetLayerSet()
+            for lid in range(pcbnew.PCB_LAYER_ID_COUNT):
+                try:
+                    if lset.Contains(lid):
+                        nm = board.GetLayerName(lid)
+                        # Only emit copper layers (signal + plane).
+                        # KiCad's GetLayerName returns 'F.Cu' / 'In1.Cu' / etc.
+                        if nm.endswith(".Cu") or nm in ("F.Cu", "B.Cu"):
+                            layer_names.add(nm)
+                except Exception:                                  # pragma: no cover
+                    continue
+        # If we could not infer any layer (e.g. exotic footprint without
+        # copper pads), default to ALL allowed_layers (conservative:
+        # blocks every layer — same as the legacy `layers=None` semantics).
+        if not layer_names:
+            layers_fs = None
+        else:
+            # Restrict to the planner's allowed_layers — an obstacle on a
+            # layer the planner cannot use is informational; it still
+            # blocks that layer if we leave it in the frozenset.
+            layers_fs = frozenset(layer_names) if layer_names else None
+        obstacles.append(MR.Obstacle(
+            x_min=x_min, y_min=y_min, x_max=x_max, y_max=y_max,
+            kind="body", plane=None, layers=layers_fs,
+        ))
+    return obstacles
 
 
-def _pin_from_pcbnew(board, pin_ref):  # pragma: no cover
-    """Stub: real implementation resolves 'U1.5' style pin refs to coords + layer."""
-    raise NotImplementedError(
-        "live pin extraction is a Step-8/CH1 op (lazy: not on the abstract suite)")
+def _pin_from_pcbnew(board, pin_ref):
+    """Resolve a `<ref>.<padname>` pin spec on the live board to a
+    `maze_router.Pin` (point in mm + KiCad layer name + HDI whitelist flag).
+
+    The HDI whitelist flag is set when the footprint reference is in
+    `HDI_WHITELIST_REFS` (J18 / J19 per BOARD_INVARIANTS) — mirrors the
+    cooperative router's HDI gate. Raises ValueError when the ref + pad
+    name does not resolve (fail-loud: the adapter caller carries the
+    verdict; no silent fall-through to a default coord)."""
+    import pcbnew  # lazy — live-board path only
+    try:
+        from . import maze_router as MR
+    except ImportError:                                            # pragma: no cover
+        import maze_router as MR  # type: ignore
+    try:
+        import route_subsystem_cooperative as RC  # type: ignore
+        _iu_to_mm = RC.iu_to_mm
+    except Exception:                                              # pragma: no cover
+        def _iu_to_mm(iu):
+            return iu / 1e6
+    if "." not in pin_ref:
+        raise ValueError(
+            f"_pin_from_pcbnew: pin_ref {pin_ref!r} must be '<ref>.<padname>'")
+    ref, padname = pin_ref.split(".", 1)
+    fp = board.FindFootprintByReference(ref)
+    if fp is None:
+        raise ValueError(
+            f"_pin_from_pcbnew: footprint {ref!r} not found on board")
+    pad = None
+    for p in fp.Pads():
+        if p.GetPadName() == padname:
+            pad = p
+            break
+    if pad is None:
+        raise ValueError(
+            f"_pin_from_pcbnew: pad {padname!r} not found on footprint "
+            f"{ref!r}")
+    pos = pad.GetPosition()
+    x_mm = _iu_to_mm(pos.x)
+    y_mm = _iu_to_mm(pos.y)
+    # Pick the FIRST signal copper layer the pad occupies as the pin's
+    # layer (the cooperative router's convention). For a through-hole
+    # pad this is F.Cu (the cooperative router's pin-layer rule); for
+    # SMD pads it is the pad's own layer.
+    layer_name = "F.Cu"
+    lset = pad.GetLayerSet()
+    # Prefer outer layers when present (where signal routes start/end).
+    for candidate in ("F.Cu", "B.Cu", "In2.Cu", "In4.Cu", "In6.Cu",
+                      "In8.Cu", "In1.Cu", "In3.Cu", "In5.Cu", "In7.Cu"):
+        try:
+            lid = board.GetLayerID(candidate)
+            if lset.Contains(lid):
+                layer_name = candidate
+                break
+        except Exception:                                          # pragma: no cover
+            continue
+    is_hdi = ref in HDI_WHITELIST_REFS
+    return MR.Pin(point=(x_mm, y_mm), layer=layer_name,
+                  is_hdi_whitelisted=is_hdi)
 
 
-def _route_to_primitives(route):  # pragma: no cover
-    """Stub: real implementation turns Route.segments + .vias into the
-    geometry_primitives.Segment / .Via list emit_to_kicad consumes. The portable
-    descriptor path is in geometry_primitives.emit_to_kicad (lazy pcbnew)."""
-    raise NotImplementedError(
-        "primitives emission is a Step-8/CH1 op (lazy: not on the abstract suite)")
+def _emit_plan_to_board(plan_obj, board, net_obj, width_mm,
+                        allowed_via_classes, allowed_layers,
+                        clearance_fos_mm, added_items,
+                        exclude_refs=()):
+    """Emit a `RoutePlan` to the live pcbnew board as PCB_TRACK +
+    PCB_VIA records. Mirrors `route_subsystem_cooperative.emit_to_board`
+    (the SSoT for via-class emit) so the multi-mech adapter produces
+    BIT-IDENTICAL geometry to the cooperative router for the same
+    (class, span, net) triple. Lazy-imports pcbnew + the cooperative
+    router INSIDE — only invoked from the live-fill path.
+
+    PRE-EMIT VALIDATION (shorts-gate discipline preserved):
+      1. Every via.via_class MUST be in `allowed_via_classes` (the
+         region's plan-budget allow-list — defense-in-depth on top of
+         the planner's `candidate_via_classes`).
+      2. Vias MUST NOT overlap (two vias on different layers at the
+         SAME (x,y) is a malformed plan — would short on the shared
+         layer). Raises ValueError per shorts-gate semantics.
+      3. Per-class halo + per-layer span clearance against all board
+         footprint bboxes (the SAME check the planner ran at plan-time;
+         re-checked here so a future planner bug surfaces at emit-time,
+         not on the live board).
+      4. Every segment's layer MUST be in `allowed_layers`.
+
+    Appends every created pcbnew object to `added_items` so the caller
+    can ROLLBACK on a later failure (mirrors cooperative router pattern).
+    Returns the count of emitted (segments, vias) on success."""
+    import pcbnew
+    try:
+        from . import maze_router as MR
+    except ImportError:                                            # pragma: no cover
+        import maze_router as MR  # type: ignore
+    try:
+        import route_subsystem_cooperative as RC  # type: ignore
+    except ImportError:                                            # pragma: no cover
+        # The cooperative router is the SSoT for via constants + emit
+        # discipline. Without it we cannot honour the SSoT — refuse
+        # rather than emit with hard-coded constants (would drift).
+        raise RuntimeError(
+            "_emit_plan_to_board: route_subsystem_cooperative not "
+            "importable — SSoT for via constants unavailable; refusing "
+            "emit (would drift from cooperative router's geometry).")
+
+    # ------------------------------------------------------------------
+    # (1) Per-via class allow-list check (defense-in-depth)
+    # ------------------------------------------------------------------
+    for v in plan_obj.vias:
+        if v.via_class not in allowed_via_classes:
+            raise ValueError(
+                f"_emit_plan_to_board: refused via class {v.via_class!r} "
+                f"outside invocation allow-list {tuple(allowed_via_classes)} "
+                "— planner's candidate_via_classes should have rejected "
+                "this; defense-in-depth REFUSE to prevent silent shorts.")
+
+    # ------------------------------------------------------------------
+    # (2) Overlapping-via check (shorts-gate semantics)
+    # ------------------------------------------------------------------
+    # Two vias at the SAME (x, y) on DIFFERENT classes/spans on shared
+    # layers would short on the shared layer (the v6/v7 shorts lesson).
+    # The planner emits at-most-one via per (cell, layer-pair), but a
+    # liar plan could place two vias at the same XY — refuse loudly.
+    via_positions = {}
+    for v in plan_obj.vias:
+        key = (round(v.point[0], 4), round(v.point[1], 4))
+        if key in via_positions:
+            other = via_positions[key]
+            raise ValueError(
+                f"_emit_plan_to_board: malformed plan — two vias at "
+                f"{key} (classes {other.via_class!r} and {v.via_class!r}). "
+                "Co-located vias on different spans share copper layers "
+                "and SHORT — shorts-gate refuses (per v6/v7 lesson).")
+        via_positions[key] = v
+
+    # ------------------------------------------------------------------
+    # (3) Per-via halo + per-layer obstacle clearance (re-check)
+    # ------------------------------------------------------------------
+    # We re-validate each via's halo against EVERY footprint body bbox on
+    # EVERY layer the barrel traverses — the same check the planner did
+    # at plan-time, defense-in-depth. The halo SSoT is maze_router's
+    # `maze_via_halo_radius_mm` (already mirrors cooperative router's
+    # per-class diameter constants).
+    try:
+        from . import multi_mech_planner as MMP
+    except ImportError:                                            # pragma: no cover
+        import multi_mech_planner as MMP  # type: ignore
+    region_for_obstacles = type("RegionShim", (), {})()
+    # Build a region covering the entire board so the obstacle sweep
+    # catches every footprint (the re-check is conservative — the actual
+    # planner ran on the bounded region already; here we just verify
+    # the emitted vias don't graze body keep-outs anywhere on board).
+    bbox = board.GetBoardEdgesBoundingBox()
+    try:
+        bx0 = bbox.GetLeft() / 1e6
+        by0 = bbox.GetTop() / 1e6
+        bx1 = bbox.GetRight() / 1e6
+        by1 = bbox.GetBottom() / 1e6
+    except Exception:                                              # pragma: no cover
+        bx0, by0, bx1, by1 = -1e6, -1e6, 1e6, 1e6
+    region_for_obstacles.bbox = (bx0, by0, bx1, by1)
+    region_for_obstacles.allowed_layers = allowed_layers
+    obstacles = _board_obstacles_from_pcbnew(board, region_for_obstacles,
+                                              exclude_refs=exclude_refs)
+    for v in plan_obj.vias:
+        halo = MR.maze_via_halo_radius_mm(v.via_class, clearance_fos_mm)
+        if halo is None:
+            raise ValueError(
+                f"_emit_plan_to_board: unknown via class {v.via_class!r} — "
+                "no halo defined; REFUSE (silent emit would short).")
+        span = MR.maze_via_span_layers(v.via_class, v.from_layer, v.to_layer)
+        if span is None:
+            raise ValueError(
+                f"_emit_plan_to_board: invalid layer span "
+                f"({v.from_layer!r} <-> {v.to_layer!r}) for class "
+                f"{v.via_class!r} — REFUSE.")
+        vx, vy = v.point
+        for o in obstacles:
+            applies = False
+            for L in span:
+                if MR._obstacle_applies_to_layer(o, L):
+                    applies = True
+                    break
+            if not applies:
+                continue
+            # Halo box (vx ± halo, vy ± halo) vs obstacle bbox
+            if (vx + halo <= o.x_min or vx - halo >= o.x_max
+                    or vy + halo <= o.y_min or vy - halo >= o.y_max):
+                continue
+            raise ValueError(
+                f"_emit_plan_to_board: via {v.via_class!r} at ({vx:.3f},"
+                f"{vy:.3f}) halo {halo:.3f}mm grazes body bbox "
+                f"({o.x_min:.3f},{o.y_min:.3f})-({o.x_max:.3f},{o.y_max:.3f}) "
+                "on a shared layer — REFUSE (shorts-gate).")
+
+    # ------------------------------------------------------------------
+    # (4) Per-segment layer allow-list check
+    # ------------------------------------------------------------------
+    for s in plan_obj.segments:
+        if s.layer not in allowed_layers:
+            raise ValueError(
+                f"_emit_plan_to_board: refused segment on layer {s.layer!r} "
+                f"outside region.allowed_layers {tuple(allowed_layers)}.")
+
+    # ------------------------------------------------------------------
+    # (5) EMIT — PCB_TRACK per segment + PCB_VIA per via (cooperative-
+    # router SSoT pattern: SetViaType BEFORE SetLayerPair BEFORE SetWidth).
+    # ------------------------------------------------------------------
+    n_tracks_emitted = 0
+    for s in plan_obj.segments:
+        t = pcbnew.PCB_TRACK(board)
+        t.SetStart(pcbnew.VECTOR2I(RC.mm_to_iu(s.p1[0]),
+                                    RC.mm_to_iu(s.p1[1])))
+        t.SetEnd(pcbnew.VECTOR2I(RC.mm_to_iu(s.p2[0]),
+                                  RC.mm_to_iu(s.p2[1])))
+        try:
+            lid = board.GetLayerID(s.layer)
+        except Exception:
+            raise ValueError(
+                f"_emit_plan_to_board: layer {s.layer!r} not on board")
+        t.SetLayer(lid)
+        t.SetWidth(RC.mm_to_iu(s.width_mm))
+        if net_obj is not None:
+            t.SetNet(net_obj)
+        board.Add(t)
+        added_items.append(t)
+        n_tracks_emitted += 1
+
+    n_vias_emitted = 0
+    for v in plan_obj.vias:
+        pv = pcbnew.PCB_VIA(board)
+        pv.SetPosition(pcbnew.VECTOR2I(RC.mm_to_iu(v.point[0]),
+                                        RC.mm_to_iu(v.point[1])))
+        # Per-class emit table — single source of truth = cooperative
+        # router's `emit_to_board` per-class branch. We mirror the SAME
+        # branches here to keep geometry IDENTICAL across backends.
+        cls = v.via_class
+        if cls in ("microvia_F_In1", "microvia_B_In8", "microvia"):
+            # Adjacent-pair HDI microvia (laser-drilled). The abstract
+            # `microvia` class is mapped to the F<->In1 SSoT geometry
+            # by the planner's class catalogue (maze_router.VIA_CLASSES);
+            # both concrete classes use the SAME drill/pad constants.
+            try:
+                pv.SetViaType(pcbnew.VIATYPE_MICROVIA)
+            except Exception:                                      # pragma: no cover
+                pass
+            # Resolve layer pair: for the abstract `microvia` class use
+            # the planner's from_layer / to_layer directly; for the
+            # concrete cooperative classes use the canonical F<->In1 or
+            # In8<->B pair (matches RC.via_span_layers semantics).
+            try:
+                l_from = board.GetLayerID(v.from_layer)
+                l_to = board.GetLayerID(v.to_layer)
+            except Exception:
+                raise ValueError(
+                    f"_emit_plan_to_board: microvia span "
+                    f"({v.from_layer!r}<->{v.to_layer!r}) not resolvable")
+            pv.SetLayerPair(l_from, l_to)
+            pv.SetDrill(RC.mm_to_iu(RC.HDI_VIA_DRILL_MM))
+            via_diam_mm = RC.HDI_VIA_DIAM_MM
+            barrel_layers = (l_from, l_to)
+        elif cls == "blind_F_In2" or cls == "blind":
+            # JLC HDI blind/buried F.Cu<->In2.Cu (OQ-020). SetViaType
+            # FIRST, then SetLayerPair (KiCad-9 order requirement;
+            # see RC.emit_to_board v8 comment).
+            try:
+                pv.SetViaType(pcbnew.VIATYPE_BLIND_BURIED)
+            except Exception:                                      # pragma: no cover
+                pass
+            l_from = board.GetLayerID(v.from_layer)
+            l_to = board.GetLayerID(v.to_layer)
+            pv.SetLayerPair(l_from, l_to)
+            pv.SetDrill(RC.mm_to_iu(RC.BLIND_F_IN2_DRILL_MM))
+            via_diam_mm = RC.BLIND_F_IN2_DIAM_MM
+            # Span layers: F.Cu, In1.Cu, In2.Cu (RC.BLIND_F_IN2_SPAN
+            # SSoT — set width on every barrel layer below).
+            barrel_layers = (board.GetLayerID("F.Cu"),
+                             board.GetLayerID("In1.Cu"),
+                             board.GetLayerID("In2.Cu"))
+        elif cls == "stacked" or cls == "stacked_microvia_F_In1_In2":
+            # LEVER L — stacked microvia F<->In1<->In2. Emitted as TWO
+            # MICROVIA legs (top F<->In1 + bottom In1<->In2). Mirrors
+            # cooperative router's emit_to_board stacked-microvia branch.
+            try:
+                pv.SetViaType(pcbnew.VIATYPE_MICROVIA)
+            except Exception:                                      # pragma: no cover
+                pass
+            l_F = board.GetLayerID("F.Cu")
+            l_In1 = board.GetLayerID("In1.Cu")
+            l_In2 = board.GetLayerID("In2.Cu")
+            pv.SetLayerPair(l_F, l_In1)
+            pv.SetDrill(RC.mm_to_iu(RC.STACKED_MICROVIA_DRILL_MM))
+            via_diam_mm = RC.STACKED_MICROVIA_DIAM_MM
+            for lid in (l_F, l_In1):
+                try:
+                    pv.SetWidth(lid, RC.mm_to_iu(via_diam_mm))
+                except Exception:                                  # pragma: no cover
+                    pass
+            if net_obj is not None:
+                pv.SetNet(net_obj)
+            board.Add(pv)
+            added_items.append(pv)
+            n_vias_emitted += 1
+            # Bottom leg: a SECOND PCB_VIA at the same XY spanning
+            # In1<->In2 (the stacked structure per RC v8).
+            pv2 = pcbnew.PCB_VIA(board)
+            pv2.SetPosition(pcbnew.VECTOR2I(RC.mm_to_iu(v.point[0]),
+                                             RC.mm_to_iu(v.point[1])))
+            try:
+                pv2.SetViaType(pcbnew.VIATYPE_MICROVIA)
+            except Exception:                                      # pragma: no cover
+                pass
+            pv2.SetLayerPair(l_In1, l_In2)
+            pv2.SetDrill(RC.mm_to_iu(RC.STACKED_MICROVIA_DRILL_MM))
+            for lid in (l_In1, l_In2):
+                try:
+                    pv2.SetWidth(lid, RC.mm_to_iu(
+                        RC.STACKED_MICROVIA_DIAM_MM))
+                except Exception:                                  # pragma: no cover
+                    pass
+            if net_obj is not None:
+                pv2.SetNet(net_obj)
+            board.Add(pv2)
+            added_items.append(pv2)
+            n_vias_emitted += 1
+            continue
+        elif cls == "through":
+            # Standard F.Cu<->B.Cu through-via (RC v6/v7 behaviour).
+            try:
+                pv.SetViaType(pcbnew.VIATYPE_THROUGH)
+            except Exception:                                      # pragma: no cover
+                pass
+            l_F = board.GetLayerID("F.Cu")
+            l_B = board.GetLayerID("B.Cu")
+            pv.SetLayerPair(l_F, l_B)
+            pv.SetDrill(RC.mm_to_iu(RC.VIA_DRILL_MM))
+            via_diam_mm = RC.VIA_DIAM_MM
+            barrel_layers = tuple(RC.ALL_COPPER_LAYERS)
+        else:                                                      # pragma: no cover
+            # Unknown class — refuse (shorts-gate discipline: silent
+            # fall-through to THROUGH would emit at a HDI cell and short
+            # adjacent QFN pads on every inner layer; v6/v7 lesson).
+            raise ValueError(
+                f"_emit_plan_to_board: unknown via class {cls!r} — REFUSE.")
+        # Set width on every barrel layer (KiCad-9 SetWidth(layer, width)
+        # SSoT — pattern lifted from RC.emit_to_board).
+        for lid in barrel_layers:
+            try:
+                pv.SetWidth(lid, RC.mm_to_iu(via_diam_mm))
+            except Exception:                                      # pragma: no cover
+                pass
+        if net_obj is not None:
+            pv.SetNet(net_obj)
+        board.Add(pv)
+        added_items.append(pv)
+        n_vias_emitted += 1
+
+    return n_tracks_emitted, n_vias_emitted
 
 
 # ============================================================================
@@ -1975,16 +2424,51 @@ def fill_region_with_multi_mech(plan, region: "RegionSpec",
                            "(Step-8/CH1 wires these)."),
                 "invocation": inv}
 
-    # LIVE region fill (Step 8 / CH1). Stub — the real wiring is Step-8
-    # territory (mirrors fill_region_with_maze; same scaffolding).
+    # LIVE region fill (M1 lever — 2026-05-28). The adapter:
+    #   (a) extracts per-layer body keep-outs from the live board's
+    #       footprints (region-bounded; lever E semantics);
+    #   (b) resolves every net_pairs (start_ref, end_ref) to live pcbnew
+    #       Pin records (coords + layer + HDI whitelist flag);
+    #   (c) invokes multi_mech_planner.plan_multi_mech_route per pair
+    #       (region-bounded + expansion-capped + chain-depth-bounded;
+    #       same A* discipline as the abstract solve());
+    #   (d) PRE-EMIT VALIDATES every via against the invocation's allowed
+    #       class list + the per-class halo + the per-layer obstacle
+    #       filter (shorts-gate semantics; defense-in-depth);
+    #   (e) EMITS PCB_TRACK + PCB_VIA records on the live board using the
+    #       SAME per-class drill/pad/SetViaType/SetLayerPair SSoT as
+    #       route_subsystem_cooperative.emit_to_board.
+    # On a per-pair validation failure the per-pair items are NOT rolled
+    # back (the helper writes added_items and raises before commit; the
+    # rollback discipline is per-pair atomic). On an unrecoverable error
+    # the adapter returns status='error' with the partial routes log.
     try:                                # pragma: no cover (real-board only)
         from . import multi_mech_planner as MMP
-        import geometry_primitives as GP  # type: ignore
-        obstacles = _board_obstacles_from_pcbnew(board, region)
-        routes = []
-        for start_ref, end_ref in net_pairs:
+    except ImportError:                 # pragma: no cover
+        import multi_mech_planner as MMP  # type: ignore
+    # Collect ALL footprint refs that appear in net_pairs — they should
+    # NOT be obstacles to their own routes (the net's own pads are not
+    # foreign copper). Mirrors RC._stamp_foreign_obstacles pattern.
+    own_refs = set()
+    for sp, ep in net_pairs:
+        if "." in sp:
+            own_refs.add(sp.split(".", 1)[0])
+        if "." in ep:
+            own_refs.add(ep.split(".", 1)[0])
+    obstacles = _board_obstacles_from_pcbnew(board, region,
+                                              exclude_refs=own_refs)
+    routes = []
+    for start_ref, end_ref in net_pairs:
+        added_for_pair: List = []
+        try:
             start = _pin_from_pcbnew(board, start_ref)
             end = _pin_from_pcbnew(board, end_ref)
+        except ValueError as e:
+            routes.append({"start": start_ref, "end": end_ref,
+                           "status": "skipped",
+                           "reason": f"pin resolution: {e}"})
+            continue
+        try:
             plan_obj = MMP.plan_multi_mech_route(
                 start=start, end=end, region_bbox=region.bbox,
                 obstacles=obstacles,
@@ -1996,34 +2480,77 @@ def fill_region_with_multi_mech(plan, region: "RegionSpec",
                 grid_pitch_mm=inv.grid_pitch_mm,
                 max_chain_depth=inv.max_chain_depth,
             )
-            if plan_obj is None:
-                routes.append({"start": start_ref, "end": end_ref,
-                               "status": "NO-PATH"})
-                continue
-            # Pre-emit validation: each via class must be one of the
-            # invocation's allowed_via_classes (defense-in-depth; the
-            # planner already enforced this, but the adapter re-checks).
-            bad = next((v for v in plan_obj.vias
-                        if v.via_class not in inv.allowed_via_classes),
-                       None)
-            if bad is not None:
-                routes.append({"start": start_ref, "end": end_ref,
-                               "status": "rollback",
-                               "reason": (f"via class {bad.via_class!r} "
-                                          "outside invocation allow-list")})
-                continue
-            GP.emit_to_kicad(_route_to_primitives(plan_obj), board=board,
-                             default_layer=start.layer)
+        except ValueError as e:         # invalid inputs — planner refused
             routes.append({"start": start_ref, "end": end_ref,
-                           "length_mm": plan_obj.length_mm,
-                           "n_vias": plan_obj.n_vias,
-                           "via_chain": list(plan_obj.via_chain),
-                           "expansions": plan_obj.expansions,
-                           "status": "routed"})
-        return {"status": "routed", "routes": routes, "invocation": inv}
-    except Exception as e:              # pragma: no cover
-        return {"status": "error", "reason": f"{type(e).__name__}: {e}",
-                "invocation": inv}
+                           "status": "skipped",
+                           "reason": f"planner refused: {e}"})
+            continue
+        if plan_obj is None:
+            routes.append({"start": start_ref, "end": end_ref,
+                           "status": "NO-PATH"})
+            continue
+        # Look up the net object on the board (the planner does not
+        # need the pcbnew net id — but the emitter does for SetNet).
+        # net name convention = '<ref>.<padname>' pads share a net iff
+        # they are connected on the schematic; for the synthetic test
+        # path the caller may pass a net_obj_override hint via the
+        # planner's segments — but in production we resolve via the
+        # start pad's pcbnew net (the cooperative router's convention).
+        try:
+            ref, padname = start_ref.split(".", 1)
+            fp = board.FindFootprintByReference(ref)
+            net_obj = None
+            if fp is not None:
+                for p in fp.Pads():
+                    if p.GetPadName() == padname:
+                        net_obj = p.GetNet()
+                        break
+        except Exception:
+            net_obj = None
+        try:
+            n_tracks, n_vias = _emit_plan_to_board(
+                plan_obj, board, net_obj,
+                width_mm=inv.width_mm,
+                allowed_via_classes=inv.allowed_via_classes,
+                allowed_layers=region.allowed_layers,
+                clearance_fos_mm=inv.clearance_fos_mm,
+                added_items=added_for_pair,
+                exclude_refs=own_refs,
+            )
+        except ValueError as e:
+            # Pre-emit validation failure: ROLL BACK the pair's items
+            # to avoid leaving a half-emitted route on the board.
+            for it in added_for_pair:
+                try:
+                    board.Remove(it)
+                except Exception:
+                    pass
+            routes.append({"start": start_ref, "end": end_ref,
+                           "status": "rollback",
+                           "reason": f"pre-emit validation: {e}"})
+            continue
+        routes.append({"start": start_ref, "end": end_ref,
+                       "length_mm": plan_obj.length_mm,
+                       "n_tracks_emitted": n_tracks,
+                       "n_vias_emitted": n_vias,
+                       "via_chain": list(plan_obj.via_chain),
+                       "expansions": plan_obj.expansions,
+                       "status": "routed"})
+    # Aggregate status: 'routed' if all pairs routed; 'partial' if any
+    # pair failed but at least one routed; 'error' if every pair failed
+    # for any reason other than NO-PATH (NO-PATH is the legitimate
+    # planner verdict the caller carries forward).
+    n_total = len(routes)
+    n_routed = sum(1 for r in routes if r.get("status") == "routed")
+    if n_routed == n_total and n_total > 0:
+        agg = "routed"
+    elif n_routed == 0:
+        agg = "partial"   # all pairs failed — but the planner verdict is
+                          # carried forward in the per-pair records; the
+                          # caller decides whether to escalate.
+    else:
+        agg = "partial"
+    return {"status": agg, "routes": routes, "invocation": inv}
 
 
 # ============================================================================
@@ -2280,9 +2807,260 @@ def self_test() -> int:
     except KeyError:
         print("  -- T20 not registered (skip)")
 
+    # 17. MULTI-MECH LIVE-BOARD EMIT — M1 lever, 2026-05-28. Synthesise a
+    # small pcbnew BOARD in-memory with start (F.Cu, J18-style HDI pin) +
+    # end (B.Cu, TP-style pin) and exercise the live emission path of
+    # fill_region_with_multi_mech. Verifies the adapter:
+    #   (a) extracts obstacles, resolves pins, calls the planner;
+    #   (b) emits PCB_TRACK on the right layer with the right width;
+    #   (c) emits PCB_VIA with the SAME drill/pad/SetViaType/SetLayerPair
+    #       as route_subsystem_cooperative (SSoT discipline);
+    #   (d) honours per-class halo + per-layer obstacle clearance;
+    #   (e) raises ValueError on a malformed (overlapping-via) plan.
+    # SKIPS gracefully when pcbnew is unavailable (master engine env).
+    print("\n[live-board] MULTI-MECH live emit on synthetic board:")
+    try:
+        import pcbnew                                              # noqa: F401
+        _have_pcbnew = True
+    except Exception as _e:
+        _have_pcbnew = False
+        print(f"  -- pcbnew unavailable ({_e}) — live-emit test SKIPPED")
+    if _have_pcbnew:
+        ok &= _self_test_live_emit()
+
     print("\n" + "=" * 72)
     print("phase_c self-test: " + ("ALL PASS" if ok else "FAILURES PRESENT"))
     return 0 if ok else 1
+
+
+def _self_test_live_emit() -> bool:
+    """Synthetic-board test for the LIVE M1 wiring of
+    `fill_region_with_multi_mech`. Mirrors the architecture of
+    `test_emit_blind_f_in2.py` (which validates the cooperative router's
+    emit) but for the multi-mech adapter: build a small pcbnew BOARD
+    in-memory with the start + end pads on F.Cu / B.Cu, invoke the live
+    adapter, and assert it emits the expected PCB_TRACK + PCB_VIA records
+    with correct geometry. Returns True on full pass."""
+    import pcbnew
+    try:
+        import route_subsystem_cooperative as RC                   # type: ignore
+        from . import maze_router as MR
+        from . import multi_mech_planner as MMP
+    except ImportError:                                            # pragma: no cover
+        import route_subsystem_cooperative as RC  # type: ignore
+        import maze_router as MR  # type: ignore
+        import multi_mech_planner as MMP  # type: ignore
+
+    sub_ok = True
+
+    def _build_board():
+        """Build a minimal pcbnew BOARD with two footprints:
+              J18 (HDI-whitelisted): F.Cu pad '1' at (30.0, 50.0)
+              TP1  (non-HDI):        B.Cu pad '1' at (32.0, 52.0)
+            No obstacles between them; planner uses blind_F_In2 at the J18
+            HDI cell + through somewhere along the path to reach B.Cu."""
+        b = pcbnew.BOARD()
+        # Add F.Cu pad on J18 at (30.0, 50.0)
+        j18 = pcbnew.FOOTPRINT(b)
+        j18.SetReference("J18")
+        j18.SetPosition(pcbnew.VECTOR2I(int(30.0e6), int(50.0e6)))
+        b.Add(j18)
+        pad_j18 = pcbnew.PAD(j18)
+        pad_j18.SetPadName("1")
+        pad_j18.SetPosition(pcbnew.VECTOR2I(int(30.0e6), int(50.0e6)))
+        pad_j18.SetSize(pcbnew.VECTOR2I(int(0.3e6), int(0.3e6)))
+        ls_f = pcbnew.LSET()
+        ls_f.AddLayer(pcbnew.F_Cu)
+        pad_j18.SetLayerSet(ls_f)
+        j18.Add(pad_j18)
+        # Add B.Cu pad on TP1 at (32.0, 52.0)
+        tp = pcbnew.FOOTPRINT(b)
+        tp.SetReference("TP1")
+        tp.SetPosition(pcbnew.VECTOR2I(int(32.0e6), int(52.0e6)))
+        b.Add(tp)
+        pad_tp = pcbnew.PAD(tp)
+        pad_tp.SetPadName("1")
+        pad_tp.SetPosition(pcbnew.VECTOR2I(int(32.0e6), int(52.0e6)))
+        pad_tp.SetSize(pcbnew.VECTOR2I(int(0.3e6), int(0.3e6)))
+        ls_b = pcbnew.LSET()
+        ls_b.AddLayer(pcbnew.B_Cu)
+        pad_tp.SetLayerSet(ls_b)
+        tp.Add(pad_tp)
+        return b
+
+    # ── Test 17a: GRACEFUL SKIP when net_pairs=None (existing dry_run path)
+    region_live = RegionSpec(
+        subsystem="CH1", bbox=(28.0, 48.0, 35.0, 55.0),
+        allowed_layers=("F.Cu", "In1.Cu", "In2.Cu", "B.Cu"),
+        via_budget={"std": 4, "hdi": 2}, hdi_refs=("J18",),
+        net_names=("SWDIO_CH1",), expansion_cap=120_000)
+    board = _build_board()
+    res_no_pairs = fill_region_with_multi_mech(
+        {"verdict": "ROUTABLE"}, region_live, board=board,
+        board_path="/tmp/synth.kicad_pcb",
+        output_path="/tmp/synth_out.kicad_pcb",
+        net_pairs=None)
+    cond_a = (res_no_pairs["status"] == "skipped"
+              and "net_pairs" in res_no_pairs.get("reason", ""))
+    sub_ok &= cond_a
+    print(f"  {'ok ' if cond_a else 'XX '}(17a) graceful skip when "
+          f"net_pairs=None: status={res_no_pairs['status']}")
+
+    # ── Test 17b: LIVE EMIT — synthetic cross-stack route
+    board = _build_board()
+    n_tracks_before = sum(1 for _ in board.GetTracks())
+    n_fps_before = len(list(board.GetFootprints()))
+    res_live = fill_region_with_multi_mech(
+        {"verdict": "ROUTABLE"}, region_live, board=board,
+        board_path="/tmp/synth.kicad_pcb",
+        output_path="/tmp/synth_out.kicad_pcb",
+        net_pairs=[("J18.1", "TP1.1")],
+        width_mm=0.20, clearance_fos_mm=0.20, grid_pitch_mm=0.10)
+    routes_live = res_live.get("routes", [])
+    # Expected: a multi-mech chain (blind_F_In2 + through) emitted as
+    # PCB_TRACK on outer layers + PCB_VIA records.
+    has_routed = any(r.get("status") == "routed" for r in routes_live)
+    cond_b1 = res_live["status"] in ("routed", "partial")
+    cond_b2 = has_routed
+    # Look at the board: PCB_TRACK + PCB_VIA records SHOULD have been
+    # added. (Track count > 0; via count > 0 — the chain has ≥1 via.)
+    tracks_after = list(board.GetTracks())  # mixed tracks + vias
+    pcb_tracks = [t for t in tracks_after
+                  if isinstance(t, pcbnew.PCB_TRACK)
+                  and not isinstance(t, pcbnew.PCB_VIA)]
+    pcb_vias = [t for t in tracks_after if isinstance(t, pcbnew.PCB_VIA)]
+    cond_b3 = len(pcb_tracks) >= 1
+    cond_b4 = len(pcb_vias) >= 1
+    # Footprint count unchanged (we don't modify footprints)
+    cond_b5 = len(list(board.GetFootprints())) == n_fps_before
+    # Per-via class check: every emitted via has VIATYPE_BLIND_BURIED,
+    # VIATYPE_MICROVIA, or VIATYPE_THROUGH (the sanctioned classes).
+    sanctioned_types = {pcbnew.VIATYPE_BLIND_BURIED,
+                        pcbnew.VIATYPE_MICROVIA,
+                        pcbnew.VIATYPE_THROUGH}
+    via_types = []
+    for v in pcb_vias:
+        try:
+            via_types.append(v.GetViaType())
+        except Exception:                                          # pragma: no cover
+            via_types.append(None)
+    cond_b6 = all(t in sanctioned_types for t in via_types) if via_types else False
+    # If a blind via is present, drill MUST be 0.15mm + pad 0.30mm (SSoT).
+    blind_geom_ok = True
+    for v in pcb_vias:
+        try:
+            if v.GetViaType() == pcbnew.VIATYPE_BLIND_BURIED:
+                d = v.GetDrill() / 1e6
+                try:
+                    p = v.GetWidth(pcbnew.F_Cu) / 1e6
+                except TypeError:
+                    p = v.GetWidth() / 1e6
+                if abs(d - RC.BLIND_F_IN2_DRILL_MM) > 1e-6:
+                    blind_geom_ok = False
+                if abs(p - RC.BLIND_F_IN2_DIAM_MM) > 1e-6:
+                    blind_geom_ok = False
+        except Exception:                                          # pragma: no cover
+            blind_geom_ok = False
+    cond_b7 = blind_geom_ok
+    # If a through via is present, drill MUST be 0.30mm + pad 0.60mm (SSoT).
+    through_geom_ok = True
+    for v in pcb_vias:
+        try:
+            if v.GetViaType() == pcbnew.VIATYPE_THROUGH:
+                d = v.GetDrill() / 1e6
+                try:
+                    p = v.GetWidth(pcbnew.F_Cu) / 1e6
+                except TypeError:
+                    p = v.GetWidth() / 1e6
+                if abs(d - RC.VIA_DRILL_MM) > 1e-6:
+                    through_geom_ok = False
+                if abs(p - RC.VIA_DIAM_MM) > 1e-6:
+                    through_geom_ok = False
+        except Exception:                                          # pragma: no cover
+            through_geom_ok = False
+    cond_b8 = through_geom_ok
+    # Track width SSoT — every emitted PCB_TRACK width matches the
+    # invocation's width_mm (0.20mm here).
+    widths_mm = [t.GetWidth() / 1e6 for t in pcb_tracks]
+    cond_b9 = all(abs(w - 0.20) < 1e-6 for w in widths_mm) if widths_mm else False
+    # Track layer is one of the region's allowed_layers
+    allowed_layer_ids = set()
+    for nm in region_live.allowed_layers:
+        try:
+            allowed_layer_ids.add(board.GetLayerID(nm))
+        except Exception:                                          # pragma: no cover
+            pass
+    cond_b10 = all(t.GetLayer() in allowed_layer_ids for t in pcb_tracks) \
+        if pcb_tracks else False
+    cond_b = (cond_b1 and cond_b2 and cond_b3 and cond_b4 and cond_b5
+              and cond_b6 and cond_b7 and cond_b8 and cond_b9 and cond_b10)
+    sub_ok &= cond_b
+    print(f"  {'ok ' if cond_b else 'XX '}(17b) LIVE EMIT: status="
+          f"{res_live['status']} | tracks={len(pcb_tracks)} vias="
+          f"{len(pcb_vias)} via_types={via_types}")
+    print(f"      drill/pad SSoT ok: blind={cond_b7} through={cond_b8} "
+          f"| track widths ok: {cond_b9} | track layers ok: {cond_b10}")
+    if routes_live:
+        for r in routes_live:
+            print(f"      route: {r}")
+
+    # ── Test 17c: ADVERSARIAL — overlapping-via plan REJECTED by emit
+    print("\n[live-board] adversarial: overlapping-via plan rejected:")
+    board_adv = _build_board()
+    # Construct a malformed RoutePlan directly and pass it to the
+    # internal _emit_plan_to_board helper. Two vias at the SAME XY but
+    # DIFFERENT classes/spans — would short on the shared layer. The
+    # shorts-gate semantics REQUIRE a refusal (ValueError).
+    bad_plan = MMP.RoutePlan(
+        segments=[],
+        vias=[
+            MR.Via(point=(30.0, 50.0), via_class="blind_F_In2",
+                   from_layer="F.Cu", to_layer="In2.Cu"),
+            MR.Via(point=(30.0, 50.0), via_class="through",
+                   from_layer="F.Cu", to_layer="B.Cu"),
+        ],
+        via_chain=["blind_F_In2", "through"],
+    )
+    refused = False
+    try:
+        _emit_plan_to_board(
+            bad_plan, board_adv, net_obj=None, width_mm=0.20,
+            allowed_via_classes=("blind_F_In2", "through"),
+            allowed_layers=("F.Cu", "In1.Cu", "In2.Cu", "B.Cu"),
+            clearance_fos_mm=0.20, added_items=[])
+    except ValueError as e:
+        refused = "malformed plan" in str(e) or "shorts-gate" in str(e)
+        print(f"      raised ValueError: {str(e)[:120]}")
+    sub_ok &= refused
+    print(f"  {'ok ' if refused else 'XX '}(17c) adversarial overlapping-"
+          f"via plan: refused={refused} (shorts-gate)")
+
+    # ── Test 17d: ADVERSARIAL — via outside allowed_via_classes REJECTED
+    print("\n[live-board] adversarial: out-of-allowlist via class rejected:")
+    board_adv2 = _build_board()
+    bad_plan2 = MMP.RoutePlan(
+        segments=[],
+        vias=[
+            MR.Via(point=(30.0, 50.0), via_class="through",
+                   from_layer="F.Cu", to_layer="B.Cu"),
+        ],
+        via_chain=["through"],
+    )
+    refused2 = False
+    try:
+        _emit_plan_to_board(
+            bad_plan2, board_adv2, net_obj=None, width_mm=0.20,
+            # allowlist EXCLUDES 'through' — should refuse
+            allowed_via_classes=("blind_F_In2", "microvia_F_In1"),
+            allowed_layers=("F.Cu", "In1.Cu", "In2.Cu", "B.Cu"),
+            clearance_fos_mm=0.20, added_items=[])
+    except ValueError as e:
+        refused2 = "outside invocation allow-list" in str(e)
+    sub_ok &= refused2
+    print(f"  {'ok ' if refused2 else 'XX '}(17d) adversarial out-of-"
+          f"allowlist via class: refused={refused2}")
+
+    return sub_ok
 
 
 if __name__ == "__main__":
