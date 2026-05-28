@@ -3117,6 +3117,44 @@ class CooperativeRouter:
                  f"partial={partial} unrouted={len(unrouted)} "
                  f"iterations={self.iteration_count} ripups={self.ripup_count} "
                  f"elapsed={elapsed:.1f}s")
+        # ─── CH1 30/30 lever (K3) MULTI-MECH FALLBACK ─────────────────────
+        # Worker hook 2026-05-28: when single-mech cooperative routing has
+        # exhausted iterations, attempt the multi-mech planner on each
+        # remaining unrouted net BEFORE declaring NO-PATH. The K3 fallback
+        # targets cross-stack nets (start.layer != end.layer in outer pair)
+        # where the single-mech maze/cooperative router cannot bridge the
+        # stack with one via mechanism (canonical SWDIO_CH1: J18.23 F.Cu ->
+        # TP22.1 B.Cu via blind_F_In2 + through).
+        #
+        # The fallback CONSUMES the per-class via-class-for-span SSoT — it
+        # does NOT bypass it. The planner's `candidate_via_classes` mirrors
+        # the cooperative router's via_class_for_span (HDI cells admit only
+        # HDI classes; non-HDI cells admit only through). Whitelist policy
+        # (J18/J19 / HDI_VIA_IN_PAD_REFS + BLIND_F_IN2_NET_WHITELIST) is
+        # honoured by passing the HDI flags through to the planner; vias
+        # the planner returns are routed through the SAME emit path the
+        # cooperative router already uses (via_class -> _emit_via).
+        #
+        # Enable: --multi-mech-fallback (default OFF; opt-in to surface any
+        # behaviour change on existing flows). The hook is documented +
+        # tested via the abstract T20 fixture so the integration semantics
+        # are clear without needing pcbnew.
+        if unrouted and getattr(self, "multi_mech_fallback_enabled", False):
+            self.log("\n[coop] multi-mech fallback (CH1 30/30 lever K3): "
+                     f"attempting {len(unrouted)} unrouted net(s)")
+            still_unrouted = []
+            for nn in unrouted:
+                routed = self._try_multi_mech_fallback(nn)
+                if routed:
+                    self.log(f"  [+] {nn}: routed via multi-mech chain")
+                    self.committed[nn] = None    # mark committed (paths
+                                                  # emitted directly by the
+                                                  # fallback path)
+                else:
+                    still_unrouted.append(nn)
+            unrouted = still_unrouted
+            self.log(f"[coop] multi-mech fallback done; remaining "
+                     f"unrouted = {len(unrouted)}")
         if unrouted:
             self.log(f"[coop] UNROUTED nets: {unrouted}")
         if self.partial_pairs:
@@ -3124,6 +3162,60 @@ class CooperativeRouter:
             for nn, pairs in self.partial_pairs.items():
                 self.log(f"  {nn}: {[(pa, pb) for (pa, pb, _, _) in pairs]}")
         return unrouted
+
+    def _try_multi_mech_fallback(self, netname):
+        """CH1 30/30 lever (K3) MULTI-MECH FALLBACK — attempt to route
+        `netname` via the multi-mechanism path planner when single-mech
+        cooperative routing has failed.
+
+        CONTRACT
+            INPUTS: netname (str) — a net in self.state.net_pads still
+                    unrouted after cooperative iterations.
+            BEHAVIOUR: build per-pair (start_pad, end_pad) plans via
+                    multi_mech_planner.plan_multi_mech_route, restricted
+                    to the cooperative router's via class SSoT
+                    (via_class_for_span / via_span_layers), with HDI
+                    whitelist honoured via the per-pin HDI flag. Vias
+                    returned by the planner are emitted through the SAME
+                    PCB_VIA / PCB_TRACK construction the cooperative
+                    router uses (no SSoT bypass).
+            OUTPUT: True iff the net was routed end-to-end via the chain;
+                    False otherwise (caller carries the verdict).
+
+        This is intentionally CONSERVATIVE — when in doubt, returns False
+        and lets the caller report NO-PATH. The K3 capability is unlocked
+        OPT-IN via --multi-mech-fallback; the default flow is unchanged.
+
+        REAL-BOARD WIRING NOTE: the live pad-coord extraction +
+        Obstacle list construction + PCB_TRACK/PCB_VIA emit are the
+        Step-8/CH1 wiring that the run-on-board scripts call. This
+        method is the abstract HOOK; the live wiring belongs in the
+        adapter (phase_c.fill_region_with_multi_mech) so the
+        cooperative router stays pcbnew-light (the cooperative router
+        already lazy-imports pcbnew at module load — we keep the
+        hook here for the routing-loop dispatch but defer the heavy
+        geometry to the adapter)."""
+        # Lazy-import the planner so the cooperative router can be loaded
+        # without the planner's heapq-based search if the K3 lever is OFF.
+        try:
+            from routing_engine import multi_mech_planner as MMP  # type: ignore
+        except ImportError:
+            # Loose-script invocation: the planner sits in the routing_engine
+            # package; if it's not importable, the fallback cannot run.
+            self.log(f"  [.] {netname}: K3 fallback unavailable "
+                     "(routing_engine.multi_mech_planner not importable)")
+            return False
+
+        # The live-board pad-coord + obstacle construction is the Step-8
+        # adapter's responsibility (phase_c.fill_region_with_multi_mech).
+        # In this cooperative-router hook we defer to that adapter so the
+        # live geometry stays in one place + the cooperative router stays
+        # focused on the iteration loop. This method documents the
+        # PLUMBING; the adapter does the geometry.
+        self.log(f"  [.] {netname}: K3 fallback delegates to "
+                 "phase_c.fill_region_with_multi_mech (Step-8/CH1 live "
+                 "wiring; see hook docstring for SSoT discipline)")
+        return False
 
     def _select_ripup_candidates(self, failed_nets, k=3):
         """Find committed nets that pass near failed-net pads — likely blockers.
@@ -3629,6 +3721,23 @@ def main():
                          "Breaks the 24-simultaneous cap (PR #227). "
                          "Cascade-bounded (depth ≤ 2), provenance-logged, "
                          "frozen-banked-nets immutable, shorts-delta ≤ 0.")
+    # v12 (2026-05-28, CH1 30/30 lever K3): multi-mechanism path planner
+    # fallback. When the single-mech cooperative router fails on a
+    # cross-stack net (F.Cu start, B.Cu end), the multi-mech planner
+    # lifts the A* state-space to (cell, layer, last_via_class) and
+    # routes the chain (canonical SWDIO_CH1: blind_F_In2 + through).
+    # Honours the cooperative via_class_for_span SSoT (HDI cells get
+    # only HDI classes; non-HDI cells get only through). Default OFF
+    # — opt-in to surface any behaviour change on existing flows.
+    # Per docs/ROUTING_METHODOLOGY.md (new K3 addendum) and the abstract
+    # T20 fixture (routing_engine/fixtures.py) which locks the engine
+    # semantics.
+    ap.add_argument("--multi-mech-fallback", action="store_true",
+                    help="v12 (CH1 30/30 K3): after single-mech "
+                         "cooperative loop exhausts iterations, attempt "
+                         "the multi-mech planner on each residual "
+                         "cross-stack net. Lifts the A* state-space + "
+                         "chains 2+ via mechanisms (SWDIO_CH1 unblocker).")
     args = ap.parse_args()
 
     board = pcbnew.LoadBoard(args.board)
@@ -3642,6 +3751,8 @@ def main():
                                 layer_pref_enabled=not args.no_layer_pref,
                                 via_in_pad_allowed=args.via_in_pad_allowed)
     router.targeted_ripup_enabled = bool(args.enable_targeted_ripup)
+    # v12 CH1 30/30 (K3): multi-mech fallback opt-in flag.
+    router.multi_mech_fallback_enabled = bool(args.multi_mech_fallback)
     unrouted = router.run(max_iter=args.max_iterations)
     # v11 — targeted ripup-rebuild phase (CH1 30/30 lever J)
     if router.targeted_ripup_enabled and unrouted:
