@@ -183,7 +183,28 @@ class ViaSlot:
 class Obstacle:
     """A rectangular keep-out. kind='body' = component body keep-out;
     kind='plane_split' = a GAP in the named reference plane (return-path
-    discontinuity — HARD constraint, ROUTING_METHODOLOGY §9 / §0b)."""
+    discontinuity — HARD constraint, ROUTING_METHODOLOGY §9 / §0b).
+
+    PER-LAYER FILTER (the CH1 30/30 (E) engine-correctness fix; 2026-05-28)
+    -----------------------------------------------------------------------
+    `layers` declares WHICH signal layers this obstacle applies to:
+      * `None` (default)  → applies to ALL layers (full-stack keep-out, the
+                            current/back-compat behaviour; e.g. a component
+                            body that blocks every signal layer below it in
+                            the conservative model). T1-T14 all use this
+                            default — unchanged.
+      * non-None frozenset → applies ONLY to the named layers (e.g. an
+                            In2.Cu track is a keep-out on In2.Cu but NOT on
+                            In6.Cu; physics says a route on In6.Cu is free to
+                            ignore an In2.Cu obstacle). T15 (per-layer-maze
+                            engine-correctness fixture, 2026-05-28) is the
+                            first user of this field.
+
+    Consumers (e.g. `maze_router.route`'s A* expansion) MUST skip an obstacle
+    when the current cell's layer is NOT in `obstacle.layers` (with layers
+    not None). For `layers=None` the obstacle is treated as full-stack — the
+    exact current behaviour for back-compat.
+    """
     id: str
     x_min: float
     y_min: float
@@ -191,6 +212,8 @@ class Obstacle:
     y_max: float
     kind: str = "body"       # 'body' | 'plane_split'
     plane: Optional[str] = None  # for plane_split: which reference plane is cut
+    layers: Optional[frozenset] = None  # None=all layers (default);
+                                        # else frozenset[str] of layer names
 
 
 @dataclass(frozen=True)
@@ -1709,6 +1732,196 @@ def _build_T14():
 
 
 # ----------------------------------------------------------------------------
+# T15 — PER-LAYER OBSTACLE FILTER (stretch). Appended 2026-05-28 to lock the
+# CH1 30/30 lever (E) engine-correctness fix: the maze router's obstacle
+# check MUST be layer-aware. Pre-fix, an obstacle on (say) In2.Cu WRONGLY
+# blocked a route on F.Cu just because the obstacle's xy footprint coincided
+# with the route — physics says the In2.Cu keep-out does not apply on F.Cu.
+# T15 is the fixture that catches the bug class. APPEND-ONLY: T1-T14 unchanged.
+# ----------------------------------------------------------------------------
+
+def _build_T15():
+    """T15 — PER-LAYER OBSTACLE FILTER (stretch).
+    The CH1 30/30 (E) engine-correctness fixture (2026-05-28; the maze
+    router's Obstacle dataclass gains a `layers` field; A* expansion skips
+    obstacles whose `layers` is not None AND does not include the candidate
+    cell's layer — physics, not heuristics).
+
+    THE BUG CLASS:
+    Pre-fix, `maze_router.route` iterated `body_obs` in `cell_clear` /
+    `_swept_track_clears` WITHOUT examining each obstacle's layer attribution
+    — every body keep-out blocked EVERY signal layer below its xy footprint.
+    This is correct for true full-stack body keep-outs (a component package
+    in the conservative model) but WRONG for layer-attributed obstacles
+    (e.g. an In2.Cu copper track placed by a prior subsystem PR does NOT
+    block an In6.Cu route on a separate layer). The cooperative router's
+    real-board harness papered over the bug by filtering obstacles per
+    layer at the call boundary — the engine itself was still incorrect.
+    T15 is the engine-level lockfile.
+
+    Construction (smallest faithful reproduction — provable by hand):
+      * STACKUP: F.Cu signal, In2.Cu signal (BOTH signal — so layer
+        attribution is meaningful; an obstacle attributed to one is NOT a
+        body, it is a per-layer keep-out, the field the fix introduces).
+      * 1 NET: LP from S=(0, 5, F.Cu) to E=(10, 5, F.Cu). Both endpoints on
+        F.Cu — the route stays on F.Cu (no via needed).
+      * 1 OBSTACLE: `BODY_IN2` at x in [-100, 100], y in [-100, 100], on
+        `layers={"In2.Cu"}` ONLY. Its xy footprint covers the ENTIRE pin
+        envelope + a huge halo (the F.Cu pin region is INSIDE the body
+        bbox in xy). A 2D-LAYER-AGNOSTIC maze (the pre-fix behaviour) sees
+        the body as full-stack and so EVERY mid-path F.Cu cell at y=5 is
+        marked BLOCKED (cell xy is inside body xy and the body is treated
+        as full-stack); the start/end cells survive only via the endpoint
+        override (pins sit inside the body's xy) but no path exists
+        BETWEEN them — the 2D-agnostic maze raises NotRoutable('NO-PATH'),
+        the WRONG verdict. The PER-LAYER MAZE recognises layers={'In2.Cu'}
+        and skips the body on F.Cu, so every cell on the y=5 row is clear
+        and the straight 10mm F.Cu segment routes trivially.
+
+        The "halo body containing the pins" construction is deliberate:
+        it removes the possibility of the 2D-agnostic maze finding ANY
+        detour around the obstacle (the body engulfs the entire region in
+        xy), so the bug class is unambiguous on the live engine path too
+        (not just on the simulated filter check).
+
+    GROUND TRUTH (re-derivable by hand, no solver):
+      verdict = ROUTABLE under per-layer filter.
+      Witness path: a single straight F.Cu segment (0,5)→(10,5).
+      witness_length_mm = 10.0  (exact — pure horizontal segment).
+      witness_n_corners = 0     (single straight segment).
+      max_n_vias = 0            (single-layer route).
+
+    BUG-WITNESS (re-derivable by hand, no solver):
+      A 2D-layer-agnostic maze simulated by `Obstacle.layers is treated as
+      None` for filtering => the obstacle is full-stack => the F.Cu cell
+      clearance check at any x ∈ [3,7] FAILS (cell xy-footprint intersects
+      body) => no F.Cu path exists at y=5 within [3,7] => the bounded A*
+      reports INFEASIBLE / NO-PATH (or BLOCKED if start/end happen to be
+      inside the body — not the case here; the bodies are clear of pins).
+      This is the bug-witness the fixture catches: same fixture, two
+      filter behaviours, two verdicts. The self-check re-derives BOTH.
+
+    SELF-CHECK DEMONSTRATES (5 assertions):
+      (a) the obstacle's `layers` field is set (the engine refactor's new
+          field is actually exercised — not a no-op fixture);
+      (b) the witness path's endpoints match the pin coords;
+      (c) under PER-LAYER filter, every F.Cu witness segment clears every
+          F.Cu-applicable body — and since no body is attributed to F.Cu,
+          the path clears trivially (ROUTABLE);
+      (d) under 2D-LAYER-AGNOSTIC simulation (force-apply every obstacle
+          to every layer), the same F.Cu segment DOES intersect the body
+          AABB — proving the bug class is REAL on this fixture
+          (a regression to the 2D filter would FAIL the maze on T15);
+      (e) per-layer ROUTABLE invokes `maze_router.solve` directly and
+          asserts the engine reports `verdict=ROUTABLE`, `routed=1`,
+          `n_vias=0`, with a witness path on F.Cu that connects S→E and
+          clears all F.Cu-applicable obstacles by ≥ (trace/2 + clearance).
+    """
+    # 2 signal layers: F.Cu (the route) and In2.Cu (where the obstacle lives).
+    layers = (
+        Layer("F.Cu", "signal"),
+        Layer("In2.Cu", "signal"),
+    )
+    # 1 single-segment F.Cu net with both pins on F.Cu (no via needed).
+    pins = [
+        Pin("LP_S", 0.0, 5.0, "F.Cu"),
+        Pin("LP_E", 10.0, 5.0, "F.Cu"),
+    ]
+    nets = [Net("LP", ("LP_S", "LP_E"), "signal")]
+    # 1 PER-LAYER body keep-out on In2.Cu ONLY (the engine-correctness lever).
+    # xy footprint ENGULFS the entire pin envelope + a huge halo so a
+    # 2D-layer-agnostic maze (the pre-fix bug) cannot find ANY detour
+    # around the body (every cell at y=5 between the pins is "blocked"
+    # under the liar filter); the per-layer filter correctly recognises
+    # the body does not apply on F.Cu, so the F.Cu route is straight.
+    obstacles = (
+        Obstacle("BODY_IN2", -100.0, -100.0, 100.0, 100.0,
+                 kind="body",
+                 layers=frozenset({"In2.Cu"})),
+    )
+    # Witness path: pure horizontal F.Cu segment, end to end.
+    witness_path = [(0.0, 5.0), (10.0, 5.0)]
+    witness_length = ((witness_path[-1][0] - witness_path[0][0]) ** 2
+                      + (witness_path[-1][1] - witness_path[0][1]) ** 2) ** 0.5
+    # Trace + clearance margin (matches T13 / the maze solve() defaults so the
+    # selfcheck uses the same physics the solver path uses).
+    trace_w = 0.20
+    clearance = 0.20
+    gt = GroundTruth(
+        verdict="ROUTABLE",
+        metrics={
+            "routed": 1,
+            "min_length_mm": 10.0,
+            "witness_length_mm": round(witness_length, 4),
+            "witness_n_corners": 0,
+            "max_n_vias": 0,
+            # The xy projection of the In2.Cu-only body DOES intersect the
+            # F.Cu direct line — that is the whole reason a 2D-agnostic
+            # filter would have wrongly rejected it.
+            "direct_line_xy_hits_body": True,
+            # Under the PER-LAYER filter, F.Cu has no applicable bodies
+            # (the only body is In2.Cu-only), so the F.Cu path is clear:
+            "f_cu_applicable_bodies": 0,
+            # Under a 2D-AGNOSTIC liar filter, the same body applies on F.Cu
+            # too — the F.Cu route would WRONGLY be blocked at x ∈ [3,7]:
+            "liar_f_cu_applicable_bodies": 1,
+            "liar_verdict": "INFEASIBLE",
+        },
+        witness={
+            "path": witness_path,
+            "layer": "F.Cu",
+            "trace_width_mm": trace_w,
+            "clearance_mm": clearance,
+            "per_layer_filter_applied": True,
+        },
+        # No CONDITIONAL lever — the fix is structural (engine refactor), not
+        # a runtime escalation. Under both consumed scenarios the fixture is
+        # ROUTABLE once the engine carries the layer field through correctly.
+        conditional_on=None,
+        alt_verdict=None,
+        alt_metrics={},
+        alt_witness={},
+    )
+    proof = (
+        "T15 (PER-LAYER OBSTACLE FILTER; the CH1 30/30 (E) engine-correctness "
+        "lockfile; maze_router.Obstacle gains a `layers` field). Stackup: "
+        "F.Cu signal, In2.Cu signal. ONE net LP: F.Cu (0,5)→(10,5). ONE body "
+        "obstacle BODY_IN2 at x∈[-100,100], y∈[-100,100] on layers={'In2.Cu'} "
+        "ONLY. The body engulfs the entire pin envelope + halo in xy — a "
+        "2D-layer-agnostic maze (the pre-fix bug) treats the body as full-"
+        "stack so every mid-path F.Cu cell at y=5 is wrongly BLOCKED; pins "
+        "survive only via the endpoint override (xy inside body) but no "
+        "path exists between them, raising NotRoutable('NO-PATH') — the "
+        "wrong verdict. The PER-LAYER FILTER recognises layers={'In2.Cu'} "
+        "and skips the body on F.Cu cell-clearance / swept-trace checks, so "
+        "the straight F.Cu segment (length "
+        f"{witness_length:.2f}mm, 0 bends, 0 vias) routes cleanly. "
+        "Self-check (1) asserts the obstacle's `layers` field is actually "
+        "set (the refactor is exercised); (2) asserts the witness endpoints "
+        "match pin coords; (3) under the PER-LAYER filter the witness "
+        "segment clears every F.Cu-applicable body (zero of them) — "
+        "ROUTABLE; (4) under a 2D-AGNOSTIC LIAR filter (force every "
+        "obstacle to apply on every layer) the F.Cu segment INTERSECTS the "
+        "body AABB — proving the bug class is real and a regression to the "
+        "2D filter would FAIL T15; (5) invokes `maze_router.solve` directly "
+        "and asserts the engine emits verdict=ROUTABLE, routed=1, n_vias=0, "
+        "with a witness polyline that connects S→E on F.Cu and clears every "
+        "F.Cu-applicable body by ≥ (trace/2 + clearance) Euclidean distance."
+    )
+    return Fixture("T15",
+                   "per-layer obstacle filter (engine correctness; "
+                   "CH1 30/30 (E) lockfile)",
+                   "stretch",
+                   "maze_router.Obstacle.layers per-layer filter: an obstacle "
+                   "attributed to layer L blocks routes on L only (not on "
+                   "every layer below its xy footprint). 2D-layer-agnostic "
+                   "maze WRONGLY blocks routes on OTHER layers — the engine "
+                   "bug class T15 catches.",
+                   layers, tuple(pins), tuple(nets), (), obstacles, (),
+                   gt, proof)
+
+
+# ----------------------------------------------------------------------------
 # Registry
 # ----------------------------------------------------------------------------
 
@@ -1717,6 +1930,10 @@ _BUILDERS = [
     _build_T6, _build_T7, _build_T8, _build_T9, _build_T10, _build_T11,
     _build_T12, _build_T13, _build_T14,
 ]
+# APPEND-ONLY: T15 — per-layer obstacle filter (CH1 30/30 (E) engine
+# correctness lockfile; 2026-05-28). Appended via `.append(...)` so the
+# T1-T14 line above stays byte-identical (diff-stat: only NEW lines).
+_BUILDERS.append(_build_T15)
 
 
 def all_fixtures():
