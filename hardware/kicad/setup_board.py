@@ -314,4 +314,49 @@ txt = txt[:last_paren] + insertion + txt[last_paren:]
 print(f"[2/3] Added Edge.Cuts {BOARD_W:.0f}×{BOARD_H:.0f} mm + 4× M3 holes at corners {mh_positions}")
 
 PCB.write_text(txt)
+
+
+# ───────────── 4. Ensure .kicad_pro has blind/buried via class for OQ-020 ─────────────
+# OQ-020 ACTIVATE 2026-05-28 (Sai cost-OK): the 4 residual J18/J19 escape nets
+# (BSTB.J19.17, PWM_INHB.J18.19, SWDIO.J18.23, PWM_INLA.J18.15) need a blind
+# F.Cu↔In2 via (the existing microvia F-In1 bottoms on the In1=GND PLANE per
+# the layer-aware engine T12; not a signal escape). Per BOARD_INVARIANTS
+# §"HDI Class extension: blind/buried F.Cu↔In2" the geometry is drill 0.15mm /
+# pad 0.30mm / annular 0.075mm. This block makes setup_board IDEMPOTENT for
+# the project settings: re-running this script does NOT clobber the blind-via
+# class (per [[reference-setup-board-py-idempotence]] — every append-block
+# needs an idempotent ensure-then-write pattern; we mirror _strip_*-then-append).
+#
+# Pi-shared rule [[feedback-pi-shared-system-protect]]: this only edits the
+# repo's .kicad_pro file (under /home/novatics64/escworker/pcb_master); no
+# system state is touched, no Pi service is poked.
+import json as _json
+
+PRO = PCB.with_suffix(".kicad_pro")
+if PRO.exists():
+    try:
+        pro = _json.loads(PRO.read_text())
+        board = pro.setdefault("board", {})
+        dpr = board.setdefault("design_settings", {})
+        rules = dpr.setdefault("rules", {})
+        # Ensure blind/buried + microvia allowed (idempotent).
+        rules["allow_blind_buried_vias"] = True
+        rules["allow_microvias"] = True
+        # OQ-020 blind F-In2 via dimensions class. Idempotent: replace any
+        # existing 0.15mm-drill entry rather than append a duplicate.
+        dims = dpr.setdefault("via_dimensions", [])
+        BLIND_DRILL = 0.15
+        BLIND_PAD = 0.30
+        dims = [d for d in dims if not (
+            isinstance(d, dict) and abs(d.get("drill", 0) - BLIND_DRILL) < 1e-9)]
+        dims.append({"diameter": BLIND_PAD, "drill": BLIND_DRILL})
+        dpr["via_dimensions"] = dims
+        PRO.write_text(_json.dumps(pro, indent=2))
+        print(f"[3/3] Ensured .kicad_pro: allow_blind_buried_vias=True + via_dim "
+              f"{BLIND_PAD}/{BLIND_DRILL}mm (OQ-020 blind F-In2 class)")
+    except Exception as _e:   # pragma: no cover - .kicad_pro malformed is rare
+        print(f"[3/3] WARN: could not patch {PRO.name}: {type(_e).__name__}: {_e}")
+else:
+    print(f"[3/3] WARN: {PRO} not found — blind-via class NOT ensured (run setup_board "
+          "after kinet2pcb so the .kicad_pro exists)")
 print(f"[3/3] Wrote: {PCB}  ({PCB.stat().st_size:,} bytes)")

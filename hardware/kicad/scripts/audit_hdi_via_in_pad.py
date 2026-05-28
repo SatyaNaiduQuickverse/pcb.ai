@@ -3,29 +3,42 @@
 audit_hdi_via_in_pad.py — HDI via-in-pad whitelist enforcement (G_HDI_VIA_IN_PAD).
 
 Master 2026-05-27 R26 HDI dispatch (CH1 STEP-6 unblock).
+Master 2026-05-28 OQ-020 ACTIVATE extension: accept blind F.Cu↔In2 vias on
+the 4-net BSTB/PWM_INHB/SWDIO/PWM_INLA whitelist (the OQ-020 lever per
+BOARD_INVARIANTS §"HDI Class extension: blind/buried F.Cu↔In2").
 
 Verifies that ONLY whitelisted footprints (J18, J19) have via-in-pad
 placements. This audit preserves the cost envelope: Sai cost-cleared
-+$2-3/board for HDI Class 2 (epoxy fill + plate-over) on J18 + J19 only;
-any via-in-pad on other components would silently expand the HDI scope
-and inflate cost.
++$2-3/board for HDI Class 2 (epoxy fill + plate-over) on J18 + J19 only,
++$2-5/board for the blind/buried F-In2 class on the 4 named nets ONLY;
+any via-in-pad on other components / pins would silently expand the HDI
+scope and inflate cost.
 
 Definition of "HDI via-in-pad" (what this audit checks):
   A via whose:
     - center falls within an SMD pad's bounding rectangle (+ 0.05mm tol)
     AND
     - drill diameter is ≤ HDI_DRILL_MAX_MM (0.15mm) OR via_type is MICROVIA
+      OR via_type is BLIND_BURIED (OQ-020 blind F-In2 — drill 0.15mm and
+      blind-tagged falls into the same HDI category from the cost POV)
   is an HDI via-in-pad. Standard 0.3mm-drill vias that incidentally land
   on a pad (router convenience) are NOT HDI — they don't require the
   +$2-3/board epoxy-fill+plate-over fab process and are out of scope.
 
-Whitelist:
+Whitelist (footprints):
   J18 (AT32F421 QFN-32, 0.5mm pitch) — south-edge BEMF + PWM escape
   J19 (DRV8300 QFN-24, 0.5mm pitch) — driver fan-out escape
+
+Whitelist (blind F.Cu↔In2 vias — OQ-020 ACTIVATE 2026-05-28):
+  Only the 4 named nets on J18/J19 — BSTB.J19.17, PWM_INHB.J18.19,
+  SWDIO.J18.23, PWM_INLA.J18.15. A blind F-In2 via on any OTHER net = FAIL
+  (cost scope creep beyond Sai's +$2-5/board envelope).
 
 PASS criteria:
   - Every HDI via (drill ≤ 0.15mm OR type MICROVIA) lies inside a J18 or
     J19 SMD pad bbox.
+  - Every BLIND_BURIED via with F.Cu↔In2 layer span (the OQ-020 class) is
+    on one of the 4 whitelisted nets AND inside a J18 or J19 SMD pad bbox.
 
 FAIL criteria:
   - Any HDI via outside J18/J19 SMD pads (cost scope creep).
@@ -34,6 +47,8 @@ FAIL criteria:
     span is NOT adjacent (F.Cu↔In1.Cu or B.Cu↔In8.Cu). JLC HDI Class 2
     spec restricts microvia to single laser-drill adjacent-layer pairs;
     longer spans must emit as through-vias (no MICROVIA tag).
+  - OQ-020 (this extension): any BLIND_BURIED via tagged F.Cu↔In2 (the
+    new OQ-020 class) on a net NOT in the BLIND_F_IN2_NET_WHITELIST.
 
 Usage:
   python3 audit_hdi_via_in_pad.py <board.kicad_pcb>
@@ -55,6 +70,26 @@ except ImportError:
 # and docs/MASTER_HDI_SPEC.md whitelist section.
 HDI_VIA_IN_PAD_WHITELIST = ("J18", "J19")
 
+# OQ-020 ACTIVATE 2026-05-28 (Sai cost-OK): blind F.Cu↔In2 via class scoped
+# to the 4 named residual escape nets ONLY. Must stay in sync with the
+# BOARD_INVARIANTS §"HDI Class extension: blind/buried F.Cu↔In2" table and
+# the pcbai_fpv4in1.kicad_dru "HDI blind F-In2" rule set. The audit checks
+# canonical .kicad_pcb net names (the binding identity post-kinet2pcb). The
+# scope is CH1 ONLY (where the OQ-020 wall was diagnosed); the channel
+# suffix `_CH1` is the schematic-canonical naming (see canonical board).
+# This is the NARROWEST scope per Sai's cost envelope. Expanding to
+# CH2/CH3/CH4 requires Sai cost-OK + a new PR (the engine code path is
+# already generic across subsystems — only the whitelist is CH1-scoped).
+BLIND_F_IN2_NET_WHITELIST = (
+    "BSTB_CH1", "PWM_INHB_CH1", "SWDIO_CH1", "PWM_INLA_CH1",
+)
+
+# The schematic-logical signal names (pre-channel-suffix) — kept for cross-
+# reference to BOARD_INVARIANTS + DRU which document the signals by their
+# logical names. NOT used for matching (matching is exact-string against
+# canonical .kicad_pcb names per [[reference-kicad-dru-libeval-crash]]).
+BLIND_F_IN2_LOGICAL_SIGNALS = ("BSTB", "PWM_INHB", "SWDIO", "PWM_INLA")
+
 # Via-center-inside-pad tolerance — accommodates grid-snap rounding from
 # router emission (router places via at pad center but pcbnew internal
 # unit conversion may shift by ≤1µm).
@@ -62,6 +97,9 @@ TOLERANCE_MM = 0.05
 
 # HDI via geometry thresholds — vias with drill ≤ HDI_DRILL_MAX are
 # considered HDI microvias. Standard board vias have drill ≥ 0.20mm.
+# The new OQ-020 blind F-In2 class has drill 0.15mm == HDI_DRILL_MAX_MM
+# (i.e. it falls into the HDI band by drill, exactly as intended — the
+# DRU's "Standard via" rules start at >0.20mm to leave room for it).
 HDI_DRILL_MAX_MM = 0.15
 
 
@@ -116,7 +154,9 @@ def main():
     fails_in_pad_nonwhitelist = []  # via inside a non-whitelist pad bbox
     fails_hdi_outside_whitelist = []  # microvia outside any J18/J19 pad
     fails_microvia_span = []  # v7: MICROVIA tag on non-adjacent span
+    fails_blind_f_in2_offwhitelist = []  # OQ-020: blind F-In2 on non-whitelist net
     pass_count = 0  # vias correctly in J18/J19 pads
+    pass_blind_f_in2 = 0  # OQ-020 blind F-In2 vias correctly on whitelist nets
 
     # v7: adjacent-layer pairs allowed for VIATYPE_MICROVIA tag (JLC HDI
     # Class 2 single laser-drill spec). Anything longer is a through-via
@@ -126,6 +166,11 @@ def main():
         (pcbnew.In1_Cu, pcbnew.F_Cu),
         (pcbnew.B_Cu, pcbnew.In8_Cu),
         (pcbnew.In8_Cu, pcbnew.B_Cu),
+    }
+    # OQ-020 ACTIVATE: the blind/buried F.Cu↔In2 class pairs (the new lever).
+    BLIND_F_IN2_PAIRS = {
+        (pcbnew.F_Cu, pcbnew.In2_Cu),
+        (pcbnew.In2_Cu, pcbnew.F_Cu),
     }
 
     for t in b.GetTracks():
@@ -143,21 +188,49 @@ def main():
             is_microvia_tag = (vt == pcbnew.VIATYPE_MICROVIA)
         except Exception:
             is_microvia_tag = False
-        is_hdi = (drill_mm <= HDI_DRILL_MAX_MM) or is_microvia_tag
+        try:
+            is_blind_buried_tag = (vt == pcbnew.VIATYPE_BLIND_BURIED)
+        except Exception:
+            is_blind_buried_tag = False
+        is_hdi = (drill_mm <= HDI_DRILL_MAX_MM) or is_microvia_tag \
+            or is_blind_buried_tag
+
+        # Read layer pair once (used by both microvia-span + blind-F-In2 checks).
+        try:
+            L_top = t.TopLayer()
+            L_bot = t.BottomLayer()
+            layer_pair = (L_top, L_bot)
+        except Exception:
+            L_top, L_bot, layer_pair = -1, -1, (-1, -1)
+
+        # Read net name once (used by the OQ-020 blind F-In2 whitelist check).
+        try:
+            net_obj = t.GetNet()
+            net_name = net_obj.GetNetname() if net_obj else ""
+        except Exception:
+            net_name = ""
 
         # v7: span check — any VIATYPE_MICROVIA must be adjacent-layer.
         if is_microvia_tag:
-            try:
-                L_top = t.TopLayer()
-                L_bot = t.BottomLayer()
-                if (L_top, L_bot) not in ADJACENT_MICROVIA_PAIRS:
-                    fails_microvia_span.append(
-                        (vx, vy, L_top, L_bot, drill_mm)
-                    )
-            except Exception:
-                # Can't read layer pair — conservatively flag as non-adjacent
+            if layer_pair not in ADJACENT_MICROVIA_PAIRS:
                 fails_microvia_span.append(
-                    (vx, vy, -1, -1, drill_mm)
+                    (vx, vy, L_top, L_bot, drill_mm)
+                )
+
+        # OQ-020 ACTIVATE 2026-05-28: a BLIND_BURIED via with F.Cu↔In2 layer
+        # span is the new whitelisted class — accept ONLY when its net is in
+        # BLIND_F_IN2_NET_WHITELIST. A blind F-In2 on any other net = FAIL
+        # (cost scope creep beyond Sai's +$2-5/board envelope).
+        is_blind_f_in2 = (is_blind_buried_tag and layer_pair in BLIND_F_IN2_PAIRS)
+        if is_blind_f_in2:
+            # Strip any net-class / netname prefix; KiCad netnames don't carry
+            # one by default but the comparison is exact-string (matches the
+            # canonical schematic net names listed in BOARD_INVARIANTS).
+            if net_name in BLIND_F_IN2_NET_WHITELIST:
+                pass_blind_f_in2 += 1
+            else:
+                fails_blind_f_in2_offwhitelist.append(
+                    (vx, vy, net_name, drill_mm)
                 )
 
         # Only HDI vias are subject to this audit. Standard 0.3mm-drill
@@ -228,9 +301,24 @@ def main():
     if len(fails_microvia_span) > 20:
         print(f"  ... and {len(fails_microvia_span) - 20} more")
 
+    # OQ-020 ACTIVATE 2026-05-28: blind F-In2 net-whitelist report
+    print(f"")
+    print(f"Blind F.Cu↔In2 vias correctly on whitelist nets "
+          f"({list(BLIND_F_IN2_NET_WHITELIST)}): {pass_blind_f_in2}")
+    print(f"Blind F.Cu↔In2 vias on NON-WHITELIST nets (FAIL, OQ-020 scope): "
+          f"{len(fails_blind_f_in2_offwhitelist)}")
+    for (vx, vy, nn, drill) in fails_blind_f_in2_offwhitelist[:20]:
+        print(f"  - blind F-In2 via @({vx:.3f},{vy:.3f}) drill={drill:.3f} "
+              f"net={nn!r} — NOT in BLIND_F_IN2_NET_WHITELIST "
+              f"(cost scope creep beyond Sai's +$2-5/board envelope; "
+              f"see BOARD_INVARIANTS §'HDI Class extension: blind/buried F.Cu↔In2')")
+    if len(fails_blind_f_in2_offwhitelist) > 20:
+        print(f"  ... and {len(fails_blind_f_in2_offwhitelist) - 20} more")
+
     total_fails = (len(fails_in_pad_nonwhitelist)
                    + len(fails_hdi_outside_whitelist)
-                   + len(fails_microvia_span))
+                   + len(fails_microvia_span)
+                   + len(fails_blind_f_in2_offwhitelist))
     if total_fails == 0:
         print(f"\n✅ PASS — all HDI via-in-pad placements on whitelist "
               f"({HDI_VIA_IN_PAD_WHITELIST}); cost envelope preserved.")
