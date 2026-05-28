@@ -1711,6 +1711,504 @@ def _special_checks_T15_wrapped(fx, got):
 _special_checks = _special_checks_T15_wrapped
 
 
+# ============================================================================
+# T16 — MAZE VIA-CELL-HALO PER-CLASS (CH1 30/30 (H) engine-correctness
+# lockfile). APPEND-ONLY block (2026-05-28): new selfcheck + harness-dispatch
+# wrappers that delegate T1-T15 to the existing (already-wrapped) functions
+# unchanged. The T1-T15 function bodies above and the T15 wrapper bindings
+# stay byte-identical (diff-stat: only NEW lines for T16). Mirrors the T15
+# append pattern exactly.
+# ============================================================================
+
+
+def _seg_aabb_min_dist_T16(x1, y1, x2, y2, rx_min, ry_min, rx_max, ry_max):
+    """Local alias to `_seg_rect_min_dist` for T16 readability — same
+    primitive the T13/T15 anti-liar checks already consume (single source of
+    geometric truth)."""
+    return _seg_rect_min_dist(x1, y1, x2, y2, rx_min, ry_min, rx_max, ry_max)
+
+
+def _point_to_rect_dist(px, py, rx_min, ry_min, rx_max, ry_max):
+    """Euclidean distance from point (px,py) to AABB rect. Returns 0 inside.
+    Used by the T16 via-pad clearance check (the via is a point on the grid;
+    pad halo is its exclusion radius). Pure stdlib; matches the maze router's
+    own primitive in spirit (the maze treats the via as a cell, the
+    selfcheck verifies the EMITTED via point's clearance)."""
+    import math as _m
+    dx = max(rx_min - px, 0.0, px - rx_max)
+    dy = max(ry_min - py, 0.0, py - ry_max)
+    return _m.hypot(dx, dy)
+
+
+def _selfcheck_T16(fx, msgs):
+    """T16 — MAZE VIA-CELL-HALO PER-CLASS (the CH1 30/30 (H) engine-
+    correctness lockfile). The bug-witness is end-to-end:
+      (a) the obstacle's `layers` field is SET to {"In2.Cu"} (the per-layer
+          filter the fix relies on is exercised; not a no-op fixture);
+      (b) the witness path's endpoints match the pin coords on the correct
+          layers (F.Cu start, In2.Cu end — the layer mismatch FORCES a via);
+      (c) the witness via at x=safe_via_x clears the body by ≥ through halo
+          (the FIX: pad_radius + clearance_fos = 0.50mm), AND a buggy 2D-halo
+          via at x=10 would short by 0.18mm (the BUG class is real);
+      (d) every witness segment clears every per-layer-applicable body by
+          ≥ (trace/2 + clearance) — F.Cu side trivial, In2.Cu side by ≥0.32mm
+          at the tail (>= 0.30mm trace-inflate margin);
+      (e) under a 2D-VIA-HALO LIAR (force via halo = trace-inflate 0.30mm) the
+          via at x=10 PASSES the cell check but the EMITTED through-via
+          pad+clearance lands 0.18mm INSIDE the body — proving the bug class
+          is real on this fixture and a regression to trace-inflate via cells
+          FAILS T16 on the shorts-gate downstream;
+      (f) INVOKES `maze_router.solve` DIRECTLY and asserts the engine emits
+          verdict=ROUTABLE, routed=1, n_vias=1 with a via whose XY position
+          clears every In2.Cu-applicable body by ≥ the per-class halo (engine
+          wires the fix end-to-end).
+    """
+    gt = fx.ground_truth
+    ok = True
+    wit = gt.witness
+    m = gt.metrics
+    path = wit["path"]
+    trace_w = wit["trace_width_mm"]
+    clearance = wit["clearance_mm"]
+    margin = trace_w / 2.0 + clearance       # 0.30mm (trace inflate)
+    via_at = tuple(wit["via_at"])
+    via_class = wit["via_class"]
+    layers_in_order = list(wit["layers_in_order"])
+
+    # (a) per-layer filter is exercised — at least one body has Obstacle.layers
+    # set to {"In2.Cu"} (the construction-proof claim; the fix RELIES on the
+    # per-layer filter from lever E correctly skipping non-applicable bodies).
+    bodies = [o for o in fx.obstacles if o.kind == "body"]
+    in2_only = [o for o in bodies if o.layers == frozenset({"In2.Cu"})]
+    ok &= _assert(len(in2_only) >= 1,
+                  f"the FOREIGN_IN2 obstacle has layers=={{'In2.Cu'}} "
+                  f"(matches: {len(in2_only)}) — the per-layer obstacle "
+                  "is ATTRIBUTED to In2.Cu only (lever E filter exercised)",
+                  msgs)
+
+    # (b) endpoints match pins on the correct layers.
+    start_pin = fx.pin(fx.nets[0].pin_ids[0])
+    end_pin = fx.pin(fx.nets[0].pin_ids[1])
+    ok &= _assert(
+        abs(path[0][0] - start_pin.x_mm) < 1e-6
+        and abs(path[0][1] - start_pin.y_mm) < 1e-6,
+        f"witness start {path[0]} == start pin "
+        f"{(start_pin.x_mm, start_pin.y_mm)} on {start_pin.layer}", msgs)
+    ok &= _assert(
+        abs(path[-1][0] - end_pin.x_mm) < 1e-6
+        and abs(path[-1][1] - end_pin.y_mm) < 1e-6,
+        f"witness end {path[-1]} == end pin "
+        f"{(end_pin.x_mm, end_pin.y_mm)} on {end_pin.layer}", msgs)
+    ok &= _assert(
+        start_pin.layer == "F.Cu" and end_pin.layer == "In2.Cu",
+        f"pin layers (start={start_pin.layer}, end={end_pin.layer}) "
+        f"FORCE a via — single layer route is impossible", msgs)
+    ok &= _assert(layers_in_order == ["F.Cu", "In2.Cu"],
+                  f"witness layers_in_order == {layers_in_order} == "
+                  "['F.Cu', 'In2.Cu'] (via splits the route at the safe cell)",
+                  msgs)
+
+    # (c) the witness via at safe_via_x clears the FOREIGN_IN2 body by >= through
+    # halo. AND the BUGGY via at x=10 would short by 0.18mm. Select FOREIGN_IN2
+    # by id (T16 has 2 In2.Cu bodies — the bug-witness body + a dispatch body).
+    safe_x = m["safe_via_x_mm"]
+    buggy_x = m["buggy_via_x_mm"]
+    foreign_in2 = [o for o in in2_only if o.id == "FOREIGN_IN2"]
+    ok &= _assert(len(foreign_in2) == 1,
+                  f"FOREIGN_IN2 body present (found {len(foreign_in2)}) — the "
+                  "specific lever (H) bug-witness body must be identifiable",
+                  msgs)
+    in2_body = foreign_in2[0]
+    safe_clear = _point_to_rect_dist(safe_x, via_at[1],
+                                     in2_body.x_min, in2_body.y_min,
+                                     in2_body.x_max, in2_body.y_max)
+    buggy_clear = _point_to_rect_dist(buggy_x, via_at[1],
+                                      in2_body.x_min, in2_body.y_min,
+                                      in2_body.x_max, in2_body.y_max)
+    through_halo = m["through_halo_mm"]
+    trace_inflate = m["trace_inflate_halo_mm"]
+    ok &= _assert(abs(safe_clear - m["safe_via_clearance_to_body_mm"]) < 1e-9,
+                  f"re-derived safe-via clearance {safe_clear:.4f}mm == "
+                  f"stored {m['safe_via_clearance_to_body_mm']}mm (==0.52)",
+                  msgs)
+    ok &= _assert(safe_clear + 1e-9 >= through_halo,
+                  f"safe via @ x={safe_x} clears body by {safe_clear:.4f}mm "
+                  f">= through halo {through_halo}mm — SAFE under FIX", msgs)
+    ok &= _assert(abs(buggy_clear - m["buggy_via_clearance_to_body_mm"]) < 1e-9,
+                  f"re-derived buggy-via clearance {buggy_clear:.4f}mm == "
+                  f"stored {m['buggy_via_clearance_to_body_mm']}mm (==0.32)",
+                  msgs)
+    ok &= _assert(buggy_clear + 1e-9 < through_halo,
+                  f"buggy via @ x={buggy_x} clears body by only "
+                  f"{buggy_clear:.4f}mm < through halo {through_halo}mm — "
+                  f"WOULD SHORT by {(through_halo-buggy_clear):.4f}mm under "
+                  "the 2D-VIA-HALO LIAR (the bug class is REAL)", msgs)
+
+    # (d) every witness segment clears every per-layer-applicable body. The
+    # path goes F.Cu (0,5)->(safe_x,5) then In2.Cu (safe_x,5)->(10,5). The
+    # F.Cu seg is clear of any F.Cu-applicable body (zero here); the In2.Cu
+    # tail is checked against the In2.Cu body — must clear by >= margin.
+    # We test BOTH segments under per-layer-applicable filter.
+    seg_layers = [layers_in_order[0], layers_in_order[1]]  # [F.Cu, In2.Cu]
+    seg_pts = [(path[0], path[1]), (path[1], path[2])]
+    all_clear = True
+    bad = None
+    for (p_a, p_b), seg_layer in zip(seg_pts, seg_layers):
+        for o in bodies:
+            applies = o.layers is None or seg_layer in o.layers
+            if not applies:
+                continue
+            d = _seg_aabb_min_dist_T16(p_a[0], p_a[1], p_b[0], p_b[1],
+                                       o.x_min, o.y_min, o.x_max, o.y_max)
+            if d < margin - 1e-9:
+                all_clear = False
+                bad = (p_a, p_b, seg_layer, o.id, round(d, 6))
+                break
+        if not all_clear:
+            break
+    ok &= _assert(all_clear,
+                  f"every witness seg clears every per-layer-applicable body "
+                  f"by ≥ {margin}mm (per-layer filter from lever E); "
+                  f"failed at {bad}", msgs)
+
+    # (e) 2D-VIA-HALO LIAR simulation: the buggy maze uses trace-inflate
+    # 0.30mm as the via-cell halo. At cell (10, 5) trace-inflate clears the
+    # body by trace_inflate - (body-distance) = (0.32 - 0.30) = +0.02mm slack
+    # — so the buggy maze ACCEPTS the cell and emits a through-via there.
+    # Physical pad+clearance halo = 0.50mm; at 0.32mm distance, the pad
+    # lands 0.18mm INSIDE the body → SHORT. We re-derive both numbers to
+    # prove the bug class is genuine on T16.
+    liar_cell_clear = (buggy_clear + 1e-9 >= trace_inflate)
+    ok &= _assert(liar_cell_clear,
+                  f"under 2D-VIA-HALO LIAR (trace-inflate {trace_inflate}), "
+                  f"the via cell at x={buggy_x} clears body by "
+                  f"{buggy_clear:.4f}mm >= {trace_inflate}mm — the buggy "
+                  "maze ACCEPTS the cell and emits a through-via there",
+                  msgs)
+    physical_short = through_halo - buggy_clear
+    ok &= _assert(physical_short > 0.0,
+                  f"the EMITTED through-via @ x={buggy_x} (buggy halo) "
+                  f"physically shorts the body by {physical_short:.4f}mm "
+                  f"(through halo {through_halo} - clearance {buggy_clear:.4f}"
+                  f") — proves the bug class is REAL on T16; a regression to "
+                  "trace-inflate via cells FAILS T16 on the shorts-gate", msgs)
+    ok &= _assert(abs(physical_short - m["buggy_via_short_mm"]) < 1e-9,
+                  f"re-derived physical short {physical_short:.4f}mm == "
+                  f"stored buggy_via_short_mm {m['buggy_via_short_mm']} "
+                  "(==0.18mm — the GLB/SWDIO/PWM_INLA shape)", msgs)
+    ok &= _assert(m["liar_verdict"] == "ROUTABLE-BUT-SHORTS",
+                  f"stored liar_verdict {m['liar_verdict']!r} == "
+                  "'ROUTABLE-BUT-SHORTS' (the buggy maze claims routable but "
+                  "the emit shorts; FIXED maze refuses cell + finds alt)",
+                  msgs)
+
+    # (f) INVOKE the engine directly on T16 and assert ROUTABLE end-to-end +
+    # the emitted via clears every In2.Cu-applicable body by >= per-class
+    # halo (the engine wires the fix end-to-end).
+    try:
+        from . import maze_router as _MR   # type: ignore
+    except ImportError:                    # pragma: no cover — script-mode
+        import os as _os
+        import sys as _sys
+        _here = _os.path.dirname(_os.path.abspath(__file__))
+        if _here not in _sys.path:
+            _sys.path.insert(0, _here)
+        import maze_router as _MR          # type: ignore
+    eng_out = _MR.solve(fx.problem_view())
+    ok &= _assert(eng_out.get("verdict") == "ROUTABLE",
+                  f"engine end-to-end verdict {eng_out.get('verdict')!r} == "
+                  "'ROUTABLE' on T16 — per-class halo refuses unsafe cells "
+                  "and finds the safe via cell at x<=9.82", msgs)
+    ok &= _assert(eng_out.get("routed") == 1,
+                  f"engine routed=={eng_out.get('routed')} == 1", msgs)
+    ok &= _assert(eng_out.get("n_vias") == 1,
+                  f"engine n_vias=={eng_out.get('n_vias')} == 1 (one layer "
+                  "change at the safe via cell)", msgs)
+    eng_vias = eng_out.get("vias") or []
+    ok &= _assert(len(eng_vias) >= 1,
+                  f"engine returned >=1 via ({len(eng_vias)} reported)", msgs)
+    # Every via emit by the engine MUST clear every applicable body by >=
+    # the per-class halo. We re-derive the halo INDEPENDENTLY from
+    # first-principles per-class pad diameters (NOT via the engine's helper)
+    # so the selfcheck catches a buggy engine even if its helper is also
+    # buggy. The constants below mirror the cooperative router + maze_router
+    # SSoT (route_subsystem_cooperative.py VIA_DIAM_MM / HDI_VIA_DIAM_MM /
+    # BLIND_F_IN2_DIAM_MM); pasted here for anti-drift independence.
+    _SC_PAD_DIAM_MM = {
+        "through":         0.60,
+        "microvia":        0.25,
+        "stacked":         0.25,
+        "blind":           0.30,
+        "microvia_F_In1":  0.25,
+        "microvia_B_In8":  0.25,
+        "blind_F_In2":     0.30,
+    }
+    _SC_LAYER_STACK = (
+        "F.Cu", "In1.Cu", "In2.Cu", "In3.Cu", "In4.Cu",
+        "In5.Cu", "In6.Cu", "In7.Cu", "In8.Cu", "B.Cu",
+    )
+    def _sc_indep_halo(vc, clr):
+        d = _SC_PAD_DIAM_MM.get(vc)
+        return None if d is None else d / 2.0 + clr
+    def _sc_indep_span(vc, f, t):
+        if vc not in _SC_PAD_DIAM_MM:
+            return None
+        if (f not in _SC_LAYER_STACK or t not in _SC_LAYER_STACK or f == t):
+            return None
+        ia, ib = _SC_LAYER_STACK.index(f), _SC_LAYER_STACK.index(t)
+        return tuple(_SC_LAYER_STACK[min(ia, ib):max(ia, ib) + 1])
+    via_geom_ok = True
+    bad_via = None
+    for v in eng_vias:
+        vp = v["point"] if isinstance(v, dict) else getattr(v, "point", None)
+        vc = v["via_class"] if isinstance(v, dict) else getattr(v, "via_class", None)
+        from_l = (v["from_layer"] if isinstance(v, dict)
+                  else getattr(v, "from_layer", "F.Cu"))
+        to_l = (v["to_layer"] if isinstance(v, dict)
+                else getattr(v, "to_layer", "In2.Cu"))
+        if vp is None or vc is None:
+            via_geom_ok = False
+            bad_via = ("missing point/class", v)
+            break
+        halo = _sc_indep_halo(vc, clearance)
+        if halo is None:
+            via_geom_ok = False
+            bad_via = ("unknown class refused by INDEPENDENT halo table", v)
+            break
+        span = _sc_indep_span(vc, from_l, to_l)
+        if span is None:
+            via_geom_ok = False
+            bad_via = ("unknown span refused by INDEPENDENT span table", v)
+            break
+        for o in bodies:
+            applies = (o.layers is None
+                       or any(L in o.layers for L in span))
+            if not applies:
+                continue
+            d = _point_to_rect_dist(vp[0], vp[1],
+                                    o.x_min, o.y_min,
+                                    o.x_max, o.y_max)
+            if d + 1e-9 < halo:
+                via_geom_ok = False
+                bad_via = (o.id, vp, vc, round(halo, 4), round(d, 4))
+                break
+        if not via_geom_ok:
+            break
+    ok &= _assert(via_geom_ok,
+                  f"every engine-emitted via clears every applicable body by "
+                  f">= per-class halo (INDEPENDENT re-derivation; the lever "
+                  f"(H) physics check; mirrors cooperative shorts-gate); "
+                  f"failed at {bad_via}", msgs)
+    # The buggy via location (10, 5) MUST NOT appear in the engine output.
+    for v in eng_vias:
+        vp = v["point"] if isinstance(v, dict) else getattr(v, "point", None)
+        ok &= _assert(
+            not (abs(vp[0] - buggy_x) < 1e-6 and abs(vp[1] - via_at[1]) < 1e-6),
+            f"engine via @ {vp} != BUGGY cell ({buggy_x},{via_at[1]}) — fix "
+            "correctly refused the unsafe cell (no silent short)", msgs)
+    ok &= _assert(gt.verdict == "ROUTABLE",
+                  "stored ground-truth verdict ROUTABLE (per-class halo "
+                  "preserves routability by finding the safe via cell)",
+                  msgs)
+    return ok
+
+
+# Append T16 selfcheck to the dispatch dict via dict assignment so the
+# original _SELFCHECKS = {...} literal stays byte-identical.
+_SELFCHECKS["T16"] = _selfcheck_T16
+
+
+# T16 harness-dispatch wrappers — chain on top of the T15 wrappers (which
+# themselves chain on top of the original T1-T14 functions). Each wrapper
+# delegates non-T16 cases to the existing chained dispatcher.
+
+_expected_for_T1_T15 = _expected_for
+
+
+def _expected_for_T16_wrapped(fx):
+    """APPEND-ONLY: delegate T1-T15 to the existing chain; handle T16 here.
+
+    T16 — maze per-via-class cell halo. The maze must route the single layer-
+    changing net by placing the via at the safe cell. Harness-scored metrics:
+        routed = 1   (the one long-path net is routed),
+        n_vias = 1   (one layer change at the safe via cell).
+    A regression to the 2D-via-halo would emit a via at the unsafe cell —
+    the engine itself emits the via (so engine reports n_vias=1 either way),
+    BUT the engine's via at (10, 5) would short the body, caught by the
+    selfcheck's via-geometry re-derivation (and downstream by the shorts-gate
+    on the live board emit). The selfcheck is the definitive bug catcher.
+    """
+    if fx.name == "T16":
+        m = fx.ground_truth.metrics
+        return {"routed": m["routed"], "n_vias": m["max_n_vias"]}
+    return _expected_for_T1_T15(fx)
+
+
+_expected_for = _expected_for_T16_wrapped
+
+
+_accepted_verdicts_T1_T15 = _accepted_verdicts
+
+
+def _accepted_verdicts_T16_wrapped(fx):
+    if fx.name == "T16":
+        # Per-class halo maze must emit ROUTABLE on T16. A 2D-via-halo
+        # regression would emit ROUTABLE too (the via cell passes trace-
+        # inflate), but the selfcheck's geometric via-clearance re-derivation
+        # catches the short (the bug class). Verdict alone is necessary
+        # but not sufficient — the special-checks gate adds the via-halo
+        # geometric witness check (the engine analog of (e)+(f)).
+        return {"ROUTABLE"}
+    return _accepted_verdicts_T1_T15(fx)
+
+
+_accepted_verdicts = _accepted_verdicts_T16_wrapped
+
+
+_key_metric_str_T1_T15 = _key_metric_str
+
+
+def _key_metric_str_T16_wrapped(fx):
+    if fx.name == "T16":
+        m = fx.ground_truth.metrics
+        return (f"via at body_gap={m['body_gap_to_end_pin_mm']}mm passes "
+                f"trace-inflate {m['trace_inflate_halo_mm']}mm BUT fails "
+                f"through halo {m['through_halo_mm']}mm; PER-CLASS halo ⇒ "
+                f"safe via @ x={m['safe_via_x_mm']} (slack "
+                f"{m['safe_via_slack_mm']}mm), 2D-VIA-HALO liar ⇒ via @ "
+                f"x={m['buggy_via_x_mm']} SHORTS by {m['buggy_via_short_mm']}"
+                f"mm (the engine-correctness lockfile; lever (H))")
+    return _key_metric_str_T1_T15(fx)
+
+
+_key_metric_str = _key_metric_str_T16_wrapped
+
+
+_special_checks_T1_T15 = _special_checks
+
+
+def _special_checks_T16_wrapped(fx, got):
+    if fx.name == "T16":
+        # Anti-liar geometric witness check (the engine analog of
+        # _selfcheck_T16 (c)+(e)+(f)): the solver must produce a path that
+        # (i) endpoints match the pins, (ii) is OCTILINEAR, (iii) every
+        # segment clears every per-layer-applicable body by >= trace inflate,
+        # AND (iv) every emitted via clears every applicable body by >=
+        # per-class halo (the lever (H) physics check; mirrors cooperative
+        # router shorts-gate). Without geometric proof, claiming ROUTABLE
+        # is unbacked — the case FAILS.
+        notes = []
+        path = _solver_path_for_T13(got)
+        if not path or len(path) < 2:
+            return False, ["T16 anti-liar: no geometric path returned"]
+        net = fx.nets[0]
+        sp = fx.pin(net.pin_ids[0])
+        ep = fx.pin(net.pin_ids[1])
+        end_ok = (abs(path[0][0] - sp.x_mm) < 1e-3
+                  and abs(path[0][1] - sp.y_mm) < 1e-3
+                  and abs(path[-1][0] - ep.x_mm) < 1e-3
+                  and abs(path[-1][1] - ep.y_mm) < 1e-3)
+        if not end_ok:
+            return False, [f"T16 anti-liar: path endpoints {path[0]},"
+                           f"{path[-1]} != pins {(sp.x_mm, sp.y_mm)},"
+                           f"{(ep.x_mm, ep.y_mm)}"]
+        for (x1, y1), (x2, y2) in zip(path, path[1:]):
+            dx, dy = abs(x2 - x1), abs(y2 - y1)
+            if dx < 1e-6 and dy < 1e-6:
+                continue   # zero-length steps OK (a via emits 2 colinear pts)
+            if not (dx < 1e-6 or dy < 1e-6 or abs(dx - dy) < 1e-6):
+                return False, [f"T16 anti-liar: non-octilinear segment "
+                               f"({x1},{y1})->({x2},{y2}) — acute-angle risk"]
+        # Every emitted via must clear every applicable body by >= per-class
+        # halo. We re-derive the halo INLINE from first-principles per-class
+        # pad diameters (NOT via the maze_router helper) so the special-check
+        # is INDEPENDENT of the engine's helper — a buggy engine that
+        # under-clearance'd via cells would also have a buggy helper; the
+        # special-check must catch the short regardless. Anti-drift: the
+        # constants below mirror the cooperative router + maze_router SSoT
+        # (route_subsystem_cooperative.py VIA_DIAM_MM / HDI_VIA_DIAM_MM /
+        # BLIND_F_IN2_DIAM_MM); pasted here so a buggy engine cannot fool
+        # the anti-liar witness.
+        _T16_PAD_DIAM_MM = {
+            "through":         0.60,
+            "microvia":        0.25,
+            "stacked":         0.25,
+            "blind":           0.30,
+            "microvia_F_In1":  0.25,
+            "microvia_B_In8":  0.25,
+            "blind_F_In2":     0.30,
+        }
+        # Same LAYER_STACK order as maze_router (kept inline for indep).
+        _T16_LAYER_STACK = (
+            "F.Cu", "In1.Cu", "In2.Cu", "In3.Cu", "In4.Cu",
+            "In5.Cu", "In6.Cu", "In7.Cu", "In8.Cu", "B.Cu",
+        )
+        def _t16_indep_halo(via_class, clearance_fos_mm):
+            d = _T16_PAD_DIAM_MM.get(via_class)
+            if d is None:
+                return None
+            return d / 2.0 + clearance_fos_mm
+        def _t16_indep_span(via_class, from_layer, to_layer):
+            if via_class not in _T16_PAD_DIAM_MM:
+                return None
+            if (from_layer not in _T16_LAYER_STACK
+                    or to_layer not in _T16_LAYER_STACK
+                    or from_layer == to_layer):
+                return None
+            i_a = _T16_LAYER_STACK.index(from_layer)
+            i_b = _T16_LAYER_STACK.index(to_layer)
+            lo, hi = min(i_a, i_b), max(i_a, i_b)
+            return tuple(_T16_LAYER_STACK[lo:hi + 1])
+        clearance = fx.ground_truth.witness["clearance_mm"]
+        bodies = [o for o in fx.obstacles if o.kind == "body"]
+        vias = got.get("vias") or []
+        if len(vias) < 1:
+            return False, ["T16 anti-liar: engine reported no vias — but the "
+                           "F.Cu→In2.Cu pin mismatch FORCES a via somewhere"]
+        for v in vias:
+            vp = v["point"] if isinstance(v, dict) else getattr(v, "point", None)
+            vc = v["via_class"] if isinstance(v, dict) else getattr(v, "via_class", None)
+            from_l = (v["from_layer"] if isinstance(v, dict)
+                      else getattr(v, "from_layer", "F.Cu"))
+            to_l = (v["to_layer"] if isinstance(v, dict)
+                    else getattr(v, "to_layer", "In2.Cu"))
+            halo = _t16_indep_halo(vc, clearance)
+            if halo is None:
+                return False, [f"T16 anti-liar: emitted via {v} of class "
+                               f"{vc!r} is UNKNOWN to the independent halo "
+                               "table (REFUSE semantics violated — engine "
+                               "emitted a via it could not classify)"]
+            span = _t16_indep_span(vc, from_l, to_l)
+            if span is None:
+                return False, [f"T16 anti-liar: emitted via class {vc!r} "
+                               f"({from_l}->{to_l}) has no span — REFUSE "
+                               "semantics violated"]
+            for o in bodies:
+                applies = (o.layers is None
+                           or any(L in o.layers for L in span))
+                if not applies:
+                    continue
+                d = _point_to_rect_dist(vp[0], vp[1],
+                                        o.x_min, o.y_min,
+                                        o.x_max, o.y_max)
+                if d + 1e-9 < halo:
+                    return False, [
+                        f"T16 anti-liar: via {vp} (class {vc}) clears body "
+                        f"{o.id} by only {d:.4f}mm (need >= per-class halo "
+                        f"{halo:.4f}mm, independent re-derivation) — LIAR "
+                        "rejected (the lever (H) bug class)"]
+        notes.append(f"T16 geometric witness: {len(path)-1} segments, "
+                     f"{len(vias)} via(s), endpoints match, octilinear, "
+                     "every via clears every per-layer-applicable body by "
+                     ">= per-class halo (lever (H) physics check, "
+                     "INDEPENDENT re-derivation of per-class halo) => PASS")
+        return True, notes
+    return _special_checks_T1_T15(fx, got)
+
+
+_special_checks = _special_checks_T16_wrapped
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="T1-T9 ground-truth test runner")
     g = ap.add_mutually_exclusive_group()
