@@ -957,13 +957,215 @@ def _build_T9():
                    gt, proof)
 
 
+def _build_T10():
+    """T10 — MULTI-IC-SIDE ESCAPE (stretch). Generalises the single-side T9 to a
+    multi-side IC where the per-side overflow DIFFERS — the case the real CH1 board
+    (8 sides across J18+J19) exposed and the OLD `escape_ledger` got WRONG (it fell
+    back to all-nets-per-side, masking which side is the bottleneck).
+
+    Construction — ONE IC (J20) with TWO populated sides:
+      * SIDE N (north): K_N=2 standard via slots + H_N=2 HDI-only slots (supply);
+        DEMAND_N = 3 escape nets. overflow_std = 3-2 = 1 > 0, but with HDI
+        overflow = 3-(2+2) = 0 => this side is NEEDS-HDI.
+      * SIDE E (east):  K_E=3 standard via slots + H_E=0 HDI slots (supply);
+        DEMAND_E = 2 escape nets. overflow_std = 2-3 = 0 => this side is ROUTABLE
+        with slack (1 spare std slot).
+
+    Each net is attributed to the ONE side it physically escapes (its pin centroid
+    is nearest that side's via-slot field). The WORST side governs (averaging-
+    masks-local-failure): the verdict is NEEDS-HDI, driven by SIDE N (overflow_std
+    1, closed by HDI). The point of the fixture: AVERAGING the two sides — avg
+    demand (3+2)/2 = 2.5 vs avg std supply (2+3)/2 = 2.5 — would WRONGLY report
+    overflow 0 (ROUTABLE); per-side counting proves NEEDS-HDI. An averaging liar
+    FAILS T10; a correct per-side worst-governs engine PASSES.
+    """
+    layers = (Layer("F.Cu", "signal"), Layer("In1", "plane", "GND"),
+              Layer("In2", "signal"))
+    # SIDE N via field along the NORTH edge (y high, x spread).  SIDE E via field
+    # along the EAST edge (x high, y spread). Coordinates chosen so each net's
+    # centroid is unambiguously nearest its own side's via centroid.
+    via_slots = []
+    # North side: 2 std + 2 HDI, near (x in 1..4, y=10).
+    for i in range(2):
+        via_slots.append(ViaSlot(f"VN_STD{i}", 1.0 + i, 10.0, "J20_N",
+                                 hdi_only=False))
+    for i in range(2):
+        via_slots.append(ViaSlot(f"VN_HDI{i}", 3.0 + i, 10.0, "J20_N",
+                                 hdi_only=True))
+    # East side: 3 std, near (x=10, y in 1..3).
+    for i in range(3):
+        via_slots.append(ViaSlot(f"VE_STD{i}", 10.0, 1.0 + i, "J20_E",
+                                 hdi_only=False))
+    pins, nets = [], []
+    # 3 escape nets on the NORTH side (pins clustered up near y=10).
+    for i in range(3):
+        nid = f"escN{i}"
+        pins.append(Pin(f"{nid}_PAD", 1.0 + i, 9.0, "F.Cu"))   # near north field
+        pins.append(Pin(f"{nid}_DST", 1.0 + i, 11.5, "F.Cu"))  # escape outward
+        nets.append(Net(nid, (f"{nid}_PAD", f"{nid}_DST"), "PWM"))
+    # 2 escape nets on the EAST side (pins clustered right near x=10).
+    for i in range(2):
+        nid = f"escE{i}"
+        pins.append(Pin(f"{nid}_PAD", 9.0, 1.0 + i, "F.Cu"))   # near east field
+        pins.append(Pin(f"{nid}_DST", 11.5, 1.0 + i, "F.Cu"))  # escape outward
+        nets.append(Net(nid, (f"{nid}_PAD", f"{nid}_DST"), "PWM"))
+    # Per-side ground-truth counts (re-derivable from the slots/nets above).
+    n_std_N = sum(1 for v in via_slots if v.ic_side == "J20_N" and not v.hdi_only)
+    n_hdi_N = sum(1 for v in via_slots if v.ic_side == "J20_N" and v.hdi_only)
+    n_std_E = sum(1 for v in via_slots if v.ic_side == "J20_E" and not v.hdi_only)
+    dem_N = 3
+    dem_E = 2
+    overflow_std_N = max(0, dem_N - n_std_N)            # 1 (the WORST side)
+    overflow_hdi_N = max(0, dem_N - (n_std_N + n_hdi_N))  # 0
+    overflow_std_E = max(0, dem_E - n_std_E)            # 0
+    # Worst side = N (max overflow_std). Verdict = NEEDS-HDI (overflow_std>0,
+    # overflow_hdi==0). The harness `overflow` metric = worst-side overflow_std.
+    gt = GroundTruth(
+        verdict="NEEDS-HDI",
+        metrics={
+            "worst_side": "J20_N",
+            "demand_N": dem_N, "supply_std_N": n_std_N, "supply_hdi_N": n_hdi_N,
+            "overflow_std_N": overflow_std_N,        # 1 (> 0 => not ROUTABLE)
+            "overflow_with_hdi_N": overflow_hdi_N,   # 0 (HDI closes it)
+            "demand_E": dem_E, "supply_std_E": n_std_E,
+            "overflow_std_E": overflow_std_E,        # 0 (E has slack)
+            "overflow_no_hdi": overflow_std_N,       # harness-scored (worst side)
+            "averaging_would_say": "overflow 0 (WRONG — masks side N)",
+            "verdict_reason": "side N demand 3 > std supply 2 (overflow 1); HDI "
+                              "closes it; side E has slack — WORST side governs",
+        },
+        conditional_on="hdi_via_in_pad",
+        alt_verdict="ROUTABLE",
+        alt_metrics={"overflow_with_hdi": 0, "all_nets_escape": dem_N + dem_E},
+        # Witness for the HDI-enabled solution: side N's 3 nets use its 2 std + 1
+        # HDI slot; side E's 2 nets use 2 of its 3 std slots. A valid bijection.
+        alt_witness={"slot_of": {
+            "escN0": "VN_STD0", "escN1": "VN_STD1", "escN2": "VN_HDI0",
+            "escE0": "VE_STD0", "escE1": "VE_STD1",
+        }},
+    )
+    proof = (
+        "T10 (multi-IC-side escape; generalises T9; the real-CH1 multi-side gap). "
+        "ONE IC, TWO sides. SIDE N: std supply 2, HDI 2, demand 3 => overflow_std "
+        "1 (> 0) closed by HDI (overflow 0). SIDE E: std supply 3, demand 2 => "
+        "overflow_std 0 (slack). Each net is attributed to the ONE side its pin "
+        "centroid is nearest (escN* -> J20_N, escE* -> J20_E). The WORST side (N) "
+        "governs (averaging-masks-local-failure): verdict NEEDS-HDI, worst-side "
+        "overflow_std 1. CRITICAL: averaging the sides (avg demand 2.5 vs avg std "
+        "supply 2.5) reports overflow 0 = ROUTABLE, WRONGLY masking side N — so a "
+        "per-side worst-governs engine is NECESSARY. Self-check counts each side "
+        "independently (no solver), asserts overflow_std_N==1, overflow_std_E==0, "
+        "the worst side is N, verdict NEEDS-HDI, and the HDI witness is a "
+        "bijection nets<->slots."
+    )
+    return Fixture("T10", "multi-IC-side escape (worst side governs)", "stretch",
+                   "per-IC-side escape ledger: worst side governs the verdict "
+                   "(averaging masks the bottleneck side)",
+                   layers, tuple(pins), tuple(nets), (), (), tuple(via_slots),
+                   gt, proof)
+
+
+def _build_T11():
+    """T11 — INTERNAL + CROSSING net classification (stretch). The real-CH1 gap
+    the OLD planner got WRONG: it force-assigned EVERY routable net to a door, so a
+    door supply that only the genuine boundary-crossing nets consume was over-
+    subscribed => phantom feasible=False + phantom stranded nets.
+
+    Construction — ONE subsystem zone with:
+      * N=3 INTERNAL nets (escN1..3): both pins INSIDE the zone, FAR from any door
+        => they route WITHIN the zone, traverse NO boundary door, consume NO door
+        capacity.
+      * k=2 CROSSING nets (xN1..2): one pin sits AT a boundary DOOR (the I/O port)
+        and the other inside the zone => each MUST traverse that door.
+      * 2 doors, capacity 1 each => total door supply = k = 2.
+
+    Ground truth: ROUTABLE. Only the k=2 crossing nets count against the doors,
+    and door supply (2) == crossing demand (2) => a feasible door assignment
+    exists. The N=3 internal nets are escape/within-zone governed and do NOT touch
+    the door ledger. THE POINT: a planner that force-assigns all N+k = 5 nets to
+    the 2 doors OVER-SUBSCRIBES (5 > 2) and WRONGLY reports infeasible / strands 3
+    nets — exactly the real-board phantom strand. Correct classification PASSES;
+    the all-to-doors liar FAILS T11.
+    """
+    layers = (Layer("F.Cu", "signal"), Layer("In1", "plane", "GND"),
+              Layer("In2", "signal"))
+    # Two boundary doors (I/O ports) at the zone edge; capacity 1 each.
+    door_A = Door("D_A", 0.0, 4.0, 0.30, ("F.Cu",),
+                  Door.capacity_from_width(0.30, PITCH, 1))   # capacity 1
+    door_B = Door("D_B", 0.0, 6.0, 0.30, ("F.Cu",),
+                  Door.capacity_from_width(0.30, PITCH, 1))   # capacity 1
+    pins, nets = [], []
+    # 3 INTERNAL nets — both pins INSIDE the zone interior (x in 4..8), well away
+    # from the doors at x=0 => geometrically NOT at any door => INTERNAL.
+    for i in range(1, 4):
+        nid = f"int{i}"
+        y = 3.0 + i * 0.5
+        pins.append(Pin(f"{nid}_A", 4.0, y, "F.Cu"))
+        pins.append(Pin(f"{nid}_B", 8.0, y, "F.Cu"))
+        nets.append(Net(nid, (f"{nid}_A", f"{nid}_B"), "signal"))
+    # 2 CROSSING nets — one pin sits AT a boundary door (within the door's
+    # half-width+tol of the door coord) => must traverse that door => CROSSING.
+    # x1 terminates at door A (0,4); x2 at door B (0,6). Other pin is interior.
+    pins.append(Pin("x1_DOOR", 0.0, 4.0, "F.Cu"))   # AT door A
+    pins.append(Pin("x1_INT", 6.0, 4.0, "F.Cu"))
+    nets.append(Net("x1", ("x1_DOOR", "x1_INT"), "signal",
+                    feasible_doors=("D_A",)))
+    pins.append(Pin("x2_DOOR", 0.0, 6.0, "F.Cu"))   # AT door B
+    pins.append(Pin("x2_INT", 6.0, 6.0, "F.Cu"))
+    nets.append(Net("x2", ("x2_DOOR", "x2_INT"), "signal",
+                    feasible_doors=("D_B",)))
+    n_internal = 3
+    n_crossing = 2
+    door_supply = door_A.capacity_tracks + door_B.capacity_tracks  # 2
+    gt = GroundTruth(
+        verdict="ROUTABLE",
+        metrics={
+            "n_internal": n_internal,            # 3 (NOT in door ledger)
+            "n_crossing": n_crossing,            # 2 (the door demand)
+            "internal_nets": ["int1", "int2", "int3"],
+            "crossing_nets": ["x1", "x2"],
+            "door_supply": door_supply,          # 2
+            "crossing_demand": n_crossing,       # 2 == door_supply => feasible
+            "routed_nets": n_internal + n_crossing,  # all 5 route
+            "naive_all_to_doors_demand": n_internal + n_crossing,  # 5 (the liar)
+            "naive_oversubscribed": (n_internal + n_crossing) > door_supply,  # True
+            "verdict_reason": "only the 2 CROSSING nets count vs door supply 2 "
+                              "=> feasible; the 3 INTERNAL nets need no door",
+        },
+        # Witness: the door assignment for the CROSSING nets ONLY (internal nets
+        # carry no door). Each crossing net to its single feasible door, in cap.
+        witness={"crossing_assignment": {"x1": "D_A", "x2": "D_B"},
+                 "internal_no_door": ["int1", "int2", "int3"]},
+    )
+    proof = (
+        "T11 (internal-vs-crossing classification; the real-CH1 phantom-strand "
+        "gap). 3 INTERNAL nets (both pins interior, far from any door) + 2 "
+        "CROSSING nets (each with one pin AT a boundary door). Door supply = 2 "
+        "(cap 1 each). A net is CROSSING iff it traverses a boundary door (a pin "
+        "at the I/O port, or a declared feasible_door); else INTERNAL. ONLY the 2 "
+        "crossing nets count against the doors: crossing demand 2 == door supply 2 "
+        "=> feasible door assignment exists (x1->D_A, x2->D_B) => ROUTABLE; the 3 "
+        "internal nets consume no door capacity. CRITICAL: a planner that force-"
+        "assigns all 5 nets to the 2 doors over-subscribes (5 > 2) and WRONGLY "
+        "reports infeasible / strands 3 nets (the phantom strand). Self-check "
+        "classifies by geometry/declaration (no solver), asserts 3 internal + 2 "
+        "crossing, crossing_demand == door_supply, the crossing assignment is "
+        "within capacity, and that all-to-doors would over-subscribe."
+    )
+    return Fixture("T11", "internal + crossing classification", "stretch",
+                   "net topology: only boundary-crossing nets consume door "
+                   "capacity (internal nets are escape/within-zone governed)",
+                   layers, tuple(pins), tuple(nets),
+                   (door_A, door_B), (), (), gt, proof)
+
+
 # ----------------------------------------------------------------------------
 # Registry
 # ----------------------------------------------------------------------------
 
 _BUILDERS = [
     _build_T1, _build_T2, _build_T3, _build_T4, _build_T5,
-    _build_T6, _build_T7, _build_T8, _build_T9,
+    _build_T6, _build_T7, _build_T8, _build_T9, _build_T10, _build_T11,
 ]
 
 
