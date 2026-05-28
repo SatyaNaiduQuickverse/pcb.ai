@@ -801,7 +801,32 @@ class BoardState:
         # Used during congestion grid build
         self.pad_obstacles_by_layer = defaultdict(list)
         self.track_obstacles_by_layer = defaultdict(list)  # (x1,y1,x2,y2,width_mm,owner)
-        self.via_obstacles = []                            # (x,y,diam_mm,owner)
+        # v10 (2026-05-28, CH1 30/30 lever I — coop state-bug fix):
+        # Each entry now (x, y, stamp_radius_mm, owner_netname, actual_diam_mm).
+        # Two BUGS were diagnosed in the pre-v10 code (both gated by the same
+        # `max(VIA_DIAM_MM, actual_width)` clamp):
+        #   (1) The hdi_via_blocked_geom centerline-precise check (used at
+        #       HDI-pad candidate cells) saw foreign HDI microvias (0.25mm)
+        #       and blind F-In2 (0.30mm) as 0.60mm through-vias, inflating
+        #       required clearance from 0.475mm to 0.650mm — falsely refusing
+        #       legitimate adjacent HDI via placements.
+        #   (2) The cell-obstacle stamp radius around foreign vias was sized
+        #       to the inflated 0.60mm fallback too, blocking same-net A*
+        #       traversal in F.Cu cells 0.1-0.2mm beyond the real foreign-via
+        #       halo — which then trip-falled through to the cell-based scan
+        #       AFTER the geom check passed.
+        # The fix splits the two purposes: `actual_diam_mm` carries the TRUE
+        # physical via diameter (read from board, NO max-clamp) into both
+        # the cell-obstacle stamp radius and the foreign_vias entry used by
+        # the precise geom check. Mathematically this still preserves
+        # CLEARANCE_MM in both directions of the gap (foreign tracks/vias
+        # respect their own halo against this via; this via's stamp respects
+        # foreign tracks via their halo). Shorts-gate semantics (v6/v7) are
+        # intact — a 0.60mm foreign through-via still gets the 0.605mm cell
+        # stamp + 0.650mm geom required (test I3 asserts this).
+        # Tuple position 4 is APPENDED so any external caller using the
+        # legacy 4-tuple unpack still works during the rollout.
+        self.via_obstacles = []                            # (x,y,stamp_r_mm,owner,actual_diam_mm)
         # Zone bboxes for SOFT cost (legacy MOTOR/SHUNT on F/B.Cu)
         self.zone_obstacles_by_layer = defaultdict(list)   # (xmin,ymin,xmax,ymax, owner)
         # NEW v2: filled-poly zones for HARD via-blocking on plane layers.
@@ -856,18 +881,51 @@ class BoardState:
             if isinstance(t, pcbnew.PCB_VIA):
                 p = t.GetPosition()
                 x = iu_to_mm(p.x); y = iu_to_mm(p.y)
-                # Use drill+clearance as effective keep-out
-                diam = VIA_DIAM_MM  # default via diameter for keep-out
+                # v10 (2026-05-28, CH1 30/30 lever I): read the TRUE physical
+                # via diameter — no max(VIA_DIAM_MM, w) clamp. Pre-v10:
+                # `diam = max(VIA_DIAM_MM, w)` inflated HDI microvias (0.25mm)
+                # + blind F-In2 (0.30mm) to 0.60mm for BOTH the cell-obstacle
+                # stamp AND the centerline-precise hdi_via_blocked_geom check.
+                # The cell-obstacle stamp over-stamped by 0.18mm (admitting a
+                # halo onto the adjacent J18/J19 HDI pad cell). The precise
+                # geom check over-required clearance by 0.175mm
+                # (0.650 vs 0.475 for blind_F_In2 vs 0.25mm foreign microvia).
+                # Together these falsely rejected legitimate adjacent HDI via
+                # placements — the worker-empirical "BSTB routes, 0/5
+                # thereafter" symptom (PR #227). See test_lever_I_* in
+                # test_emit_blind_f_in2.py for the regression coverage.
+                # Defensive: if width read fails entirely we still default to
+                # VIA_DIAM_MM for actual_diam (conservative = bigger required-
+                # clearance = false-block, not silent-short — preserves the
+                # v6/v7 shorts-gate semantics on classifier drift).
+                actual_diam = VIA_DIAM_MM  # defensive fallback
+                w = None
                 try:
                     # KiCad 9: PCB_VIA.GetWidth(layer)
                     w = iu_to_mm(t.GetWidth(t.TopLayer()))
-                    diam = max(diam, w)
                 except (TypeError, Exception):
                     try:
                         w = iu_to_mm(t.GetDrillValue()) + 0.2  # drill + ring
-                        diam = max(diam, w)
                     except Exception:
-                        pass
+                        w = None
+                if w is not None and w > 0:
+                    actual_diam = w
+                stamp_diam = actual_diam
+                # stamp_diam = actual_diam: the cell-obstacle stamp radius
+                # uses the TRUE diameter (not max-clamped). Correct semantics:
+                # stamp radius = via_pad/2 + CLEARANCE + trace_half + slop —
+                # which is the centerline distance at which a FOREIGN trace
+                # centerline would touch this via's clearance halo. The
+                # symmetric clearance (foreign-trace-half + foreign-via-pad/2
+                # + CLEARANCE) is enforced from the OTHER direction by the
+                # foreign track's own halo stamp + halo-rect — i.e. both
+                # parties stamp half the gap and the sum equals the required
+                # clearance. Setting stamp_diam to actual_diam therefore
+                # preserves the v6/v7 shorts-gate (test I3 asserts a 0.60mm
+                # foreign through-via still refuses a blind candidate at the
+                # 0.650mm required distance — no relaxation on through-via
+                # clearance) while removing the 0.18mm over-stamp on HDI
+                # microvias that caused the lever-I symptom.
                 # v2: obstacle circle radius must accommodate BOTH:
                 #   - foreign via centerline gap (via_pad + clearance from this via pad)
                 #   - foreign track centerline gap (via_pad + clearance + trace_half from this via pad)
@@ -875,7 +933,8 @@ class BoardState:
                 # both new tracks and new vias passing too close.
                 # via_obstacle_radius = (this_via_pad/2) + CLEARANCE + trace_half + slop
                 self.via_obstacles.append((x, y,
-                    diam/2 + CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM, netname))
+                    stamp_diam/2 + CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM,
+                    netname, actual_diam))
             else:
                 s = t.GetStart(); e = t.GetEnd()
                 x1 = iu_to_mm(s.x); y1 = iu_to_mm(s.y)
@@ -2195,15 +2254,29 @@ class CooperativeRouter:
         # Vias -> obstacle on ALL copper layers (through vias span F.Cu to B.Cu
         # including inner planes — must block foreign-net vias from colliding
         # on plane layers, not just routing layers; v2 fix companion).
-        for (x, y, r, owner) in s.via_obstacles:
+        for entry in s.via_obstacles:
+            # v10 (2026-05-28, CH1 30/30 lever I): _collect now produces a
+            # 5-tuple (x, y, stamp_r, owner, actual_diam). Pre-v10 4-tuple
+            # support kept for any caller / test that still produces the
+            # legacy shape — if no actual_diam is present we fall back to
+            # the pre-v10 back-derivation (preserves v6/v7 behaviour).
+            if len(entry) >= 5:
+                x, y, r, owner, actual_diam = entry[0], entry[1], entry[2], entry[3], entry[4]
+            else:
+                x, y, r, owner = entry
+                # legacy fall-back — back-derive from stamp radius
+                actual_diam = max(VIA_DIAM_MM,
+                                  2 * (r - CLEARANCE_MM - TRACE_HALF_MM - GRID_SLOP_MM))
             for layer in ALL_COPPER_LAYERS:
                 g.stamp_obstacle_circle(x, y, r, layer)
-            # v6: track foreign via for HDI precise distance checks
-            # r is (via_radius + clearance + trace_half + slop); back out
-            # an effective via diameter estimate (2 × (r - margins)).
-            est_diam = max(VIA_DIAM_MM,
-                           2 * (r - CLEARANCE_MM - TRACE_HALF_MM - GRID_SLOP_MM))
-            g.foreign_vias.append((x, y, est_diam, owner))
+            # v10 (2026-05-28, CH1 30/30 lever I): foreign_vias entry uses
+            # the TRUE physical diameter from the board (no max-VIA_DIAM_MM
+            # clamp), so hdi_via_blocked_geom's centerline-precise check
+            # against this foreign via uses the actual via barrel — not an
+            # inflated 0.60mm fallback that falsely rejected legitimate
+            # adjacent HDI via placements. The cell-obstacle stamp above
+            # still uses the conservative `r` for foreign-cell blocking.
+            g.foreign_vias.append((x, y, actual_diam, owner))
             # Also mark via cell as plane-owned by its net on plane layers so
             # a SAME-net via at (i,j) is not falsely blocked by the existing
             # via's own clearance halo when retried.
