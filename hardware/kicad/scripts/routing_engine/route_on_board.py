@@ -234,23 +234,21 @@ def extract_obstacles(board, layers: Sequence[str],
                       exclude_net: str = "") -> List[Obstacle]:
     """Foreign copper on the given layers, expressed as 'body' Obstacles.
 
-    Maze router obstacles are layer-AGNOSTIC; this function IS the per-layer
-    filter — only items whose layer is in `layers` produce an obstacle.
+    Per lever (E) — maze_router.Obstacle now has a per-layer `layers` field;
+    we populate it so each obstacle blocks ONLY the layer(s) it physically
+    occupies. This fixes the old over-blocking where a foreign F.Cu track
+    would also reject In6 routes at the same xy.
 
-      foreign pads (on a layer in `layers`)  → AABB obstacle (pad bbox)
-      foreign tracks (on a layer in `layers`) → AABB obstacle (segment bbox
-                                                inflated by half-width)
-      foreign vias (always)                   → AABB obstacle (square around
-                                                via center; through vias span
-                                                every layer)
-
-    The maze router's _swept_track_clears uses the EXACT segment-AABB min
-    distance (not just AABB containment), so inflated AABBs over-block by at
-    most the AABB-vs-segment slop — safe on the conservative side.
+      foreign pads     → AABB obstacle, layers = the pad's Cu layer(s)
+      foreign tracks   → AABB obstacle (segment bbox + half-width), layers =
+                         {track layer}
+      foreign vias     → AABB obstacle (square around center), layers = None
+                         (the via barrel spans every Cu layer, so block on all)
     """
     obstacles: List[Obstacle] = []
     layer_set = set(layers)
     name_to_id = _maze_name_to_pcb_id_map()
+    id_to_maze = _pcb_id_to_maze_name_map()
     layer_ids = {name_to_id[L] for L in layers if L in name_to_id}
 
     # foreign pads on the allowed layers
@@ -259,12 +257,14 @@ def extract_obstacles(board, layers: Sequence[str],
             nn = p.GetNetname()
             if nn == exclude_net and nn != "":
                 continue
-            pad_layers = set(_pad_layers(p, board))
-            if not (pad_layers & layer_set):
+            pad_canonical = set(_pad_layers(p, board))
+            intersect = pad_canonical & layer_set
+            if not intersect:
                 continue
             l, t, r, b = _pad_bbox_mm(p)
             obstacles.append(Obstacle(x_min=l, y_min=t, x_max=r, y_max=b,
-                                      kind="body"))
+                                      kind="body",
+                                      layers=frozenset(intersect)))
 
     # tracks + vias
     pcbnew = _import_pcbnew()
@@ -272,19 +272,23 @@ def extract_obstacles(board, layers: Sequence[str],
         if tk.GetNetname() == exclude_net and exclude_net != "":
             continue
         if tk.GetClass() == "PCB_VIA":
-            # vias span multiple layers — block on any allowed-layer route.
+            # via barrel spans every Cu layer → layers=None (apply universally)
             pos = tk.GetPosition()
             try:
-                width = tk.GetWidth(pcbnew.F_Cu) / 1e6   # KiCad 9: per-layer width
+                width = tk.GetWidth(pcbnew.F_Cu) / 1e6
             except Exception:
-                width = 0.60                              # fallback to default via pad
+                width = 0.60
             r = width / 2.0
             x = pos.x / 1e6; y = pos.y / 1e6
             obstacles.append(Obstacle(x_min=x - r, y_min=y - r,
-                                      x_max=x + r, y_max=y + r, kind="body"))
+                                      x_max=x + r, y_max=y + r,
+                                      kind="body", layers=None))
         else:
             tk_lid = tk.GetLayer()
             if tk_lid not in layer_ids:
+                continue
+            tk_canonical = id_to_maze.get(tk_lid)
+            if tk_canonical is None:
                 continue
             s = tk.GetStart(); e = tk.GetEnd()
             sx, sy = s.x / 1e6, s.y / 1e6
@@ -293,7 +297,9 @@ def extract_obstacles(board, layers: Sequence[str],
             x_min = min(sx, ex) - half; x_max = max(sx, ex) + half
             y_min = min(sy, ey) - half; y_max = max(sy, ey) + half
             obstacles.append(Obstacle(x_min=x_min, y_min=y_min,
-                                      x_max=x_max, y_max=y_max, kind="body"))
+                                      x_max=x_max, y_max=y_max,
+                                      kind="body",
+                                      layers=frozenset({tk_canonical})))
 
     return obstacles
 
