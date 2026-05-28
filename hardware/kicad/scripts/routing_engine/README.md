@@ -23,8 +23,9 @@ fix is proven, not asserted.
 
 | File | Role |
 |---|---|
-| `fixtures.py` | The fixture FORMAT (dataclasses) + the 9 T1–T9 fixtures + the closed-form math helpers (`interval_density`, `has_cycle`, `is_nested_river_order`, `_segments_cross`). |
-| `run_suite.py` | The test-runner harness: `--self-check`, `--list`, and pluggable-`--solver` modes. |
+| `fixtures.py` | The fixture FORMAT (dataclasses) + the 9 T1–T9 fixtures + the closed-form math helpers (`interval_density`, `has_cycle`, `is_nested_river_order`, `_segments_cross`) + the **input-only `Problem` view** (`Fixture.problem_view()`). |
+| `run_suite.py` | The test-runner harness: `--self-check`, `--list`, and pluggable-`--solver` (+ `--cases`) modes. |
+| `phase_a.py` | **Engine Step 2** — the SURESHOT capacity + escape pre-check solver (`solve()`): demand-vs-supply ledger, bipartite max-flow feasibility, greedy-strand detection, verdict (ROUTABLE / NEEDS-HDI / NEEDS-PLACEMENT-CHANGE / INFEASIBLE), FoS headroom. Passes T3/T4/T9. |
 | `README.md` | This file. |
 | `__init__.py` | Package marker. |
 
@@ -71,32 +72,72 @@ python3 hardware/kicad/scripts/routing_engine/run_suite.py --self-check
 python3 hardware/kicad/scripts/routing_engine/run_suite.py --list
 
 # 3. SOLVER — score a pluggable solver against ground truth (engine components
-#    register here in later steps). NO solver ships in this commit.
+#    register here). Phase A (Engine Step 2) ships in this package.
 python3 hardware/kicad/scripts/routing_engine/run_suite.py --solver mymod:solve
+
+# 3b. --cases — score a solver only on its DESIGNATED cases (design §3: a
+#     component need not pass cases it doesn't address). Default = all 9.
+PYTHONPATH=hardware/kicad/scripts \
+  python3 hardware/kicad/scripts/routing_engine/run_suite.py \
+          --solver routing_engine.phase_a:solve --cases T3,T4,T9
 ```
 
 ### Registering a solver
 
-A solver is any callable `solve(fixture) -> dict`. Pass it as `module:callable`
-to `--solver`. The returned dict reports the solver's findings; the harness
-compares only the keys the case's ground truth defines and prints the delta.
-Recognised keys (all optional):
+A solver is any callable `solve(problem) -> dict`. Pass it as `module:callable`
+to `--solver` (the package must be importable, e.g. `PYTHONPATH=hardware/kicad/scripts`).
+
+**`problem` is the INPUT-ONLY `Problem` view** (`fixtures.Problem`, built by
+`Fixture.problem_view()`): it exposes ONLY `name/layers/pins/nets/doors/
+via_slots/obstacles` and the geometry helpers (`pin`/`signal_layers`/
+`plane_layers`), and **structurally has NO `ground_truth`/`witness`/`alt_*`
+attribute** — a solver therefore CANNOT read the answer it is scored against
+(anti-drift "structural not discipline" fix). The harness asserts this property
+(`assert_problem_view_has_no_answer`) before every run and prints a one-line
+confirmation.
+
+The returned dict reports the solver's findings; the harness compares only the
+keys the case's expectation names and prints the delta. Recognised keys (all
+optional):
 
 ```
-verdict              "ROUTABLE" | "INFEASIBLE" | "CONDITIONAL"
+verdict              engine vocabulary: "ROUTABLE" | "INFEASIBLE" |
+                     "CONDITIONAL" | "NEEDS-HDI" | "NEEDS-PLACEMENT-CHANGE"
 optimal_track_count  int    (T1)
 vcg_cyclic           bool   (T2)
 min_doglegs          int    (T2 resolved)
-routed_nets          int    (T3/T4/T9, under global planning)
+routed_nets          int    (T3/T4/T9 — nets the FEASIBLE GLOBAL plan routes)
 vias_required        int    (T5)
 direct_path_allowed  bool   (T6 — must be False)
 achieved_skew_mm     float  (T7)
 crossings            int    (T8)
-overflow             int    (T9 — 0 only with HDI)
+overflow             int    (T9 — escape overflow w/ std vias; 0 only with HDI)
+greedy               dict   ({greedy_routes, global_routes, stranded_nets}) —
+                     REQUIRED on T3/T4 to PROVE the greedy strand
 ```
 
-A solver passes a case when its `verdict` matches AND every metric it reports
-matches ground truth within tolerance (1e-6). It "passes the suite" at 9/9.
+A solver passes a case when its `verdict` is **accepted** AND every scored metric
+matches within tolerance (1e-6). It "passes the suite" at 9/9 (or N/N over a
+`--cases` subset).
+
+### CONDITIONAL verdict reconciliation (T3/T4/T9)
+
+The fixtures store a base `verdict` (and an `alt_verdict` once a named lever is
+applied). A capacity pre-check emits a concrete engine verdict, not "CONDITIONAL".
+The harness reconciles cleanly **without weakening the check** (see
+`run_suite._accepted_verdicts` + `_special_checks`):
+
+- **T3/T4** (base CONDITIONAL on *global-vs-greedy*): accepted verdicts =
+  `{CONDITIONAL, ROUTABLE}` — Phase A proves a feasible GLOBAL assignment EXISTS,
+  so it reports `ROUTABLE`-under-global. PASS additionally REQUIRES
+  `routed_nets == global_routes` (global plan routes ALL nets) **and** a `greedy`
+  block with `greedy_routes < global_routes` and non-empty `stranded_nets` — the
+  solver must *demonstrate* the greedy strand. This is **stronger**, not weaker,
+  than the base check.
+- **T9** (base INFEASIBLE → ROUTABLE on *HDI*): accepted verdicts =
+  `{INFEASIBLE, NEEDS-HDI}` (NEEDS-HDI is the precise engine reading of
+  "infeasible with std vias, routable with HDI") AND `overflow == 1` (the
+  std-resource overflow by counting; 0 only once HDI slots are added).
 
 ---
 

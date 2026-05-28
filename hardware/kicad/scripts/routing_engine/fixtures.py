@@ -201,6 +201,40 @@ class GroundTruth:
 
 
 @dataclass(frozen=True)
+class Problem:
+    """INPUT-ONLY view of a Fixture handed to a solver.
+
+    Anti-drift "structural, not discipline" fix (`[[feedback-systemic-rule-
+    enforcement]]`): a solver receives ONLY the problem inputs
+    (name/layers/pins/nets/doors/obstacles/via_slots) and the geometry helpers
+    (`pin`, `signal_layers`, `plane_layers`). It has NO `ground_truth`, NO
+    `witness`, NO `alt_*` attribute — so it is STRUCTURALLY IMPOSSIBLE for a
+    solver to read the answer it is being scored against (verified by
+    `run_suite.assert_problem_view_has_no_answer`). The harness builds this from
+    a Fixture via `Fixture.problem_view()` and passes it to `solve()`.
+    """
+    name: str
+    layers: tuple
+    pins: tuple
+    nets: tuple
+    doors: tuple
+    obstacles: tuple
+    via_slots: tuple
+
+    def signal_layers(self):
+        return [l for l in self.layers if l.role == "signal"]
+
+    def plane_layers(self):
+        return [l for l in self.layers if l.role == "plane"]
+
+    def pin(self, pid):
+        for p in self.pins:
+            if p.id == pid:
+                return p
+        raise KeyError(f"{self.name}: no pin {pid}")
+
+
+@dataclass(frozen=True)
 class Fixture:
     """One T-case board-state fixture."""
     name: str                # e.g. "T1"
@@ -227,6 +261,20 @@ class Fixture:
             if p.id == pid:
                 return p
         raise KeyError(f"{self.name}: no pin {pid}")
+
+    def problem_view(self):
+        """Return the INPUT-ONLY `Problem` (no ground_truth/witness/alt_*). This
+        is what `run_suite.run_solver` hands a solver, so the solver cannot read
+        the answer (anti-drift structural fix)."""
+        return Problem(
+            name=self.name,
+            layers=self.layers,
+            pins=self.pins,
+            nets=self.nets,
+            doors=self.doors,
+            obstacles=self.obstacles,
+            via_slots=self.via_slots,
+        )
 
 
 # ----------------------------------------------------------------------------
