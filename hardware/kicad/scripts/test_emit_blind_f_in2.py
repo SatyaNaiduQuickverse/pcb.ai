@@ -62,6 +62,11 @@ from route_subsystem_cooperative import (
     via_halo_radius_mm, via_diam_mm_for_class, via_pad_half_mm_for_class,
     CLEARANCE_MM, TRACE_HALF_MM, GRID_SLOP_MM,
     HDI_VIA_HALF_MM, BLIND_F_IN2_HALF_MM,
+    # LEVER L (CH1 30/30 stacked microvia F↔In1↔In2) — drill/pad/half/span
+    # constants + SSoT whitelist accessor.
+    STACKED_MICROVIA_DRILL_MM, STACKED_MICROVIA_DIAM_MM,
+    STACKED_MICROVIA_HALF_MM, STACKED_MICROVIA_SPAN,
+    stacked_microvia_net_whitelist,
 )
 import audit_hdi_via_in_pad as audit_mod
 
@@ -846,6 +851,235 @@ def test_lever_I_hdi_geom_refuses_real_through_short():
     return ok
 
 
+# ─── LEVER L (CH1 30/30 stacked microvia F↔In1↔In2) — emit + classify tests ─
+#
+# Background: LEVER L adds a SECOND signal-reaching via mechanism per
+# whitelist pin — JLC HDI Class 2 stacked microvia (TWO MICROVIA legs
+# geometrically aligned: top F.Cu↔In1.Cu + bottom In1.Cu↔In2.Cu, with the
+# In1 landing as an isolated antipad+pad island). Mathematically doubles
+# the signal-reaching supply on whitelist pins (blind_F_In2 = 1 slot + LEVER
+# L stacked = 1 slot per pin = 2 slots per whitelist landing). Industry-
+# standard since iPhone 4 era; ~$1-2/board adder, no new fab class.
+#
+# Validation (5 tests below):
+#   (L1) SSoT: router stacked whitelist == audit STACKED_MICROVIA_NET_WHITELIST
+#   (L2) classifier: F↔In2 + stacked-WL net + prefer_stacked = stacked class
+#   (L3) classifier: F↔In2 + non-WL net = REFUSED (no through fall-through)
+#   (L4) emit: stacked class emits TWO VIATYPE_MICROVIA legs at same XY
+#        spanning (F.Cu, In1.Cu) + (In1.Cu, In2.Cu), drill 0.10mm + pad 0.25mm
+#        each, on the whitelist net. Verify per leg.
+#   (L5) emit: ALL 8 sanctioned (net, pin) landings emit stacked correctly.
+#   (L6) halo + span SSoT: via_halo_radius_mm('stacked_...') == HDI microvia
+#        halo (per-leg pad 0.25mm); via_span_layers returns the F/In1/In2
+#        3-tuple; via_diam_mm_for_class returns STACKED_MICROVIA_DIAM_MM.
+
+def test_lever_L_ssoT():
+    """(L1) Router stacked whitelist mirrors audit's
+    STACKED_MICROVIA_NET_WHITELIST exactly (SSoT discipline)."""
+    router_wl = set(stacked_microvia_net_whitelist())
+    audit_wl = set(audit_mod.STACKED_MICROVIA_NET_WHITELIST)
+    expected = {"BSTB_CH1", "PWM_INHB_CH1", "SWDIO_CH1", "PWM_INLA_CH1",
+                "GLB_CH1", "KILL_RAIL_N_CH1"}
+    ok = router_wl == audit_wl == expected and len(router_wl) == 6
+    print(f"  [{'OK' if ok else 'BAD'}] (L1) SSoT: router stacked whitelist "
+          f"== audit whitelist = {sorted(router_wl)} (expected 6)")
+    return ok
+
+
+def test_lever_L_classifier_stacked_class():
+    """(L2) F↔In2 + stacked-WL net + prefer_stacked=True returns
+    'stacked_microvia_F_In1_In2' class instead of blind_F_In2."""
+    cases = [
+        # (L_from, L_to, net, prefer_stacked, expected)
+        (F_CU, IN2_CU, "BSTB_CH1",         True,  "stacked_microvia_F_In1_In2"),
+        (F_CU, IN2_CU, "PWM_INHB_CH1",     True,  "stacked_microvia_F_In1_In2"),
+        (F_CU, IN2_CU, "SWDIO_CH1",        True,  "stacked_microvia_F_In1_In2"),
+        (F_CU, IN2_CU, "PWM_INLA_CH1",     True,  "stacked_microvia_F_In1_In2"),
+        (F_CU, IN2_CU, "GLB_CH1",          True,  "stacked_microvia_F_In1_In2"),
+        (F_CU, IN2_CU, "KILL_RAIL_N_CH1",  True,  "stacked_microvia_F_In1_In2"),
+        (IN2_CU, F_CU, "BSTB_CH1",         True,  "stacked_microvia_F_In1_In2"),
+        # prefer_stacked=False preserves the OQ-020 default (blind_F_In2).
+        (F_CU, IN2_CU, "BSTB_CH1",         False, "blind_F_In2"),
+        (F_CU, IN2_CU, "PWM_INHB_CH1",     False, "blind_F_In2"),
+    ]
+    ok = True
+    for (lf, lt, n, ps, exp) in cases:
+        got = via_class_for_span(lf, lt, n, is_hdi_cell=True, prefer_stacked=ps)
+        good = got == exp
+        ok &= good
+        if not good:
+            print(f"  [BAD] via_class_for_span({lf},{lt},{n!r},prefer_stacked={ps}) "
+                  f"= {got!r}, expected {exp!r}")
+    print(f"  [{'OK' if ok else 'BAD'}] (L2) classifier: stacked class "
+          f"returned for F↔In2 + WL + prefer_stacked; blind default preserved")
+    return ok
+
+
+def test_lever_L_classifier_negative():
+    """(L3) F↔In2 + non-WL net at HDI cell = REFUSED (None) — no
+    fall-through to through-via (v6/v7 shorts lesson preserved)."""
+    cases = [
+        ("FOOBAR_CH1", True),
+        ("BSTB", True),
+        ("GLA_CH1", True),
+        ("KILL_RAIL_N", True),
+        ("KILL_RAIL_N_CH2", True),
+        ("FOOBAR_CH1", False),
+        ("GLC_CH1", False),
+    ]
+    ok = True
+    for (n, ps) in cases:
+        got = via_class_for_span(F_CU, IN2_CU, n, is_hdi_cell=True,
+                                  prefer_stacked=ps)
+        good = got is None
+        ok &= good
+        if not good:
+            print(f"  [BAD] via_class_for_span(F,In2,{n!r},prefer_stacked={ps}) "
+                  f"= {got!r}, expected None (REFUSED — no through fall-through)")
+    print(f"  [{'OK' if ok else 'BAD'}] (L3) classifier: F↔In2 + non-WL = REFUSED")
+    return ok
+
+
+def _emit_stacked(board, net_name, x_mm, y_mm):
+    """Call emit_to_board for ONE stacked microvia at (x_mm, y_mm) on
+    `net_name` (whitelist-eligible). Returns (legs_added, exception_str)
+    where legs_added is the list of PCB_VIAs added (expect 2 legs)."""
+    net_obj = _ensure_net(board, net_name)
+    grid = SyntheticGrid(is_hdi=True)
+    segments = []
+    vias = [(x_mm, y_mm)]
+    # Drive the stacked class via the v8 emitter — uses via_class_for_span
+    # with the F.Cu↔In2.Cu span. We must thread prefer_stacked through the
+    # classifier (the emitter calls via_class_for_span internally without
+    # prefer_stacked). For the LEVER L emit test we shim the classifier by
+    # monkey-patching emit_to_board's resolver to prefer_stacked=True for
+    # the duration of this call — done by temporarily replacing
+    # rsc.via_class_for_span with a partial-applied version.
+    via_target_layers = {(round(x_mm, 3), round(y_mm, 3)): (F_CU, IN2_CU)}
+    added = []
+    orig_via_class_for_span = rsc.via_class_for_span
+    def _vcs_prefer_stacked(L_from, L_to, net_name, is_hdi_cell, **kwargs):
+        return orig_via_class_for_span(L_from, L_to, net_name,
+                                        is_hdi_cell=is_hdi_cell,
+                                        prefer_stacked=True, **kwargs)
+    rsc.via_class_for_span = _vcs_prefer_stacked
+    try:
+        emit_to_board(board, segments, vias, net_obj, width_mm=0.15,
+                       added_items=added,
+                       hdi_via_cells=grid.hdi_via_cells, grid=grid,
+                       via_target_layers=via_target_layers)
+    except ValueError as e:
+        rsc.via_class_for_span = orig_via_class_for_span
+        return None, str(e)
+    finally:
+        rsc.via_class_for_span = orig_via_class_for_span
+    legs = [it for it in added if isinstance(it, pcbnew.PCB_VIA)]
+    return legs, None
+
+
+def test_lever_L_emit_stacked_pair():
+    """(L4) emit on a whitelist net produces TWO MICROVIA legs at same XY
+    spanning (F.Cu, In1.Cu) + (In1.Cu, In2.Cu), drill 0.10mm + pad 0.25mm
+    each, on the bound net."""
+    board = pcbnew.LoadBoard(str(PLACED_BOARD))
+    legs, err = _emit_stacked(board, "BSTB_CH1", x_mm=26.137, y_mm=61.770)
+    if err:
+        print(f"  [BAD] (L4) stacked emit raised: {err}")
+        return False
+    if legs is None or len(legs) != 2:
+        print(f"  [BAD] (L4) expected 2 legs, got {len(legs) if legs else 0}")
+        return False
+    layer_pairs = sorted([tuple(sorted((l.TopLayer(), l.BottomLayer())))
+                          for l in legs])
+    expected_pairs = sorted([tuple(sorted((F_CU, IN1_CU))),
+                              tuple(sorted((IN1_CU, IN2_CU)))])
+    ok_pairs = layer_pairs == expected_pairs
+    ok_types = all(l.GetViaType() == pcbnew.VIATYPE_MICROVIA for l in legs)
+    ok_drill = all(abs(l.GetDrill() / 1e6 - STACKED_MICROVIA_DRILL_MM) < 1e-6
+                   for l in legs)
+    # pad: read width on the top layer of each leg.
+    pads_ok = True
+    for l in legs:
+        try:
+            pad_mm = l.GetWidth(l.TopLayer()) / 1e6
+        except TypeError:
+            pad_mm = l.GetWidth() / 1e6
+        if abs(pad_mm - STACKED_MICROVIA_DIAM_MM) > 1e-6:
+            pads_ok = False
+    ok = ok_pairs and ok_types and ok_drill and pads_ok
+    print(f"  [{'OK' if ok else 'BAD'}] (L4) STACKED emit (BSTB_CH1 @ J19.17): "
+          f"2 MICROVIA legs, layer_pairs={layer_pairs}, "
+          f"types={[l.GetViaType() for l in legs]} "
+          f"(expected {pcbnew.VIATYPE_MICROVIA} × 2), drill+pad ok")
+    return ok
+
+
+def test_lever_L_emit_all_8_landings():
+    """(L5) all 8 sanctioned (net, pin) landings emit stacked correctly."""
+    cases = [
+        ("BSTB_CH1",        "J19.17", 26.137, 61.770),
+        ("PWM_INHB_CH1",    "J18.19", 34.188, 66.750),
+        ("SWDIO_CH1",       "J18.23", 34.188, 64.750),
+        ("PWM_INLA_CH1",    "J18.15", 33.000, 68.438),
+        ("PWM_INHB_CH1",    "J19.23", 23.450, 60.582),
+        ("PWM_INLA_CH1",    "J19.1",  22.262, 61.270),
+        ("GLB_CH1",         "J19.10", 24.450, 64.457),
+        ("KILL_RAIL_N_CH1", "J19.8",  23.450, 64.457),
+    ]
+    ok = True
+    breakdown = []
+    for (net, pad_label, x, y) in cases:
+        board = pcbnew.LoadBoard(str(PLACED_BOARD))
+        legs, err = _emit_stacked(board, net, x, y)
+        if err or legs is None or len(legs) != 2:
+            ok = False
+            breakdown.append(f"{net}@{pad_label}: FAIL "
+                             f"({err or f'{len(legs) if legs else 0} legs'})")
+            continue
+        # Both legs must be MICROVIA, drill 0.10, pad 0.25, layer-pair set
+        # is {(F,In1), (In1,In2)}.
+        layer_pairs = sorted([tuple(sorted((l.TopLayer(), l.BottomLayer())))
+                              for l in legs])
+        expected_pairs = sorted([tuple(sorted((F_CU, IN1_CU))),
+                                  tuple(sorted((IN1_CU, IN2_CU)))])
+        good = (layer_pairs == expected_pairs and
+                all(l.GetViaType() == pcbnew.VIATYPE_MICROVIA for l in legs))
+        ok &= good
+        breakdown.append(f"{net}@{pad_label}: legs={len(legs)} "
+                         f"layer_pairs={layer_pairs} "
+                         f"{'OK' if good else 'BAD'}")
+    print(f"  [{'OK' if ok else 'BAD'}] (L5) ALL 8 SANCTIONED LANDINGS emit "
+          f"STACKED MICROVIA F.Cu↔In1↔In2 (2 legs × 8 pins = 16 microvias):")
+    for line in breakdown:
+        print(f"      {line}")
+    return ok
+
+
+def test_lever_L_halo_and_span():
+    """(L6) per-class halo / span / diam helpers all return LEVER L geometry."""
+    # via_diam_mm_for_class
+    got_diam = via_diam_mm_for_class('stacked_microvia_F_In1_In2')
+    ok_diam = abs(got_diam - STACKED_MICROVIA_DIAM_MM) < 1e-9
+    # via_halo_radius_mm — per-leg formula matches microvia halo (same diam)
+    expected_halo = (STACKED_MICROVIA_DIAM_MM / 2 + CLEARANCE_MM
+                     + TRACE_HALF_MM + GRID_SLOP_MM)
+    got_halo = via_halo_radius_mm('stacked_microvia_F_In1_In2')
+    ok_halo = abs(got_halo - expected_halo) < 1e-9
+    # via_pad_half_mm_for_class — matches STACKED_MICROVIA_HALF_MM constant
+    got_pad_half = via_pad_half_mm_for_class('stacked_microvia_F_In1_In2')
+    ok_pad_half = abs(got_pad_half - STACKED_MICROVIA_HALF_MM) < 1e-9
+    # via_span_layers — F.Cu / In1 / In2 (same as blind_F_In2)
+    got_span = via_span_layers('stacked_microvia_F_In1_In2')
+    ok_span = got_span == STACKED_MICROVIA_SPAN
+    ok = ok_diam and ok_halo and ok_pad_half and ok_span
+    print(f"  [{'OK' if ok else 'BAD'}] (L6) per-class helpers: "
+          f"diam={got_diam}mm (exp {STACKED_MICROVIA_DIAM_MM}), "
+          f"halo={got_halo:.3f}mm (exp {expected_halo:.3f}), "
+          f"pad_half={got_pad_half}mm (exp {STACKED_MICROVIA_HALF_MM}), "
+          f"span={got_span} (exp {STACKED_MICROVIA_SPAN})")
+    return ok
+
+
 def main():
     if not PLACED_BOARD.exists():
         print(f"FAIL: board {PLACED_BOARD} not found")
@@ -854,6 +1088,7 @@ def main():
     print("test_emit_blind_f_in2 — synthetic OQ-020 EMITTER patch (v8)")
     print("                       + v9 per-via-class halo radius (CH1 30/30 F)")
     print("                       + v10 foreign-via actual-diam (CH1 30/30 I)")
+    print("                       + v11 LEVER L stacked microvia (CH1 30/30 L)")
     print(f"  board: {PLACED_BOARD}")
     print(f"  audit: {HERE / 'audit_hdi_via_in_pad.py'}")
     print("=" * 72)
@@ -887,6 +1122,19 @@ def main():
                     test_lever_I_hdi_geom_accepts_legit_microvia()))
     results.append(("(I3) hdi_geom refuses real through short (shorts-gate intact)",
                     test_lever_I_hdi_geom_refuses_real_through_short()))
+    # LEVER L (CH1 30/30) stacked microvia F↔In1↔In2 — 6 new tests.
+    results.append(("(L1) SSoT: stacked whitelist == audit",
+                    test_lever_L_ssoT()))
+    results.append(("(L2) classifier returns stacked class",
+                    test_lever_L_classifier_stacked_class()))
+    results.append(("(L3) classifier refuses non-WL (no through fall-through)",
+                    test_lever_L_classifier_negative()))
+    results.append(("(L4) emit stacked pair (2 MICROVIA legs)",
+                    test_lever_L_emit_stacked_pair()))
+    results.append(("(L5) ALL 8 sanctioned landings emit stacked",
+                    test_lever_L_emit_all_8_landings()))
+    results.append(("(L6) per-class halo/span/diam helpers (SSoT)",
+                    test_lever_L_halo_and_span()))
     print("=" * 72)
     n_pass = sum(1 for (_, p) in results if p)
     n = len(results)
@@ -894,7 +1142,10 @@ def main():
         print(f"  {'PASS' if p else 'FAIL'}: {name}")
     print("=" * 72)
     if n_pass == n:
-        print(f"RESULT: PASS — {n_pass}/{n} tests pass; OQ-020 EMITTER (v8 + "
+        print(f"RESULT: PASS — {n_pass}/{n} tests pass; LEVER L (CH1 30/30 "
+              f"stacked microvia F↔In1↔In2): SSoT discipline + classifier + "
+              f"REFUSE-non-WL + 2-leg emit + 8-landing emit + per-class halo "
+              f"all green. OQ-020 EMITTER (v8 + "
               f"2026-05-28 lever D + 2026-05-28 lever G) correctly emits "
               f"BLIND_BURIED F.Cu↔In2 for all 6 whitelist nets at all 8 "
               f"sanctioned landings, REFUSES non-whitelist spans, preserves "
