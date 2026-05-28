@@ -376,6 +376,7 @@ travel together for every entry.
 | `+VMOTOR_CH2` | Per-channel rail | Mirror_X(CH1) per R19 — same validation. |
 | `+VMOTOR_CH3` | Per-channel rail | Mirror per R19. |
 | `+VMOTOR_CH4` | Per-channel rail | Mirror per R19. |
+| `VMOTOR_CH` | Per-channel bus-cap rail | 85-pad envelope including Q5/Q7/Q9 HS-FET drain + C62-C100 bulk-cap network; carries the FET-region bypass-loop current at 280A burst envelope. Ripping cascades into S2-bus + S5-BEC validation redo. Added 2026-05-28 per `docs/CH1_DRONE_RELIABILITY_SWEEP_2026-05-28.md` Finding #5. |
 | `BATGND` | Battery return | S1↔S2 validated low-impedance return; ripping breaks the bulk-cap → battery loop sim (Tier 1). |
 | `+3V3` | BEC trunk | S5 BEC validated (multi-load tree); cross-subsystem feeder. |
 | `+5V` | BEC trunk | S5 BEC validated. |

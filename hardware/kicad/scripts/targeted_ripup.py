@@ -125,6 +125,12 @@ FROZEN_BANKED_NETS = (
     "+VMOTOR_CH2",
     "+VMOTOR_CH3",
     "+VMOTOR_CH4",
+    # Per-channel bus-cap rail (post-Hall-sense VMOTOR; 85-pad envelope
+    # including Q5/Q7/Q9 drain + C62-C100 bulk-cap network). Carries the
+    # FET-region bypass-loop current at 280 A burst envelope. Ripping it
+    # cascades into S2-bus + S5-BEC validation redo. Added 2026-05-28 per
+    # docs/CH1_DRONE_RELIABILITY_SWEEP_2026-05-28.md Finding #5.
+    "VMOTOR_CH",
     # Battery + bulk-cap interconnect (S1+S2 validated routing)
     "BATGND",
     # BEC trunks (S5 validated, cross-subsystem feeders)
