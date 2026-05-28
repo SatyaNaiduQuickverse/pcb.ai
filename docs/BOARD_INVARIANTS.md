@@ -252,6 +252,75 @@ condition); `GLB_CH1` was added to the net condition for lever D;
 All other footprints use board-default via: 0.30mm drill, 0.50mm pad,
 0.10mm annular — standard JLC fab, no HDI surcharge.
 
+## Frozen banked nets (CH1 30/30 lever J — R38, 2026-05-28)
+
+Per master 2026-05-28 CH1 30/30 lever J (targeted ripup-rebuild) and Sai
+mandate "have strong validation and audit gates": when the cooperative
+router's targeted-ripup capability surgically rips a foreign net to free
+a corridor for a blocked net, certain nets MUST NEVER be ripped under
+any circumstance. They are "banked" — validated, sim-confirmed, and any
+re-route would either (a) brick a PDN already-current-density / EMI /
+thermal verified, or (b) cascade into a per-channel power redo + sim
+that defeats the surgical-rip cost saving.
+
+The list is enforced TWO ways:
+  1. **Code-side SSoT**: `hardware/kicad/scripts/targeted_ripup.py`
+     `FROZEN_BANKED_NETS` tuple (the import boundary the router consults
+     at rip-decision time; `is_frozen_banked(netname)` returns True for
+     any name in the list).
+  2. **Doc-side SSoT**: this table. Audit gate
+     `audit_frozen_banked_nets_preserved.py` G_J3 verifies the code-side
+     and doc-side intersect on the canonical set + are NOT divergent.
+
+Updating the list requires editing BOTH AND a new PR tagged
+`[invariant-change]`. Per `[[feedback-codify-not-patch]]` 2026-05-24
+codified-fix + codified-audit + master-independent-test, all 3 artifacts
+travel together for every entry.
+
+| Net | Class | Why frozen |
+|---|---|---|
+| `+VMOTOR` | Power plane | 280A burst — PDN already current-density + thermal verified (Tier 1 sim PASS). Re-route ⇒ full PDN redo + sim. |
+| `GND` | Reference plane | Continuous plane reference for every signal layer; ripping ⇒ return-path discontinuity for the entire board. |
+| `+BATT` | Power trunk (S1 star) | Single 40A source; star topology validated. Ripping defeats the +BATT/GND-return loop validated at Tier 1. |
+| `+VMOTOR_CH1` | Per-channel rail | Post-Hall-sense +VMOTOR rail; separated from +VMOTOR by R34 0R bridge in S3. In8 local pours (BOARD_INVARIANTS §In8 multi-use a) feed FET bypass caps with 0.4nH bypass-loop physics. |
+| `+VMOTOR_CH2` | Per-channel rail | Mirror_X(CH1) per R19 — same validation. |
+| `+VMOTOR_CH3` | Per-channel rail | Mirror per R19. |
+| `+VMOTOR_CH4` | Per-channel rail | Mirror per R19. |
+| `BATGND` | Battery return | S1↔S2 validated low-impedance return; ripping breaks the bulk-cap → battery loop sim (Tier 1). |
+| `+3V3` | BEC trunk | S5 BEC validated (multi-load tree); cross-subsystem feeder. |
+| `+5V` | BEC trunk | S5 BEC validated. |
+| `+9V` | BEC trunk | S5 BEC validated. |
+| `+3V3A` | BEC analog trunk | S5 BEC validated; analog reference rail. |
+| `+3V3_CH1` | Per-channel BEC | CH1-side BEC tap — validated by S5→CH1 cumulative sim. |
+| `+5V_CH1` | Per-channel BEC | CH1-side BEC tap. |
+| `+9V_CH1` | Per-channel BEC | CH1-side BEC tap. |
+| `+3V3A_CH1` | Per-channel BEC analog | CH1-side BEC tap. |
+| `+3V3_CH2` | Per-channel BEC | Mirror_X(CH1) per R19. |
+| `+5V_CH2` | Per-channel BEC | Mirror. |
+| `+9V_CH2` | Per-channel BEC | Mirror. |
+| `+3V3_CH3` | Per-channel BEC | Mirror per R19. |
+| `+5V_CH3` | Per-channel BEC | Mirror. |
+| `+9V_CH3` | Per-channel BEC | Mirror. |
+| `+3V3_CH4` | Per-channel BEC | Mirror per R19. |
+| `+5V_CH4` | Per-channel BEC | Mirror. |
+| `+9V_CH4` | Per-channel BEC | Mirror. |
+| `KILL_CH1` | Safety kill broadcast | Per-channel KILL is SAFETY (criticality 100, R36); routed FIRST, never ripped. |
+| `KILL_CH2` | Safety kill broadcast | Per R19 mirror. |
+| `KILL_CH3` | Safety kill broadcast | Per R19 mirror. |
+| `KILL_CH4` | Safety kill broadcast | Per R19 mirror. |
+
+Code-side import target:
+
+```python
+from hardware.kicad.scripts.targeted_ripup import (
+    FROZEN_BANKED_NETS, is_frozen_banked,
+)
+```
+
+A net NOT in this list is rippable subject to the other R36-R39 / G_J1-
+G_J5 disciplines. Adding a net to the frozen set RAISES the protection;
+removing requires Sai cost-OK + new sim cycle on the affected subsystem.
+
 ## Invariant hash
 
 Per master v2 review #5: compute + store hash.

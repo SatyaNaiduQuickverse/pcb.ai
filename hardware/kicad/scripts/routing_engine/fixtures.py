@@ -2216,6 +2216,269 @@ def _build_T16():
 _BUILDERS.append(_build_T16)
 
 
+# ----------------------------------------------------------------------------
+# T17 — TARGETED-RIPUP-BEATS-GLOBAL (stretch). Appended 2026-05-28 to lock
+# the CH1 30/30 lever (J) capability: a small synthetic case where global
+# ripup converges at N-1 routed because the blocking foreign X has globally
+# LOWER total cost than the blocked net Y, but X has SLACK (an alternate
+# path) while Y has NONE. Targeted ripup identifies X as the SPECIFIC
+# corridor conflict, surgically rips X, routes Y on its preferred path,
+# then re-routes X on its alt → 2/2 routed.
+#
+# T1-T16 above remain byte-identical. APPEND-ONLY.
+# ----------------------------------------------------------------------------
+
+def _build_T17():
+    """T17 — TARGETED-RIPUP-BEATS-GLOBAL (stretch).
+    The CH1 30/30 lever (J) capability fixture (2026-05-28; cooperative
+    router's 24-simultaneous cap broken by surgical conflict-set rip-
+    rebuild — worker empirical PR #227 5-residual diagnosis).
+
+    THE BUG CLASS (a class of failure, not a one-shot):
+    Cooperative PathFinder evaluates each potential evict at GLOBAL cost.
+    When the blocking foreign X has alternates but the blocked Y does
+    not, GLOBAL cost-min keeps X (its eviction touches many cells, all
+    accounted) and strands Y (its strand touches one net). The
+    asymmetry between X's slack and Y's no-slack is invisible to the
+    global cost function; PathFinder oscillates and plateaus.
+
+    CONSTRUCTION (smallest faithful reproduction — provable by hand):
+      * STACKUP: F.Cu signal only (1 signal layer; via slots not needed
+        — the case is about IN-LAYER corridor competition, not escape).
+      * 2 NETS:
+          - Y ("blocked") — must route from S=(0, 5) to E=(10, 5). Its
+            ONLY feasible path crosses the corridor at x ∈ [4, 6], y=5.
+            (Body keep-outs to the north + south make any detour
+            impossible: NORTH_BODY at y ∈ [6, 10] across x ∈ [0, 10];
+            SOUTH_BODY at y ∈ [0, 4] across x ∈ [0, 10]. The y=5 lane
+            is the ONLY 1-mm-tall slot Y can use.)
+          - X ("foreigner") — currently routes from S=(2, 5) to
+            E=(8, 5). Its routed path RUNS THROUGH the y=5 lane at
+            x ∈ [2, 8] — overlapping Y's required corridor. X has an
+            ALT path through (2, 5) → (2, 2.5) → (8, 2.5) → (8, 5)
+            using the south-corridor at y ∈ [2, 3] (which is a
+            free strip between SOUTH_BODY's top edge y=4 and another
+            keep-out — left intentionally CLEAR for X's alternate).
+            X's alt is LONGER (10mm vs 6mm) so global cost-min
+            keeps the y=5 path and strands Y.
+      * 1 OBSTACLE pair: NORTH_BODY + SOUTH_BODY pinning Y to y=5.
+        Plus 2 SOUTH-CORRIDOR-BOUNDARY bodies leaving x ∈ [2, 8],
+        y ∈ [2, 3] as X's alt path (X-only — Y cannot reach it
+        because Y's start/end are on y=5).
+
+    GLOBAL RIPUP outcome (the failure mode lever J fixes):
+      * X is committed at y=5; Y attempts to route → blocked by X.
+      * Global ripup evaluates evicting X: X's re-route cost = 10mm
+        (alt path). Cost of stranding Y = 1 stranded net (Y has 0
+        alternates → strand is mandatory). PathFinder's cost
+        comparison: 10mm-extra-X-route ≫ 1-stranded-Y, so global
+        keeps X, strands Y. Routed = 1/2; Y BLOCKED.
+
+    TARGETED RIPUP outcome (the fix):
+      1. Identify Y's IDEAL CORRIDOR ignoring foreigns → the y=5 lane,
+         x ∈ [0, 10].
+      2. Identify FOREIGN NETS intersecting → {X}. CONFLICT SET = {X}.
+      3. Pre-rip feasibility: X has ≥1 alternate (the south corridor)
+         → PASS.
+      4. Surgically rip X. Route Y on the y=5 lane (now free) — 10mm.
+         Re-route X on alt path (south corridor) — 10mm. Both routed.
+      5. Cascade depth = 1 (X's re-route did not itself need a rip).
+      6. Atomic commit: SHORTS pre = 0, SHORTS post = 0 (delta 0 OK).
+
+    ADVERSARIAL "RIP-EVERYTHING" LIAR:
+      A liar that rips ALL foreigns (X + any other committed routes)
+      then routes Y alone "succeeds" at Y but DESTROYS the X commit
+      without re-routing it. T17 ground-truth witness asserts X is
+      ALSO routed in the final state (the frozen-routes-preserved
+      invariant). The liar FAILS the routed-count metric (1/2 instead
+      of 2/2).
+
+    ADVERSARIAL "SKIP-CASCADE-CHECK" LIAR:
+      A liar that allows depth > 2 would succeed on T17 trivially
+      (T17's chain depth is 1). But a downstream provenance log
+      check would catch a depth > 2 entry — that audit lives in
+      G_J2 (independently testable against synthetic provenance).
+      T17 doesn't exercise the cascade beyond depth 1 by
+      construction; the deeper-cascade check belongs to G_J2.
+
+    GROUND TRUTH (re-derivable by hand, no solver):
+      verdict = ROUTABLE under targeted ripup (the FIX),
+                CONDITIONAL on lever='targeted_ripup' applied.
+      Base verdict (no lever) = CONDITIONAL with greedy=1/2,
+                                  global=1/2, targeted=2/2.
+      Witness paths:
+          Y: (0,5) → (10,5)  [straight; 10mm]
+          X: (2,5) → (2,2.5) → (8,2.5) → (8,5)  [alt corridor; 10mm]
+      witness_n_corners_X = 2  (two right-angle bends in X's alt path)
+      witness_n_corners_Y = 0  (single straight segment)
+      witness_n_vias = 0       (single signal layer)
+      conflict_set = ("X",)
+      cascade_depth = 1
+      shorts_delta = 0
+    """
+    # Single signal layer keeps the case 1D-resource (no via-slot supply
+    # accounting muddying the corridor-competition logic).
+    layers = (
+        Layer("F.Cu", "signal"),
+    )
+    # Pins
+    Ys = Pin("Y_S", 0.0, 5.0, "F.Cu")
+    Ye = Pin("Y_E", 10.0, 5.0, "F.Cu")
+    Xs = Pin("X_S", 2.0, 5.0, "F.Cu")
+    Xe = Pin("X_E", 8.0, 5.0, "F.Cu")
+    pins = [Ys, Ye, Xs, Xe]
+    nets = [
+        Net("Y", ("Y_S", "Y_E"), "signal"),
+        Net("X", ("X_S", "X_E"), "signal"),
+    ]
+    # Body keep-outs pinning Y to y=5 (Y has NO alternate path):
+    #   NORTH wall at y ∈ [6, 10] across x ∈ [0, 10]
+    #   SOUTH wall at y ∈ [0, 4] across x ∈ [0, 10]
+    # Plus south-corridor boundaries leaving x ∈ [0, 10], y ∈ [2, 3] open
+    # for X's alt — but this strip is UNREACHABLE for Y (Y's pins are at y=5
+    # and the south wall blocks any detour from y=5 to y=3 across x ∈ [0,10]
+    # except through y=5 itself — which X is currently using).
+    # Wait — we must leave a vertical channel for X to get from y=5 to y=3.
+    # Solution: leave two narrow vertical gaps at x=2 (X_S) and x=8 (X_E)
+    # only — encode by making SOUTH wall NOT a single block but two blocks
+    # leaving the X_S → south and X_E → south gaps open (Y cannot use them
+    # because Y has no pins at x=2 or x=8 on y=5 — Y's path enters at x=0
+    # which is blocked by SOUTH wall and exits at x=10 which is blocked).
+    obstacles = (
+        # North wall (full-width)
+        Obstacle("NORTH_WALL", 0.0, 6.0, 10.0, 10.0, kind="body"),
+        # South wall WITH 2 gaps (at x ∈ [1.7, 2.3] and x ∈ [7.7, 8.3]).
+        # The gaps are 0.6mm wide — wide enough for ONE trace (0.20mm + 2x
+        # clearance 0.20mm = 0.60mm exactly), exactly what X needs to descend
+        # from y=5 to y=2.5 at its endpoints. Y's pins at x=0 and x=10 are
+        # OUTSIDE the gaps so Y cannot use them.
+        Obstacle("SOUTH_WALL_W", 0.0, 0.0, 1.7, 4.0, kind="body"),
+        Obstacle("SOUTH_WALL_M", 2.3, 0.0, 7.7, 4.0, kind="body"),
+        Obstacle("SOUTH_WALL_E", 8.3, 0.0, 10.0, 4.0, kind="body"),
+    )
+    # Y's IDEAL CORRIDOR (the construction's binding fact):
+    #   the only feasible y-band for Y at x ∈ [0, 10] is y ∈ [4, 6] (between
+    #   the south + north walls' inner edges); within that band, X's existing
+    #   route at y=5 occupies the centerline. Any detour off y=5 within the
+    #   y ∈ [4, 6] slot would still cross X's track at some x ∈ [2, 8].
+    # Conflict set = {X}. Witness for the FIX:
+    #   Y: (0,5) → (10,5) ; length 10mm, 0 bends.
+    #   X (re-routed): (2,5) → (2,2.5) → (8,2.5) → (8,5) ; length 10mm,
+    #     2 bends (rises out of y=5 lane through gap at x=2, runs along
+    #     south corridor at y=2.5, climbs back through gap at x=8).
+    # Both routes coexist; SHORTS delta = 0.
+    witness_Y_path = [(0.0, 5.0), (10.0, 5.0)]
+    witness_X_alt_path = [(2.0, 5.0), (2.0, 2.5), (8.0, 2.5), (8.0, 5.0)]
+    Y_len = 10.0  # straight
+    X_len = (5.0 - 2.5) + (8.0 - 2.0) + (5.0 - 2.5)   # 2.5 + 6.0 + 2.5 = 11.0
+    gt = GroundTruth(
+        verdict="CONDITIONAL",
+        metrics={
+            # Base (no lever): greedy AND global converge at 1/2 routed
+            # (X committed first at y=5 — global cost keeps it, strands Y).
+            "greedy_routes": 1,
+            "global_routes": 1,
+            # The 'targeted' lever applied: 2/2 routed via surgical rip of X
+            # + route Y on y=5 lane + re-route X on south corridor.
+            "targeted_routes": 2,
+            "conflict_set_size": 1,
+            "cascade_depth": 1,
+            "shorts_delta": 0,
+            "frozen_routes_preserved": True,
+            "witness_Y_len_mm": Y_len,
+            "witness_X_alt_len_mm": X_len,
+            "witness_Y_n_bends": 0,
+            "witness_X_alt_n_bends": 2,
+            "max_n_vias": 0,
+        },
+        witness={
+            "routed_paths": {
+                "Y": witness_Y_path,
+                "X": witness_X_alt_path,
+            },
+            "conflict_set": ["X"],
+            "cascade_depth": 1,
+            "shorts_delta": 0,
+            "frozen_routes_preserved": True,
+        },
+        conditional_on="targeted_ripup",
+        alt_verdict="ROUTABLE",
+        alt_metrics={
+            "routed": 2,
+            "conflict_set_size": 1,
+            "cascade_depth": 1,
+            "shorts_delta": 0,
+        },
+        alt_witness={
+            "routed_paths": {
+                "Y": witness_Y_path,
+                "X": witness_X_alt_path,
+            },
+            "conflict_set": ["X"],
+            "cascade_depth": 1,
+        },
+    )
+    proof = (
+        "T17 (TARGETED-RIPUP-BEATS-GLOBAL; the CH1 30/30 lever (J) "
+        "capability lockfile; cooperative router's 24-simultaneous cap "
+        "broken by surgical conflict-set rip-rebuild). Stackup: F.Cu "
+        "signal only. TWO nets — Y (blocked, S=(0,5)→E=(10,5)) and "
+        "X (foreigner, S=(2,5)→E=(8,5)). FOUR body obstacles pin Y to "
+        "y=5 (its ONLY feasible lane between NORTH_WALL y∈[6,10] and "
+        "SOUTH_WALL y∈[0,4]); the SOUTH_WALL is broken into 3 segments "
+        "leaving 0.6mm gaps at x=2 and x=8 ONLY (wide enough for one "
+        "trace; unreachable for Y whose pins are at x=0 and x=10). "
+        "X's CURRENT route runs along y=5 — overlapping Y's required "
+        "corridor. X has an ALTERNATIVE through the south corridor "
+        f"y=2.5 (length {X_len}mm, 2 bends) but it's LONGER than Y's "
+        f"required y=5 path ({Y_len}mm, 0 bends). GLOBAL cost-min "
+        "keeps X at y=5 (lower total cost), strands Y → 1/2 routed. "
+        "TARGETED RIPUP identifies the conflict set = {X} from Y's "
+        "ideal corridor walk, verifies X has an alternate (south "
+        "corridor exists + reachable through gap-at-x=2 and gap-at-"
+        "x=8), surgically rips X, routes Y on its preferred y=5 "
+        "lane, re-routes X on the alt south corridor → 2/2 routed. "
+        "Cascade depth = 1 (X's re-route did not itself trigger a "
+        "rip). SHORTS delta = 0 (no overlapping new copper). "
+        "ADVERSARIAL 'rip-everything' LIAR would rip X then route Y "
+        "but DROP X's re-route — fails the routed-count witness "
+        "(1/2 instead of 2/2) AND fails the frozen-routes-preserved "
+        "invariant. ADVERSARIAL 'skip-cascade-check' LIAR would "
+        "allow depth > 2 — irrelevant on T17 (chain depth IS 1), "
+        "but caught downstream by G_J2 against synthetic provenance "
+        "(the audit is independently testable). Self-check verifies "
+        "(a) the obstacle layout pins Y to y=5; (b) X's alt path "
+        "exists (reaches y=2.5 through gaps at x=2 and x=8); (c) "
+        "the witness X-route bypasses Y's y=5 lane; (d) the witness "
+        "Y-route uses the y=5 lane; (e) conflict_set is {X} with "
+        "cascade depth 1; (f) shorts delta = 0; (g) global / greedy "
+        "verdict is 1/2 (the FAILURE mode the lever fixes); (h) the "
+        "rip-everything liar produces 1/2 routed — FAILS the "
+        "frozen-routes-preserved invariant."
+    )
+    return Fixture("T17",
+                   "targeted-ripup-beats-global (capability; "
+                   "CH1 30/30 (J) lockfile)",
+                   "stretch",
+                   "targeted ripup-rebuild: identify corridor conflict, "
+                   "verify feasibility, surgically rip foreigner(s), "
+                   "route blocked net, re-route foreigners on alts. "
+                   "Cascade-bounded (≤2), frozen-banked-nets immutable, "
+                   "shorts-delta ≤ 0. Cooperative global ripup converges "
+                   "at 1/2 routed on this case (cost-min keeps the "
+                   "long-alt foreigner X over the no-alt blocked Y); "
+                   "targeted ripup achieves 2/2 by addressing the "
+                   "asymmetry the global cost function cannot see.",
+                   layers, tuple(pins), tuple(nets), (), obstacles, (),
+                   gt, proof)
+
+
+# APPEND-ONLY: T17 — targeted ripup-rebuild (CH1 30/30 (J) capability
+# lockfile; 2026-05-28). Appended via `.append(...)` so the T1-T16 lines
+# above stay byte-identical (diff-stat: only NEW lines).
+_BUILDERS.append(_build_T17)
+
+
 def all_fixtures():
     """Return the registered fixtures in case-number order (T1..T14)."""
     return [b() for b in _BUILDERS]
