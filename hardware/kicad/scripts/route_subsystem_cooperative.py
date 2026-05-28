@@ -101,6 +101,46 @@ v7 (2026-05-27, master R26 — worker R22 catch #4 on v6 HDI shorts):
       they were physically through-vias anyway in v6.
 
   Either prong alone fixes the bug. Both = defense in depth.
+
+v8 (2026-05-28, master Phase 3 dispatch — OQ-020 emitter gap per PR #227):
+  Phase 3 (CH1 final route) diagnosis found that v7's `adj_pairs` recognises
+  ONLY the 2 microvia spans (F.Cu↔In1, B.Cu↔In8) at HDI cells; for any
+  other target_pair (including the new blind F.Cu↔In2 the OQ-020 whitelist
+  now permits per BOARD_INVARIANTS §"HDI Class extension"), the emitter
+  silently falls through to `VIATYPE_THROUGH` F.Cu↔B.Cu — which SHORTS at
+  fine pitch (the v6/v7 lesson the previous prongs were meant to close).
+
+  v8 fix (3 changes; same file):
+    1. Add `via_class_for_span(L_from, L_to, net_name, is_hdi_cell,
+       hdi_whitelist)` → {'microvia_F_In1' | 'microvia_B_In8' |
+       'blind_F_In2' | 'through' | None}. Per-net whitelist for the new
+       blind class is read from `audit_hdi_via_in_pad.BLIND_F_IN2_NET_WHITELIST`
+       (the same SSoT routing_engine/run_on_board.py reads — see task
+       point 4). REFUSED span at an HDI cell returns None — the router
+       MUST skip rather than fall through to THROUGH.
+    2. emit_to_board() uses the classifier and emits the matching via
+       type/geometry per class:
+         microvia_F_In1 / microvia_B_In8 → VIATYPE_MICROVIA + 0.10/0.25mm
+         blind_F_In2                     → VIATYPE_BLIND_BURIED + 0.15/0.30mm
+                                            + SetLayerPair(F.Cu, In2.Cu)
+         through                         → VIATYPE_THROUGH  + 0.30/0.60mm
+         None                            → raise ValueError (defense-in-depth;
+                                            should never reach emit because A*
+                                            rejected the span — see #3)
+    3. find_path_astar() skips layer-changes that classify as None at the
+       source cell, and uses the LAYER-AWARE span (F.Cu/In1.Cu/In2.Cu for
+       blind F-In2; 2-layer for microvias; full-stack for through) in
+       `via_blocked_for_net` so foreign copper on layers the barrel never
+       touches doesn't falsely block legitimate blind escapes. commit_net
+       likewise stamps obstacles only on the layers the barrel actually
+       traverses — the layer-aware obstacle analog to phase_a's layer-aware
+       escape supply.
+
+  After v8 the OQ-020 4 nets (BSTB / PWM_INHB / SWDIO / PWM_INLA, all _CH1)
+  emit correctly as BLIND_BURIED F.Cu↔In2 vias on J18/J19 SMD pads —
+  passes audit_hdi_via_in_pad.py + the new DRU rule (PR #226). Other nets
+  requesting F.Cu↔In2 at an HDI cell are REFUSED (the router searches
+  another layer pair); the silent THROUGH-fall-through bug is closed.
 """
 from __future__ import annotations
 
@@ -391,6 +431,141 @@ HDI_VIA_DIAM_MM = 0.25    # = QFN pad short-axis width
 # center. Compared to standard via 0.5mm. Saves ~0.175mm of scan radius —
 # lets the via fit between adjacent QFN pad copper at 0.5mm pitch.
 HDI_VIA_HALF_MM = HDI_VIA_DIAM_MM / 2 + CLEARANCE_MM  # = 0.325mm
+
+# v8 (2026-05-28, master Phase 3 OQ-020 emitter gap — PR #227 diagnosis):
+# Blind/buried F.Cu↔In2 via class (the OQ-020 ACTIVATE lever). Per
+# BOARD_INVARIANTS §"HDI Class extension: blind/buried F.Cu↔In2" + DRU
+# §"HDI blind/buried F.Cu↔In2" + audit_hdi_via_in_pad.BLIND_F_IN2_NET_WHITELIST.
+# Drill 0.15mm (>= JLC HDI blind/buried laser min; +50% FoS over 0.10mm
+# single-microvia limit per §5c FoS-everywhere). Pad 0.30mm (= drill + 2×0.075
+# annular; fits QFN long-axis 0.875mm pad). Barrel traverses ONLY F.Cu↔In1↔In2
+# (3 layers) — NOT the full F.Cu↔B.Cu stack a through-via spans. Layer-aware
+# obstacle validation uses BLIND_F_IN2_SPAN below (the layer-aware analog to
+# the layer-aware escape supply primitive in phase_a.py).
+BLIND_F_IN2_DRILL_MM = 0.15
+BLIND_F_IN2_DIAM_MM = 0.30
+BLIND_F_IN2_HALF_MM = BLIND_F_IN2_DIAM_MM / 2 + CLEARANCE_MM  # = 0.35mm
+# Layers a blind F.Cu↔In2 barrel actually intersects (F.Cu / In1 / In2 only).
+# Through-via spans ALL_COPPER_LAYERS; blind F-In2 spans this 3-tuple, so
+# foreign copper on In3-In8 + B.Cu does NOT block a blind F-In2 (the barrel
+# never reaches those layers). The layer-aware obstacle check (point 3 of
+# the Phase 3 emitter patch) reads this tuple.
+BLIND_F_IN2_SPAN = (F_CU, IN1_CU, IN2_CU)
+
+
+# v8: per-named-net whitelist of nets permitted to use the blind F.Cu↔In2
+# class. Single source of truth = audit_hdi_via_in_pad.BLIND_F_IN2_NET_WHITELIST
+# (the gate that ENFORCES this on the saved board). Imported lazily here so
+# the router stays in lock-step with the audit without duplicating the list
+# (a divergence would either allow the router to emit a via the audit then
+# rejects, or vice-versa). On import failure (e.g. running route_subsystem
+# in a venv without the audit on the path) we fall back to an empty tuple —
+# which DEGRADES TO REFUSING THE NEW CLASS, never to silently fall through
+# to THROUGH-via (the bug we are fixing). Mirrors the same pattern used by
+# routing_engine/run_on_board.py lines 175-177.
+try:                                          # pragma: no cover - import path
+    from audit_hdi_via_in_pad import BLIND_F_IN2_NET_WHITELIST as \
+        _BLIND_F_IN2_NET_WHITELIST            # canonical .kicad_pcb names
+except Exception:                             # pragma: no cover
+    _BLIND_F_IN2_NET_WHITELIST = ()
+
+
+def blind_f_in2_net_whitelist():
+    """Return the canonical-net-name tuple permitted for the blind F.Cu↔In2
+    via class. Single source of truth = audit_hdi_via_in_pad.
+    BLIND_F_IN2_NET_WHITELIST. Empty tuple on import failure (refuse-class
+    behaviour — the router NEVER silently falls through to THROUGH-via for
+    a fine-pitch HDI cell, which is the v6/v7 shorts lesson per the file
+    banner and [[reference-cascading-escape-needs-negotiated-routing]])."""
+    return _BLIND_F_IN2_NET_WHITELIST
+
+
+# Adjacent-layer microvia spans (JLC HDI Class 2 single laser-drill spec) —
+# the existing classes. Bidirectional (router may pick either direction).
+_MICROVIA_F_IN1_SPAN = {(F_CU, IN1_CU), (IN1_CU, F_CU)}
+_MICROVIA_B_IN8_SPAN = {(B_CU, IN8_CU), (IN8_CU, B_CU)}
+# Blind/buried F.Cu↔In2 span (OQ-020) — bidirectional.
+_BLIND_F_IN2_PAIRS = {(F_CU, IN2_CU), (IN2_CU, F_CU)}
+
+
+def via_class_for_span(L_from, L_to, net_name, is_hdi_cell,
+                       hdi_whitelist=None):
+    """Classify a (L_from, L_to) via span for `net_name` into one of:
+      'microvia_F_In1' — JLC HDI Class 2 adjacent microvia (F.Cu↔In1.Cu)
+      'microvia_B_In8' — JLC HDI Class 2 adjacent microvia (B.Cu↔In8.Cu)
+      'blind_F_In2'    — JLC HDI blind/buried F.Cu↔In2 (OQ-020 class),
+                         permitted ONLY when `net_name` is in
+                         `hdi_whitelist` (BLIND_F_IN2_NET_WHITELIST source of truth)
+      'through'        — standard F.Cu↔B.Cu through-via (any span on a
+                         non-HDI cell; the existing behaviour)
+      None             — REFUSED: span is not permitted at this HDI cell
+                         for this net. The router MUST NOT fall through to
+                         a through-via at fine-pitch HDI cells (that's the
+                         v6/v7 shorts lesson — through F.Cu↔B.Cu drills
+                         clearance into adjacent 0.5mm-pitch QFN pads on
+                         every inner layer, guaranteeing a short). Caller
+                         must SKIP this layer-change candidate.
+
+    The HDI-cell context is what triggers the refuse-vs-through distinction:
+    on a normal board cell, any (L_from, L_to) span is acceptable as a
+    standard through-via (the existing v6/v7 behaviour). At an HDI via-in-
+    pad cell (J18/J19) the geometry only supports the 3 listed HDI classes;
+    anything else MUST be refused so the router seeks another layer pair.
+
+    `hdi_whitelist` defaults to `blind_f_in2_net_whitelist()` (the audit's
+    canonical list). Callers MAY pass an override for testing (the per-net
+    whitelist is read from a single source per task point 4).
+    """
+    pair = (L_from, L_to)
+    if not is_hdi_cell:
+        # Non-HDI cell: any span emits as standard through-via (existing
+        # v6/v7 behaviour preserved).
+        return 'through'
+    # HDI cell: only the 3 sanctioned classes are physically realisable
+    # (JLC HDI Class 2 + OQ-020 blind extension). Anything else is refused.
+    if pair in _MICROVIA_F_IN1_SPAN:
+        return 'microvia_F_In1'
+    if pair in _MICROVIA_B_IN8_SPAN:
+        return 'microvia_B_In8'
+    if pair in _BLIND_F_IN2_PAIRS:
+        wl = hdi_whitelist if hdi_whitelist is not None \
+            else blind_f_in2_net_whitelist()
+        if net_name in wl:
+            return 'blind_F_In2'
+        # Blind F-In2 span requested by non-whitelisted net at HDI cell:
+        # REFUSE. (The DRU rejects this anyway — but the router must NOT
+        # fall through to THROUGH F.Cu↔B.Cu, which would short adjacent
+        # pads. Routing fails → A* searches another layer pair.)
+        return None
+    # Some other span at an HDI cell (e.g. F.Cu↔In4, In8↔In2, etc.) is
+    # not a sanctioned HDI class on this fab process → REFUSE.
+    return None
+
+
+def via_span_layers(via_class):
+    """Layers a via of `via_class` actually barrel-traverses (for the layer-
+    aware obstacle check — point 3 of the OQ-020 emitter patch).
+
+    - 'through'         spans ALL_COPPER_LAYERS (F.Cu→B.Cu)
+    - 'microvia_F_In1'  spans only F.Cu, In1.Cu (adjacent laser drill)
+    - 'microvia_B_In8'  spans only In8.Cu, B.Cu (adjacent laser drill)
+    - 'blind_F_In2'     spans F.Cu, In1.Cu, In2.Cu (BLIND_F_IN2_SPAN)
+    - None              caller's responsibility to never call (refused class)
+
+    Foreign copper on layers OUTSIDE the via's barrel does NOT block it —
+    e.g. a track on In4 on a foreign net cannot collide with a blind F-In2
+    via (the barrel never reaches In4). This is the layer-aware analog to
+    the layer-aware escape supply primitive in routing_engine/phase_a.py."""
+    if via_class == 'through':
+        return tuple(ALL_COPPER_LAYERS)
+    if via_class == 'microvia_F_In1':
+        return (F_CU, IN1_CU)
+    if via_class == 'microvia_B_In8':
+        return (IN8_CU, B_CU)
+    if via_class == 'blind_F_In2':
+        return BLIND_F_IN2_SPAN
+    # Refused class — caller should never reach here.
+    raise ValueError(f"via_span_layers: refused via_class {via_class!r}")
 
 # A* tunables
 LAYER_CHANGE_COST = 5.0       # via penalty (was 30 — too high vs free inner layer)
@@ -1364,31 +1539,67 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
         # FORBID via inside any pad zone (own or other) — clearance to pads
         via_here_forbidden = grid.is_via_forbidden((i, j, L), netname)
         if not via_here_forbidden:
-            # v2 fix: validate proposed THROUGH-via against EVERY copper layer
-            # in the via's span — not just the two routing layers. Catches the
-            # bug class where a via lands on a foreign power plane or foreign
-            # track on an inner layer (catastrophic short).
-            # v6: HDI vias are also through-vias (per emit_to_board: JLC
-            # HDI Class 2 uses single-layer microvias which are full
-            # through-drills). HDI cell scan uses geometric precise check
-            # (hdi_via_blocked_geom in CongestionGrid) which is more
-            # accurate than the cell-based scan but still considers the
-            # full layer span. Memoized via _via_blocked() — see top.
-            if not _via_blocked(i, j):
-                for L2 in allowed_layers:
-                    if L2 == L: continue
-                    ncell = (i, j, L2)
-                    if grid.is_blocked_for(ncell, netname): continue
-                    # Also forbid via on dest layer if it lands in another net's pad zone
-                    if grid.is_via_forbidden((i, j, L2), netname): continue
-                    # via cost: fixed + congestion of both cells
-                    # v5: pass netname so cost() can apply per-net-class layer bias
-                    via_cost = LAYER_CHANGE_COST + grid.cost(ncell, present_factor, netname)
-                    ng = g + via_cost
-                    if ng < g_score.get(ncell, math.inf):
-                        g_score[ncell] = ng
-                        came_from[ncell] = cell
-                        heapq.heappush(open_heap, (ng + h(ncell), ng, ncell, cell))
+            # v2 fix: validate proposed via against EVERY copper layer the
+            # via barrel actually traverses — not just the two routing
+            # layers. Catches the bug class where a via lands on a foreign
+            # power plane or foreign track on an inner layer (catastrophic
+            # short).
+            # v6: HDI cells use the geometric precise check (hdi_via_blocked_geom
+            # in CongestionGrid) which is more accurate than the cell-based
+            # scan; memoized via _via_blocked() — see top.
+            # v8 (2026-05-28, master Phase 3 OQ-020): the via barrel span
+            # depends on the via CLASS:
+            #   - non-HDI cell  → through-via, span = ALL_COPPER_LAYERS (the
+            #                     existing default; obstacles on EVERY copper
+            #                     layer are load-bearing).
+            #   - HDI + (F,In1)/(B,In8) → adjacent microvia, span = 2 layers.
+            #   - HDI + (F,In2) on whitelist net → blind/buried F-In2, span =
+            #                     (F.Cu, In1.Cu, In2.Cu) — foreign copper on
+            #                     In3..B.Cu CANNOT block this via (barrel
+            #                     never reaches there; layer-aware obstacle
+            #                     check). Without this, a foreign track on
+            #                     In4 (the v6/v7 shorts hazard) would falsely
+            #                     block legitimate blind F-In2 escapes.
+            #   - HDI + other span  → REFUSED at this cell (the v6/v7 shorts
+            #                     gate: the router MUST NOT silently fall
+            #                     through to THROUGH F↔B at fine-pitch HDI).
+            # The obstacle pre-check at the SOURCE cell uses the worst-case
+            # (largest) span across all candidate layer pairs at this cell —
+            # if EVERY candidate span is blocked at the worst-case span, the
+            # via is hopeless; otherwise we check each candidate individually
+            # below. For simplicity + correctness we run the per-class span
+            # check on each candidate ncell (the cache key includes the span
+            # signature so identical spans share results).
+            is_hdi_cell = (i, j) in grid.hdi_via_cells
+            for L2 in allowed_layers:
+                if L2 == L: continue
+                # v8: classify the (L, L2) span at this cell for this net.
+                # `None` => the HDI cell + (L, L2) + net combination is not
+                # a sanctioned via class → SKIP (no via emission attempted).
+                via_class = via_class_for_span(L, L2, netname,
+                                                is_hdi_cell=is_hdi_cell)
+                if via_class is None:
+                    continue
+                ncell = (i, j, L2)
+                if grid.is_blocked_for(ncell, netname): continue
+                # Also forbid via on dest layer if it lands in another net's pad zone
+                if grid.is_via_forbidden((i, j, L2), netname): continue
+                # v8: layer-aware obstacle scan — span_layers is class-specific
+                # (blind F-In2 only intersects F/In1/In2, microvias only
+                # intersect 2 layers, through spans all). Cached per (i,j,
+                # span-signature) so 2 candidate layer-pairs with the same
+                # span share a single grid scan.
+                span = via_span_layers(via_class)
+                if _via_blocked(i, j, span_layers_tuple=span):
+                    continue
+                # via cost: fixed + congestion of both cells
+                # v5: pass netname so cost() can apply per-net-class layer bias
+                via_cost = LAYER_CHANGE_COST + grid.cost(ncell, present_factor, netname)
+                ng = g + via_cost
+                if ng < g_score.get(ncell, math.inf):
+                    g_score[ncell] = ng
+                    came_from[ncell] = cell
+                    heapq.heappush(open_heap, (ng + h(ncell), ng, ncell, cell))
     return None, None
 
 
@@ -1506,7 +1717,29 @@ def emit_to_board(board, segments, vias, net_obj, width_mm, added_items,
     inner layers (In2/In8) when the actual escape happens on a quieter
     layer (e.g. In4 or In6). JLC HDI Class 2 supports F.Cu→In* blind
     laser-drilled microvias as part of the +$2-3/board fab option.
+
+    v8 (2026-05-28, master Phase 3 OQ-020 emitter gap — PR #227 diagnosis):
+    via class is now resolved per-via via `via_class_for_span(L_from, L_to,
+    netname, is_hdi_cell, hdi_whitelist)` — adding the BLIND_BURIED
+    F.Cu↔In2 emit path (drill 0.15mm / pad 0.30mm) for OQ-020-whitelist
+    nets. Per-class emit table (canonical source: this function):
+        microvia_F_In1 → VIATYPE_MICROVIA,      drill 0.10, pad 0.25, F↔In1
+        microvia_B_In8 → VIATYPE_MICROVIA,      drill 0.10, pad 0.25, In8↔B
+        blind_F_In2    → VIATYPE_BLIND_BURIED,  drill 0.15, pad 0.30, F↔In2
+        through        → VIATYPE_THROUGH,       drill 0.30, pad 0.60, F↔B
+        None           → REFUSED, via not emitted (caller bug: A*'s _via_blocked
+                         must have rejected this layer-change before reaching
+                         emit time; raises ValueError as defense-in-depth so
+                         a silent fall-through to THROUGH F↔B never recurs —
+                         the v6/v7 shorts lesson).
+    Net-name resolved from `net_obj.GetNetname()` (the bound net is the
+    OQ-020 per-net whitelist source — see audit_hdi_via_in_pad).
     """
+    # Resolve the bound net's canonical name ONCE for the via-class lookup.
+    try:
+        bound_netname = net_obj.GetNetname() if net_obj is not None else ""
+    except Exception:
+        bound_netname = ""
     for (x1, y1, x2, y2, layer) in segments:
         t = pcbnew.PCB_TRACK(board)
         t.SetStart(pcbnew.VECTOR2I(mm_to_iu(x1), mm_to_iu(y1)))
@@ -1525,58 +1758,86 @@ def emit_to_board(board, segments, vias, net_obj, width_mm, added_items,
             ci, cj = grid.xy_to_ij(x, y)
             if (ci, cj) in hdi_via_cells:
                 is_hdi_cell = True
-        # v7 (worker R22 catch #4 on v6 microvia-span gap):
-        # The MICROVIA type tag in v6 was applied to ALL HDI via-in-pad cells
-        # regardless of layer span — but JLC HDI Class 2 fab spec restricts
-        # microvia to ADJACENT-layer single laser-drill (F.Cu↔In1.Cu or
-        # B.Cu↔In8.Cu). Tagging an F.Cu→In4 through-via as MICROVIA is a
-        # spec lie that masks the through-via's full-stack obstacle exposure.
-        # v7 fix: only tag as MICROVIA when the actual span is JLC-compliant;
-        # otherwise emit as standard through-via with HDI geometry (small
-        # drill/pad) preserved. Through-via geometry is what the via
-        # PHYSICALLY is in v6 anyway (line ~1537 was always F_CU↔B_CU);
-        # we just stop lying with the type tag.
         target_pair = via_target_layers.get((round(x, 3), round(y, 3))) \
             if via_target_layers else None
-        is_adjacent_microvia_span = False
+        # v8: classify the (L_from, L_to) span into a sanctioned via class.
+        # `via_class_for_span` returns 'through' on a non-HDI cell (back-compat,
+        # the v6/v7 behaviour), one of the 3 HDI classes at an HDI cell, or
+        # None if the HDI cell + span + net combination is REFUSED (the
+        # router must never emit a through-via at a fine-pitch HDI cell —
+        # the v6/v7 shorts lesson). Non-HDI cells where `target_pair` is None
+        # also classify as 'through' (the prior default for grid-internal
+        # via emissions that lack a recorded span).
         if is_hdi_cell and target_pair is not None:
             L_from, L_to = target_pair
-            adj_pairs = {(F_CU, IN1_CU), (IN1_CU, F_CU),
-                         (B_CU, IN8_CU), (IN8_CU, B_CU)}
-            is_adjacent_microvia_span = (L_from, L_to) in adj_pairs
-        # Use HDI geometry (small drill / pad) whenever the cell is on the
-        # HDI whitelist (microvia geometry needed to fit between QFN pads),
-        # but only tag as MICROVIA when span is adjacent-layer.
-        is_hdi = is_hdi_cell
-        is_hdi_microvia = is_hdi_cell and is_adjacent_microvia_span
-        # Layer pair: for adjacent-layer HDI microvia, emit blind via on the
-        # actual layer pair (so DRC treats it as a true microvia). For all
-        # other vias (HDI or not), emit as through via F.Cu↔B.Cu — that's
-        # what the v6 code did and what the obstacle validation assumes.
-        if is_hdi_microvia:
-            v.SetLayerPair(target_pair[0], target_pair[1])
+            via_class = via_class_for_span(L_from, L_to, bound_netname,
+                                            is_hdi_cell=True)
+        elif is_hdi_cell and target_pair is None:
+            # HDI cell with no recorded span: not safely classifiable —
+            # fall back to refusing (no via emitted). This should not occur
+            # in practice (via_target_layers is populated by path_to_segments
+            # for every via the A* commits) but the defense-in-depth path
+            # avoids silent THROUGH-via emission at an HDI cell.
+            via_class = None
+        else:
+            via_class = 'through'
+        if via_class is None:
+            # REFUSED: do not emit. Raise so a same-router-run bug (A* let
+            # an unsanctioned HDI-cell span through to commit_net) surfaces
+            # loudly instead of silently shorting adjacent QFN pads.
+            raise ValueError(
+                f"emit_to_board: refused via class for net={bound_netname!r} "
+                f"at ({x:.3f},{y:.3f}) span={target_pair} hdi={is_hdi_cell} — "
+                f"A* should have rejected this layer-change before commit "
+                f"(via_class_for_span returned None). This is the v6/v7 "
+                f"shorts gate: NEVER silently fall through to THROUGH.")
+        # Per-class emit: via-type tag + layer pair + drill + pad geometry.
+        # v8: ORDER MATTERS in KiCad 9: SetViaType BEFORE SetLayerPair BEFORE
+        # SetWidth (per test_audit_hdi_blind_f_in2.py docstring + KiCad
+        # source: VIATYPE drives the size-stack lookup; SetLayerPair on a
+        # default VIATYPE_THROUGH normalizes to (F.Cu, B.Cu) so the inner
+        # layer pair is lost). The pre-v8 emit set MICROVIA then SetLayerPair
+        # which happened to work because MICROVIA normalizes correctly for
+        # adjacent pairs; the new BLIND_BURIED class REQUIRES the type be
+        # set first so SetLayerPair preserves (F.Cu, In2.Cu).
+        if via_class == 'microvia_F_In1' or via_class == 'microvia_B_In8':
+            # JLC HDI Class 2 adjacent-layer microvia (existing geometry).
             try:
                 v.SetViaType(pcbnew.VIATYPE_MICROVIA)
             except Exception:
                 pass
-        else:
-            v.SetLayerPair(F_CU, B_CU)
-            # v7: explicit through-via type for non-adjacent HDI cells.
-            # Without this, v6 inherited MICROVIA from prior is_hdi
-            # branch — which is the spec violation we are fixing.
+            v.SetLayerPair(target_pair[0], target_pair[1])
+            v.SetDrill(mm_to_iu(HDI_VIA_DRILL_MM))
+            via_diam = HDI_VIA_DIAM_MM
+        elif via_class == 'blind_F_In2':
+            # OQ-020 ACTIVATE: blind/buried F.Cu↔In2 — laser-drilled blind via
+            # on the 4 OQ-020 whitelist nets (BSTB / PWM_INHB / SWDIO / PWM_INLA).
+            # SetViaType first, then SetLayerPair (KiCad-9 order requirement).
+            try:
+                v.SetViaType(pcbnew.VIATYPE_BLIND_BURIED)
+            except Exception:
+                pass
+            v.SetLayerPair(target_pair[0], target_pair[1])
+            v.SetDrill(mm_to_iu(BLIND_F_IN2_DRILL_MM))
+            via_diam = BLIND_F_IN2_DIAM_MM
+        else:  # via_class == 'through'
+            # Standard through-via (board-wide default; v6/v7 behaviour).
             try:
                 v.SetViaType(pcbnew.VIATYPE_THROUGH)
             except Exception:
                 pass
-        if is_hdi:
-            v.SetDrill(mm_to_iu(HDI_VIA_DRILL_MM))
-            via_diam = HDI_VIA_DIAM_MM
-        else:
+            v.SetLayerPair(F_CU, B_CU)
+            # HDI cells without a target_pair never reach here (refused above);
+            # so the only path to 'through' here is a NON-HDI cell. Use the
+            # standard via geometry; the HDI-small-pad geometry was never
+            # appropriate for a non-HDI cell (it's a JLC HDI fab class).
             v.SetDrill(mm_to_iu(VIA_DRILL_MM))
             via_diam = VIA_DIAM_MM
         # KiCad 9 PCB_VIA.SetWidth signature: SetWidth(layer, width)
-        # Set width on each copper layer the via spans
-        for lid in (F_CU, IN2_CU, IN4_CU, IN6_CU, IN8_CU, B_CU):
+        # Set width on each copper layer the via spans (the layer set is
+        # class-specific — only the layers the barrel actually crosses —
+        # so the per-layer width is set only where it physically applies).
+        for lid in via_span_layers(via_class):
             try:
                 v.SetWidth(lid, mm_to_iu(via_diam))
             except Exception:
@@ -2201,7 +2462,14 @@ class CooperativeRouter:
         # repair A* can traverse the net's own routing without being blocked
         # by its own clearance halo).
         for path in paths:
-            segments, vias = path_to_segments(path, self.grid)
+            # v8: ask path_to_segments for via_layers too, so the same per-
+            # via (L_from, L_to) span the emitter uses also drives the
+            # obstacle stamping (layer-aware: blind F-In2 stamps only F/In1/In2,
+            # NOT all 10 layers — otherwise a blind via would falsely block
+            # subsequent foreign-net through-vias on In3..B.Cu it cannot
+            # actually short).
+            segments, vias, via_layers_local = path_to_segments(
+                path, self.grid, return_via_layers=True)
             for (x1, y1, x2, y2, layer) in segments:
                 self._stamp_own_track_obstacle(x1, y1, x2, y2, width, layer, netname)
                 # v7 (worker R22 catch #4 on v6): append to segment list so
@@ -2213,26 +2481,49 @@ class CooperativeRouter:
                 self.grid.track_segments_by_layer[layer].append(
                     (x1, y1, x2, y2, width, netname))
             for (vx, vy) in vias:
-                # v2 fix: stamp via obstacle on ALL copper layers in the span
-                # (through-via spans F.Cu->B.Cu). Radius accommodates foreign-
-                # track centerline gap.
-                r = VIA_DIAM_MM / 2 + CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM
-                for layer in ALL_COPPER_LAYERS:
-                    self._stamp_own_via_obstacle(vx, vy, r, layer, netname)
-                # Also mark as plane-owned by this net on every copper layer so
-                # a SAME-net repeat via doesn't get false-blocked.
+                # v8: classify the via to compute the correct barrel span +
+                # diameter. Same logic as emit_to_board (single source =
+                # via_class_for_span), so obstacle stamping cannot drift
+                # from emission.
                 vi, vj = self.grid.xy_to_ij(vx, vy)
-                for layer in ALL_COPPER_LAYERS:
+                is_hdi_cell = (vi, vj) in self.grid.hdi_via_cells
+                target_pair = via_layers_local.get(
+                    (round(vx, 3), round(vy, 3)))
+                if is_hdi_cell and target_pair is not None:
+                    via_class = via_class_for_span(
+                        target_pair[0], target_pair[1], netname,
+                        is_hdi_cell=True)
+                else:
+                    via_class = 'through'
+                # If classification refused (None), stamp conservatively
+                # (full stack) as a defense-in-depth no-op — emit_to_board
+                # will have raised ValueError, so this code path is
+                # unreachable in a passing route. Defensive default kept
+                # so a future bug doesn't silently corrupt the obstacle map.
+                span_layers = (tuple(ALL_COPPER_LAYERS) if via_class is None
+                                else via_span_layers(via_class))
+                if via_class == 'blind_F_In2':
+                    via_diam = BLIND_F_IN2_DIAM_MM
+                elif via_class in ('microvia_F_In1', 'microvia_B_In8'):
+                    via_diam = HDI_VIA_DIAM_MM
+                else:
+                    via_diam = VIA_DIAM_MM
+                # v2 fix: stamp via obstacle on every copper layer in the
+                # via's barrel span (layer-aware per v8). Radius accommodates
+                # foreign-track centerline gap.
+                r = via_diam / 2 + CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM
+                for layer in span_layers:
+                    self._stamp_own_via_obstacle(vx, vy, r, layer, netname)
+                # Also mark as plane-owned by this net on every layer the
+                # via barrel reaches so a SAME-net repeat via doesn't get
+                # false-blocked (layer-aware: blind F-In2 reserves F/In1/In2
+                # only — other nets' vias can still use In3..B.Cu cells).
+                for layer in span_layers:
                     self.grid.via_plane_owners[(vi, vj)].setdefault(layer, netname)
                 # v7 (worker R22 catch #4 on v6): append to foreign_vias so
                 # hdi_via_blocked_geom sees this just-committed via when the
-                # NEXT HDI net's A* runs in this same iteration. Use the
-                # actual via diameter (HDI if applicable; standard otherwise).
-                est_diam = VIA_DIAM_MM
-                vi2, vj2 = self.grid.xy_to_ij(vx, vy)
-                if (vi2, vj2) in self.grid.hdi_via_cells:
-                    est_diam = HDI_VIA_DIAM_MM
-                self.grid.foreign_vias.append((vx, vy, est_diam, netname))
+                # NEXT HDI net's A* runs in this same iteration.
+                self.grid.foreign_vias.append((vx, vy, via_diam, netname))
         # Re-allow pad cells for THIS net (in case its own pads got stamped)
         for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(netname, []):
             for lid in layers:
