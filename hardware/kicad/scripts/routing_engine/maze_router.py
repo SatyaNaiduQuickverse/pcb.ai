@@ -136,6 +136,153 @@ VIA_CLASSES = {
 
 HDI_OUTER_PAIRS = (("F.Cu", "In1.Cu"), ("In8.Cu", "B.Cu"))
 
+
+# ─── PER-VIA-CLASS BARREL GEOMETRY (CH1 30/30 (H) engine correctness — 2026-05-28)
+# ─── Analog of cooperative router's lever F (PR #228 / refactored in PR #231).
+# ───────────────────────────────────────────────────────────────────────────────
+# THE BUG (locked by T16, fixed below):
+# Pre-fix, A* layer-change expansion treated a via candidate cell as "clear" iff
+# the trace-inflate halo (width_mm/2 + clearance_fos_mm, e.g. 0.30mm for a
+# 0.20mm trace + 0.20mm FoS) cleared every foreign body. But the actual via
+# pad+clearance the emitter later places is LARGER (through pad 0.60mm radius
+# 0.30mm + 0.20mm clearance = 0.50mm halo). So vias landed at cells the maze
+# thought were clear at 0.30mm inflate but the physical pad+clearance grazed
+# foreign copper by 0.04-0.18mm — silent shorts (worker Phase 3 final route:
+# GLB stitch via @(24.41,64.76) shorts GLA F.Cu at 0.04mm; SWDIO via
+# @(29.24,70.75) shorts LED_GPIO In2 at 0.127mm; PWM_INLA via @(32.96,68.47)
+# shorts I_TRIP_N In2 at 0.01mm — 18 total). Shorts-gate caught + worker
+# reverted; this fix lifts the cell-clearance check to the PER-VIA-CLASS
+# pad+clearance radius for via candidate cells SPECIFICALLY (track cells are
+# unchanged — they correctly use trace-inflate).
+#
+# SSoT discipline (mirrors cooperative router constants 1:1):
+# Per-class barrel diameters MUST match the cooperative router's per-class
+# constants — same physical via inventory + same JLC HDI Class 2 + OQ-020
+# BOARD_INVARIANTS source-of-truth. Cooperative router lives in
+# route_subsystem_cooperative.py and eagerly imports pcbnew; the maze MUST
+# stay pcbnew-free (see module docstring), so we MIRROR the values here with
+# an explicit cross-reference comment rather than import the cooperative
+# helper. Any change to the cooperative diameters MUST mirror here (and vice
+# versa); a future shared-constants module is the long-term SSoT, but for now
+# we cite the source explicitly. The values below are pasted from
+# route_subsystem_cooperative.py @ master HEAD 2026-05-28 (lines 407-447).
+#
+# Cross-reference: route_subsystem_cooperative.py:
+#   VIA_DIAM_MM         = 0.60   (standard through via)
+#   HDI_VIA_DIAM_MM     = 0.25   (laser-drilled adjacent microvia)
+#   BLIND_F_IN2_DIAM_MM = 0.30   (blind/buried F.Cu↔In2 via)
+THROUGH_PAD_DIAM_MM = 0.60       # SSoT mirror of cooperative VIA_DIAM_MM
+MICROVIA_PAD_DIAM_MM = 0.25      # SSoT mirror of cooperative HDI_VIA_DIAM_MM
+BLIND_F_IN2_PAD_DIAM_MM = 0.30   # SSoT mirror of cooperative BLIND_F_IN2_DIAM_MM
+
+# Maze-router class-name → barrel pad diameter (mm). The maze's catalogue of
+# class names is the abstract set in VIA_CLASSES above (`microvia`, `blind`,
+# `stacked`, `through`); for the live-board emitter SSoT we ALSO accept the
+# cooperative router's concrete class names (`microvia_F_In1`, `microvia_B_In8`,
+# `blind_F_In2`) so callers that bridge the two routers (e.g. phase_c) can
+# hand the maze the same class strings their own emitter consumes.
+#
+# Unknown class → REFUSED (returns None). Callers MUST then BLOCK the via
+# candidate (mirrors cooperative router's REFUSE semantics; defense-in-depth:
+# a future bug surfaces loudly as a missing route rather than a silent short).
+_VIA_PAD_DIAM_MM = {
+    # maze-native abstract classes
+    "through":         THROUGH_PAD_DIAM_MM,       # full-stack mechanical
+    "microvia":        MICROVIA_PAD_DIAM_MM,      # adjacent outer-skin laser
+    "stacked":         MICROVIA_PAD_DIAM_MM,      # adjacent-pair laser stack
+    "blind":           BLIND_F_IN2_PAD_DIAM_MM,   # outer-required blind drill
+    # cooperative router concrete classes (SSoT bridge)
+    "microvia_F_In1":  MICROVIA_PAD_DIAM_MM,
+    "microvia_B_In8":  MICROVIA_PAD_DIAM_MM,
+    "blind_F_In2":     BLIND_F_IN2_PAD_DIAM_MM,
+}
+
+
+def maze_via_pad_radius_mm(via_class: str) -> Optional[float]:
+    """Per-via-class PAD RADIUS (mm). The physical via pad's half-diameter.
+
+    Returns None for UNKNOWN class — callers MUST refuse the via candidate
+    (mirrors cooperative router's REFUSE semantics; the maze A* expansion
+    treats `None` as "via candidate BLOCKED, search another layer pair").
+    Defense-in-depth: a future bug (e.g. classifier drift, new HDI class
+    not registered) surfaces as a routing miss, NEVER as a silent emitted
+    via that shorts foreign copper.
+
+    SSoT: per-class diameters mirror route_subsystem_cooperative.py
+    (VIA_DIAM_MM / HDI_VIA_DIAM_MM / BLIND_F_IN2_DIAM_MM) — see the
+    PER-VIA-CLASS BARREL GEOMETRY block above for the cross-reference.
+    """
+    d = _VIA_PAD_DIAM_MM.get(via_class)
+    if d is None:
+        return None
+    return d / 2.0
+
+
+def maze_via_halo_radius_mm(via_class: str,
+                            clearance_fos_mm: float) -> Optional[float]:
+    """Per-via-class OBSTACLE HALO RADIUS (mm) = pad_radius + clearance_fos.
+
+    The via barrel's pad edge MUST clear every foreign body (on every layer
+    the barrel traverses) by ≥ clearance_fos_mm Euclidean — physics, not
+    heuristics. A* expansion uses this halo (NOT the trace-inflate halo) to
+    decide if a via candidate cell is clear. The trace-inflate halo
+    (width_mm/2 + clearance_fos_mm) is SMALLER for every sanctioned via class:
+
+      through    : 0.30 + clearance_fos  (0.50mm at default 0.20mm FoS)
+      blind      : 0.15 + clearance_fos  (0.35mm)
+      microvia   : 0.125 + clearance_fos (0.325mm)
+
+    vs. a 0.20mm trace: width/2 + clearance = 0.10 + 0.20 = 0.30mm (the
+    pre-H buggy inflate). Through pads exceeded the trace inflate by 0.20mm
+    — the GLB/SWDIO/PWM_INLA shorts at 0.01-0.18mm.
+
+    Returns None for UNKNOWN class — callers MUST refuse the via candidate
+    (see maze_via_pad_radius_mm doc for the REFUSE rationale).
+
+    SSoT: same per-class diameters as cooperative router's via_halo_radius_mm
+    (route_subsystem_cooperative.py lines 600-634); the cooperative helper
+    additionally adds a trace_half + GRID_SLOP_MM term because IT stamps
+    against FOREIGN-COPPER traces on a grid. The maze halo here is the via
+    pad-to-foreign-body MIN clearance (the physics check the shorts-gate
+    enforces): pad_radius + clearance_fos.
+    """
+    r = maze_via_pad_radius_mm(via_class)
+    if r is None:
+        return None
+    return r + clearance_fos_mm
+
+
+def maze_via_span_layers(via_class: str,
+                         from_layer: str,
+                         to_layer: str) -> Optional[Tuple[str, ...]]:
+    """Layers the via BARREL physically traverses (start..end layer inclusive).
+
+    Used by the layer-aware foreign-body check: a via must clear obstacles on
+    EVERY layer in its span — a through F.Cu↔B.Cu barrel intersects all 10
+    copper layers (including the 4 GND/+VMOTOR planes); a blind F.Cu↔In2 barrel
+    intersects F.Cu+In1.Cu+In2.Cu only; a microvia adjacent pair intersects
+    just the two layers. Foreign copper on layers OUTSIDE the span does NOT
+    block the via (mirrors cooperative router's via_span_layers — same
+    physics, same SSoT).
+
+    Returns None for an UNKNOWN class or an invalid layer pair — callers
+    REFUSE the via candidate. UNKNOWN inputs are NEVER silently fallen
+    through (the pre-fix buggy 2D halo had no such guard; it just under-
+    clearance'd and emitted).
+    """
+    if via_class not in _VIA_PAD_DIAM_MM:
+        return None
+    if from_layer not in LAYER_STACK or to_layer not in LAYER_STACK:
+        return None
+    if from_layer == to_layer:
+        return None
+    i_from = LAYER_STACK.index(from_layer)
+    i_to = LAYER_STACK.index(to_layer)
+    lo = min(i_from, i_to)
+    hi = max(i_from, i_to)
+    return tuple(LAYER_STACK[lo:hi + 1])
+
+
 # A* cost weights (the cost FUNCTION — physics-derived multipliers, not magic).
 COST_STEP_AXIS = 1.0           # 1 cell H/V hop = 1 unit of length
 COST_STEP_DIAG = math.sqrt(2)  # 45° hop = sqrt(2) units (true Euclidean)
@@ -613,6 +760,54 @@ def route(
             return False
         return True
 
+    # PER-VIA-CLASS CELL-HALO CHECK (CH1 30/30 (H) — 2026-05-28).
+    # A via candidate cell is CLEAR for via_class C iff the cell + the per-class
+    # halo (`maze_via_halo_radius_mm(C, clearance_fos_mm)`, which is pad_radius
+    # + clearance_fos) clears every APPLICABLE body obstacle on EVERY layer
+    # the via barrel traverses (`maze_via_span_layers(C, from, to)`). The
+    # trace-inflate halo (`inflate = width_mm/2 + clearance_fos`) is the WRONG
+    # check at a via cell — through pads (0.30mm radius) blow past a 0.20mm
+    # trace's 0.10mm half-width by 0.20mm, and the emitter would otherwise
+    # silently land vias at sub-clearance distance from foreign copper
+    # (worker Phase 3 GLB/SWDIO/PWM_INLA shorts repro: 18 vias @ 0.01-0.18mm).
+    #
+    # REFUSE semantics (defense-in-depth, mirrors lever F):
+    # If `via_class` is UNKNOWN (the helpers return None) we return False —
+    # the via candidate is BLOCKED, the search finds another layer pair OR
+    # reports NO-PATH. A future classifier-drift bug surfaces LOUDLY as a
+    # missing route, NEVER as a silently shorted emit. NEVER fall through.
+    def via_cell_clear(ix: int, iy: int, via_class: str,
+                       from_layer: str, to_layer: str) -> bool:
+        if ix < 0 or ix > nx or iy < 0 or iy > ny:
+            return False
+        halo = maze_via_halo_radius_mm(via_class, clearance_fos_mm)
+        if halo is None:
+            return False  # REFUSE: unknown class
+        span = maze_via_span_layers(via_class, from_layer, to_layer)
+        if span is None:
+            return False  # REFUSE: unknown class or invalid layer pair
+        px, py = point_of(ix, iy)
+        cell_x_min = px - halo
+        cell_y_min = py - halo
+        cell_x_max = px + halo
+        cell_y_max = py + halo
+        # The barrel intersects EVERY layer in span; an obstacle on ANY such
+        # layer blocks the via. Mirror of cooperative router's per-layer
+        # foreign-net clearance scan (single SSoT for the physics).
+        for o in body_obs:
+            applies = False
+            for L in span:
+                if _obstacle_applies_to_layer(o, L):
+                    applies = True
+                    break
+            if not applies:
+                continue
+            if (cell_x_max <= o.x_min or cell_x_min >= o.x_max
+                    or cell_y_max <= o.y_min or cell_y_min >= o.y_max):
+                continue
+            return False
+        return True
+
     # Endpoint cells get a permissive override: a pin sits inside its component
     # body by definition (its pad IS the body's terminal). Clearance is checked
     # against EVERY OTHER body obstacle. Without this the search can never start
@@ -769,6 +964,18 @@ def route(
             if picked is None:
                 continue
             cls_name, cls_cost = picked
+            # PER-VIA-CLASS CELL-HALO CHECK (CH1 30/30 (H) — 2026-05-28).
+            # The candidate cell must clear every foreign body on EVERY layer
+            # the via barrel traverses, by ≥ (pad_radius + clearance_fos_mm)
+            # Euclidean. Trace-inflate (the pre-fix buggy check) is the WRONG
+            # halo for via cells — it under-clearance'd by up to 0.20mm and
+            # caused the worker's Phase 3 GLB/SWDIO/PWM_INLA via shorts.
+            # REFUSE semantics: unknown class → via_cell_clear returns False
+            # (the via candidate is BLOCKED; A* finds another layer pair OR
+            # surfaces NO-PATH). NEVER silently emit a sub-clearance via.
+            if not via_cell_clear(node.ix, node.iy, cls_name,
+                                  node.layer, new_layer):
+                continue
             cost = COST_VIA_BASE + cls_cost
             new_state = (node.ix, node.iy, new_layer)
             new_g = node.g + cost
@@ -866,9 +1073,9 @@ def solve(problem) -> dict:
             expansions
     """
     # The maze router's registered cases.
-    if problem.name not in ("T13", "T15"):
+    if problem.name not in ("T13", "T15", "T16"):
         return {"verdict": "NOT-MY-CASE",
-                "rationale": f"maze_router.solve handles T13/T15 long-path "
+                "rationale": f"maze_router.solve handles T13/T15/T16 long-path "
                              f"through obstacles; got {problem.name}. Use "
                              "phase_c.solve for general dispatch."}
 
@@ -912,6 +1119,14 @@ def solve(problem) -> dict:
     if p_end.layer not in sig_layers:
         sig_layers = sig_layers + (p_end.layer,)
 
+    # Per-case knobs. T13/T15 are mm-scale long-paths (coarse grid is fine).
+    # T16 (CH1 30/30 (H) per-via-class cell-halo lockfile) is at the sub-mm
+    # scale of the trace-inflate vs via-halo delta (~0.20mm); needs a fine
+    # grid that can resolve the safe-vs-unsafe via cell distinction.
+    if problem.name == "T16":
+        grid_pitch_mm = 0.10
+    else:
+        grid_pitch_mm = 0.5
     try:
         r = route(
             start=Pin(point=(p_start.x_mm, p_start.y_mm), layer=p_start.layer),
@@ -923,7 +1138,7 @@ def solve(problem) -> dict:
             width_mm=0.20,
             clearance_fos_mm=0.20,
             expansion_cap=DEFAULT_EXPANSION_CAP,
-            grid_pitch_mm=0.5,    # coarser pitch — T13 is mm-scale, not pad-scale
+            grid_pitch_mm=grid_pitch_mm,
         )
     except NotRoutable as e:
         return {"verdict": "INFEASIBLE",

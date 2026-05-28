@@ -667,6 +667,185 @@ def test_halo_genuine_short_still_refused():
     return ok_a and ok_b
 
 
+# ─── v10 (CH1 30/30 lever I) — foreign-via actual-diam tests ──────────────
+#
+# Background: PR #227 worker symptom was "BSTB routes, 0/5 thereafter".
+# Master diagnosis (this PR) found the real cause: BoardState._collect()
+# (and the v6 foreign_vias entry in _stamp_obstacles) clamped the foreign-
+# via diameter to max(VIA_DIAM_MM=0.60, actual_width). For prior router
+# passes that emitted HDI microvias (0.25mm) or blind F-In2 vias (0.30mm)
+# at sibling-channel J18/J19 pads, the clamp inflated those vias to 0.60mm
+# for the centerline-precise hdi_via_blocked_geom check — falsely rejecting
+# legitimate adjacent HDI via placements on the canonical board.
+#
+# Fix: split into stamp_diam (cell-obstacle radius) and actual_diam (precise
+# geom check). The actual_diam is read from t.GetWidth(t.TopLayer()) without
+# max-clamp, then flows to CongestionGrid.foreign_vias[] for the precise
+# clearance check. The stamp_diam also uses actual_diam (no max-clamp) so
+# the cell-obstacle halo is sized to the real via, not an inflated fallback.
+#
+# Validation (3 tests below):
+#   (I1) foreign_vias entry diameter MATCHES via.GetWidth(top) read-back —
+#        no max-clamp drift between board state and obstacle map.
+#   (I2) hdi_via_blocked_geom against a 0.25mm foreign HDI microvia at
+#        distance D accepts when D > 0.475mm and refuses when D < 0.475mm
+#        (the correct edge-to-edge ≥ CLEARANCE_MM check at HDI diameter).
+#   (I3) hdi_via_blocked_geom against a 0.60mm foreign through-via at the
+#        same distance refuses at D ≤ 0.65mm (the through-via clearance is
+#        STILL respected — shorts-gate intact on the standard via class).
+
+def _build_synthetic_state_with_foreign_via(foreign_diam_mm, foreign_xy=(2.0, 2.5)):
+    """Build a minimal BoardState + CongestionGrid with ONE synthetic foreign
+    via injected. Returns (board, router) so callers can interrogate
+    router.grid.foreign_vias to verify the actual_diam round-trip, and call
+    router.grid.via_blocked_for_net() / hdi_via_blocked_geom() directly.
+    """
+    board = pcbnew.LoadBoard(str(PLACED_BOARD))
+    # Inject ONE synthetic foreign via at the requested coords + width.
+    # We synthesize the via on a copy of the board so the canonical .kicad_pcb
+    # is read-only (R-sim-provenance). The via is placed off the placed-board
+    # geometry (far from any pad) so it doesn't interact with real obstacles.
+    nn = "FOREIGN_NET_FOR_I_TEST"
+    net_obj = board.FindNet(nn)
+    if net_obj is None or net_obj.GetNetCode() == 0:
+        net_obj = pcbnew.NETINFO_ITEM(board, nn)
+        board.Add(net_obj)
+    fx, fy = foreign_xy
+    v = pcbnew.PCB_VIA(board)
+    v.SetPosition(pcbnew.VECTOR2I(int(fx * 1e6), int(fy * 1e6)))
+    # Set via diameter on F.Cu top layer (KiCad 9 SetWidth(layer, w)).
+    try:
+        v.SetWidth(F_CU, int(foreign_diam_mm * 1e6))
+        v.SetWidth(IN2_CU, int(foreign_diam_mm * 1e6))
+    except Exception:
+        try:
+            v.SetWidth(int(foreign_diam_mm * 1e6))
+        except Exception:
+            pass
+    v.SetDrill(int(foreign_diam_mm * 0.5 * 1e6))  # half = pad-half guess
+    if foreign_diam_mm < 0.30:
+        try: v.SetViaType(pcbnew.VIATYPE_MICROVIA)
+        except: pass
+    v.SetLayerPair(F_CU, IN2_CU)
+    v.SetNet(net_obj)
+    board.Add(v)
+    # Build a router whose subsystem zone INCLUDES the synthetic via location.
+    # CH1 zone = (0, 50, 35, 89); foreign_xy must be inside this.
+    router = rsc.CooperativeRouter(
+        board, "CH1",
+        grid_pitch=0.1,  # use grid pitch consistent with router default
+        seed_nets=["BSTB_CH1"],  # any net — we only care about grid state
+        verbose=False,
+        via_in_pad_allowed=True,
+    )
+    return board, router, (fx, fy)
+
+
+def test_lever_I_actual_diam_round_trip():
+    """(I1) foreign_vias entry diameter matches via.GetWidth — no clamp drift.
+
+    Inject a synthetic foreign HDI microvia (diam=0.25mm) into a board copy,
+    instantiate the router, look up the corresponding entry in
+    CongestionGrid.foreign_vias, assert the stored diameter is 0.25 — NOT
+    the pre-v10 0.60mm max-clamped fallback.
+
+    Also check a 0.60mm foreign through-via still stores 0.60mm (no
+    regression on standard through-via clearance — shorts-gate intact).
+    """
+    cases = [
+        # (foreign_diam_mm, expected_in_foreign_vias)
+        (0.25, 0.25),   # HDI microvia — pre-v10 clamped to 0.60mm
+        (0.30, 0.30),   # blind F-In2  — pre-v10 clamped to 0.60mm
+        (0.60, 0.60),   # standard through — was already 0.60mm
+    ]
+    ok = True
+    for (diam_in, diam_expected) in cases:
+        _, router, fxy = _build_synthetic_state_with_foreign_via(
+            foreign_diam_mm=diam_in, foreign_xy=(20.0, 70.0))
+        # Find the synthetic foreign via in router.grid.foreign_vias[]
+        match = [(x, y, d, o) for (x, y, d, o) in router.grid.foreign_vias
+                 if abs(x - 20.0) < 1e-3 and abs(y - 70.0) < 1e-3
+                 and o == "FOREIGN_NET_FOR_I_TEST"]
+        good = (len(match) == 1
+                and abs(match[0][2] - diam_expected) < 1e-3)
+        ok &= good
+        d_got = match[0][2] if match else None
+        print(f"  [{'OK' if good else 'BAD'}] (I1) foreign_vias actual diam "
+              f"injected={diam_in}mm, expected stored={diam_expected}mm, "
+              f"got={d_got}mm "
+              f"({'no clamp drift' if good else 'clamped — pre-v10 bug'})")
+    return ok
+
+
+def test_lever_I_hdi_geom_accepts_legit_microvia():
+    """(I2) hdi_via_blocked_geom accepts when the FOREIGN via is genuinely
+    a 0.25mm HDI microvia at a distance the actual (post-fix) clearance maths
+    permits but the pre-fix (over-clamped) maths refused.
+
+    Distance setup: required clearance for blind F-In2 candidate (pad_half =
+    0.30/2 = 0.15) vs foreign HDI microvia (diam = 0.25) =
+       (0.25 / 2) + 0.15 + 0.20 = 0.475mm  (post-fix, CORRECT)
+    Pre-fix maths used clamped diam = 0.60, required =
+       (0.60 / 2) + 0.15 + 0.20 = 0.650mm  (pre-fix, OVER-CONSERVATIVE)
+
+    At D = 0.50mm: post-fix margin = +0.025 (ACCEPT); pre-fix margin = −0.15
+    (REFUSE). The test injects the foreign via at exactly 0.50mm and asserts
+    ACCEPT — proves the v10 fix unblocks legitimate adjacent HDI placements.
+    """
+    fx, fy = 20.0, 70.0
+    # Candidate cell at distance 0.50mm from foreign via center.
+    cand_x, cand_y = fx + 0.50, fy
+    _, router, _ = _build_synthetic_state_with_foreign_via(
+        foreign_diam_mm=0.25, foreign_xy=(fx, fy))
+    g = router.grid
+    ci, cj = g.xy_to_ij(cand_x, cand_y)
+    span = list(rsc.via_span_layers('blind_F_In2'))
+    blk, reason = g.hdi_via_blocked_geom(
+        ci, cj, netname="BSTB_CH1", span_layers=span,
+        via_class='blind_F_In2')
+    # Expect ACCEPT (not blocked) — the synthetic foreign 0.25mm microvia
+    # at 0.50mm is OUTSIDE the post-fix 0.475mm halo.
+    ok = (not blk)
+    print(f"  [{'OK' if ok else 'BAD'}] (I2) blind_F_In2 candidate at "
+          f"D=0.50mm from foreign 0.25mm microvia: "
+          f"blocked={blk} reason={reason!r} "
+          f"(post-fix required=0.475mm; ACCEPT correct; pre-fix would "
+          f"have rejected at clamped required=0.650mm)")
+    return ok
+
+
+def test_lever_I_hdi_geom_refuses_real_through_short():
+    """(I3) Shorts-gate intact: a 0.60mm foreign THROUGH via at the same
+    0.50mm distance is correctly REFUSED — the actual_diam fix does NOT
+    relax legitimate through-via clearances.
+
+    Required for blind_F_In2 candidate (pad_half=0.15) vs foreign 0.60mm:
+       (0.60/2) + 0.15 + 0.20 = 0.650mm  — distance 0.50mm < 0.650 → BLOCK.
+
+    This proves the v10 fix is per-class precise: small foreign vias get
+    smaller halos (legit acceptance), big foreign vias keep their full halo
+    (shorts-gate intact). Together with (I1) + (I2) this is the symmetric
+    test of the fix.
+    """
+    fx, fy = 20.0, 70.0
+    cand_x, cand_y = fx + 0.50, fy
+    _, router, _ = _build_synthetic_state_with_foreign_via(
+        foreign_diam_mm=0.60, foreign_xy=(fx, fy))
+    g = router.grid
+    ci, cj = g.xy_to_ij(cand_x, cand_y)
+    span = list(rsc.via_span_layers('blind_F_In2'))
+    blk, reason = g.hdi_via_blocked_geom(
+        ci, cj, netname="BSTB_CH1", span_layers=span,
+        via_class='blind_F_In2')
+    ok = blk
+    print(f"  [{'OK' if ok else 'BAD'}] (I3) blind_F_In2 candidate at "
+          f"D=0.50mm from foreign 0.60mm THROUGH via: "
+          f"blocked={blk} reason={reason!r} "
+          f"(required=0.650mm; REFUSE correct — shorts-gate intact, "
+          f"no through-via clearance relaxation)")
+    return ok
+
+
 def main():
     if not PLACED_BOARD.exists():
         print(f"FAIL: board {PLACED_BOARD} not found")
@@ -674,6 +853,7 @@ def main():
     print("=" * 72)
     print("test_emit_blind_f_in2 — synthetic OQ-020 EMITTER patch (v8)")
     print("                       + v9 per-via-class halo radius (CH1 30/30 F)")
+    print("                       + v10 foreign-via actual-diam (CH1 30/30 I)")
     print(f"  board: {PLACED_BOARD}")
     print(f"  audit: {HERE / 'audit_hdi_via_in_pad.py'}")
     print("=" * 72)
@@ -700,6 +880,13 @@ def main():
                     test_halo_per_class_via_placement_scenario()))
     results.append(("(F5) shorts-gate intact (negative)",
                     test_halo_genuine_short_still_refused()))
+    # v10 (CH1 30/30 I) foreign-via actual-diameter (no max-clamp) tests.
+    results.append(("(I1) foreign_vias actual diam round-trip",
+                    test_lever_I_actual_diam_round_trip()))
+    results.append(("(I2) hdi_geom accepts legit microvia at 0.50mm",
+                    test_lever_I_hdi_geom_accepts_legit_microvia()))
+    results.append(("(I3) hdi_geom refuses real through short (shorts-gate intact)",
+                    test_lever_I_hdi_geom_refuses_real_through_short()))
     print("=" * 72)
     n_pass = sum(1 for (_, p) in results if p)
     n = len(results)
@@ -711,12 +898,19 @@ def main():
               f"2026-05-28 lever D + 2026-05-28 lever G) correctly emits "
               f"BLIND_BURIED F.Cu↔In2 for all 6 whitelist nets at all 8 "
               f"sanctioned landings, REFUSES non-whitelist spans, preserves "
-              f"existing via classes, AND v9 per-via-class halo (CH1 30/30 F) "
+              f"existing via classes, v9 per-via-class halo (CH1 30/30 F) "
               f"correctly admits HDI vias the through halo would over-reject "
-              f"without weakening shorts-gate semantics.")
+              f"without weakening shorts-gate semantics, AND v10 foreign-via "
+              f"actual-diameter (CH1 30/30 I, this PR) correctly threads the "
+              f"TRUE foreign HDI microvia/blind diameter into the centerline-"
+              f"precise hdi_via_blocked_geom check — fixing the pre-v10 "
+              f"max(VIA_DIAM_MM, actual) over-clamp that falsely rejected "
+              f"legitimate adjacent HDI via placements (the worker-empirical "
+              f"'BSTB routes, 0/5 thereafter' symptom; PR #227 diagnosis).")
         return 0
-    print(f"RESULT: FAIL — {n_pass}/{n} tests pass; OQ-020 EMITTER (v8) or "
-          f"v9 halo per-class has regressions; see [BAD] lines above.")
+    print(f"RESULT: FAIL — {n_pass}/{n} tests pass; OQ-020 EMITTER (v8), "
+          f"v9 halo per-class, or v10 foreign-via actual-diam has "
+          f"regressions; see [BAD] lines above.")
     return 1
 
 

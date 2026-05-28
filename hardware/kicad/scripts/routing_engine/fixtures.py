@@ -1936,6 +1936,286 @@ _BUILDERS = [
 _BUILDERS.append(_build_T15)
 
 
+# ----------------------------------------------------------------------------
+# T16 — MAZE VIA-CELL-HALO PER-CLASS (stretch). Appended 2026-05-28 to lock
+# the CH1 30/30 lever (H) engine-correctness fix: the maze router's A* via
+# candidate cell-clearance check MUST use the PER-VIA-CLASS pad halo
+# (pad_radius + clearance_fos), NOT the trace-inflate halo (trace/2 +
+# clearance_fos). Through-via pads (0.30mm radius) blow past a 0.20mm trace's
+# 0.10mm half-width; pre-fix the maze emitted vias at cells the trace-inflate
+# said were clear at 0.30mm but the actual pad+clearance landed 0.04-0.18mm
+# from foreign copper (worker Phase 3 final route: GLB stitch shorts GLA
+# F.Cu at 0.04mm, SWDIO shorts LED_GPIO In2 at 0.127mm, PWM_INLA shorts
+# I_TRIP_N In2 at 0.01mm — 18 total shorts caught by shorts-gate + worker
+# reverted canonical). T16 is the engine-level lockfile. APPEND-ONLY:
+# T1-T15 unchanged.
+# ----------------------------------------------------------------------------
+
+def _build_T16():
+    """T16 — MAZE VIA-CELL-HALO PER-CLASS (stretch).
+    The CH1 30/30 (H) engine-correctness fixture (2026-05-28; the maze
+    router's A* layer-change expansion gains a per-via-class cell-halo
+    check — `maze_via_halo_radius_mm(via_class, clearance_fos_mm)` ≥
+    pad_radius + clearance_fos, instead of the buggy trace-inflate
+    width/2 + clearance_fos — applied across EVERY layer the via barrel
+    physically traverses via `maze_via_span_layers`).
+
+    THE BUG CLASS:
+    Pre-fix, `maze_router.route` evaluated a via candidate cell with the
+    same `cell_clear(ix, iy)` test used for same-layer track cells —
+    inflate = width/2 + clearance_fos (e.g. 0.30mm for a 0.20mm trace +
+    0.20mm FoS). That inflate is CORRECT for a track sweep but WRONG for
+    a via emit: the physical via pad is LARGER. JLC sanctioned via
+    classes (BOARD_INVARIANTS §HDI Class 2 + OQ-020):
+      through   : pad diam 0.60mm → halo 0.30 + 0.20 = 0.50mm
+      blind     : pad diam 0.30mm → halo 0.15 + 0.20 = 0.35mm
+      microvia  : pad diam 0.25mm → halo 0.125 + 0.20 = 0.325mm
+    All three exceed the 0.30mm trace-inflate. Worker's Phase 3 final
+    route empirically witnessed it: 3 maze routes (SWDIO, GLB, PWM_INLA)
+    were "routable" at cell-grid level but emitted 18 NEW shorts when
+    the vias landed — shorts-gate caught them and the worker REVERTED
+    canonical (safe behaviour). T16 is the fixture that catches the bug
+    class at the engine level (no live-board emit needed; the maze
+    itself reports verdict that distinguishes buggy from fixed).
+
+    CONSTRUCTION (smallest faithful reproduction — provable by hand):
+      * STACKUP: F.Cu signal, In2.Cu signal.
+      * 1 NET: LP from S=(0, 5, F.Cu) to E=(10, 5, In2.Cu). The layer
+        difference FORCES a via somewhere on the route.
+      * 1 OBSTACLE: `FOREIGN_IN2` at x in [10.32, 11.0], y in [3.0, 7.0],
+        on `layers={"In2.Cu"}` ONLY. It sits 0.32mm RIGHT of the E pin
+        (which is on In2.Cu). Distance from any cell at (x_via, 5) to the
+        body's nearest edge = max(0, 10.32 - x_via).
+        - trace-inflate (BUGGY check) at via cell: 0.30mm. Cell at x≥10.02
+          is "clear" (trace half-width fits in the 0.32mm gap with 0.02mm
+          slack). The END pin cell at (10, 5) passes the buggy check by
+          0.02mm.
+        - per-class halo (FIXED check):
+            through halo 0.50mm → cell at (10, 5) FAILS by 0.18mm.
+            blind halo 0.35mm   → cell at (10, 5) FAILS by 0.03mm.
+            microvia halo 0.325mm → cell at (10, 5) FAILS by 0.005mm.
+          ALL sanctioned via classes refuse the (10, 5) cell. The maze
+          must place the via at a SAFE cell — the rightmost cell that
+          clears the through halo by ≥0 is x_via = 10.32 - 0.50 = 9.82mm
+          (snapped to grid 0.10mm: 9.80mm). The witness route is then:
+            F.Cu (0,5) → (9.80, 5), via through @ (9.80, 5),
+            In2.Cu (9.80, 5) → (10, 5).
+
+    WHY THIS IS THE EXACT WORKER-WITNESSED CASE:
+    Worker's Phase 3 shorts (GLB stitch via @(24.41,64.76) shorts GLA
+    F.Cu at 0.04mm; SWDIO via @(29.24,70.75) shorts LED_GPIO In2 at
+    0.127mm; PWM_INLA via @(32.96,68.47) shorts I_TRIP_N In2 at 0.01mm)
+    all fit the same shape: a candidate via cell that the trace-inflate
+    said was clear, where the emitted pad+clearance landed sub-clearance.
+    T16's 0.32mm body gap reproduces that geometry: 0.32mm > 0.30mm
+    (passes trace-inflate, the buggy check) AND 0.32mm < 0.50mm
+    (fails through-halo, the physics check). Same root cause; same fix
+    surface area; T16 is the bug-distinguishing fixture.
+
+    GROUND TRUTH (re-derivable by hand, no solver):
+      verdict = ROUTABLE under per-class halo (the FIX).
+      Witness path: F.Cu (0,5) → (9.80, 5) → via through →
+                    In2.Cu (9.80, 5) → (10, 5).
+      witness_length_mm = 9.80 + 0.20 = 10.00mm (the In2.Cu hop is the
+                          0.20mm tail past the via).
+      witness_n_corners = 0   (single straight F.Cu segment + via + single
+                                straight In2.Cu segment).
+      max_n_vias = 1          (one layer change).
+      via_via_class = 'through'   (the only allowed_via_classes used).
+      via_clearance_at_emit_mm = 0.52mm   (10.32 - 9.80 = 0.52 ≥ 0.50
+                                            through halo — CLEAR by 0.02mm).
+
+    BUG-WITNESS (re-derivable by hand, no solver):
+      The BUGGY 2D-via-halo liar uses trace-inflate (0.30mm) for via
+      cells. Cell at (10, 5) passes by 0.02mm. The maze HAPPILY emits a
+      through-via at (10, 5). PHYSICAL pad+clearance halo = 0.50mm; at
+      0.32mm distance from body, the pad+clearance lands 0.18mm INSIDE
+      the foreign body → SHORT. Verdict = "ROUTABLE-BUT-SHORTS" (the
+      maze claims routable, shorts-gate downstream catches the emit at
+      0.18mm sub-clearance and rejects). The PER-CLASS halo (the fix)
+      refuses the (10, 5) cell + every cell at x ∈ (9.82, 10.32], so
+      the via must land at x ≤ 9.82 (the safe cell at 9.80 above).
+
+    SELF-CHECK DEMONSTRATES (6 assertions):
+      (a) the obstacle's `layers` field is set to {"In2.Cu"} (the
+          per-layer filter the fix relies on is exercised);
+      (b) the witness path's endpoints match the pin coords on the
+          correct layers (F.Cu start, In2.Cu end);
+      (c) the witness via at x=9.80 clears the body by 0.52mm Euclidean
+          (through halo 0.50mm — safe by 0.02mm), AND a buggy 2D-halo
+          via at x=10.00 would short by 0.18mm (the bug class is real);
+      (d) every witness segment clears every per-layer-applicable body
+          (F.Cu segment trivially; In2.Cu segment by ≥0.30mm at the
+          tail);
+      (e) under a 2D-VIA-HALO LIAR simulation (force via halo =
+          trace-inflate 0.30mm) the maze WOULD emit a through-via at
+          (10, 5) and SHORT — proving the bug class is REAL on this
+          fixture and a regression to trace-inflate via cells would
+          FAIL T16 on the shorts-gate downstream;
+      (f) INVOKES `maze_router.solve` DIRECTLY and asserts the engine
+          emits verdict=ROUTABLE, routed=1, n_vias=1 with a via whose
+          XY position clears every In2.Cu-applicable body by ≥ the
+          per-class halo (the engine wires the fix end-to-end).
+    """
+    # 2 signal layers: F.Cu (the start layer) and In2.Cu (the end layer).
+    # The pin layer mismatch forces a via somewhere on the route.
+    layers = (
+        Layer("F.Cu", "signal"),
+        Layer("In2.Cu", "signal"),
+    )
+    pins = [
+        Pin("LP_S", 0.0, 5.0, "F.Cu"),
+        Pin("LP_E", 10.0, 5.0, "In2.Cu"),
+    ]
+    nets = [Net("LP", ("LP_S", "LP_E"), "signal")]
+    # 2 PER-LAYER body keep-outs, both on In2.Cu ONLY (the per-layer filter
+    # from lever E correctly skips them on F.Cu — same physics chain).
+    #
+    # FOREIGN_IN2 (the lever (H) bug-witness body): sits 0.32mm to the right
+    # of pin E. The 0.32mm gap is the EXACT shape worker's Phase 3 GLB/SWDIO/
+    # PWM_INLA shorts had: passes the buggy trace-inflate check (0.30mm) by
+    # 0.02mm of slack but fails every sanctioned per-class via halo (through
+    # 0.50, blind 0.35, microvia 0.325). The maze must place the via at a
+    # SAFE cell at x ≤ 9.82 (the witness via at x=9.80).
+    #
+    # DISPATCH_BODY (forces phase_c.classify() to dispatch this fixture to
+    # the MAZE branch): the In2.Cu-only body's xy footprint must intersect
+    # the direct S→E 2D line (phase_c's `_direct_line_through_body` check
+    # is 2D-only; it doesn't read Obstacle.layers — by design, dispatch is
+    # a SHAPE classifier not a physics check). Placed at x∈[4.5,5.5],
+    # y∈[3,7] so the direct line at y=5 crosses it. The body is on In2.Cu
+    # ONLY so the F.Cu portion of the route correctly skips it (lever E
+    # filter); the In2.Cu portion of the witness route is from the safe
+    # via cell (x=9.80) to pin E (x=10) — does NOT pass through the
+    # dispatch body's x-band (4.5..5.5), so the In2.Cu tail is clear.
+    obstacles = (
+        Obstacle("FOREIGN_IN2", 10.32, 3.0, 11.0, 7.0,
+                 kind="body",
+                 layers=frozenset({"In2.Cu"})),
+        Obstacle("DISPATCH_BODY", 4.5, 3.0, 5.5, 7.0,
+                 kind="body",
+                 layers=frozenset({"In2.Cu"})),
+    )
+    # Witness path: F.Cu (0,5) → (9.80, 5), via through, In2.Cu (9.80, 5) → (10, 5).
+    # The via at x=9.80 clears the body's x_min=10.32 by 0.52mm — safe by
+    # 0.02mm over the through-via halo (0.50mm).
+    witness_via_x = 9.80
+    witness_via_y = 5.0
+    witness_path = [(0.0, 5.0), (witness_via_x, witness_via_y),
+                    (10.0, 5.0)]
+    # Path length = horizontal F.Cu run + horizontal In2.Cu tail. The via at
+    # the bend point has zero length contribution (it is a layer change at
+    # the same xy).
+    witness_length = ((witness_via_x - 0.0) + (10.0 - witness_via_x))  # = 10.0
+    # Buggy 2D-halo via at the END pin cell (x=10): pad+clearance 0.50mm
+    # extends into body 0.18mm. That is the SHORT the lever (H) fix prevents.
+    buggy_via_x = 10.0
+    buggy_via_clearance = 10.32 - buggy_via_x  # = 0.32 mm (< 0.50mm halo)
+    buggy_via_short_mm = 0.50 - buggy_via_clearance  # = 0.18 mm SHORT
+    # Safe via at x=9.80 (the witness): pad+clearance 0.50mm leaves 0.02mm slack.
+    safe_via_clearance = 10.32 - witness_via_x  # = 0.52 mm (>= 0.50mm halo)
+    safe_via_slack_mm = safe_via_clearance - 0.50  # = 0.02 mm SLACK
+    trace_w = 0.20
+    clearance = 0.20
+    through_halo_mm = 0.60 / 2.0 + clearance     # 0.50
+    blind_halo_mm = 0.30 / 2.0 + clearance        # 0.35
+    microvia_halo_mm = 0.25 / 2.0 + clearance     # 0.325
+    trace_inflate_mm = trace_w / 2.0 + clearance  # 0.30 — the BUGGY check
+    gt = GroundTruth(
+        verdict="ROUTABLE",
+        metrics={
+            "routed": 1,
+            "min_length_mm": 10.0,
+            "witness_length_mm": round(witness_length, 4),
+            "witness_n_corners": 0,
+            "max_n_vias": 1,
+            # The body gap distance from the worker's witnessed shorts shape:
+            # 0.32mm passes trace-inflate (0.30) by 0.02 — the bug surface.
+            "body_gap_to_end_pin_mm": 0.32,
+            "trace_inflate_halo_mm": round(trace_inflate_mm, 4),
+            "through_halo_mm": round(through_halo_mm, 4),
+            "blind_halo_mm": round(blind_halo_mm, 4),
+            "microvia_halo_mm": round(microvia_halo_mm, 4),
+            # The buggy via emit (the lever (H) bug class):
+            "buggy_via_x_mm": buggy_via_x,
+            "buggy_via_clearance_to_body_mm": round(buggy_via_clearance, 4),
+            "buggy_via_short_mm": round(buggy_via_short_mm, 4),    # 0.18 mm short
+            # The safe via emit (the witness; lever (H) fix):
+            "safe_via_x_mm": witness_via_x,
+            "safe_via_clearance_to_body_mm": round(safe_via_clearance, 4),
+            "safe_via_slack_mm": round(safe_via_slack_mm, 4),       # 0.02 mm slack
+            # Under a 2D-VIA-HALO LIAR (uses trace-inflate for via cells) the
+            # maze would emit a through-via at the END pin cell and short:
+            "liar_verdict": "ROUTABLE-BUT-SHORTS",
+        },
+        witness={
+            "path": witness_path,
+            "layers_in_order": ["F.Cu", "In2.Cu"],  # before-via / after-via
+            "via_at": [witness_via_x, witness_via_y],
+            "via_class": "through",
+            "trace_width_mm": trace_w,
+            "clearance_mm": clearance,
+            "per_via_class_halo_applied": True,
+        },
+        conditional_on=None,
+        alt_verdict=None,
+        alt_metrics={},
+        alt_witness={},
+    )
+    proof = (
+        "T16 (MAZE VIA-CELL-HALO PER-CLASS; the CH1 30/30 (H) engine-"
+        "correctness lockfile; analog of cooperative router lever F). "
+        "Stackup: F.Cu signal, In2.Cu signal. ONE net LP: F.Cu (0,5) → "
+        "In2.Cu (10,5) — layer-change FORCES a via. ONE body obstacle "
+        "FOREIGN_IN2 on In2.Cu ONLY at x∈[10.32,11.0], y∈[3,7] — sits "
+        "0.32mm right of pin E. The 0.32mm gap reproduces the EXACT bug "
+        "class of worker's Phase 3 shorts (GLB/SWDIO/PWM_INLA at 0.01-"
+        "0.18mm sub-clearance): passes the BUGGY trace-inflate via-cell "
+        "check (0.30mm) by 0.02mm slack BUT fails EVERY sanctioned "
+        f"per-class via halo (through {through_halo_mm}, blind "
+        f"{blind_halo_mm}, microvia {microvia_halo_mm}). The PER-CLASS "
+        "halo (the fix) refuses the END pin cell + every cell at "
+        f"x∈(9.82,10.32]; the maze places the via at x={witness_via_x} "
+        f"(safe by {safe_via_slack_mm}mm over through halo). Witness "
+        f"path: F.Cu (0,5)→({witness_via_x},5)→via through→In2.Cu "
+        f"({witness_via_x},5)→(10,5); length {witness_length}mm, 0 "
+        "bends, 1 via. Self-check (a) asserts the per-layer field is "
+        "exercised; (b) endpoints match pins on correct layers; (c) "
+        f"the witness via clears body by {safe_via_clearance}mm (>= "
+        f"through halo {through_halo_mm}); (d) every witness leg "
+        "clears every per-layer-applicable body by >= (trace/2 + "
+        f"clearance) = {trace_inflate_mm}mm Euclidean; (e) under a "
+        "2D-VIA-HALO LIAR (force via halo = trace-inflate) the maze "
+        f"would emit a through-via at x={buggy_via_x} that shorts the "
+        f"body by {buggy_via_short_mm}mm — proving the bug class is "
+        "real and a regression to trace-inflate via cells FAILS T16; "
+        "(f) INVOKES `maze_router.solve` DIRECTLY and asserts the "
+        "engine emits verdict=ROUTABLE, routed=1, n_vias=1 with a via "
+        "whose XY position clears every In2.Cu-applicable body by >= "
+        "the per-class halo (engine wires the fix end-to-end)."
+    )
+    return Fixture("T16",
+                   "maze per-via-class cell halo (engine correctness; "
+                   "CH1 30/30 (H) lockfile)",
+                   "stretch",
+                   "maze_router A* via candidate cell-clearance uses the "
+                   "PER-VIA-CLASS pad halo (pad_radius + clearance_fos), "
+                   "NOT the trace-inflate (trace/2 + clearance_fos), "
+                   "across EVERY layer the via barrel traverses. The "
+                   "trace-inflate halo silently under-clearance'd via "
+                   "emits by up to 0.20mm (worker Phase 3 GLB/SWDIO/"
+                   "PWM_INLA shorts); T16 is the bug-distinguishing "
+                   "fixture.",
+                   layers, tuple(pins), tuple(nets), (), obstacles, (),
+                   gt, proof)
+
+
+# APPEND-ONLY: T16 — maze per-via-class cell halo (CH1 30/30 (H) engine
+# correctness lockfile; 2026-05-28). Appended via `.append(...)` so the
+# T1-T15 lines above stay byte-identical (diff-stat: only NEW lines).
+_BUILDERS.append(_build_T16)
+
+
 def all_fixtures():
     """Return the registered fixtures in case-number order (T1..T14)."""
     return [b() for b in _BUILDERS]
