@@ -2,7 +2,7 @@
 
 **Single source of truth.** All routing scripts read from this.
 
-Hash: ROUTING_METHODOLOGY_HASH = (TBD)
+**Hash**: see bottom (ROUTING_METHODOLOGY_HASH); change requires explicit PR tagged `[methodology-change]`.
 
 ---
 
@@ -15,6 +15,77 @@ Per Henry Ott *EMC Engineering*, Lee Ritchey *Right the First Time*, Eric Bogati
 > Pick topology BEFORE drawing geometry; geometry implements topology.
 
 Per `[[feedback-build-routing-system-not-freerouter]]` + `[[feedback-sureshot-over-sota]]`: this is a deterministic constraint-manager-style router, NOT Freerouter random search.
+
+---
+
+## 0b. Global→Detailed Architecture (Phases A/B/C) — the engine wrapper around the 6 tiers
+
+> **Added 2026-05-28** per master locked decisions after the CH1 24/30 plateau diagnosis (`DEEP_RESEARCH_2026-05-28_ROUTING_METHODOLOGY.md`). This section is the **engine architecture**; §1–§9 below are its **detailed-phase ordering** (they describe Phase C's per-tier discipline). The two are reconciled, not competing: the 6 tiers are *what to route in what physics-priority order*; Phases A/B/C are *how the engine decides feasibility and region assignment before any geometry is drawn*. **The companion build+validation plan is `docs/ROUTING_ENGINE_DESIGN_2026-05-28.md` (T1–T9 suite + build sequence + SURESHOT/HEURISTIC ledger); this section is the methodology, that doc is the plan — no duplication.**
+
+### Root cause being fixed
+
+Per the canonical VLSI flow (Sherwani Ch. 7–11; Sait & Youssef Ch. 5; Kahng/Lienig/Markov/Hu *VLSI Physical Design* Ch. 5–6), routing is **GLOBAL routing** (assign nets to a sequence of capacity-limited regions; decide WHERE) → **DETAILED routing** (assign exact tracks/vias inside each region; decide HOW). Our v1→v8 cooperative router (`MASTER_COOP_ROUTER.md`) is **pure detailed routing with no global phase**: greedy MST + per-edge A*, committing geometry net-by-net. Early nets consume the shared scarce escape-via resource at J18/J19, and by net ~25 the supply is exhausted → the 24/30 plateau. This is the textbook order-dependent greedy failure mode (Sherwani: maze routing is order-dependent and needs global pre-planning). The engine adds the missing two-thirds.
+
+### PHASE A — Capacity + Escape pre-check (NEW, SURESHOT, deterministic counting — not search)
+
+Computed UP FRONT, before any geometry, on a routing-resource graph (gcells per signal layer In2/In4/In6/In8/F/B; GND In1/In3/In7 + +VMOTOR In5 excluded — they are reference/PDN, matching `SKIP_NET_PATTERNS`). Subsystem zones (`BOARD_INVARIANTS.md` §Subsystem zones) are coarse regions; highway reservations (`BOARD_INVARIANTS.md` §Highway reservations) are **zero-capacity edges for foreign nets**.
+
+1. **Per-edge capacity** = (boundary length) ÷ (track pitch = trace width + clearance) summed over available layers in the preferred direction. **Demand** = nets the current plan routes across that edge. **Overflow** = max(0, demand − capacity). Metrics: Total Overflow / Max Overflow (ISPD-2008 convention — any overflow is strictly inferior regardless of wirelength).
+2. **Per-IC-side pin-escape demand-vs-supply ledger** for every fine-pitch IC (`BOARD_INVARIANTS.md` HDI whitelist J18 QFN-32, J19 HVQFN-24, both 0.5mm pitch). Per package side, per signal layer:
+   - **Supply** = boundary-segment÷track-pitch + via-slot count (via sites that fit the fanout band at via keep-out spacing).
+   - **Demand** = nets that must escape that side (from netlist + pin-face assignment).
+3. **Verdict** (deterministic, provable): `ROUTABLE` / `NEEDS-HDI` / `NEEDS-PLACEMENT-CHANGE` / `INFEASIBLE`. If not `ROUTABLE`, **STOP and report up front** — do NOT route blind. This is the gate that would have flagged "J18/J19 needs HDI" on day one instead of after v1→v8 (`DEEP_RESEARCH_2026-05-28` §1.2; `[[reference-qfn-pin-escape-bottleneck]]`).
+
+**Escalation order when not ROUTABLE** (per `DEEP_RESEARCH_2026-05-26_J18_J19_ESCAPE.md` capacity-vs-escape-density decision table + 2026-05-28 diagnosis correction): (1) HDI via-in-pad — reclaims the dog-bone fanout band, the operative J18/J19 fix; (2) placement change — redistribute pins across sides; (3) package change (QFN-32→LQFP-48, future SKU); (4) more layers — **only** when failure is board-wide channel congestion, NOT pin-ring saturation. Binding classification rule: single-net isolation test on stuck nets first — fine-pitch-IC failure in isolation = escape density (HDI/fanout), board-wide congestion = layers. Grounding: BGA/QFN ordered-escape literature (Yan & Wong SAT; dual-node network-flow ILP, PMC8056246 ~99.9% routability; ISQED'24 multilayer ordered escape).
+
+SI hard constraints (§9, the §0c-referenced hard-constraint set) enter Phase A as graph constraints, not post-hoc DRC: plane-continuity = forbidden edges across splits; return-adjacency = layer pinning.
+
+### PHASE B — Global plan + DOORS + topology (NEW, generic graph)
+
+A **generic graph** model (Sai-locked: build it generic from the start even if slower — `[[feedback-sureshot-over-sota]]` verifiability over speed). Nodes = pins / door-ports / via-sites / corridor-junctions. Edges = corridor supply (capacity) + net demand.
+
+**DOORS are first-class objects** = corridor cross-sections, each declaring `{id, coord, width, layer-set, capacity, passes(net/net-group)}`:
+- **Board-edge / inter-subsystem doors ARE the `BOARD_INVARIANTS.md` Subsystem I/O ports** (e.g. S6→CH1 at (17,82) 2mm; S2→CH1 +VMOTOR at (40,50) 4mm) — referenced, not redefined.
+- **Interior doors** = channel mouths between component clusters + highway entries (`BOARD_INVARIANTS.md` Highway reservations).
+
+The global router (Phase B):
+1. Assigns nets to corridors **with capacity headroom** (never to 100% — see §F FoS-on-routing-process; the root-cause fix for the 24/30 corner-paint).
+2. **Orders nets through each door** (net-ordering / topology-before-geometry, rubber-band / VCG style — Ritchey "topology before geometry" made algorithmic; Dai/Dayan SURF rubber-band sketch). Door capacity + planarity verified BEFORE geometry exists.
+3. **Pre-assigns via slots** for sibling escapes (the `MASTER_COOP_ROUTER.md` "multi-net joint A*" gap-fix), so siblings don't fight over the same via.
+4. **Layer assignment** under the fixed `LAYER_PREF` table (`MASTER_COOP_ROUTER.md` v5: BEMF→In4, PWM/CSA→In2, control→In8, SW→In6); minimize vias *within* those constraints (each layer change = full-stack through-via = SI discontinuity + the v2 +46-shorts hazard).
+
+Parametric → cheap re-iteration + visible conflicts: overflow is resolved at region level (flip a region assignment, microseconds), NOT by ripping committed copper and re-running A* (the expensive thing v8 does — 97 rips / 45 iters). Emits per-net region path + layer + via slots + ordering, all CERTIFIED feasible by Phase A capacity. If a region overflows and no reassignment fixes it → kick back to Phase A escalation.
+
+### PHASE C — Detailed fill (EXISTS — `route_subsystem_cooperative.py`, demoted)
+
+The v8 PathFinder negotiated-congestion router (`MASTER_COOP_ROUTER.md`) is KEPT as the **detailed-phase primitive within a feasible region handed down by Phase B** — demoted from "the router" to "the region filler." Everything it does well carries forward: full-stack via validation (v2/v7), per-net-class layer-pref bias (v5), `--no-rip-routed` multi-pass preserve (v4), HDI via-in-pad on the J18/J19 whitelist (v6/v7), MST-completion safety net + union-find connectivity verify (v3). The §1–§9 tier ordering below governs Phase C's per-region discipline (Tier 1 PDN first … Tier 6 bulk last).
+
+### A* usage (Sai-locked)
+
+A* lives **ONLY in Phase C**, confined to the bounded region Phase B hands down, expansion-capped. NEVER the global mechanism (global A* = autorouter mess; maze search has no capacity awareness, is order-dependent — Lee 1961 / Hart-Nilsson-Raphael 1968; Sherwani warning). Discipline: (1) bound the search to the gcell box; (2) cap expansions — over-budget ⇒ kick back to Phase B, do not thrash; (3) use the Phase-B congestion map as the A* cost field; (4) consume Phase-B pre-assigned via slots; (5) keep the existing 8-connected + axis-cell-passable diagonal discipline + post-collapse Bresenham validation. Our A* is fine as a primitive; the defect was letting it BE the router.
+
+### SURESHOT vs HEURISTIC split (Sai-locked, `[[feedback-sureshot-over-sota]]`)
+
+**Lead with SURESHOT** (deterministic, provable): escape demand/supply pre-check; left-edge channel routing on acyclic VCG; river routing (order-preserving, no-cross); layer-assignment verdict; cyclic-VCG / density-lower-bound detection; bounded ILP/SAT escape (optimal-or-infeasibility-certificate on one IC's one side). **Gate HEURISTIC behind the T1–T9 ground-truth tests**: net ordering (most-constrained-first / criticality-first); PathFinder negotiated congestion; rubber-band topology refine / shove; global rip-up; constrained via minimization. The full ledger lives in `docs/ROUTING_ENGINE_DESIGN_2026-05-28.md` §SURESHOT/HEURISTIC inventory.
+
+### SOTA via SIM-INTELLIGENCE (the differentiator)
+
+Classical routers optimize abstract overflow counts with pure logic. OURS puts REAL physics sims in the decision loop — net ordering, where to spend geometric complexity, when to escalate to HDI, and congestion negotiation are all informed by actual SI / thermal / loop-L sim results (commutation loop-L 0.1953nH/phase, BEMF crosstalk, current-density). Two-tier:
+- **Proxy-sim** (fast analytical inner loop): `physics_primitives.py` closed-form (IPC-2152 ampacity, Hammerstad-Jensen Z0, crosstalk_db, via thermal R) — cheap, drives the cost field and ordering. NOT a binding verdict.
+- **STRONG-sim** (openEMS / Elmer / ngspice): the ONLY binding verdict, NO cutting. Gated by the existing **sim-execution-gate** (`[[feedback-sim-execution-gate]]`, R18): result-file present + mtime > input mtime + extract-script output + literal exec command + git-SHA-reproducible against the canonical board (`[[feedback-sim-artifact-must-be-canonical]]`). A proxy-sim disagreeing with a strong-sim by >tolerance writes a proposed lesson (`ROUTING_LESSONS.md`); the strong-sim governs.
+
+### Anti-drift discipline (ported from the placement engine)
+
+- **Parametric `RoutingParameters` SSoT + `routing_topology.yaml` lockfile**; live `.kicad_pcb` is the source of truth, NEVER module numbers (`[[reference-parametric-placement-desync-trap]]`), bridged by a compliance gate (the placement analogue is `audit_parametric_compliance.py`).
+- **Routing RULES_MANIFEST 3-artifact contract** (fix script + audit gate + master-verified) per R29/R30.
+- **Routing gate taxonomy by class**, reusing `master_pre_merge.sh`'s `run_gate` harness.
+- **Two-sided meta-integrity**: named-gate-exists-on-disk (`audit_meta.py`) + every-gate-wired-or-deferred (`audit_meta_coverage.py`, G_META1).
+- **Sim-execution + provenance + sanity gates** (`audit_sim_execution.py`, `audit_sim_artifact_provenance.py`, `audit_sim_result_sanity.py`).
+- **CH1 is the route template; CH2/3/4 are PURE transforms** (mirror_X / mirror_Y per `BOARD_INVARIANTS.md` §Symmetry pairs + §mirror_primitive), never hand-laid (R19; `[[feedback-symmetry-preserves-work]]`; L2). The global plan must be mirror-consistent.
+
+### Honest gaps (carried from `DEEP_RESEARCH_2026-05-28` §13)
+
+Classical channel/river theory ports as PARADIGM not literal algorithm (we are 10L not row-based); HDI micro-via stacks are barely in VLSI literature (our full-stack-via discipline is MORE specialized than textbooks); SI constraints are HARD for us vs soft in EDA tools; genuine geometric infeasibility at 0.5mm QFN pitch where the right deliverable is a correct VERDICT not a heroic route; Pi memory forces subsystem-scoped global routing (`[[feedback-pi-bounded-subsystem-scope]]` — coarse-gcell global on Pi, fine detailed A* is the x86 Phase-7 op); R19 symmetry sits outside standard routing theory.
 
 ---
 
@@ -167,6 +238,62 @@ Documented in Ott/Bogatin/Johnson, caught by audit gates:
 
 ---
 
+## 5b. Geometry policy (Sai-locked 2026-05-28, honest physics)
+
+The engine emits the **simplest manufacturable geometry that is electrically correct**, with targeted local enhancements only where physics demands. No cosmetic global rules.
+
+| Policy | Decision | Physical basis / standard |
+|---|---|---|
+| **Global chamfer / curve rule** | **REJECTED** — no board-wide rounding/curving rule | Bloat for no benefit at our edge rates. The "90°-corner radiates" belief is a myth below GHz (Howard Johnson *HSDD*: the right-angle reflection/radiation effect is negligible for rise times above ~tens of ps; our PWM/DShot/BEMF nets are sub-MHz to low-MHz). |
+| **DEFAULT geometry = OCTILINEAR (45°)** | All routing is H/V + 45° diagonal segments | Simplest manufacturable geometry; electrically fine for ~all our nets. By construction, octilinear **never creates an acute (<90°) interior angle.** |
+| **Acute-angle GATE** | REJECT any interior angle <90° (trace-trace or trace-pad junction) | Acute angles trap etchant → acid-trap / over-etch manufacturing defect class (IPC-2221 §6.1 conductor geometry; standard DFM). |
+| **TEARDROPS at every pad/via junction** | Mandatory teardrop fillet at each trace-to-pad and trace-to-via transition | The "round the pointed end" that genuinely helps: mechanical stress relief (drill breakout, thermal-cycle crack at the neck) + current-crowding relief at the trace-to-pad neck. IPC-standard targeted enhancement (IPC-7351 land patterns + IPC-2221 thermal-cycle reliability). |
+| **LOCAL 45° chamfer / fillet** | HIGH-CURRENT corners ONLY, sim-driven | Applied where a current-density sim flags crowding (real effect on ~100A motor-phase traces — the inside corner of a sharp bend concentrates J; Brooks *PCB Currents*). NOT applied to signal corners. |
+
+This policy is consumed by Phase C geometry emission and by hand touch-ups; both call the same geometry-primitive library (below).
+
+### Geometry-primitive library (spec)
+
+A small set of pure geometry constructors, each with a self-test vs analytic ground truth (length / clearance / radius), plus a KiCad emitter (PCB_TRACK + native PCB_ARC). The router AND hand touch-ups both call these — one set of validated primitives, no ad-hoc track math.
+
+| Primitive | Signature intent | Self-test ground truth |
+|---|---|---|
+| `straight(p1, p2, w)` | one segment | length = ‖p2−p1‖ |
+| `bend_45(corner, setback)` | 90° turn split into two 45° segments | each leg = setback; no acute angle |
+| `arc(p1, p2, r)` | circular arc through endpoints, radius r | chord/sagitta vs r |
+| `arc_tangent(...)` | arc tangent to two segments | tangency residual ≈ 0 |
+| `chamfer(corner)` | 45° cut across a corner | cut leg geometry |
+| `fillet(corner, r)` | rounded corner radius r | tangent radius = r |
+| `teardrop(pad)` | teardrop fillet at pad neck | neck width ≥ trace width; IPC ratio |
+| `taper(w1→w2)` | width transition | monotone width, no acute edge |
+| `via_transition()` | track→via landing | annular + clearance preserved |
+| KiCad emitter | primitives → PCB_TRACK + PCB_ARC | round-trip length match |
+
+Implementation status: see `hardware/kicad/scripts/geometry_primitives.py` (stub signatures + docstrings + self-test, this PR) — design-stage, not wired into the engine yet.
+
+---
+
+## 5c. Factor of Safety everywhere (Sai-locked 2026-05-28, "very important — no cut-to-cut")
+
+**THE design target is NEVER the raw limit.** Every physical quantity is sized to `limit ÷ FoS` (for ceilings) or `requirement × FoS` (for floors). This table is the routing FoS SSoT; it aligns with the already-implemented FoS gates (`audit_fos_current.py` G_FoS2, `audit_fos_thermal.py` G_FoS1, `audit_fos_cap_voltage.py` G_FoS3, `audit_fos_cap_ripple.py` G_FoS4, `audit_fos_pin_current.py` G_FoS5, `audit_via_current_capacity.py`) so routing inherits the same multipliers rather than inventing new ones.
+
+| Quantity | Raw limit + source standard | FoS | Justification | Design target |
+|---|---|---|---|---|
+| **Trace width / ampacity (continuous)** | IPC-2152 ampacity nomograph (i = K·ΔT^0.44·Ac^0.725) | **1.5×** | 50% margin; industry standard for continuous load (matches G_FoS2) | width carries ≥ 1.5 × rated continuous current at ΔT budget |
+| **Trace width / ampacity (burst)** | IPC-2152 | **1.2×** | 20% transient margin for short pulses (matches G_FoS2; e.g. +VMOTOR 280A burst) | width carries ≥ 1.2 × burst current |
+| **Clearance / spacing ("no cut-to-cut")** | JLC fab min (0.0889mm/3.5mil std process) + IPC-2221B §6.3 voltage-derived spacing | **above fab min, never at it** | Routing to the exact fab minimum has zero manufacturing margin → over-etch/short risk. Target ≥ class spacing AND a margin above the fab floor. | spacing = max(IPC-2221B voltage-spacing, fab-min × headroom); never == fab-min |
+| **Via current** | IPC-2152 + Brooks *PCB Currents* via ampacity | **1.5×** + extra vias | derate single-via capacity; spread current across ≥ ceil(I·1.5 / I_via) vias (matches `audit_via_current_capacity.py` FOS_VIA) | n_vias ≥ load × 1.5 / per-via capacity |
+| **Annular ring & drill** | JLC std 0.10mm annular / 0.30mm drill; HDI 0.075mm/0.10mm (`BOARD_INVARIANTS.md` HDI spec) | **above fab min** | ring at fab min risks breakout on registration error | ring ≥ fab min + registration margin; HDI only on J18/J19 whitelist |
+| **Impedance tolerance** | Hammerstad-Jensen Z0 (±4% model accuracy) + JLC controlled-Z ±10% process | **band, not point** | a single target W invites process drift outside spec | W chosen so Z0 stays within ±10% across the fab stack tolerance (50Ω SE / 90Ω diff per Tier 5) |
+| **Loop-L margin** | commutation loop measured 0.1953nH/phase (STEP-6); ≤50mm² placement gate G3 | **margin below ringing threshold** | di/dt × L = switch-node ringing/EMI; design below the budget not at it | routed loop-L ≤ design budget with headroom; Tier-2 sim-verified |
+| **Thermal rise margin** | Si MOSFET T_J reliability (T_J ≤ 75% T_J_max continuous, ≤90% burst) | **25% cont / 10% burst** | matches G_FoS1; junction never at rated max | trace/plane thermal contribution keeps T_J within FoS bound |
+| **Voltage / creepage margin** | IPC-2221B creepage + JEDEC cap derating (V_rated ≥ V_max×1.4 elec/polymer, ×1.5 ceramic) | **1.4×–1.5×** | matches G_FoS3; clearance/creepage above the breakdown floor | creepage ≥ IPC-2221B for working voltage with margin |
+| **Routing-process capacity (the root-cause fix)** | global planner door/corridor fill | **≤ 75–80% (never 100%)** | FoS on the routing process itself. Filling a corridor/door to 100% is the cut-to-cut that produced the 24/30 corner-paint — no slack for negotiated congestion or later nets. ISPD global-routing practice treats any overflow as failure; we add a headroom band below capacity. | door/corridor demand ≤ 0.75–0.80 × capacity at plan time |
+
+**Planned FoS meta-gate** (described as planned; the script is NOT created this PR): a meta-check that every physical routing constraint **declares** a FoS, flagging any quantity sized to its raw limit (the G_META1 analogue for safety). It would parse `routing_topology.yaml` `factor_of_safety:` fields and fail if any physical quantity is present with no FoS declared. See `docs/ROUTING_ENGINE_DESIGN_2026-05-28.md` and the RULES_MANIFEST "Planned routing gates" subsection for the planned-gate inventory.
+
+---
+
 ## 6. Audit gates per tier (extends existing `audit_routing.py`)
 
 | Tier | Audit |
@@ -263,4 +390,8 @@ All must PASS on master HEAD post-merge.
 
 ---
 
-ROUTING_METHODOLOGY_HASH = (placeholder; computed by `audit_routing_system.py --write` after lock)
+## ROUTING_METHODOLOGY_HASH
+
+```
+ROUTING_METHODOLOGY_HASH = 08c9e7f34d4530c8f2e9f5784661e1501c8854c1e168854b19a259f2b56c0894
+```
