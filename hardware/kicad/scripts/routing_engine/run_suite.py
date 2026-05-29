@@ -2575,12 +2575,38 @@ def _selfcheck_T20(fx, msgs):
                       f"chain cell {chain_pt} not inside body {o.id} "
                       f"(d={d:.4f}mm)", msgs)
 
-    # (g) SINGLE-MECH-ONLY LIAR fails on T20. Two liars:
-    #     blind-only: planner with allowed_via_classes=('blind_F_In2',)
-    #                 lands on In2.Cu and cannot reach B.Cu => None.
-    #     through-only: planner with allowed_via_classes=('through',)
-    #                 is REFUSED at the HDI start cell + cannot escape
-    #                 F.Cu (F_BLOCK strip) => None.
+    # (g) SINGLE-MECH-ONLY LIAR fails on T20 (X-lever redo 2026-05-29):
+    #     Seven liars covering the K3 distinguishability surface:
+    #       1. blind_F_In2-only      — lands on In2.Cu, cannot reach B.Cu.
+    #       2. through-only          — REFUSED at HDI start, all adjacent
+    #                                  F.Cu cells blocked by non-relaxation-
+    #                                  eligible blockers.
+    #       3. microvia_F_In1-only   — spans F.Cu↔In1.Cu; In1 is a plane,
+    #                                  not in allowed_layers (signal only);
+    #                                  cannot escape start.
+    #       4. microvia_B_In8-only   — spans B.Cu↔In8.Cu; from_layer must
+    #                                  include node_layer (F.Cu at start);
+    #                                  HDI gating: cannot route from F.Cu.
+    #       5. blind-only (abstract) — `blind` is HDI-gated, but the maze
+    #                                  `_via_class_reachable` for `blind`
+    #                                  spans F.Cu↔B.Cu — at HDI start cell
+    #                                  it is admitted but lands on B.Cu
+    #                                  the route would be 1-mechanism;
+    #                                  current geometry refuses (B_BLOCK
+    #                                  on B.Cu engulfs the via halo at
+    #                                  the start cell's projection).
+    #       6. {through, microvia_B_In8} (multi-class but missing
+    #                                  blind_F_In2) — cannot escape HDI
+    #                                  start (HDI policy refuses through;
+    #                                  microvia_B_In8 wrong layer pair).
+    #       7. {blind_F_In2, microvia_B_In8} (multi-class but missing
+    #                                  through) — blind lands on In2;
+    #                                  In2→B requires through-via class
+    #                                  (microvia_B_In8 spans B↔In8 not
+    #                                  In2↔B); no transition to B.Cu.
+    #     A K3 planner must reject ALL seven and succeed only with both
+    #     {blind_F_In2, through} simultaneously available — the
+    #     distinguishability gate.
     try:
         from . import multi_mech_planner as _MMP   # type: ignore
     except ImportError:                            # pragma: no cover
@@ -2600,31 +2626,60 @@ def _selfcheck_T20(fx, msgs):
                          is_hdi_whitelisted=True)
     end_pin = _MMP.Pin(point=(ep.x_mm, ep.y_mm), layer=ep.layer)
     sig_layers = tuple(L.name for L in fx.signal_layers())
-    # Blind-only liar
-    liar_blind = _MMP.plan_multi_mech_route(
-        start=start_pin, end=end_pin, region_bbox=region,
-        obstacles=obs, allowed_layers=sig_layers,
-        allowed_via_classes=("blind_F_In2",),
-        width_mm=trace_w, clearance_fos_mm=clearance,
-        grid_pitch_mm=0.5,
-    )
+
+    def _liar(classes):
+        return _MMP.plan_multi_mech_route(
+            start=start_pin, end=end_pin, region_bbox=region,
+            obstacles=obs, allowed_layers=sig_layers,
+            allowed_via_classes=classes,
+            width_mm=trace_w, clearance_fos_mm=clearance,
+            grid_pitch_mm=0.5,
+        )
+
+    # Single-mech liars (5):
+    liar_blind = _liar(("blind_F_In2",))
     ok &= _assert(liar_blind is None,
-                  "blind-only LIAR returns None (cannot reach B.Cu from "
-                  "In2.Cu without a second mechanism) — bug class is REAL "
-                  "and a single-mech regression FAILS T20", msgs)
-    # Through-only liar
-    liar_through = _MMP.plan_multi_mech_route(
-        start=start_pin, end=end_pin, region_bbox=region,
-        obstacles=obs, allowed_layers=sig_layers,
-        allowed_via_classes=("through",),
-        width_mm=trace_w, clearance_fos_mm=clearance,
-        grid_pitch_mm=0.5,
-    )
+                  "(L1) blind_F_In2-only LIAR returns None (lands on "
+                  "In2.Cu, cannot reach B.Cu without a second mechanism) "
+                  "— bug class is REAL; single-mech regression FAILS T20",
+                  msgs)
+    liar_through = _liar(("through",))
     ok &= _assert(liar_through is None,
-                  "through-only LIAR returns None (REFUSED at HDI start "
-                  "cell AND F.Cu blocking field prevents F.Cu detour) — "
-                  "the K3 signature: both single-mech liars fail; only "
-                  "the multi-mech chain succeeds", msgs)
+                  "(L2) through-only LIAR returns None (REFUSED at HDI "
+                  "start cell AND every adjacent F.Cu cell is blocked by "
+                  "a NON-relaxation-eligible blocker — the X-lever 0.6mm "
+                  "offset survives W's 0.5mm HDI relaxation)", msgs)
+    liar_mv_f = _liar(("microvia_F_In1",))
+    ok &= _assert(liar_mv_f is None,
+                  "(L3) microvia_F_In1-only LIAR returns None (spans "
+                  "F.Cu↔In1.Cu; In1 is plane, NOT in allowed_layers — "
+                  "the route cannot land on In1)", msgs)
+    liar_mv_b = _liar(("microvia_B_In8",))
+    ok &= _assert(liar_mv_b is None,
+                  "(L4) microvia_B_In8-only LIAR returns None (spans "
+                  "B.Cu↔In8.Cu; at HDI start cell on F.Cu, "
+                  "candidate_via_classes requires {node_layer,new_layer} "
+                  "== {B.Cu, In8.Cu} — F.Cu start is incompatible)", msgs)
+    liar_blind_abs = _liar(("blind",))
+    ok &= _assert(liar_blind_abs is None,
+                  "(L5) blind (abstract)-only LIAR returns None (the "
+                  "maze abstract `blind` class is HDI-gated but its "
+                  "barrel-span is F.Cu↔B.Cu — at start cell the via halo "
+                  "extends to B.Cu where B_BLOCK is engulfing-near, the "
+                  "shorts-gate refuses the placement)", msgs)
+    # Multi-class liars MISSING canonical chain mechanism (2):
+    liar_no_blind = _liar(("through", "microvia_B_In8"))
+    ok &= _assert(liar_no_blind is None,
+                  "(L6) {through, microvia_B_In8}-only LIAR returns None "
+                  "(missing canonical blind_F_In2 — cannot escape HDI "
+                  "start; the K3 chain REQUIRES blind_F_In2 at the F.Cu "
+                  "HDI cell)", msgs)
+    liar_no_through = _liar(("blind_F_In2", "microvia_B_In8"))
+    ok &= _assert(liar_no_through is None,
+                  "(L7) {blind_F_In2, microvia_B_In8}-only LIAR returns "
+                  "None (missing canonical through — blind lands on "
+                  "In2.Cu; In2→B transition needs through-via class; "
+                  "microvia_B_In8 spans B.Cu↔In8.Cu not In2→B)", msgs)
 
     # (h) INVOKE the engine directly and assert ROUTABLE + matching chain
     eng_out = _MMP.solve(fx.problem_view())
