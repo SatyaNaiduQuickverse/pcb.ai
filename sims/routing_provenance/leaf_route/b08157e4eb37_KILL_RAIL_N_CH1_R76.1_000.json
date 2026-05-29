@@ -1,0 +1,27 @@
+{
+  "attempts": [
+    {
+      "mechanism": "init",
+      "outcome": "NO_PATH",
+      "reason": "leaf_pad_R76.1_outside_zone_or_unmapped",
+      "shorts_post": 27,
+      "shorts_pre": 27
+    }
+  ],
+  "board_sha": "b08157e4eb378024820ee40d191dd7db93fa1111",
+  "cascade_attempts": 0,
+  "committed": false,
+  "final_outcome": "NO_PATH",
+  "leaf_pad": "R76.1",
+  "netname": "KILL_RAIL_N_CH1",
+  "schema_version": 1,
+  "shorts_post": 27,
+  "shorts_pre": 27,
+  "subsystem": "CH1",
+  "timestamp_iso": "2026-05-29T16:08:06.929533+00:00",
+  "trunk_pads": [
+    "J19.8",
+    "D38.2",
+    "D37.2"
+  ]
+}
