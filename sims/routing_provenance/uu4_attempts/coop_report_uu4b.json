@@ -1,0 +1,8 @@
+net,status,pads,priority,partial_pairs
+PWM_INHB_CH1,ROUTED,2,1,
+PWM_INLA_CH1,UNROUTED,2,1,
+GLB_CH1,UNROUTED,2,2,
+KILL_RAIL_N_CH1,UNROUTED,5,3,
+SWDIO_CH1,ROUTED,2,3,
+
+# summary: full=2/5 partial=0 unrouted=3, 30 iterations, 30 ripups

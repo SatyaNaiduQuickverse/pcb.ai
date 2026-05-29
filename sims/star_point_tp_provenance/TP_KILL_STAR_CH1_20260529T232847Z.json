@@ -1,0 +1,19 @@
+{
+  "lever": "UU.4 STAR-POINT TP",
+  "approval": "Sai 2026-05-30 UU expansion",
+  "tp": {
+    "ref": "TP_KILL_STAR_CH1",
+    "net": "KILL_RAIL_N_CH1",
+    "position_mm": [
+      33.0,
+      60.5
+    ],
+    "layer": "B.Cu",
+    "template_ref": "TP23",
+    "pad_size_mm": 1.0
+  },
+  "input_md5": "f119ac7e8a42a78f06e1acd553cb60fb",
+  "output_md5": "f4794962649541954a7d900f027dbbe0",
+  "timestamp_utc": "20260529T232847Z",
+  "R21_deviation": "DEV-007: TP added board-only; schematic edit required"
+}
