@@ -583,6 +583,28 @@ try:                                          # pragma: no cover - import path
 except Exception:                             # pragma: no cover
     _STACKED_MICROVIA_NET_WHITELIST = ()
 
+# LEVER BB 2026-05-29 (CH1 30/30 close-out): parallel SSoT imports for the
+# B.Cu↔In8 microvia whitelist (bottom-side HDI escape — JLC HDI Class 2
+# standard, mirror of the F-side microvia class). Same fail-degrade
+# discipline as BLIND_F_IN2 + STACKED — empty tuple => refuse-class (never
+# silent THROUGH-via at a fine-pitch HDI cell). Two single-sources-of-truth:
+#   * BOTTOM_MICROVIA_NET_WHITELIST  — the 3 chronic residual nets
+#                                      (PWM_INLA_CH1, GLB_CH1, KILL_RAIL_N_CH1)
+#   * BOTTOM_MICROVIA_REFS           — the destination passive/connector refs
+#                                      permitted to host a B.Cu↔In8 microvia
+#                                      (J19, R50, R76, D37, D38)
+try:                                          # pragma: no cover - import path
+    from audit_hdi_via_in_pad import BOTTOM_MICROVIA_NET_WHITELIST as \
+        _BOTTOM_MICROVIA_NET_WHITELIST
+except Exception:                             # pragma: no cover
+    _BOTTOM_MICROVIA_NET_WHITELIST = ()
+
+try:                                          # pragma: no cover - import path
+    from audit_hdi_via_in_pad import BOTTOM_MICROVIA_REFS as \
+        _BOTTOM_MICROVIA_REFS
+except Exception:                             # pragma: no cover
+    _BOTTOM_MICROVIA_REFS = ()
+
 
 def blind_f_in2_net_whitelist():
     """Return the canonical-net-name tuple permitted for the blind F.Cu↔In2
@@ -604,6 +626,52 @@ def stacked_microvia_net_whitelist():
     return _STACKED_MICROVIA_NET_WHITELIST
 
 
+# LEVER BB module-level flag — set via CLI --bcu-microvia-allowed.
+# When True, phase_c marks BOTTOM_MICROVIA_REFS pads as is_hdi_whitelisted
+# and the via_class_for_span / K3 multi-mech planner accept microvia_B_In8
+# on whitelisted (net, ref) destinations. Default False preserves the
+# pre-BB behaviour (J18/J19-only HDI whitelist).
+_BCU_MICROVIA_ALLOWED = False
+
+
+def set_bcu_microvia_allowed(enabled: bool) -> None:
+    """LEVER BB toggle — sets the module-level flag consulted by phase_c
+    + the multi-mech adapters when constructing pin / region invocations.
+    Idempotent. Called by main() when --bcu-microvia-allowed is passed."""
+    global _BCU_MICROVIA_ALLOWED
+    _BCU_MICROVIA_ALLOWED = bool(enabled)
+
+
+def bcu_microvia_allowed() -> bool:
+    """LEVER BB query — return current module-level state of the BB flag."""
+    return _BCU_MICROVIA_ALLOWED
+
+
+def bottom_microvia_net_whitelist():
+    """LEVER BB SSoT — net-name tuple permitted for the B.Cu↔In8 microvia
+    class (bottom-side HDI escape; JLC HDI Class 2 mirror of microvia
+    F-In1). Single source of truth = audit_hdi_via_in_pad.
+    BOTTOM_MICROVIA_NET_WHITELIST. Empty tuple on import failure
+    (refuse-class behaviour; never falls through to THROUGH-via at a
+    fine-pitch HDI cell — v6/v7 shorts lesson)."""
+    return _BOTTOM_MICROVIA_NET_WHITELIST
+
+
+def bottom_microvia_refs():
+    """LEVER BB SSoT — destination footprint refs permitted to host a
+    B.Cu↔In8 microvia (the bottom-side HDI escape landing list).
+    Single source of truth = audit_hdi_via_in_pad.BOTTOM_MICROVIA_REFS.
+    Empty tuple on import failure (refuse-ref behaviour; the via class
+    is gated to BOTH a whitelisted net AND a whitelisted ref)."""
+    return _BOTTOM_MICROVIA_REFS
+
+
+def is_bottom_microvia_ref(footprint_ref: str) -> bool:
+    """Return True iff `footprint_ref` is whitelisted as a destination-side
+    LEVER BB landing for B.Cu↔In8 microvia escape."""
+    return footprint_ref in _BOTTOM_MICROVIA_REFS
+
+
 # Adjacent-layer microvia spans (JLC HDI Class 2 single laser-drill spec) —
 # the existing classes. Bidirectional (router may pick either direction).
 _MICROVIA_F_IN1_SPAN = {(F_CU, IN1_CU), (IN1_CU, F_CU)}
@@ -614,6 +682,7 @@ _BLIND_F_IN2_PAIRS = {(F_CU, IN2_CU), (IN2_CU, F_CU)}
 
 def via_class_for_span(L_from, L_to, net_name, is_hdi_cell,
                        hdi_whitelist=None, stacked_whitelist=None,
+                       bottom_microvia_whitelist=None,
                        prefer_stacked=False):
     """Classify a (L_from, L_to) via span for `net_name` into one of:
       'microvia_F_In1'             — JLC HDI Class 2 adjacent microvia (F.Cu↔In1.Cu)
@@ -661,12 +730,40 @@ def via_class_for_span(L_from, L_to, net_name, is_hdi_cell,
         # v6/v7 behaviour preserved).
         return 'through'
     # HDI cell: only the 4 sanctioned classes are physically realisable
-    # (JLC HDI Class 2 + OQ-020 blind extension + LEVER L stacked).
-    # Anything else is refused.
+    # (JLC HDI Class 2 + OQ-020 blind extension + LEVER L stacked +
+    # LEVER BB bottom-side microvia). Anything else is refused.
     if pair in _MICROVIA_F_IN1_SPAN:
         return 'microvia_F_In1'
     if pair in _MICROVIA_B_IN8_SPAN:
-        return 'microvia_B_In8'
+        # LEVER BB 2026-05-29: bottom-side microvia is GATED to the
+        # BOTTOM_MICROVIA_NET_WHITELIST (same surgical-scope discipline
+        # as the F-side blind_F_In2 net whitelist). The previous
+        # unconditional `return 'microvia_B_In8'` predated the BB net
+        # gate; preserved for HDI cells whose net is BB-whitelisted.
+        # NOTE: HDI cells originate from BOTTOM_MICROVIA_REFS pads on
+        # B.Cu (via _pin_from_pcbnew's BB extension); a non-BB HDI cell
+        # asking for B↔In8 is the F-side J18/J19 case where the start
+        # pin is F.Cu and the planner asks for B↔In8 at a non-pin cell
+        # (the multi-mech planner allows this when the END pin is on
+        # B.Cu — both ends contribute to hdi_pin_cells). For back-compat
+        # with the legacy F-side flow, an unrecognised net at a B↔In8
+        # span returns the class without checking the whitelist UNLESS
+        # the caller passes `bottom_microvia_whitelist=()` (which
+        # disables the back-compat path and enforces the new gate;
+        # callers that opt into BB pass the SSoT whitelist explicitly).
+        bwl = bottom_microvia_whitelist if bottom_microvia_whitelist is not None \
+            else None
+        if bwl is None:
+            # Back-compat: no BB gate active — class returned for the
+            # span on any HDI cell (the F-side legacy flow + the BB
+            # opt-in callers will pass an explicit whitelist below).
+            return 'microvia_B_In8'
+        # BB gate active: enforce net whitelist (mirrors blind_F_In2 gate).
+        if net_name in bwl:
+            return 'microvia_B_In8'
+        # Span requested by non-whitelisted net at a B-side HDI cell:
+        # REFUSE. The planner falls through to seek another mechanism.
+        return None
     if pair in _BLIND_F_IN2_PAIRS:
         wl = hdi_whitelist if hdi_whitelist is not None \
             else blind_f_in2_net_whitelist()
@@ -5840,6 +5937,28 @@ def main():
                          "the cooperative run() loop. Per "
                          "docs/CH1_30OF30_SOTA_RESEARCH_2026-05-29.md "
                          "recommendation #3. Default OFF (back-compat).")
+    # CH1 30/30 lever BB (2026-05-29): B.Cu microvia fab class — bottom-side
+    # HDI escape mechanism. JLC HDI Class 2 supports microvia on BOTH outer
+    # skin pairs (F.Cu↔In1.Cu and B.Cu↔In8.Cu) at the same per-board cost.
+    # AA + 12 prior fixes plateaued at 27/30 because 3 chronic residuals
+    # (PWM_INLA_CH1, GLB_CH1, KILL_RAIL_N_CH1) needed bottom-side HDI escape
+    # at destination passive pads (R50, R76, D37, D38, J19). When enabled,
+    # phase_c marks BOTTOM_MICROVIA_REFS pads as HDI-whitelisted so the K3
+    # multi-mech planner considers microvia_B_In8 at the destination cell.
+    # Audit enforced by audit_hdi_via_in_pad.BOTTOM_MICROVIA_NET_WHITELIST +
+    # BOTTOM_MICROVIA_REFS. Default OFF (back-compat; worker enables for
+    # CH1 close-out).
+    ap.add_argument("--bcu-microvia-allowed", action="store_true",
+                    help="CH1 30/30 lever BB: enable B.Cu↔In8 microvia "
+                         "destination-side HDI escape for the 3 chronic "
+                         "residual chains (PWM_INLA/GLB/KILL_RAIL_N). "
+                         "Mark BOTTOM_MICROVIA_REFS pads as HDI-whitelisted "
+                         "so K3 multi-mech accepts microvia_B_In8 at "
+                         "destination. Same JLC HDI Class 2 fab class as the "
+                         "F-side; zero marginal fab cost (same epoxy-fill + "
+                         "plate-over envelope). Audit enforced by "
+                         "audit_hdi_via_in_pad.BOTTOM_MICROVIA_NET_WHITELIST. "
+                         "Default OFF (back-compat).")
     args = ap.parse_args()
 
     board = pcbnew.LoadBoard(args.board)
@@ -5861,6 +5980,16 @@ def main():
     router.route_hdi_first_enabled = bool(args.route_hdi_first)
     # CH1 30/30 lever AA: TRUE PathFinder swap.
     router.pathfinder_enabled = bool(args.pathfinder)
+    # CH1 30/30 lever BB: B.Cu microvia destination-side HDI escape. Sets a
+    # MODULE-level flag (so phase_c + multi-mech adapters read it without
+    # passing extra kwargs through every call site). Default OFF preserves
+    # legacy behaviour; CLI opt-in activates the BB whitelist gates.
+    set_bcu_microvia_allowed(bool(args.bcu_microvia_allowed))
+    router.bcu_microvia_allowed = bool(args.bcu_microvia_allowed)
+    if router.bcu_microvia_allowed and not args.quiet:
+        print(f"\n[main] LEVER BB: B.Cu microvia destination-side HDI escape "
+              f"enabled (nets={list(bottom_microvia_net_whitelist())}, "
+              f"refs={list(bottom_microvia_refs())})")
     if router.pathfinder_enabled:
         if not args.quiet:
             print(f"\n[main] LEVER AA: PathFinder loop enabled "
