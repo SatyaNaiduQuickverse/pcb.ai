@@ -2054,11 +2054,16 @@ def _pin_from_pcbnew(board, pin_ref):
     """Resolve a `<ref>.<padname>` pin spec on the live board to a
     `maze_router.Pin` (point in mm + KiCad layer name + HDI whitelist flag).
 
-    The HDI whitelist flag is set when the footprint reference is in
-    `HDI_WHITELIST_REFS` (J18 / J19 per BOARD_INVARIANTS) — mirrors the
-    cooperative router's HDI gate. Raises ValueError when the ref + pad
-    name does not resolve (fail-loud: the adapter caller carries the
-    verdict; no silent fall-through to a default coord)."""
+    The HDI whitelist flag is set when:
+      (a) the footprint reference is in `HDI_WHITELIST_REFS` (J18 / J19
+          per BOARD_INVARIANTS — the F-side OQ-020 / lever D scope), OR
+      (b) LEVER BB is active (route_subsystem_cooperative.bcu_microvia_allowed())
+          AND the footprint reference is in BOTTOM_MICROVIA_REFS AND the
+          pad's net is in BOTTOM_MICROVIA_NET_WHITELIST — the bottom-side
+          B.Cu↔In8 microvia destination escape scope.
+    Mirrors the cooperative router's HDI gate. Raises ValueError when the
+    ref + pad name does not resolve (fail-loud: the adapter caller carries
+    the verdict; no silent fall-through to a default coord)."""
     import pcbnew  # lazy — live-board path only
     try:
         from . import maze_router as MR
@@ -2070,6 +2075,7 @@ def _pin_from_pcbnew(board, pin_ref):
     except Exception:                                              # pragma: no cover
         def _iu_to_mm(iu):
             return iu / 1e6
+        RC = None  # type: ignore
     if "." not in pin_ref:
         raise ValueError(
             f"_pin_from_pcbnew: pin_ref {pin_ref!r} must be '<ref>.<padname>'")
@@ -2106,7 +2112,31 @@ def _pin_from_pcbnew(board, pin_ref):
                 break
         except Exception:                                          # pragma: no cover
             continue
+    # F-side HDI whitelist (the existing OQ-020 / lever D scope).
     is_hdi = ref in HDI_WHITELIST_REFS
+    # LEVER BB 2026-05-29 — bottom-side B.Cu↔In8 microvia escape. Mark
+    # BOTTOM_MICROVIA_REFS pads as HDI-whitelisted when the BB module flag
+    # is on AND the pad's net is on the BB whitelist. The K3 multi-mech
+    # planner consults `is_hdi_whitelisted` on start/end pins to decide
+    # whether microvia_B_In8 is admissible at the pin cell. Without BB
+    # this branch is a no-op (back-compat).
+    if not is_hdi and RC is not None:
+        try:
+            bb_active = RC.bcu_microvia_allowed()
+            bb_refs = RC.bottom_microvia_refs()
+            bb_nets = RC.bottom_microvia_net_whitelist()
+        except Exception:                                          # pragma: no cover
+            bb_active = False
+            bb_refs = ()
+            bb_nets = ()
+        if bb_active and ref in bb_refs:
+            try:
+                net_obj = pad.GetNet()
+                pad_net = net_obj.GetNetname() if net_obj else ""
+            except Exception:                                      # pragma: no cover
+                pad_net = ""
+            if pad_net in bb_nets:
+                is_hdi = True
     return MR.Pin(point=(x_mm, y_mm), layer=layer_name,
                   is_hdi_whitelisted=is_hdi)
 
@@ -2454,6 +2484,15 @@ def _multi_mech_via_classes_from_region(region: "RegionSpec") -> Tuple[str, ...]
                                           cooperative-router class names —
                                           the multi-mech planner accepts
                                           BOTH abstract and concrete names).
+      * LEVER BB (2026-05-29): HDI budget + BOTTOM_MICROVIA_REFS in
+                               region.hdi_refs + BB module flag active =>
+                               'microvia_B_In8' added (destination-side
+                               B.Cu↔In8 escape). The other HDI classes
+                               (blind_F_In2 / microvia_F_In1) require F-side
+                               whitelist (J18/J19) as before; BB only adds
+                               the B-side mirror class. The cooperative
+                               router's via_class_for_span gate enforces
+                               the per-net BB whitelist downstream.
     """
     classes: List[str] = []
     std_budget = int(region.via_budget.get("std", 0))
@@ -2468,6 +2507,23 @@ def _multi_mech_via_classes_from_region(region: "RegionSpec") -> Tuple[str, ...]
         classes.append("blind_F_In2")
         classes.append("microvia_F_In1")
         classes.append("microvia_B_In8")
+    # LEVER BB — extend HDI class set when BOTTOM_MICROVIA_REFS appear in
+    # region.hdi_refs AND the BB module flag is active. This is the
+    # destination-side activation: a region whose hdi_refs lists ONLY a BB
+    # destination (R50 / R76 / D37 / D38 / J19) and NOT a J18/J19 source
+    # still unlocks microvia_B_In8 (without the F-side classes — they
+    # aren't physically realisable on a BB-only destination cell).
+    try:
+        import route_subsystem_cooperative as RC  # type: ignore
+        bb_active = RC.bcu_microvia_allowed()
+        bb_refs = RC.bottom_microvia_refs()
+    except Exception:                                              # pragma: no cover
+        bb_active = False
+        bb_refs = ()
+    if bb_active and hdi_budget > 0:
+        bb_whitelisted = tuple(r for r in region.hdi_refs if r in bb_refs)
+        if bb_whitelisted and "microvia_B_In8" not in classes:
+            classes.append("microvia_B_In8")
     return tuple(classes)
 
 
