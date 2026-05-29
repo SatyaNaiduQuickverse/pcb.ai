@@ -3780,16 +3780,28 @@ class CooperativeRouter:
 
         # ── 4. Snapshot the board's track/via items BEFORE the adapter
         # call so we can roll back atomically on aggregate failure. The
-        # snapshot uses object identity (pcbnew object pointers); any
-        # item present after the call but NOT in the snapshot was added
-        # by phase_c and is eligible for rollback.
+        # snapshot uses KiCad's persistent UUID (`m_Uuid`) NOT Python
+        # `id()`: SWIG generates EPHEMERAL Python proxy objects for
+        # pcbnew C++ items — back-to-back `GetTracks()` calls return
+        # different Python proxies wrapping the SAME C++ object, so
+        # `id(t)` is UNSTABLE across calls on a LoadBoard()'ed board.
+        # (Verified empirically on canonical 085dee9: only 716/1934
+        # `id()` overlap between two consecutive snapshots; 0/1934 when
+        # one snapshot is `held=list(...)` and the other is fresh.)
+        # NewBoard()-based synthetic tests masked this because they
+        # start with zero tracks (empty before_items → every post-call
+        # item is "added"). UUIDs are KiCad-side persistent + survive
+        # SWIG proxy churn (1934/1934 verified stable). Per
+        # reference-pcbnew-swig-batch-mutation-trap + this 30/30 lever
+        # (P) live-board fix.
         try:
             import pcbnew  # noqa: F401  (already imported at module load)
         except Exception:
             self.log(f"  [.] {netname}: K3 fallback unavailable "
                      "(pcbnew not importable for rollback snapshot)")
             return False
-        before_items = set(id(t) for t in self.board.GetTracks())
+        before_items = set(self._stable_item_key(t)
+                           for t in self.board.GetTracks())
 
         # ── 5. Minimal Phase-B GlobalPlan: a dict with verdict ROUTABLE.
         # The adapter's verdict gate accepts this (same gate as the maze
@@ -3863,7 +3875,7 @@ class CooperativeRouter:
         # cell set is safe for rip_net (it iterates over `added` for the
         # board removal; uncommit_path on an empty set is a no-op).
         added_items = [t for t in self.board.GetTracks()
-                       if id(t) not in before_items]
+                       if self._stable_item_key(t) not in before_items]
         # Log the chain summary (n_mechanisms, via_chain) for trace.
         for r in routes:
             chain = r.get("via_chain", [])
@@ -3874,20 +3886,60 @@ class CooperativeRouter:
         self.committed[netname] = (set(), added_items)
         return True
 
-    def _rollback_added_since(self, before_item_ids):
+    def _rollback_added_since(self, before_item_keys):
         """Per-net atomic rollback helper for the K3 fallback. Removes
-        every track/via item on the board whose id() is NOT in the
-        pre-call snapshot. Idempotent + defensive: a Remove failure on
-        any single item is logged but does not stop the rollback of
+        every track/via item on the board whose STABLE KEY is NOT in
+        the pre-call snapshot. Idempotent + defensive: a Remove failure
+        on any single item is logged but does not stop the rollback of
         the rest (the partial-half-emit is exactly the state we are
-        trying to avoid leaving on the board)."""
+        trying to avoid leaving on the board).
+
+        UUID-based identity (NOT Python `id()`): the SWIG layer creates
+        ephemeral Python proxy objects per pcbnew C++ item — `id(t)` is
+        UNSTABLE across `GetTracks()` calls on a LoadBoard()'ed board,
+        which would cause this rollback to misidentify EVERY original
+        track as "added" and wipe the entire pre-existing route plane.
+        See `_stable_item_key` + the 30/30 lever (P) live-board fix.
+        """
         added = [t for t in self.board.GetTracks()
-                 if id(t) not in before_item_ids]
+                 if self._stable_item_key(t) not in before_item_keys]
         for it in added:
             try:
                 self.board.Remove(it)
             except Exception as exc:                              # pragma: no cover
                 self.log(f"      rollback: failed to Remove item: {exc}")
+
+    @staticmethod
+    def _stable_item_key(item):
+        """SWIG-stable identity for a pcbnew board item.
+
+        Returns a string that is STABLE across `GetTracks()` re-entry,
+        across phase_c emit + rollback cycles, across consecutive
+        snapshots on a LoadBoard()'ed canonical board. Uses KiCad's
+        `m_Uuid` (persistent UUID assigned at item construction +
+        preserved across SaveBoard/LoadBoard) as the primary key; falls
+        back to the C++ pointer address (`int(this)`) if the item
+        somehow lacks an m_Uuid (older pcbnew variants or in-memory
+        BOARD() items that bypass the UUID assignment path).
+
+        Why NOT Python `id()`: SWIG generates a NEW Python proxy per
+        access. id() of the proxy is meaningless as cross-call identity.
+        Empirically: snap1 vs snap2 on canonical = 716/1934 overlap;
+        held-list vs fresh snap = 0/1934 overlap. UUIDs = 1934/1934.
+
+        Why NOT plain `t.this`: it IS the SWIG pointer wrapper, but
+        SwigPyObject doesn't always hash stably across reads; int(this)
+        does (the underlying C++ address). UUID is preferred when
+        present because it survives even a hypothetical realloc of the
+        C++ object at the same address inside one process.
+        """
+        try:
+            return f"uuid:{item.m_Uuid.AsString()}"
+        except Exception:                                          # pragma: no cover
+            try:
+                return f"ptr:{int(item.this)}"
+            except Exception:
+                return f"id:{id(item)}"                            # last-resort
 
     def _select_ripup_candidates(self, failed_nets, k=3):
         """Find committed nets that pass near failed-net pads — likely blockers.
