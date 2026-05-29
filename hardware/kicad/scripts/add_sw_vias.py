@@ -14,8 +14,12 @@ through-vias (the only via class whose pads land inside the F.Cu+B.Cu SW-node
 copper without HDI complications) and rigorously validates EVERY drill against:
 
   1. Inside the SW-node copper region on BOTH F.Cu AND B.Cu (no dangling).
-  2. ≥0.20mm hole-to-hole clearance from EVERY existing drill (vias + footprint
-     pads + mounting holes) — board-wide walk.
+  2. ≥0.25mm hole-to-hole clearance from EVERY existing drill (vias + footprint
+     pads + mounting holes) — board-wide walk. (Drone-grade multi-fab default
+     2026-05-29 lever R; was 0.20mm = JLC HDI Class 2 floor. Override via
+     `--hole-hole-mm 0.20` for JLC-Class-2-locked builds where max density
+     matters; see HOLE_TO_HOLE_MIN_MM module constant + --help for the
+     supply-chain rationale + ampacity FoS implication.)
   3. ≥0.20mm clearance from EVERY foreign-net copper on every layer the via
      barrel + pads traverse (anti-pad clearance to foreign copper).
   4. Phase symmetry (R19): if MOTOR_A receives N vias, MOTOR_B + MOTOR_C
@@ -39,8 +43,10 @@ Algorithm:
 Usage:
   python3 add_sw_vias.py --board <in.kicad_pcb> --net <MOTOR_A_CH1|MOTOR_B_CH1|MOTOR_C_CH1>
                          --target-count <N> --output <out.kicad_pcb>
-                         [--hole-to-hole 0.20] [--foreign-clearance 0.20]
+                         [--hole-hole-mm 0.25] [--foreign-clearance 0.20]
                          [--pitch 0.5] [--via-drill 0.3] [--via-pad 0.6]
+  (--hole-hole-mm default 0.25 = drone-grade multi-fab; --hole-to-hole alias
+   accepted for legacy callers; override to 0.20 for JLC-Class-2-locked.)
 
 Returns exit 0 on PASS (target met or honestly-reported max-feasible);
 exit 1 only on tool error (e.g. net not found).
@@ -75,14 +81,28 @@ VIA_AMP_BURST_PER_VIA = 3.0
 FOS_VIA_CURRENT = 1.5  # × continuous demand for via-cluster ampacity (G_R5)
 FOS_VIA_BURST   = 1.2  # × burst demand (audit_via_current_capacity.py)
 
-# Sub-FoS hole-to-hole rule (Sai-locked 2026-05-28 + JLC fab):
-# JLC absolute hole-to-hole min = 0.20mm; we use this AS the threshold (NOT
-# above-fab-min FoS) because the SW-cluster geometry is genuinely
-# pitch-constrained and the master-route can lift this only by escalating to
-# HDI which trades ampacity for density. 0.20mm is the floor, not a target;
-# tool flags any drill < 0.25mm to-hole as a "tight" warning row in the report.
-HOLE_TO_HOLE_MIN_MM = 0.20
-HOLE_TO_HOLE_WARN_MM = 0.25
+# Hole-to-hole rule — DRONE-GRADE MULTI-FAB SUPPLY-CHAIN DEFAULT (Sai 2026-05-29
+# lever R, post PR #227 boundary-finding):
+#
+#   * JLC HDI Class 2 absolute minimum: 0.20mm hole-to-hole. PR #227 packed 79
+#     SW vias at EXACTLY 0.20mm — every drill sits ON the JLC floor. That is
+#     ZERO process margin: any JLC fab drift, any fab swap to a non-Class-2
+#     house, and the design rejects on DRC at the fab.
+#   * Conservative multi-fab supply-chain default: 0.25mm. This matches:
+#       - PCBWay default (0.20mm Class 2 special-order, 0.25mm standard)
+#       - Sierra/Advanced Circuits standard library (0.25mm)
+#       - JLC Class 1 standard (0.25mm without HDI upcharge)
+#     i.e. 0.25mm is fabbable EVERYWHERE, 0.20mm is JLC-Class-2-only.
+#   * Trade-off: 0.25mm reduces max via density per unit area by ~14% (drill
+#     pitch 0.55 → 0.60 → 0.65, area scales pitch²). For SW-node ampacity this
+#     matters — see ampacity FoS recompute in --help.
+#
+# Override to 0.20mm via `--hole-hole-mm 0.20` when fab is locked JLC HDI
+# Class 2 AND maximum via density is required for ampacity. Default 0.25mm
+# is the supply-chain-safe value; tool reports "tight" any drill <0.30mm
+# (so a 0.25mm field can still be inspected for >0.30mm margin candidates).
+HOLE_TO_HOLE_MIN_MM = 0.25  # drone-grade multi-fab default (was 0.20mm JLC-only)
+HOLE_TO_HOLE_WARN_MM = 0.30
 
 # Foreign-net copper clearance (anti-pad to foreign track/pad/zone):
 # JLC fab min 0.127mm; routing_topology.yaml `clearance: above-fab-min` FoS;
@@ -706,7 +726,26 @@ def parse_args():
                    help="candidate grid pitch in mm")
     p.add_argument("--via-drill", type=float, default=VIA_DRILL_MM_DEFAULT)
     p.add_argument("--via-pad", type=float, default=VIA_PAD_MM_DEFAULT)
-    p.add_argument("--hole-to-hole", type=float, default=HOLE_TO_HOLE_MIN_MM)
+    # Hole-to-hole: drone-grade default 0.25mm (multi-fab supply-chain safe).
+    # Override to 0.20mm for JLC HDI Class 2 lock-in when MAX density required
+    # (see HOLE_TO_HOLE_MIN_MM module constant for the full trade-off rationale).
+    # Both `--hole-hole-mm` (canonical, matches stitch_vmotor_plane.py) and
+    # `--hole-to-hole` (legacy) supply the same value.
+    p.add_argument(
+        "--hole-hole-mm", "--hole-to-hole",
+        dest="hole_to_hole", type=float, default=HOLE_TO_HOLE_MIN_MM,
+        help=(
+            f"min hole-to-hole edge-to-edge clearance in mm "
+            f"(default {HOLE_TO_HOLE_MIN_MM}mm = drone-grade multi-fab safe; "
+            f"override to 0.20 for JLC-HDI-Class-2-only builds where max "
+            f"via density is needed). "
+            f"TRADE-OFF: 0.25mm vs 0.20mm reduces max via-grid density by "
+            f"~14 pct (drill pitch scales linearly, area scales pitch^2) so "
+            f"per-phase via counts drop ~10-20 pct in tight SW clusters; "
+            f"ampacity FoS must be re-checked at 0.25mm via "
+            f"audit_via_current_capacity."
+        ),
+    )
     p.add_argument("--foreign-clearance", type=float, default=FOREIGN_COPPER_CLEAR_MM)
     p.add_argument("--symmetric-phases", action="store_true",
                    help="also add R19-symmetric vias to the other 2 phases "
