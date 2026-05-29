@@ -1,0 +1,27 @@
+{
+  "board_sha": "",
+  "failed_pad_pairs": [
+    [
+      "C72.1",
+      "D35.2"
+    ],
+    [
+      "D35.2",
+      "J21.5"
+    ]
+  ],
+  "netname": "CSA_B_OUT_CH1",
+  "pad_refs": [
+    "C72.1",
+    "D35.2",
+    "J21.5"
+  ],
+  "reason": "PARTIAL MST after K2 rejoin retries: 0 routed + 2 failed of 2 total MST edges; retry cap = 3",
+  "retries_per_leaf": {
+    "0": 3,
+    "1": 3
+  },
+  "routed_edges": 0,
+  "schema_version": 1,
+  "timestamp_iso": "2026-05-29T11:41:00.077810+00:00"
+}

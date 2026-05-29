@@ -1,0 +1,19 @@
+{
+  "blocked_net": "PWM_INLA_CH1",
+  "blocked_net_priority": 80,
+  "board_sha": "fc513205e5eb7638b4cb3a6ae0392ca3f1a54b56",
+  "cascade_depth": 1,
+  "committed": false,
+  "conflict_set": [],
+  "conflict_set_priorities": [],
+  "deviation_log_ref": "",
+  "phase_symmetric_mirror_status": "N/A",
+  "phase_symmetric_peers": [],
+  "rerouted": {},
+  "rollback_reason": "no_conflict (corridor unobstructed by foreigns)",
+  "schema_version": 1,
+  "shorts_post": 0,
+  "shorts_pre": 23,
+  "subsystem": "CH1",
+  "timestamp_iso": "2026-05-28T19:04:01.075842Z"
+}

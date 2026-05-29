@@ -1,0 +1,19 @@
+{
+  "blocked_net": "SWDIO_CH1",
+  "blocked_net_priority": 20,
+  "board_sha": "ffdd8f81997b3972fb243d45a4a217e091f21410",
+  "cascade_depth": 1,
+  "committed": false,
+  "conflict_set": [],
+  "conflict_set_priorities": [],
+  "deviation_log_ref": "",
+  "phase_symmetric_mirror_status": "N/A",
+  "phase_symmetric_peers": [],
+  "rerouted": {},
+  "rollback_reason": "no_conflict (corridor unobstructed by foreigns)",
+  "schema_version": 1,
+  "shorts_post": 0,
+  "shorts_pre": 23,
+  "subsystem": "CH1",
+  "timestamp_iso": "2026-05-28T17:44:21.610033Z"
+}

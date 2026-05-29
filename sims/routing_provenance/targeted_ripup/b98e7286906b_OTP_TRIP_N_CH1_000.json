@@ -1,0 +1,25 @@
+{
+  "blocked_net": "OTP_TRIP_N_CH1",
+  "blocked_net_priority": 40,
+  "board_sha": "b98e7286906bc334cbbd4ab988f84784f7f9637b",
+  "cascade_depth": 1,
+  "committed": false,
+  "conflict_set": [
+    "PWM_INHB_CH1",
+    "PWM_INLA_CH1"
+  ],
+  "conflict_set_priorities": [
+    80,
+    80
+  ],
+  "deviation_log_ref": "",
+  "phase_symmetric_mirror_status": "N/A",
+  "phase_symmetric_peers": [],
+  "rerouted": {},
+  "rollback_reason": "conflict_set_all_protected (every foreign is frozen-banked or >= blocked priority 40); cannot fix without higher-level escalation (HDI / placement change)",
+  "schema_version": 1,
+  "shorts_post": 0,
+  "shorts_pre": 6,
+  "subsystem": "CH1",
+  "timestamp_iso": "2026-05-29T11:44:16.405369Z"
+}

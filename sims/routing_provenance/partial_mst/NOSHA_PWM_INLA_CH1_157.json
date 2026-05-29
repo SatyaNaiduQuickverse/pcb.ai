@@ -1,0 +1,21 @@
+{
+  "board_sha": "",
+  "failed_pad_pairs": [
+    [
+      "J18.15",
+      "J19.1"
+    ]
+  ],
+  "netname": "PWM_INLA_CH1",
+  "pad_refs": [
+    "J18.15",
+    "J19.1"
+  ],
+  "reason": "PARTIAL MST after K2 rejoin retries: 0 routed + 1 failed of 1 total MST edges; retry cap = 3",
+  "retries_per_leaf": {
+    "0": 3
+  },
+  "routed_edges": 0,
+  "schema_version": 1,
+  "timestamp_iso": "2026-05-29T03:01:15.168867+00:00"
+}

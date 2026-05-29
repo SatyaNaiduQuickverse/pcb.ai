@@ -1,0 +1,21 @@
+{
+  "board_sha": "",
+  "failed_pad_pairs": [
+    [
+      "J19.10",
+      "R50.1"
+    ]
+  ],
+  "netname": "GLB_CH1",
+  "pad_refs": [
+    "J19.10",
+    "R50.1"
+  ],
+  "reason": "PARTIAL MST after K2 rejoin retries: 0 routed + 1 failed of 1 total MST edges; retry cap = 3",
+  "retries_per_leaf": {
+    "0": 3
+  },
+  "routed_edges": 0,
+  "schema_version": 1,
+  "timestamp_iso": "2026-05-29T03:01:15.029279+00:00"
+}

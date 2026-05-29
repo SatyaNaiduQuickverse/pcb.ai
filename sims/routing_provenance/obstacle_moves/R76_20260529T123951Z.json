@@ -1,0 +1,23 @@
+{
+  "ref": "R76",
+  "from": [
+    34.75,
+    60.803847
+  ],
+  "to": [
+    34.75,
+    58.803847
+  ],
+  "delta_mm": [
+    0.0,
+    -2.0
+  ],
+  "reason": "open KILL_RAIL_N R76.1\u2194D38.2 leaf corridor (4.43\u21923.29mm; J19.8\u2194D38.2\u2194D37.2 trio unblocked)",
+  "mirror_disclosure": "NO_MIRROR (R176 has value=1K \u2260 R76's 10K + parked at (260,15) off-board \u2014 different schematic role)",
+  "collisions_within_1.5mm": [],
+  "input_board_md5": "f119ac7e8a42a78f06e1acd553cb60fb",
+  "output_board_md5": "1c3ac25cffbe78b6965ea80b944ade19",
+  "timestamp_utc": "20260529T123951Z",
+  "input_path": "hardware/kicad/pcbai_fpv4in1.kicad_pcb",
+  "output_path": "/tmp/board_R76_moved.kicad_pcb"
+}
