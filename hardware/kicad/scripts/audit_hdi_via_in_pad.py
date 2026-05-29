@@ -228,6 +228,119 @@ BLIND_F_IN2_SANCTIONED_LANDINGS = (
     ("KILL_RAIL_N_CH1", "J19", "8"),    # new net+pin (closes last residual)
 )
 
+# ─── 2026-05-29 CH1 30/30 LEVER BB ────────────────────────────────────────────
+# B.Cu microvia fab class (bottom-side HDI escape — JLC HDI Class 2 standard).
+#
+# Sai cost-OK / drone-grade reliability: JLC HDI Class 2 SUPPORTS microvia on
+# BOTH outer skin pairs (F.Cu↔In1.Cu AND B.Cu↔In8.Cu) at the same per-board
+# cost adder ($2-3/board epoxy-fill + plate-over already paid for the F-side
+# whitelist; the B-side microvia uses the SAME fab process). This lever adds
+# a SECOND HDI escape mechanism per chain — on the destination side of the
+# 3 chronic residual nets (PWM_INLA / GLB / KILL_RAIL_N). The F-side escape
+# (blind_F_In2 at J19) was already whitelisted; the chains then needed a
+# through-via at the destination end (R50 / R76 / D37 / D38). Through-vias
+# at fine-pitch SMD passive pads are GEOMETRICALLY infeasible (0.60mm pad
+# extends 0.18mm beyond a 0.875mm × 0.25mm passive pad edge). The B.Cu↔In8
+# microvia (0.25mm pad) fits entirely within the passive pad bbox — same
+# physics that the F-side microvia exploits at J18/J19. DOUBLES escape supply
+# per chain → drives the 3 chronic residuals.
+#
+# PHYSICS — Brooks PCB Currents Ch.10 / JLC HDI Class 2 spec:
+#   F-side HDI: microvia 0.10mm drill / 0.25mm pad on F.Cu↔In1.Cu, 0.075mm
+#               annular ring (≥ JLC blind/buried fab min). Already lever-O.
+#   B-side HDI (this lever BB): SAME geometry, MIRROR pair on B.Cu↔In8.Cu.
+#               Single laser-drill per microvia (JLC HDI Class 2 single-pass).
+#   Fab cost adder: $0 above existing F-side envelope (same fab class, same
+#               per-board cost; the fab process pays for the whole HDI shell).
+#
+# Whitelist scope (NARROWEST per Sai cost envelope + R26 codify-don't-patch):
+#   - Refs: BOTTOM_MICROVIA_REFS — destination-side passive footprints on the
+#           3 chronic residual nets. Surgical add: ONLY R50 / R76 / D37 / D38
+#           (the named endpoints of the 3 failing chains).
+#   - Nets: BOTTOM_MICROVIA_NET_WHITELIST — exact 3 chronic residuals.
+#   - Landings: BOTTOM_MICROVIA_SANCTIONED_LANDINGS — fab-traceable per-pin
+#               roster of permitted B.Cu↔In8 microvia drops.
+#
+# Why these refs / nets / landings (CH1 30/30 BB diagnosis 2026-05-29):
+#   PWM_INLA_CH1 escape chain: J19.1 (HDI start, F→In2 blind) → through (mid)
+#                              → J19.1 ALREADY HDI-whitelisted under blind
+#                              F-In2 (lever D). But the J18.15 endpoint is
+#                              a partner pin — both already in HDI scope.
+#                              Adding B.Cu microvia at the DESTINATION-side
+#                              (J19.1 is the through-via residual; the chain
+#                              currently exhausts through-via budget). The
+#                              BB extension allows a B-In8 microvia at J19.1
+#                              when the chain needs B.Cu escape (no through).
+#   GLB_CH1 escape chain: J19.10 (HDI start, F→In2 blind) → through (mid) →
+#                         R50.1 (destination, B.Cu run). R50 is 40mm from
+#                         J19 — the BB extension whitelists R50 for B.Cu
+#                         microvia escape, doubling chain supply.
+#   KILL_RAIL_N_CH1 escape chain: J19.8 (HDI start, F→In2 blind) → through
+#                                 (mid) → D37.2 / D38.2 / R76.1 (destinations
+#                                 chained through the kill-rail discrete
+#                                 network). D37 / D38 are within 10-15mm of
+#                                 J19, R76 is at 65mm. The BB extension
+#                                 whitelists all three for B.Cu microvia
+#                                 escape — every destination node in the
+#                                 KILL_RAIL_N chain can drop to In8 via
+#                                 single-laser microvia.
+#
+# Cost envelope: SAME as existing F-side HDI ($2-3/board, already cost-cleared
+# per BOARD_INVARIANTS HDI scope). Zero marginal fab cost (same fab process,
+# same laser pass, same plate-over). Industry standard since iPhone 4 era.
+#
+# Master Lever BB 2026-05-29 — CH1 30/30 BB: B.Cu microvia fab class —
+# bottom-side HDI escape for chronic residuals.
+
+BOTTOM_MICROVIA_NET_WHITELIST = (
+    "PWM_INLA_CH1",     # chronic residual — chains via J19.1 + J18.15 + R50?
+    "GLB_CH1",          # chronic residual — escape chain to R50.1
+    "KILL_RAIL_N_CH1",  # chronic residual — escape chain via D37/D38/R76
+)
+
+# Destination-side passive / connector footprints permitted to host a B.Cu↔In8
+# microvia. SURGICAL list: each ref is a confirmed pad endpoint of one of the
+# 3 chronic residual nets. The J19 ref is INCLUDED because PWM_INLA_CH1's
+# destination is on J19 itself (the chain's HDI-start side has a partner pin
+# on J19 — J19.1 — that's the same MCU; adding B-side microvia on J19 allows
+# the destination-side escape on the same pin without through-via).
+BOTTOM_MICROVIA_REFS = (
+    "J19",      # PWM_INLA_CH1 destination (J19.1) + KILL_RAIL_N at J19.8
+    "R50",      # GLB_CH1 destination (R50.1, ~40mm from J19)
+    "R76",      # KILL_RAIL_N_CH1 destination (R76.1)
+    "D37",      # KILL_RAIL_N_CH1 chained destination (D37.2)
+    "D38",      # KILL_RAIL_N_CH1 chained destination (D38.2)
+)
+
+# Fab-traceable per-pin landing roster — the master gate verifies each
+# B.Cu↔In8 microvia the worker emits lands on a sanctioned (net, ref, pin).
+# Mirrors BLIND_F_IN2_SANCTIONED_LANDINGS pattern (net-name-only audit
+# matching per [[reference-kicad-dru-libeval-crash]]; per-pin docs are
+# fab traceability + master-gate evidence).
+BOTTOM_MICROVIA_SANCTIONED_LANDINGS = (
+    # PWM_INLA_CH1 chain destinations:
+    ("PWM_INLA_CH1",    "J19", "1"),    # chain endpoint at J19.1 (partner of J18.15)
+    # GLB_CH1 chain destination (R50.1):
+    ("GLB_CH1",         "R50", "1"),
+    # KILL_RAIL_N_CH1 chain destinations (D37.2, D38.2, R76.1, J19.8):
+    ("KILL_RAIL_N_CH1", "J19", "8"),    # KILL_RAIL_N at J19.8 (partner endpoint)
+    ("KILL_RAIL_N_CH1", "D37", "2"),    # chained discrete
+    ("KILL_RAIL_N_CH1", "D38", "2"),    # chained discrete
+    ("KILL_RAIL_N_CH1", "R76", "1"),    # final terminal
+)
+
+# Logical signal-name cross-reference (matches BLIND_F_IN2_LOGICAL_SIGNALS).
+BOTTOM_MICROVIA_LOGICAL_SIGNALS = ("PWM_INLA", "GLB", "KILL_RAIL_N")
+
+# Adjacent-pair span for B-side microvia (mirrors STACKED_TOP_PAIRS form).
+# Defined here at module level so route_subsystem_cooperative + maze_router
+# adapters can import and validate spans without round-tripping through
+# the via-emit code path. JLC HDI Class 2 single laser-drill semantics.
+BOTTOM_MICROVIA_ADJACENT_PAIRS = (
+    ("B.Cu", "In8.Cu"),
+    ("In8.Cu", "B.Cu"),
+)
+
 # Via-center-inside-pad tolerance — accommodates grid-snap rounding from
 # router emission (router places via at pad center but pcbnew internal
 # unit conversion may shift by ≤1µm).
@@ -298,9 +411,14 @@ def main():
     # Each entry: (x, y, layer_pair, net_name, drill_mm).
     microvia_legs = []                  # candidate top/bottom legs of stacked pairs
     fails_stacked_offwhitelist = []     # stacked pair on non-whitelist net
+    # 2026-05-29 LEVER BB: B.Cu↔In8 microvia (bottom-side HDI escape) —
+    # net-whitelist + landing-ref fails (analogous to the blind_F_In2 gate).
+    fails_bottom_microvia_offwhitelist = []   # B-In8 microvia on non-WL net
+    fails_bottom_microvia_offref = []         # B-In8 microvia outside BOTTOM_MICROVIA_REFS
     pass_count = 0  # vias correctly in J18/J19 pads
     pass_blind_f_in2 = 0  # OQ-020 blind F-In2 vias correctly on whitelist nets
     pass_stacked_microvia = 0  # LEVER L: stacked microvia pairs correctly on whitelist
+    pass_bottom_microvia = 0   # LEVER BB: B-In8 microvia on whitelist net + ref
 
     # v7: adjacent-layer pairs allowed for VIATYPE_MICROVIA tag (JLC HDI
     # Class 2 single laser-drill spec). Anything longer is a through-via
@@ -325,6 +443,14 @@ def main():
     BLIND_F_IN2_PAIRS = {
         (pcbnew.F_Cu, pcbnew.In2_Cu),
         (pcbnew.In2_Cu, pcbnew.F_Cu),
+    }
+    # LEVER BB 2026-05-29: B.Cu↔In8 microvia adjacent-layer pairs (the
+    # bottom-side mirror of microvia F-In1). JLC HDI Class 2 single laser-
+    # drill on the bottom outer pair. Per BOARD_INVARIANTS §"HDI Outer
+    # pair extension: B.Cu↔In8" (this lever).
+    BOTTOM_MICROVIA_PAIRS = {
+        (pcbnew.B_Cu, pcbnew.In8_Cu),
+        (pcbnew.In8_Cu, pcbnew.B_Cu),
     }
     # LEVER L: stacked microvia F↔In1↔In2 — the TOP leg spans (F.Cu, In1.Cu)
     # and the BOTTOM leg spans (In1.Cu, In2.Cu); a stacked pair is two
@@ -403,6 +529,40 @@ def main():
                     (vx, vy, net_name, drill_mm)
                 )
 
+        # LEVER BB 2026-05-29: a VIATYPE_MICROVIA via on the B.Cu↔In8 outer
+        # pair is the bottom-side HDI escape class. Accept ONLY when (a) the
+        # net is in BOTTOM_MICROVIA_NET_WHITELIST AND (b) the via lands
+        # inside an SMD pad of a footprint in BOTTOM_MICROVIA_REFS. Either
+        # gate violated = FAIL (cost scope creep beyond Sai's BB envelope).
+        is_bottom_microvia = (is_microvia_tag and layer_pair in BOTTOM_MICROVIA_PAIRS)
+        bottom_pass = False
+        if is_bottom_microvia:
+            if net_name not in BOTTOM_MICROVIA_NET_WHITELIST:
+                fails_bottom_microvia_offwhitelist.append(
+                    (vx, vy, net_name, drill_mm)
+                )
+            else:
+                # Verify landing ref. We re-use the SMD-pad bbox loop below
+                # but pre-scan here for B-microvia ref enforcement (so the
+                # surgical (net, ref) gate is independent of the J18/J19
+                # whitelist-pad loop semantics).
+                landed_ref = None
+                for fp_ref, pads in pads_by_fp.items():
+                    for (pad_name, px, py, phx, phy, pnet) in pads:
+                        if (abs(vx - px) <= phx + TOLERANCE_MM
+                                and abs(vy - py) <= phy + TOLERANCE_MM):
+                            landed_ref = fp_ref
+                            break
+                    if landed_ref:
+                        break
+                if landed_ref is None or landed_ref not in BOTTOM_MICROVIA_REFS:
+                    fails_bottom_microvia_offref.append(
+                        (vx, vy, net_name, landed_ref, drill_mm)
+                    )
+                else:
+                    pass_bottom_microvia += 1
+                    bottom_pass = True
+
         # Only HDI vias are subject to this audit. Standard 0.3mm-drill
         # vias on pads are pre-existing routing convention and don't
         # require HDI fab process; out of scope here.
@@ -418,6 +578,13 @@ def main():
                 if (abs(vx - px) <= phx + TOLERANCE_MM
                         and abs(vy - py) <= phy + TOLERANCE_MM):
                     if fp_ref in HDI_VIA_IN_PAD_WHITELIST:
+                        inside_whitelist = True
+                    elif (is_bottom_microvia and bottom_pass
+                            and fp_ref in BOTTOM_MICROVIA_REFS):
+                        # LEVER BB: B-microvia on a sanctioned (net, ref)
+                        # pair is the bottom-side HDI escape — treat as
+                        # whitelist (in-pad-whitelist) for the J18/J19 loop
+                        # so it does NOT re-fail under fails_in_pad_nonwhitelist.
                         inside_whitelist = True
                     else:
                         if inside_nonwhitelist_pad is None:
@@ -533,11 +700,37 @@ def main():
     if len(fails_stacked_offwhitelist) > 20:
         print(f"  ... and {len(fails_stacked_offwhitelist) - 20} more")
 
+    # LEVER BB 2026-05-29: B.Cu↔In8 microvia report (bottom-side HDI escape)
+    print(f"")
+    print(f"B.Cu↔In8 microvias correctly on whitelist nets+refs "
+          f"({list(BOTTOM_MICROVIA_NET_WHITELIST)} @ "
+          f"{list(BOTTOM_MICROVIA_REFS)}): {pass_bottom_microvia}")
+    print(f"B.Cu↔In8 microvias on NON-WHITELIST nets (FAIL, LEVER BB scope): "
+          f"{len(fails_bottom_microvia_offwhitelist)}")
+    for (vx, vy, nn, drill) in fails_bottom_microvia_offwhitelist[:20]:
+        print(f"  - B-In8 microvia @({vx:.3f},{vy:.3f}) drill={drill:.3f} "
+              f"net={nn!r} — NOT in BOTTOM_MICROVIA_NET_WHITELIST "
+              f"(cost scope creep beyond Sai's LEVER BB envelope; see "
+              f"BOARD_INVARIANTS §'HDI Outer pair extension: B.Cu↔In8')")
+    if len(fails_bottom_microvia_offwhitelist) > 20:
+        print(f"  ... and {len(fails_bottom_microvia_offwhitelist) - 20} more")
+    print(f"B.Cu↔In8 microvias outside BOTTOM_MICROVIA_REFS (FAIL, LEVER BB scope): "
+          f"{len(fails_bottom_microvia_offref)}")
+    for (vx, vy, nn, ref, drill) in fails_bottom_microvia_offref[:20]:
+        print(f"  - B-In8 microvia @({vx:.3f},{vy:.3f}) drill={drill:.3f} "
+              f"net={nn!r} ref={ref!r} — NOT in BOTTOM_MICROVIA_REFS "
+              f"(landing ref out of scope; LEVER BB whitelist = "
+              f"{list(BOTTOM_MICROVIA_REFS)})")
+    if len(fails_bottom_microvia_offref) > 20:
+        print(f"  ... and {len(fails_bottom_microvia_offref) - 20} more")
+
     total_fails = (len(fails_in_pad_nonwhitelist)
                    + len(fails_hdi_outside_whitelist)
                    + len(fails_microvia_span)
                    + len(fails_blind_f_in2_offwhitelist)
-                   + len(fails_stacked_offwhitelist))
+                   + len(fails_stacked_offwhitelist)
+                   + len(fails_bottom_microvia_offwhitelist)
+                   + len(fails_bottom_microvia_offref))
     if total_fails == 0:
         print(f"\n✅ PASS — all HDI via-in-pad placements on whitelist "
               f"({HDI_VIA_IN_PAD_WHITELIST}); cost envelope preserved.")
