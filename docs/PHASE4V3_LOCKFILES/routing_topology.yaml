@@ -396,18 +396,118 @@ components:
   # anchor to their parent IC pin per R23/R25. Refs map: J13=TLV76733 LDO,
   # J15-17=USBLC6 ESD, C45=LDO Vin, C46=LDO Vout, L11=VDDA ferrite, C47/C48=VDDA
   # bypass, D23=power-good LED, R35=LED limit-R.
-  J13: {tier: 5, role: cluster-anchor, subsystem: S6, zone_hint: [70.0, 90.0]}
-  J15: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [-10.0, -4.0]}
-  J16: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [0.0, -4.0]}
-  J17: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [10.0, -4.0]}
+  J13: {tier: 5, role: cluster-anchor, subsystem: S6, zone_hint: [25.0, 7.0]}
+  J15: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [-13.0, 0.0]}
+  J16: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [-19.0, 0.0]}
+  J17: {tier: 5, role: cluster-anchor, subsystem: S6, near_anchor: J14, near_offset: [13.0, 0.0]}
   C45: {tier: 5, role: decoupling, subsystem: S6, parent: J13, parent_pin: "3", max_distance_mm: 3, same_layer_as_parent: true}
   C46: {tier: 5, role: decoupling, subsystem: S6, parent: J13, parent_pin: "5", max_distance_mm: 3, same_layer_as_parent: true}
   L11: {tier: 5, role: cluster-member, subsystem: S6, parent: J13, parent_pin: "5", max_distance_mm: 5, same_layer_as_parent: true}
   C47: {tier: 5, role: decoupling, subsystem: S6, parent: L11, parent_pin: "2", max_distance_mm: 3, same_layer_as_parent: true}
-  C48: {tier: 5, role: decoupling, subsystem: S6, parent: L11, parent_pin: "2", max_distance_mm: 3, same_layer_as_parent: true}
+  C48: {tier: 5, role: cluster-aux, subsystem: S6, parent: L11, parent_pin: "2", same_layer_as_parent: true}  # surplus 2nd cap on L11.2 (C47 holds the <=3mm slot); L11 is inductor not IC-VDD -> bulk/aux not R25
   R35: {tier: 5, role: cluster-member, subsystem: S6, parent: J13, parent_pin: "5", max_distance_mm: 8, same_layer_as_parent: true}
   D23: {tier: 5, role: cluster-member, subsystem: S6, parent: R35, parent_pin: "2", max_distance_mm: 3, same_layer_as_parent: true}
 
+  # ==== CH1 (Stage 2 template) — derive_ch1_roles.py from netlist 2026-05-26 ====
+  C51: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "17", relation: "decoupling", max_distance_mm: 3, same_layer_as_parent: true}
+  C52: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "decoupling", max_distance_mm: 3, same_layer_as_parent: true}
+  C53: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "J18", relation: "bypass-bulk", same_layer_as_parent: true}
+  C54: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J18", parent_pin: "5", relation: "decoupling", max_distance_mm: 3, same_layer_as_parent: true}
+  C55: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "J18", relation: "bypass-bulk", same_layer_as_parent: true}
+  C56: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "R42", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C57: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "J19", parent_pin: "1", relation: "decoupling", max_distance_mm: 3, same_layer_as_parent: true}
+  C58: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "C57", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C59: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "D24", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C60: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "D27", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C61: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "D30", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C62: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "Q5", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C63: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "Q5", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C64: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "Q5", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C65: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "Q5", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C66: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "Q5", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C67: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "Q5", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C68: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "Q5", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C69: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "Q5", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C70: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "Q5", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C71: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "D34", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C72: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "D35", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C73: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "D36", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C74: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "R60", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C75: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "R62", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C76: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "R64", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C77: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "C57", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C78: {tier: 3, role: "cluster-aux", subsystem: "CH1", parent: "R68", parent_pin: "1", relation: "aux-cap", max_distance_mm: 6, same_layer_as_parent: true}
+  C79: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "U3", parent_pin: "8", relation: "decoupling", max_distance_mm: 3, same_layer_as_parent: true}
+  C80: {tier: 3, role: "decoupling", subsystem: "CH1", parent: "U4", parent_pin: "5", relation: "decoupling", max_distance_mm: 3, same_layer_as_parent: true}
+  D15: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  D19: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U4", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  D24: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R45", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  D25: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R46", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  D26: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J20", parent_pin: "1", relation: "motor-clamp", max_distance_mm: 8, layer: "B.Cu", rotation: 90}
+  D27: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R49", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  D28: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R50", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  D29: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J21", parent_pin: "1", relation: "motor-clamp", max_distance_mm: 8, layer: "B.Cu", rotation: 90}
+  D30: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R53", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  D31: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R54", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  D32: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J22", parent_pin: "1", relation: "motor-clamp", max_distance_mm: 8, layer: "B.Cu", rotation: 90}
+  D33: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  D34: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R57", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  D35: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R58", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  D36: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R59", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  D37: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 8, same_layer_as_parent: true}
+  D38: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D19", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  J18: {zone_hint: [31.75, 66.0], tier: 3, role: "cluster-anchor", subsystem: "CH1"}
+  J19: {zone_hint: [24.5, 62.0], tier: 2, role: "cluster-anchor", subsystem: "CH1", parent: "TP20", parent_pin: "1", relation: "gate-driver", max_distance_mm: 8, same_layer_as_parent: true}
+  J20: {zone_hint: [24.5, 54.0], tier: 3, role: "cluster-anchor", subsystem: "CH1", parent: "R57", parent_pin: "1", relation: "ina-near-shunt", max_distance_mm: 5, same_layer_as_parent: true}
+  J21: {zone_hint: [24.5, 67.0], tier: 3, role: "cluster-anchor", subsystem: "CH1", parent: "R58", parent_pin: "1", relation: "ina-near-shunt", max_distance_mm: 5, same_layer_as_parent: true}
+  J22: {zone_hint: [24.5, 78.0], tier: 3, role: "cluster-anchor", subsystem: "CH1", parent: "R59", parent_pin: "1", relation: "ina-near-shunt", max_distance_mm: 5, same_layer_as_parent: true}
+  Q5: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "TP19", parent_pin: "1", relation: "hs-fet", max_distance_mm: 7, layer: "F.Cu", loop_member: true}
+  Q6: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q5", parent_pin: "D", relation: "ls-fet", max_distance_mm: 1.5, layer: "B.Cu", loop_member: true}
+  Q7: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "TP20", parent_pin: "1", relation: "hs-fet", max_distance_mm: 7, layer: "F.Cu", loop_member: true}
+  Q8: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q7", parent_pin: "D", relation: "ls-fet", max_distance_mm: 1.5, layer: "B.Cu", loop_member: true}
+  Q9: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "TP21", parent_pin: "1", relation: "hs-fet", max_distance_mm: 7, layer: "F.Cu", loop_member: true}
+  Q10: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q9", parent_pin: "D", relation: "ls-fet", max_distance_mm: 1.5, layer: "B.Cu", loop_member: true}
+  R22: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D15", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R26: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D19", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R41: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R42: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R43: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R41", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R44: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J19", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R45: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q5", parent_pin: "G", relation: "gate-r", max_distance_mm: 5, same_layer_as_parent: true}
+  R46: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q6", parent_pin: "G", relation: "gate-r", max_distance_mm: 5, same_layer_as_parent: true}
+  R47: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D24", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R48: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D25", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R49: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q7", parent_pin: "G", relation: "gate-r", max_distance_mm: 5, same_layer_as_parent: true}
+  R50: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q8", parent_pin: "G", relation: "gate-r", max_distance_mm: 5, same_layer_as_parent: true}
+  R51: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D27", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R52: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D28", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R53: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q9", parent_pin: "G", relation: "gate-r", max_distance_mm: 5, same_layer_as_parent: true}
+  R54: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q10", parent_pin: "G", relation: "gate-r", max_distance_mm: 5, same_layer_as_parent: true}
+  R55: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D30", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R56: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D31", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R57: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q6", parent_pin: "S", relation: "source-shunt", max_distance_mm: 6, layer: "F.Cu", loop_member: true, kelvin_sense: true}
+  R58: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q8", parent_pin: "S", relation: "source-shunt", max_distance_mm: 6, layer: "F.Cu", loop_member: true, kelvin_sense: true}
+  R59: {tier: 2, role: "cluster-member", subsystem: "CH1", parent: "Q10", parent_pin: "S", relation: "source-shunt", max_distance_mm: 6, layer: "F.Cu", loop_member: true, kelvin_sense: true}
+  R60: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D24", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R61: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R60", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R62: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D27", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R63: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R62", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R64: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D30", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R65: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R64", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R66: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D33", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R67: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "TH1", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R68: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U3", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R69: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R68", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R70: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R68", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R71: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R70", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R72: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "D34", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R73: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U4", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R74: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U4", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R75: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "R73", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  R76: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "auto", max_distance_mm: 8, same_layer_as_parent: true}
+  TH1: {tier: 3, role: "cluster-member", subsystem: "CH1", parent: "U3", parent_pin: "1", relation: "auto", max_distance_mm: 6, same_layer_as_parent: true}
+  U3: {zone_hint: [31.75, 75.0], tier: 3, role: "cluster-anchor", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "logic-near-mcu", max_distance_mm: 8, same_layer_as_parent: true}
+  U4: {zone_hint: [31.75, 49.0], tier: 3, role: "cluster-anchor", subsystem: "CH1", parent: "J18", parent_pin: "1", relation: "logic-near-mcu", max_distance_mm: 8, same_layer_as_parent: true}
   # ---- Schema example (worker fills concrete entries from netlist) ----
 
   # Tier 1: Already in mechanical_anchors.yaml (mount holes, fiducials, J1, J11, J12, motor pads, test points, LEDs)

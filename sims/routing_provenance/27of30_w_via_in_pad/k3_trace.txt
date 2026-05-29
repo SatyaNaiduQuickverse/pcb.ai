@@ -1,0 +1,9 @@
+248:[coop] multi-mech fallback (CH1 30/30 lever K3): attempting 5 unrouted net(s)
+249:  [.] PWM_INHB_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+250:      pair J18.15->J19.1: chain=[] len_mm=17.13 tracks=5 vias=0
+251:  [+] PWM_INLA_CH1: routed via multi-mech chain
+252:  [.] GLB_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+253:  [.] KILL_RAIL_N_CH1: K3 multi-mech aggregate status=partial (0/2 pairs routed) — atomic rollback (per-net)
+254:      pair J18.23->TP22.1: chain=['through'] len_mm=8.07 tracks=2 vias=1
+255:  [+] SWDIO_CH1: routed via multi-mech chain
+256:[coop] multi-mech fallback done; remaining unrouted = 3

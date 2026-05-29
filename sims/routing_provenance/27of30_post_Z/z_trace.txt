@@ -1,0 +1,36 @@
+7:  [Z] HDI-whitelisted target nets (5): ['GLB_CH1', 'KILL_RAIL_N_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+8:  [Y] cascade k=5: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+9:      joint try (5 nets, 2 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed', 'SWDIO_CH1': 'routed'}
+10:  [Y] cascade k=4: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1']
+11:      joint try (4 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed'}
+12:  [Y] cascade k=3: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1']
+13:      joint try (3 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed'}
+14:  [Y] cascade k=2: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1']
+15:      joint try (2 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed'}
+16:  [Y] cascade k=1: trying subset ['KILL_RAIL_N_CH1']
+17:      joint try (1 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed'}
+18:  [Y] cascade: NO feasible subset (size 1 also failed) — restoring snapshot, deferring to per-net sequential pass
+19:  [Z] HDI-first phase: 0/5 rescued — proceeding to normal cooperative pass (HDI residuals will be retried at the K3 fallback after the loop)
+263:[coop] JOINT multi-mech fallback (CH1 30/30 lever Y): attempting 5 unrouted net(s) simultaneously
+264:  [Y] cascade k=5: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+265:      joint try (5 nets, 2 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed', 'SWDIO_CH1': 'routed'}
+266:  [Y] cascade k=4: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1']
+267:      joint try (4 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed'}
+268:  [Y] cascade k=3: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1']
+269:      joint try (3 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed'}
+270:  [Y] cascade k=2: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1']
+271:      joint try (2 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed'}
+272:  [Y] cascade k=1: trying subset ['KILL_RAIL_N_CH1']
+273:      joint try (1 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed'}
+274:  [Y] cascade: NO feasible subset (size 1 also failed) — restoring snapshot, deferring to per-net sequential pass
+277:[coop] SEQUENTIAL multi-mech fallback (CH1 30/30 lever K3): attempting 5 residual net(s)
+278:      pair J18.19->J19.23: chain=[] len_mm=14.07 tracks=5 vias=0
+279:  [+] PWM_INHB_CH1: routed via multi-mech chain
+280:  [.] PWM_INLA_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+281:  [.] GLB_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+282:  [.] KILL_RAIL_N_CH1: K3 multi-mech aggregate status=partial (0/2 pairs routed) — atomic rollback (per-net)
+283:      pair J18.23->TP22.1: chain=['through', 'through'] len_mm=8.95 tracks=5 vias=2
+284:  [+] SWDIO_CH1: routed via multi-mech chain
+285:[coop] multi-mech fallback done; remaining unrouted = 3
+286:[coop] UNROUTED nets: ['PWM_INLA_CH1', 'GLB_CH1', 'KILL_RAIL_N_CH1']
+304:Result: full=2/5 partial=0 unrouted=3, 30 iterations, 30 ripups

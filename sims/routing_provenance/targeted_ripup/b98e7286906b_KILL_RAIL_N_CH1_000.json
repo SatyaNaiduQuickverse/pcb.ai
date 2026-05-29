@@ -1,0 +1,33 @@
+{
+  "blocked_net": "KILL_RAIL_N_CH1",
+  "blocked_net_priority": 100,
+  "board_sha": "b98e7286906bc334cbbd4ab988f84784f7f9637b",
+  "cascade_depth": 1,
+  "committed": false,
+  "conflict_set": [
+    "BOOT0_CH1",
+    "SWDIO_CH1",
+    "BEMF_A_CH1",
+    "I_TRIP_N_CH1"
+  ],
+  "conflict_set_priorities": [
+    20,
+    20,
+    70,
+    70
+  ],
+  "deviation_log_ref": "docs/ROUTING_METHODOLOGY.md#PHASE C addendum",
+  "phase_symmetric_mirror_status": "DEVIATION_LOGGED",
+  "phase_symmetric_peers": [
+    "BEMF_A_CH1",
+    "BEMF_B_CH1",
+    "BEMF_C_CH1"
+  ],
+  "rerouted": {},
+  "rollback_reason": "reroute_failed (one or more rerouted nets did not complete)",
+  "schema_version": 1,
+  "shorts_post": 13,
+  "shorts_pre": 20,
+  "subsystem": "CH1",
+  "timestamp_iso": "2026-05-29T11:41:00.095936Z"
+}

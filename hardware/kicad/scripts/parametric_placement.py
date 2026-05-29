@@ -276,7 +276,7 @@ def ch_ic_anchors(channel: str, p: BoardParameters) -> Dict[str, Tuple[float, fl
         # INAs (3) — MOTOR sub-zone, Kelvin sense to shunts on same layer
         'J20':  (motor_mid_x, motor['TP19'][1] + 1, p.driver_layer, 'MOTOR'),  # phase A INA
         'J21':  (motor_mid_x, motor['TP20'][1] + 1, p.driver_layer, 'MOTOR'),  # phase B INA
-        'J22':  (motor_mid_x, motor['TP21'][1] - 1, p.driver_layer, 'MOTOR'),  # phase C INA
+        'J22':  (motor_mid_x, motor['TP21'][1] + 1, p.driver_layer, 'MOTOR'),  # phase C INA (sign-typo fix 2026-05-26: was -1, broke uniform-Δ13 cluster symmetry → R19 pure-transform; master-approved J22 y78→80)
         # Op-amps (BEMF comparators) — LOGIC sub-zone
         'U3':   (logic_mid_x, motor['TP21'][1] - 4, p.mcu_layer, 'LOGIC'),
         'U4':   (logic_mid_x, motor['TP19'][1] - 4, p.mcu_layer, 'LOGIC'),

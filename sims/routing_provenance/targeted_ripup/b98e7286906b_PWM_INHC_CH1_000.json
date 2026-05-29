@@ -1,0 +1,29 @@
+{
+  "blocked_net": "PWM_INHC_CH1",
+  "blocked_net_priority": 80,
+  "board_sha": "b98e7286906bc334cbbd4ab988f84784f7f9637b",
+  "cascade_depth": 1,
+  "committed": false,
+  "conflict_set": [
+    "SWCLK_CH1",
+    "LED_GPIO_CH1",
+    "NRST_CH1",
+    "VREF_I_TRIP_CH1"
+  ],
+  "conflict_set_priorities": [
+    20,
+    40,
+    40,
+    70
+  ],
+  "deviation_log_ref": "",
+  "phase_symmetric_mirror_status": "N/A",
+  "phase_symmetric_peers": [],
+  "rerouted": {},
+  "rollback_reason": "reroute_failed (one or more rerouted nets did not complete)",
+  "schema_version": 1,
+  "shorts_post": 7,
+  "shorts_pre": 13,
+  "subsystem": "CH1",
+  "timestamp_iso": "2026-05-29T11:42:05.701233Z"
+}

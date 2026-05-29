@@ -1,0 +1,161 @@
+{
+  "board": "hardware/kicad/pcbai_fpv4in1.kicad_pcb",
+  "hpwl": {
+    "total_mm": 2892.2,
+    "nets_with_pins_ge_2": 77,
+    "worst_10": [
+      [
+        "GND",
+        298.66
+      ],
+      [
+        "VMOTOR_CH",
+        270.95
+      ],
+      [
+        "BUS_CURR_HALL_OUT",
+        242.99
+      ],
+      [
+        "PG_VMOTOR",
+        217.35
+      ],
+      [
+        "+V5_PI5",
+        196.55
+      ],
+      [
+        "BOOT0_CH3",
+        161.1
+      ],
+      [
+        "+3V3",
+        111.13
+      ],
+      [
+        "+V5_FC",
+        91.9
+      ],
+      [
+        "+3V3A",
+        79.09
+      ],
+      [
+        "TLM",
+        60.08
+      ]
+    ]
+  },
+  "density": [
+    {
+      "zone": "S1 battery input",
+      "area_mm2": 1100.0,
+      "comp_area_mm2": 341.6636249999999,
+      "comp_frac": 0.31060329545454535,
+      "over_budget": false
+    },
+    {
+      "zone": "S6 connectors",
+      "area_mm2": 1100.0,
+      "comp_area_mm2": 168.3225,
+      "comp_frac": 0.15302045454545454,
+      "over_budget": false
+    },
+    {
+      "zone": "CH1 (channel A)",
+      "area_mm2": 1365.0,
+      "comp_area_mm2": 893.6499499999991,
+      "comp_frac": 0.6546886080586074,
+      "over_budget": true
+    },
+    {
+      "zone": "CH2 (channel B)",
+      "area_mm2": 1365.0,
+      "comp_area_mm2": 102.51749999999986,
+      "comp_frac": 0.0751043956043955,
+      "over_budget": false
+    },
+    {
+      "zone": "CH3 (channel C)",
+      "area_mm2": 1365.0,
+      "comp_area_mm2": 77.01499999999994,
+      "comp_frac": 0.05642124542124538,
+      "over_budget": false
+    },
+    {
+      "zone": "CH4 (channel D)",
+      "area_mm2": 1365.0,
+      "comp_area_mm2": 77.01499999999997,
+      "comp_frac": 0.0564212454212454,
+      "over_budget": false
+    },
+    {
+      "zone": "S2 bulk caps",
+      "area_mm2": 400.0,
+      "comp_area_mm2": 29.00499999999996,
+      "comp_frac": 0.0725124999999999,
+      "over_budget": false
+    },
+    {
+      "zone": "S3 supervisor+Hall",
+      "area_mm2": 440.0,
+      "comp_area_mm2": 0.0,
+      "comp_frac": 0.0,
+      "over_budget": false
+    },
+    {
+      "zone": "S5 BEC east strip (CH1 feed)",
+      "area_mm2": 160.0,
+      "comp_area_mm2": 25.502499999999973,
+      "comp_frac": 0.15939062499999984,
+      "over_budget": false
+    },
+    {
+      "zone": "S5 BEC west strip (CH2 feed)",
+      "area_mm2": 160.0,
+      "comp_area_mm2": 0.0,
+      "comp_frac": 0.0,
+      "over_budget": false
+    },
+    {
+      "zone": "S5 BEC south strip (CH4 feed)",
+      "area_mm2": 160.0,
+      "comp_area_mm2": 12.60249999999998,
+      "comp_frac": 0.07876562499999987,
+      "over_budget": false
+    },
+    {
+      "zone": "S5 BEC north strip (CH3 feed)",
+      "area_mm2": 160.0,
+      "comp_area_mm2": 16.402500000000007,
+      "comp_frac": 0.10251562500000004,
+      "over_budget": false
+    }
+  ],
+  "decoupling": {
+    "over_3mm_count": 3,
+    "worst": [
+      {
+        "ic": "J18",
+        "pad": "5",
+        "net": "+3V3A",
+        "nearest_cap": "C54",
+        "distance_mm": 4.8
+      },
+      {
+        "ic": "J19",
+        "pad": "4",
+        "net": "+V5_FC",
+        "nearest_cap": "C57",
+        "distance_mm": 4.36
+      },
+      {
+        "ic": "J12",
+        "pad": "2",
+        "net": "+3V3",
+        "nearest_cap": "C79",
+        "distance_mm": 17.93
+      }
+    ]
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "input": "hardware/kicad/pcbai_fpv4in1.kicad_pcb",
+  "output": "/tmp/board_hand.kicad_pcb",
+  "dry_run": true,
+  "summary": {
+    "PWM_INLA_CH1": {
+      "status": "COLLISION",
+      "issues_count": 23,
+      "issues_sample": [
+        "  seg0 (33.0, 68.44)\u2192(33.0, 62.2) on F.Cu: pad J18.14 net='PWM_INLB_CH1' on F.Cu d=0.500mm < 0.637mm",
+        "  seg0 (33.0, 68.44)\u2192(33.0, 62.2) on F.Cu: pad J18.16 net='GND' on F.Cu d=0.500mm < 0.637mm",
+        "  seg0 (33.0, 68.44)\u2192(33.0, 62.2) on F.Cu: pad J18.25 net='LED_GPIO_CH1' on F.Cu d=0.500mm < 0.637mm",
+        "  seg0 (33.0, 68.44)\u2192(33.0, 62.2) on F.Cu: pad J18.26 net='PB3_NC_CH1' on F.Cu d=0.000mm < 0.637mm",
+        "  seg0 (33.0, 68.44)\u2192(33.0, 62.2) on F.Cu: pad J18.27 net='M1_CLEAN' on F.Cu d=0.500mm < 0.637mm",
+        "  seg0 (33.0, 68.44)\u2192(33.0, 62.2) on F.Cu: pad J18.33 net='' on F.Cu d=1.250mm < 1.850mm",
+        "  seg0 (33.0, 68.44)\u2192(33.0, 62.2) on F.Cu: pad J18.33 net='' on F.Cu d=0.250mm < 0.450mm",
+        "  seg0 (33.0, 68.44)\u2192(33.0, 62.2) on F.Cu: pad J18.33 net='' on F.Cu d=0.250mm < 0.450mm",
+        "  seg0 (33.0, 68.44)\u2192(33.0, 62.2) on F.Cu: pad J18.33 net='' on F.Cu d=0.250mm < 0.450mm",
+        "  seg1 (33.0, 62.2)\u2192(22.26, 62.2) on F.Cu: track 'GHB_CH1' on F.Cu d=0.059mm < 0.300mm"
+      ]
+    },
+    "GLB_CH1": {
+      "status": "COLLISION",
+      "issues_count": 4,
+      "issues_sample": [
+        "  seg0 (24.45, 64.46)\u2192(24.45, 75.0) on In2.Cu: track 'CSA_B_OUT_CH1' on In2.Cu d=0.050mm < 0.275mm",
+        "  seg0 (24.45, 64.46)\u2192(24.45, 75.0) on In2.Cu: track 'CSA_B_OUT_CH1' on In2.Cu d=0.050mm < 0.275mm",
+        "  seg1 (24.45, 75.0)\u2192(6.81, 75.0) on In2.Cu: track 'SHUNT_B_TOP_CH1' on In2.Cu d=0.165mm < 0.325mm",
+        "  seg1 (24.45, 75.0)\u2192(6.81, 75.0) on In2.Cu: track 'SHUNT_B_TOP_CH1' on In2.Cu d=0.165mm < 0.325mm"
+      ]
+    },
+    "KILL_RAIL_N_CH1": {
+      "status": "COLLISION",
+      "issues_count": 17,
+      "issues_sample": [
+        "  seg0 (23.45, 64.46)\u2192(23.45, 57.6) on F.Cu: pad J19.7 net='' on F.Cu d=0.500mm < 0.637mm",
+        "  seg0 (23.45, 64.46)\u2192(23.45, 57.6) on F.Cu: pad J19.9 net='GLC_CH1' on F.Cu d=0.500mm < 0.637mm",
+        "  seg0 (23.45, 64.46)\u2192(23.45, 57.6) on F.Cu: pad J19.22 net='PWM_INHA_CH1' on F.Cu d=0.500mm < 0.637mm",
+        "  seg0 (23.45, 64.46)\u2192(23.45, 57.6) on F.Cu: pad J19.23 net='PWM_INHB_CH1' on F.Cu d=0.000mm < 0.637mm",
+        "  seg0 (23.45, 64.46)\u2192(23.45, 57.6) on F.Cu: pad J19.24 net='PWM_INHC_CH1' on F.Cu d=0.500mm < 0.637mm",
+        "  seg0 (23.45, 64.46)\u2192(23.45, 57.6) on F.Cu: pad J19.25 net='' on F.Cu d=0.750mm < 1.500mm",
+        "  seg0 (23.45, 64.46)\u2192(23.45, 57.6) on F.Cu: pad C57.1 net='+V5_FC' on F.Cu d=0.168mm < 0.510mm",
+        "  seg1 (23.45, 57.6)\u2192(32.2, 57.6) on F.Cu: pad D19.1 net='KILL_LOCAL_N_CH1' on F.Cu d=0.263mm < 0.675mm",
+        "  seg1 (23.45, 57.6)\u2192(32.2, 57.6) on F.Cu: pad R44.1 net='N$8' on F.Cu d=0.480mm < 0.520mm",
+        "  seg1 (23.45, 57.6)\u2192(32.2, 57.6) on F.Cu: pad R44.2 net='GND' on F.Cu d=0.480mm < 0.520mm"
+      ]
+    }
+  },
+  "timestamp_utc": "20260529T130846Z"
+}

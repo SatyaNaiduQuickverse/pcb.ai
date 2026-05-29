@@ -1,0 +1,40 @@
+{
+  "input": "hardware/kicad/pcbai_fpv4in1.kicad_pcb",
+  "output": "/tmp/board_hand2.kicad_pcb",
+  "dry_run": true,
+  "summary": {
+    "PWM_INLA_CH1": {
+      "status": "COLLISION",
+      "issues_count": 9,
+      "issues_sample": [
+        "  seg0 (33.0, 68.44)\u2192(33.0, 56.5) on In2.Cu: track 'PWM_INHC_CH1' on In2.Cu d=0.000mm < 0.265mm",
+        "  seg0 (33.0, 68.44)\u2192(33.0, 56.5) on In2.Cu: track 'PWM_INHC_CH1' on In2.Cu d=0.000mm < 0.265mm",
+        "  seg0 (33.0, 68.44)\u2192(33.0, 56.5) on In2.Cu: pad J18.33 net='' on In2.Cu d=0.250mm < 0.440mm",
+        "  seg0 (33.0, 68.44)\u2192(33.0, 56.5) on In2.Cu: pad J18.33 net='' on In2.Cu d=0.250mm < 0.440mm",
+        "  seg0 (33.0, 68.44)\u2192(33.0, 56.5) on In2.Cu: pad J18.33 net='' on In2.Cu d=0.250mm < 0.440mm",
+        "  seg1 (33.0, 56.5)\u2192(21.0, 56.5) on In2.Cu: track 'BSTB_CH1' on In2.Cu d=0.100mm < 0.290mm",
+        "  seg1 (33.0, 56.5)\u2192(21.0, 56.5) on In2.Cu: track 'BSTB_CH1' on In2.Cu d=0.100mm < 0.290mm",
+        "  seg1 (33.0, 56.5)\u2192(21.0, 56.5) on In2.Cu: track 'I_TRIP_N_CH1' on In2.Cu d=0.200mm < 0.265mm",
+        "  seg1 (33.0, 56.5)\u2192(21.0, 56.5) on In2.Cu: track 'I_TRIP_N_CH1' on In2.Cu d=0.200mm < 0.265mm"
+      ]
+    },
+    "GLB_CH1": {
+      "status": "DRY_RUN_OK",
+      "segments": 3,
+      "vias": 2
+    },
+    "KILL_RAIL_N_CH1": {
+      "status": "COLLISION",
+      "issues_count": 6,
+      "issues_sample": [
+        "  seg0 (23.45, 64.46)\u2192(28.0, 64.46) on In2.Cu: track 'GLC_CH1' on In2.Cu d=0.090mm < 0.290mm",
+        "  seg2 (28.0, 57.6)\u2192(32.2, 57.6) on In2.Cu: track 'OTP_TRIP_N_CH1' on In2.Cu d=0.141mm < 0.265mm",
+        "  seg2 (28.0, 57.6)\u2192(32.2, 57.6) on In2.Cu: track 'OTP_TRIP_N_CH1' on In2.Cu d=0.200mm < 0.265mm",
+        "  seg3 (32.2, 57.6)\u2192(30.7, 57.6) on In2.Cu: track 'OTP_TRIP_N_CH1' on In2.Cu d=0.141mm < 0.265mm",
+        "  seg3 (32.2, 57.6)\u2192(30.7, 57.6) on In2.Cu: track 'OTP_TRIP_N_CH1' on In2.Cu d=0.200mm < 0.265mm",
+        "  seg5 (35.26, 60.8)\u2192(35.26, 60.4) on F.Cu: pad D15.2 net='KILL_LED_NODE_CH1' on F.Cu d=0.524mm < 0.665mm"
+      ]
+    }
+  },
+  "timestamp_utc": "20260529T131023Z"
+}

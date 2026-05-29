@@ -1,0 +1,4 @@
+phase,HS,LS,loop_area_mm2,n_sw_vias,n_sw_vias_source,L_loop_nH,L_loop_freespace_nH,margin_to_2nH
+A,Q5,Q6,26.933,31,actual,0.173,13.5355,1.827
+B,Q7,Q8,26.933,35,actual,0.1703,13.5327,1.8297
+C,Q9,Q10,26.932,34,actual,0.1709,13.5334,1.8291

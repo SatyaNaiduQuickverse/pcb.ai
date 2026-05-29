@@ -1,0 +1,13 @@
+{
+  "input": "hardware/kicad/pcbai_fpv4in1.kicad_pcb",
+  "output": "/tmp/board_glb.kicad_pcb",
+  "dry_run": false,
+  "summary": {
+    "GLB_CH1": {
+      "status": "EMITTED",
+      "tracks": 3,
+      "vias": 2
+    }
+  },
+  "timestamp_utc": "20260529T131104Z"
+}

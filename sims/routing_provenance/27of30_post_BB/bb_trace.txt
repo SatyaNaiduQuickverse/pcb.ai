@@ -1,0 +1,129 @@
+5:[main] LEVER BB: B.Cu microvia destination-side HDI escape enabled (nets=['PWM_INLA_CH1', 'GLB_CH1', 'KILL_RAIL_N_CH1'], refs=['J19', 'R50', 'R76', 'D37', 'D38'])
+8:[pf] AA-LEVER PathFinder negotiated congestion router
+9:[pf]   5 target nets in CH1; max_iter=30
+10:[pf]   discipline: per-iter rip-all + global re-route in priority order + h_n×p_n cost; convergence on 2-iter zero-ripup streak.
+12:[pf] LEVER Z (preamble): HDI-whitelisted target nets (5): ['GLB_CH1', 'KILL_RAIL_N_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+13:  [Y] cascade k=5: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+14:      joint try (5 nets, 2 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed', 'SWDIO_CH1': 'routed'}
+15:  [Y] cascade k=4: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1']
+16:      joint try (4 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed'}
+17:  [Y] cascade k=3: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1']
+18:      joint try (3 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed'}
+19:  [Y] cascade k=2: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1']
+20:      joint try (2 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed'}
+21:  [Y] cascade k=1: trying subset ['KILL_RAIL_N_CH1']
+22:      joint try (1 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed'}
+23:  [Y] cascade: NO feasible subset (size 1 also failed) — restoring snapshot, deferring to per-net sequential pass
+26:[pf] === iter 1/30 (present_factor=1.00) ===
+27:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+28:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+30:[pf] === iter 2/30 (present_factor=1.40) ===
+31:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+32:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+34:[pf] === iter 3/30 (present_factor=1.96) ===
+35:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+36:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+38:[pf] === iter 4/30 (present_factor=2.74) ===
+39:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+40:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+42:[pf] === iter 5/30 (present_factor=3.84) ===
+43:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+44:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+46:[pf] === iter 6/30 (present_factor=5.38) ===
+47:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+48:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+50:[pf] === iter 7/30 (present_factor=7.53) ===
+51:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+52:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+54:[pf] === iter 8/30 (present_factor=10.54) ===
+55:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+56:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+58:[pf] === iter 9/30 (present_factor=14.76) ===
+59:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+60:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+62:[pf] === iter 10/30 (present_factor=20.66) ===
+63:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+64:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+66:[pf] === iter 11/30 (present_factor=28.93) ===
+67:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+68:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+70:[pf] === iter 12/30 (present_factor=40.50) ===
+71:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+72:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+74:[pf] === iter 13/30 (present_factor=56.69) ===
+75:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+76:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+78:[pf] === iter 14/30 (present_factor=79.37) ===
+79:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+80:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+82:[pf] === iter 15/30 (present_factor=111.12) ===
+83:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+84:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+86:[pf] === iter 16/30 (present_factor=155.57) ===
+87:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+88:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+90:[pf] === iter 17/30 (present_factor=217.80) ===
+91:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+92:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+94:[pf] === iter 18/30 (present_factor=304.91) ===
+95:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+96:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+98:[pf] === iter 19/30 (present_factor=426.88) ===
+99:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+100:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+102:[pf] === iter 20/30 (present_factor=597.63) ===
+103:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+104:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+106:[pf] === iter 21/30 (present_factor=836.68) ===
+107:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+108:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+110:[pf] === iter 22/30 (present_factor=1171.36) ===
+111:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+112:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+114:[pf] === iter 23/30 (present_factor=1639.90) ===
+115:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+116:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+118:[pf] === iter 24/30 (present_factor=2295.86) ===
+119:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+120:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+122:[pf] === iter 25/30 (present_factor=3214.20) ===
+123:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+124:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+126:[pf] === iter 26/30 (present_factor=4499.88) ===
+127:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+128:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+130:[pf] === iter 27/30 (present_factor=6299.83) ===
+131:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+132:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+134:[pf] === iter 28/30 (present_factor=8819.76) ===
+135:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+136:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+138:[pf] === iter 29/30 (present_factor=12347.67) ===
+139:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+140:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+142:[pf] === iter 30/30 (present_factor=17286.74) ===
+143:[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+144:[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+146:[pf] PathFinder loop DONE. committed=0/5 unrouted=5 best_ever_iter=-1 best_ever=0/5 iterations=30 total_ripups=0 elapsed=349.5s
+148:[pf] JOINT multi-mech fallback (CH1 30/30 lever Y): attempting 5 unrouted net(s) simultaneously
+149:  [Y] cascade k=5: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+150:      joint try (5 nets, 2 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed', 'SWDIO_CH1': 'routed'}
+151:  [Y] cascade k=4: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1']
+152:      joint try (4 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed'}
+153:  [Y] cascade k=3: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1']
+154:      joint try (3 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed'}
+155:  [Y] cascade k=2: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1']
+156:      joint try (2 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed'}
+157:  [Y] cascade k=1: trying subset ['KILL_RAIL_N_CH1']
+158:      joint try (1 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed'}
+159:  [Y] cascade: NO feasible subset (size 1 also failed) — restoring snapshot, deferring to per-net sequential pass
+160:[pf] JOINT K3 result: 0/5 rescued ([])
+162:[pf] SEQUENTIAL multi-mech fallback (CH1 30/30 lever K3): attempting 5 residual net(s)
+163:      pair J18.19->J19.23: chain=[] len_mm=14.07 tracks=5 vias=0
+164:  [+] PWM_INHB_CH1: routed via multi-mech chain
+168:      pair J18.23->TP22.1: chain=['through', 'through'] len_mm=8.95 tracks=5 vias=2
+169:  [+] SWDIO_CH1: routed via multi-mech chain
+170:[pf] multi-mech fallback done; remaining unrouted = 3
+171:[pf] UNROUTED nets: ['PWM_INLA_CH1', 'GLB_CH1', 'KILL_RAIL_N_CH1']
+172:[pf] K2 partial-MST provenance: wrote 120 entry(ies)
+187:Result: full=2/5 partial=0 unrouted=3, 30 iterations, 30 ripups

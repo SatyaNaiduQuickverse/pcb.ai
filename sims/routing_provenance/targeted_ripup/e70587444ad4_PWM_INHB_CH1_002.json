@@ -1,0 +1,40 @@
+{
+  "blocked_net": "PWM_INHB_CH1",
+  "blocked_net_priority": 80,
+  "board_sha": "e70587444ad4f1539efa5b9361b2a12c67891ca9",
+  "cascade_depth": 1,
+  "committed": false,
+  "conflict_set": [
+    "SWCLK_CH1",
+    "SWDIO_CH1",
+    "CSA_B_OUT_CH1",
+    "NRST_CH1"
+  ],
+  "conflict_set_priorities": [
+    20,
+    20,
+    40,
+    40
+  ],
+  "deviation_log_ref": "",
+  "phase_symmetric_mirror_status": "N/A",
+  "phase_symmetric_peers": [],
+  "rerouted": {
+    "SWCLK_CH1": {
+      "depth": 1,
+      "length_mm": 171.338,
+      "path": "17 segs",
+      "summary": "ROUTED"
+    },
+    "SWDIO_CH1": {
+      "depth": 1,
+      "summary": "FAILED status=FAILED"
+    }
+  },
+  "rollback_reason": "reroute_failed (one or more rerouted nets did not complete)",
+  "schema_version": 1,
+  "shorts_post": 15,
+  "shorts_pre": 18,
+  "subsystem": "CH1",
+  "timestamp_iso": "2026-05-28T15:50:41.555014Z"
+}

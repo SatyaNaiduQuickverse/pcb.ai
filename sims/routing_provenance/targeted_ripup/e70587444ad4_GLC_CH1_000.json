@@ -1,0 +1,23 @@
+{
+  "blocked_net": "GLC_CH1",
+  "blocked_net_priority": 80,
+  "board_sha": "e70587444ad4f1539efa5b9361b2a12c67891ca9",
+  "cascade_depth": 1,
+  "committed": false,
+  "conflict_set": [
+    "CSA_MAX_CH1"
+  ],
+  "conflict_set_priorities": [
+    40
+  ],
+  "deviation_log_ref": "",
+  "phase_symmetric_mirror_status": "N/A",
+  "phase_symmetric_peers": [],
+  "rerouted": {},
+  "rollback_reason": "reroute_failed (one or more rerouted nets did not complete)",
+  "schema_version": 1,
+  "shorts_post": 18,
+  "shorts_pre": 18,
+  "subsystem": "CH1",
+  "timestamp_iso": "2026-05-28T15:50:33.803198Z"
+}

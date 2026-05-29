@@ -1,0 +1,30 @@
+[coop] layer-pref-bias: ON (v5 per-net-class layer cost multiplier; BEMF→In4, PWM/CSA→In2, SWD/GH/GL/BST→In8, etc.)
+[coop] via-in-pad-allowed: ON (v6 HDI whitelist=['J18', 'J19']; unblocks J18/J19 QFN escape per worker per-pin diagnosis)
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[coop] 33 target nets in CH1: CSA_MAX_CH1, BEMF_A_CH1, BEMF_B_CH1, BEMF_C_CH1, CSA_A_OUT_CH1, CSA_B_OUT_CH1, CSA_C_OUT_CH1, PWM_INHA_CH1...
+
+[coop] LEVER Z: route-hardest-first enabled — identifying HDI-whitelisted nets BEFORE main cooperative pass
+  [Z] HDI-whitelisted target nets (6): ['BSTB_CH1', 'GLB_CH1', 'KILL_RAIL_N_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+  [Y] cascade k=6: trying subset ['KILL_RAIL_N_CH1', 'BSTB_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+      joint try (6 nets, 3 routed): {'KILL_RAIL_N_CH1': 'failed', 'BSTB_CH1': 'routed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'routed', 'SWDIO_CH1': 'failed'}
+  [Y] cascade k=5: trying subset ['KILL_RAIL_N_CH1', 'BSTB_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1']
+      joint try (5 nets, 3 routed): {'KILL_RAIL_N_CH1': 'failed', 'BSTB_CH1': 'routed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'routed'}
+  [Y] cascade k=4: trying subset ['KILL_RAIL_N_CH1', 'BSTB_CH1', 'GLB_CH1', 'PWM_INHB_CH1']
+      joint try (4 nets, 2 routed): {'KILL_RAIL_N_CH1': 'failed', 'BSTB_CH1': 'routed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed'}
+  [Y] cascade k=3: trying subset ['KILL_RAIL_N_CH1', 'BSTB_CH1', 'GLB_CH1']
+      joint try (3 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'BSTB_CH1': 'routed', 'GLB_CH1': 'failed'}
+  [Y] cascade k=2: trying subset ['KILL_RAIL_N_CH1', 'BSTB_CH1']
+      joint try (2 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'BSTB_CH1': 'routed'}
+  [Y] cascade k=1: trying subset ['KILL_RAIL_N_CH1']
+      joint try (1 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed'}
+  [Y] cascade: NO feasible subset (size 1 also failed) — restoring snapshot, deferring to per-net sequential pass
+  [Z] HDI-first phase: 0/6 rescued — proceeding to normal cooperative pass (HDI residuals will be retried at the K3 fallback after the loop)
+
+[coop] === Iteration 1/30 (present_factor=1.00) ===
+  [+] BEMF_A_CH1: routed (4 segs, 3 vias) verify=1-island fail_count_was=0
+  [+] BEMF_B_CH1: routed (4 segs, 3 vias) verify=1-island fail_count_was=0
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.8', 'J20.5'], ['C71.1', 'D34.2']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=1)

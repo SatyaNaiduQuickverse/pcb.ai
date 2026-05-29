@@ -1,0 +1,21 @@
+14:      joint try (5 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed', 'SWDIO_CH1': 'failed'}
+16:      joint try (4 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed'}
+18:      joint try (3 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed'}
+20:      joint try (2 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed'}
+22:      joint try (1 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed'}
+163:[pf] JOINT multi-mech fallback (CH1 30/30 lever Y): attempting 5 unrouted net(s) simultaneously
+165:      joint try (5 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed', 'SWDIO_CH1': 'failed'}
+167:      joint try (4 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed'}
+169:      joint try (3 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed'}
+171:      joint try (2 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed'}
+173:      joint try (1 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed'}
+177:[pf] SEQUENTIAL multi-mech fallback (CH1 30/30 lever K3): attempting 5 residual net(s)
+178:      pair J18.19->J19.23: chain=['through', 'through'] len_mm=14.11 tracks=9 vias=2
+179:  [+] PWM_INHB_CH1: routed via multi-mech chain
+180:  [.] PWM_INLA_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+181:  [.] GLB_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+182:  [.] KILL_RAIL_N_CH1: K3 multi-mech aggregate status=partial (1/2 pairs routed) — atomic rollback (per-net)
+183:  [.] SWDIO_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+184:[pf] multi-mech fallback done; remaining unrouted = 4
+185:[pf] UNROUTED nets: ['PWM_INLA_CH1', 'GLB_CH1', 'KILL_RAIL_N_CH1', 'SWDIO_CH1']
+202:Result: full=1/5 partial=0 unrouted=4, 30 iterations, 37 ripups

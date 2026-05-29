@@ -1,0 +1,33 @@
+{
+  "ref": "R76",
+  "from": [
+    34.75,
+    60.803847
+  ],
+  "to": [
+    35.25,
+    60.803847
+  ],
+  "delta_mm": [
+    0.5,
+    0.0
+  ],
+  "reason": "close KILL_RAIL_N R76.1 leaf \u2014 J19 east already applied; R76 east shifts pad closer to D37 trunk",
+  "mirror_disclosure": "NO_MIRROR (R176 value=1K off-board)",
+  "collisions_within_1.5mm": [
+    {
+      "ref": "D15",
+      "value": "RED_KILL_FW",
+      "pos": [
+        34.45,
+        61.323462
+      ],
+      "distance_mm": 0.9539390694509777
+    }
+  ],
+  "input_board_md5": "e0bd63a8be97a21f1a1d8ad6cb3ed350",
+  "output_board_md5": "985c9a3d5dd511a580580163d0b66b4d",
+  "timestamp_utc": "20260529T153652Z",
+  "input_path": "/tmp/board_j19e2.kicad_pcb",
+  "output_path": "/tmp/board_j19e2_r76.kicad_pcb"
+}
