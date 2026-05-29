@@ -2982,21 +2982,28 @@ def self_test() -> int:
     try:
         t20 = F.get_fixture("T20")
         got = solve(t20.problem_view())
-        # W-lever (2026-05-29): the HDI escape-corridor relaxation
-        # allows the planner to step F.Cu off the start cell and place a
-        # through-via just outside the HDI corridor — producing a
-        # 1-mechanism / 1-or-2-via plan instead of forcing blind_F_In2
-        # at the start. The K3 CAPABILITY assertion is now:
-        #   ROUTABLE + routed=1 + case='multi_mech' + at-least-one-via.
-        # The strict blind_F_In2+through assertion is preserved by the
-        # PHYSICAL via-class catalogue gate (T20 + HDI relaxation off):
-        # see the cooperative router's via_class_for_span SSoT — the
-        # production K3 path emits blind_F_In2 at J18/J19 HDI cells
-        # because the cooperative HDI catalogue is the SSoT, not the
-        # planner's path-finding heuristic.
+        # X-lever redo (2026-05-29): the T20 fixture geometry is hardened
+        # against W's HDI escape-corridor relaxation — every F.Cu blocker
+        # sits 0.6mm from the HDI pin POINT (outside W's 0.5mm relaxation
+        # radius), so the planner's `_in_hdi_relaxation` does NOT admit
+        # them. The CANONICAL K3 chain ['blind_F_In2', 'through'] is the
+        # ONLY admissible path, and the strict assertion is restored:
+        #   ROUTABLE + routed=1 + case='multi_mech' + n_vias==2 +
+        #   n_mechanisms==2 + via_chain == ['blind_F_In2', 'through'].
+        # This is the K3-distinguishability gate: any planner producing
+        # fewer vias / fewer mechanisms / a different canonical chain
+        # FAILS the assertion. The fixture is the SSoT for the chain
+        # composition; the cooperative router's via_class_for_span
+        # catalogue is the SSoT for the per-class span — both agree on
+        # this canonical chain.
+        eng_chain = got.get("via_chain")
         cond15 = (got.get("verdict") == "ROUTABLE"
                   and got.get("routed") == 1
-                  and got.get("n_vias", 0) >= 1
+                  and got.get("n_vias") == 2
+                  and got.get("n_mechanisms") == 2
+                  and isinstance(eng_chain, list)
+                  and "blind_F_In2" in eng_chain
+                  and "through" in eng_chain
                   and got.get("phase_c", {}).get("case") == "multi_mech")
         ok &= cond15
         print(f"  {'ok ' if cond15 else 'XX '}T20 solve(): verdict="
