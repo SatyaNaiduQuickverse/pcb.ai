@@ -1,0 +1,19 @@
+{
+  "blocked_net": "GLB_CH1",
+  "blocked_net_priority": 80,
+  "board_sha": "fd76744622dd6e85a55e73778ddc6bee4db7c365",
+  "cascade_depth": 1,
+  "committed": false,
+  "conflict_set": [],
+  "conflict_set_priorities": [],
+  "deviation_log_ref": "",
+  "phase_symmetric_mirror_status": "N/A",
+  "phase_symmetric_peers": [],
+  "rerouted": {},
+  "rollback_reason": "no_conflict (corridor unobstructed by foreigns)",
+  "schema_version": 1,
+  "shorts_post": 0,
+  "shorts_pre": 24,
+  "subsystem": "CH1",
+  "timestamp_iso": "2026-05-29T14:47:53.703016Z"
+}

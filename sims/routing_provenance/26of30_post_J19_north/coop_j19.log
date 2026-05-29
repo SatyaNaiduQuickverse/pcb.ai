@@ -1,0 +1,203 @@
+[coop] layer-pref-bias: ON (v5 per-net-class layer cost multiplier; BEMF→In4, PWM/CSA→In2, SWD/GH/GL/BST→In8, etc.)
+[coop] via-in-pad-allowed: ON (v6 HDI whitelist=['J18', 'J19']; unblocks J18/J19 QFN escape per worker per-pin diagnosis)
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[main] LEVER BB: B.Cu microvia destination-side HDI escape enabled (nets=['PWM_INLA_CH1', 'GLB_CH1', 'KILL_RAIL_N_CH1'], refs=['J19', 'R50', 'R76', 'D37', 'D38'])
+
+[main] LEVER AA: PathFinder loop enabled (replaces cooperative run() with true rip-all + global re-route + cost-history convergence)
+[pf] AA-LEVER PathFinder negotiated congestion router
+[pf]   5 target nets in CH1; max_iter=30
+[pf]   discipline: per-iter rip-all + global re-route in priority order + h_n×p_n cost; convergence on 2-iter zero-ripup streak.
+
+[pf] LEVER Z (preamble): HDI-whitelisted target nets (5): ['GLB_CH1', 'KILL_RAIL_N_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+  [Y] cascade k=5: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+      joint try (5 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed', 'SWDIO_CH1': 'failed'}
+  [Y] cascade k=4: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1']
+      joint try (4 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed'}
+  [Y] cascade k=3: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1']
+      joint try (3 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed'}
+  [Y] cascade k=2: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1']
+      joint try (2 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed'}
+  [Y] cascade k=1: trying subset ['KILL_RAIL_N_CH1']
+      joint try (1 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed'}
+  [Y] cascade: NO feasible subset (size 1 also failed) — restoring snapshot, deferring to per-net sequential pass
+  [pf-Z] HDI-first phase: 0/5 rescued
+
+[pf] === iter 1/30 (present_factor=1.00) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=1 partial=0 unrouted_this_iter=4 target_committed=1/5 total_committed=1/5
+[pf]   NEW BEST iter=1 routed=1/5
+
+[pf] === iter 2/30 (present_factor=1.40) ===
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[pf]   ripped 1 previously-committed nets (total_ripups=1)
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=1 partial=0 unrouted_this_iter=4 target_committed=1/5 total_committed=1/5
+
+[pf] === iter 3/30 (present_factor=1.96) ===
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[pf]   ripped 1 previously-committed nets (total_ripups=2)
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=1 partial=0 unrouted_this_iter=4 target_committed=1/5 total_committed=1/5
+
+[pf] === iter 4/30 (present_factor=2.74) ===
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[pf]   ripped 1 previously-committed nets (total_ripups=3)
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=1 partial=0 unrouted_this_iter=4 target_committed=1/5 total_committed=1/5
+
+[pf] === iter 5/30 (present_factor=3.84) ===
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[pf]   ripped 1 previously-committed nets (total_ripups=4)
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=1 partial=0 unrouted_this_iter=4 target_committed=1/5 total_committed=1/5
+
+[pf] === iter 6/30 (present_factor=5.38) ===
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[pf]   ripped 1 previously-committed nets (total_ripups=5)
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=1 partial=0 unrouted_this_iter=4 target_committed=1/5 total_committed=1/5
+
+[pf] === iter 7/30 (present_factor=7.53) ===
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[pf]   ripped 1 previously-committed nets (total_ripups=6)
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 8/30 (present_factor=10.54) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=1 partial=0 unrouted_this_iter=4 target_committed=1/5 total_committed=1/5
+
+[pf] === iter 9/30 (present_factor=14.76) ===
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[pf]   ripped 1 previously-committed nets (total_ripups=7)
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 10/30 (present_factor=20.66) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 11/30 (present_factor=28.93) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 12/30 (present_factor=40.50) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 13/30 (present_factor=56.69) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 14/30 (present_factor=79.37) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 15/30 (present_factor=111.12) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 16/30 (present_factor=155.57) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 17/30 (present_factor=217.80) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 18/30 (present_factor=304.91) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 19/30 (present_factor=426.88) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 20/30 (present_factor=597.63) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 21/30 (present_factor=836.68) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 22/30 (present_factor=1171.36) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 23/30 (present_factor=1639.90) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 24/30 (present_factor=2295.86) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 25/30 (present_factor=3214.20) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 26/30 (present_factor=4499.88) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 27/30 (present_factor=6299.83) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 28/30 (present_factor=8819.76) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 29/30 (present_factor=12347.67) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] === iter 30/30 (present_factor=17286.74) ===
+[pf]   [!] KILL_RAIL_N_CH1: ROUTED-but-SPLIT verify; ripping + re-queue
+[pf]   iter result: routed=0 partial=0 unrouted_this_iter=5 target_committed=0/5 total_committed=0/5
+
+[pf] PathFinder loop DONE. committed=0/5 unrouted=5 best_ever_iter=1 best_ever=1/5 iterations=30 total_ripups=7 elapsed=1166.0s
+
+[pf] JOINT multi-mech fallback (CH1 30/30 lever Y): attempting 5 unrouted net(s) simultaneously
+  [Y] cascade k=5: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+      joint try (5 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed', 'SWDIO_CH1': 'failed'}
+  [Y] cascade k=4: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1']
+      joint try (4 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'failed'}
+  [Y] cascade k=3: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1', 'PWM_INHB_CH1']
+      joint try (3 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed'}
+  [Y] cascade k=2: trying subset ['KILL_RAIL_N_CH1', 'GLB_CH1']
+      joint try (2 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed', 'GLB_CH1': 'failed'}
+  [Y] cascade k=1: trying subset ['KILL_RAIL_N_CH1']
+      joint try (1 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed'}
+  [Y] cascade: NO feasible subset (size 1 also failed) — restoring snapshot, deferring to per-net sequential pass
+[pf] JOINT K3 result: 0/5 rescued ([])
+
+[pf] SEQUENTIAL multi-mech fallback (CH1 30/30 lever K3): attempting 5 residual net(s)
+      pair J18.19->J19.23: chain=['through', 'through'] len_mm=14.11 tracks=9 vias=2
+  [+] PWM_INHB_CH1: routed via multi-mech chain
+  [.] PWM_INLA_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+  [.] GLB_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+  [.] KILL_RAIL_N_CH1: K3 multi-mech aggregate status=partial (1/2 pairs routed) — atomic rollback (per-net)
+  [.] SWDIO_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+[pf] multi-mech fallback done; remaining unrouted = 4
+[pf] UNROUTED nets: ['PWM_INLA_CH1', 'GLB_CH1', 'KILL_RAIL_N_CH1', 'SWDIO_CH1']
+[pf] K2 partial-MST provenance: wrote 113 entry(ies)
+
+[targeted-ripup] cooperative plateau at 1 routed / 4 residual; engaging targeted ripup-rebuild phase (R36-R39 + R-J5; depth ≤ 2; provenance under sims/routing_provenance/targeted_ripup/)
+/home/novatics64/escworker/pcb.ai/hardware/kicad/scripts/route_subsystem_cooperative.py:5013: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  timestamp_iso=_tr_dt.datetime.utcnow().isoformat() + "Z",
+[targeted-ripup] KILL_RAIL_N_CH1: ROLLBACK — no_conflict (corridor unobstructed by foreigns)
+[targeted-ripup] GLB_CH1: ROLLBACK — no_conflict (corridor unobstructed by foreigns)
+[targeted-ripup] PWM_INLA_CH1: ROLLBACK — no_conflict (corridor unobstructed by foreigns)
+[targeted-ripup] SWDIO_CH1: ROLLBACK — no_conflict (corridor unobstructed by foreigns)
+[targeted-ripup] phase done: 0/4 attempts committed.
+
+[leaf-route] cooperative + targeted-ripup phases done; scanning committed nets for disconnected leaves (lever Q; R42 / G_Q1; provenance under sims/routing_provenance/leaf_route/)
+[leaf-route] no disconnected leaves found (vacuous-PASS — every committed net is single-island)
+[leaf-route] phase done: 0/0 leaf-attempts committed.
+
+Saved: /tmp/post_route_j19.kicad_pcb
+Result: full=1/5 partial=0 unrouted=4, 30 iterations, 37 ripups
+Report: /tmp/coop_report_j19.json
