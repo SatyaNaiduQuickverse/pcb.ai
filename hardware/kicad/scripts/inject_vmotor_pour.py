@@ -53,12 +53,35 @@ DRONE-GRADE CLEARANCE GATES (post-emit, BLOCKING)
     G3. zone refill produces no exception, output board loads.
     G4. (optional --run-drc) kicad-cli pcb drc reports 0 +VMOTOR
         via_dangling (slow; let the stitcher do it if you prefer).
+    G5. (default ON --remove-orphan-vias) kicad-cli pcb drc reports 0
+        via_dangling AFTER orphan-via cleanup pass. Stage 5 removes any
+        through-via whose barrel center has no same-net Cu contact on
+        ≥2 layers (the ground-truth that kicad-cli enforces).
+
+LEVER V RESIDUAL FIX (2026-05-29 — Sai catch on PR #250 post-merge)
+    PR #250 (lever T) achieved 199→3 via_dangling on canonical
+    post-T board (085dee9). The 3 residual offenders are NOT +VMOTOR:
+        MOTOR_A_CH1 via at (18.0, 54.0)  — 1.20mm OUTSIDE F+B MOTOR_A pour
+        MOTOR_C_CH1 via at (18.0, 82.0)  — 1.20mm OUTSIDE F+B MOTOR_C pour
+        SHUNT_C_TOP_CH1 via at (10.0, 86.0) — 0.37mm OUTSIDE F SHUNT pour;
+                                              NO B.Cu zone for that net
+    Root cause: the upstream add_sw_vias.py grid generator (lever M2)
+    accepts a candidate via if it fits inside ANY F.Cu polygon (pour OR
+    pad-bbox) AND inside ANY B.Cu polygon — but ZONE_FILLER on the
+    refilled post-T board pulls the MOTOR pour back by the foreign-net
+    clearance, leaving the via barrel center in pour-clearance void.
+    The 3 vias are truly orphan: no same-net track passes through the
+    via center on EITHER surface layer.
+    T cannot rescue them by extending the +VMOTOR pour (wrong nets).
+    Lever V resolution = Stage 5 = post-refill orphan-via REMOVAL,
+    authoritative via kicad-cli pcb drc via_dangling.
 
 USAGE
     python3 inject_vmotor_pour.py \\
         --board pcbai_fpv4in1.kicad_pcb \\
         --output pcbai_fpv4in1_vmotor_fixed.kicad_pcb \\
-        [--report report.json] [--run-drc] [--surface-layers F.Cu,B.Cu]
+        [--report report.json] [--run-drc] [--surface-layers F.Cu,B.Cu] \\
+        [--remove-orphan-vias / --keep-orphan-vias]
 
 Read-only on --board.  Writes new .kicad_pcb at --output.
 Exit 0 = PASS, 1 = post-emit FAIL, 2 = environment / load error.
@@ -522,6 +545,220 @@ def run_kicad_cli_drc(board_path, timeout_s=600):
 
 
 # ----------------------------------------------------------------------
+# Stage 5 — orphan-via cleanup (lever V residual fix)
+# ----------------------------------------------------------------------
+
+VIA_BLOCK_RE = re.compile(
+    r'\(via\s*\(at\s+([\-\d.]+)\s+([\-\d.]+)\)'
+    r'(?:\s*\(size\s+[\d.]+\))?'
+    r'(?:\s*\(drill\s+[\d.]+\))?'
+    r'(?:\s*\(layers\s+"[^"]+"\s+"[^"]+"\))?'
+    r'(?:\s*\(net\s+\d+\))?'
+    r'(?:\s*\(uuid\s+"([^"]*)"\))?'
+    r'\s*\)',
+    re.DOTALL,
+)
+
+
+def run_kicad_cli_drc_full(board_path, timeout_s=600):
+    """Run kicad-cli pcb drc and return the parsed JSON dict.
+    Returns (parsed_json_dict, None) on success, or (None, error_str) on
+    failure. Caller can extract whichever violation types it needs."""
+    if not Path(board_path).exists():
+        return None, f"board not found: {board_path}"
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf:
+        drc_path = tf.name
+    try:
+        cmd = ["kicad-cli", "pcb", "drc", "--format", "json",
+               "--severity-error", "--severity-warning",
+               "-o", drc_path, str(board_path)]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True,
+                                 timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            return None, f"kicad-cli pcb drc timed out after {timeout_s}s"
+        if not Path(drc_path).exists() and res.returncode != 0:
+            return None, f"kicad-cli pcb drc failed: {res.stderr[:300]}"
+        try:
+            return json.loads(Path(drc_path).read_text()), None
+        except Exception as e:
+            return None, f"could not parse DRC json: {e}"
+    finally:
+        try:
+            os.unlink(drc_path)
+        except OSError:
+            pass
+
+
+def collect_dangling_via_positions(drc_json):
+    """Return list of {'x', 'y', 'description', 'uuid'} for every
+    via_dangling violation in the DRC JSON. Position is rounded to
+    the kicad-cli output precision (3 decimal places)."""
+    out = []
+    for v in drc_json.get("violations", []):
+        if v.get("type") != "via_dangling":
+            continue
+        for it in v.get("items", []):
+            pos = it.get("pos") or {}
+            try:
+                x = round(float(pos.get("x")), 3)
+                y = round(float(pos.get("y")), 3)
+            except (TypeError, ValueError):
+                continue
+            out.append({
+                "x": x,
+                "y": y,
+                "description": it.get("description") or "",
+                "uuid": it.get("uuid") or "",
+            })
+    return out
+
+
+def remove_orphan_vias_from_text(txt, orphan_positions, tol_mm=0.005):
+    """Remove (via ...) blocks whose (at x y) match any orphan position
+    within tol_mm. Returns (new_txt, removed_records).
+
+    Why a tolerance: kicad-cli reports pos rounded to 3 decimals; the
+    actual (at ...) in the file may have higher precision. 5µm tolerance
+    is well below any meaningful via spacing (the minimum drill-to-drill
+    spacing on this board is 0.20mm = 40× the tolerance).
+
+    Why UUID-then-position match: when the DRC JSON carries a uuid we
+    match on uuid first (zero false positives). When uuid is missing
+    (some kicad-cli versions emit empty), we fall back to position.
+    Each match is logged so the report is auditable.
+    """
+    # Index orphans for fast lookup
+    orphan_uuids = {o["uuid"] for o in orphan_positions if o.get("uuid")}
+    orphan_xy = [(o["x"], o["y"], o) for o in orphan_positions]
+
+    removed = []
+    out_chunks = []
+    last_end = 0
+    for m in VIA_BLOCK_RE.finditer(txt):
+        vx, vy = float(m.group(1)), float(m.group(2))
+        vuuid = m.group(3) or ""
+        match = None
+        if vuuid and vuuid in orphan_uuids:
+            # find the orphan record with this uuid
+            for o in orphan_positions:
+                if o.get("uuid") == vuuid:
+                    match = o
+                    break
+        if match is None:
+            for (ox, oy, o) in orphan_xy:
+                if abs(vx - ox) <= tol_mm and abs(vy - oy) <= tol_mm:
+                    match = o
+                    break
+        if match is None:
+            continue
+        # remove this via block, including the leading tab/newline so we
+        # don't leave a blank line behind
+        block_start = m.start()
+        block_end = m.end()
+        # back up over the immediate leading tab/whitespace on the same line
+        while block_start > 0 and txt[block_start - 1] in '\t ':
+            block_start -= 1
+        # consume trailing newline so subsequent lines collapse cleanly
+        if block_end < len(txt) and txt[block_end] == '\n':
+            block_end += 1
+        out_chunks.append(txt[last_end:block_start])
+        last_end = block_end
+        removed.append({
+            "x": vx, "y": vy, "uuid": vuuid,
+            "matched_orphan": match,
+        })
+    out_chunks.append(txt[last_end:])
+    return "".join(out_chunks), removed
+
+
+def cleanup_orphan_vias(out_path, max_iterations=3, timeout_s=600):
+    """Iterative orphan-via cleanup:
+      1. Run kicad-cli pcb drc on out_path.
+      2. Parse via_dangling violations.
+      3. Remove those vias from out_path (S-expression edit).
+      4. Re-run DRC; if zero dangling vias remain, PASS.
+      5. Otherwise iterate (removing a via can in principle leave another
+         dangling if connectivity was relying on it). Cap at max_iterations
+         to bound runtime; in practice the second pass shows 0.
+
+    Returns dict with:
+        pre_dangling_count, removed_count_per_iter, post_dangling_count,
+        all_removed (list of {x,y,uuid,description}),
+        residual_dangling (list — empty on success),
+        iterations_used,
+        error (str, only if a fatal error occurred).
+    """
+    report = {
+        "pre_dangling_count": None,
+        "removed_count_per_iter": [],
+        "post_dangling_count": None,
+        "all_removed": [],
+        "residual_dangling": [],
+        "iterations_used": 0,
+        "error": None,
+    }
+    out_path = Path(out_path)
+    for iteration in range(1, max_iterations + 1):
+        drc_json, err = run_kicad_cli_drc_full(str(out_path),
+                                                timeout_s=timeout_s)
+        if err is not None:
+            report["error"] = err
+            return report
+        orphans = collect_dangling_via_positions(drc_json)
+        if iteration == 1:
+            report["pre_dangling_count"] = len(orphans)
+        if not orphans:
+            report["post_dangling_count"] = 0
+            report["iterations_used"] = iteration - 1
+            return report
+        txt = out_path.read_text()
+        new_txt, removed = remove_orphan_vias_from_text(txt, orphans)
+        report["removed_count_per_iter"].append(len(removed))
+        report["all_removed"].extend(removed)
+        # SAFETY: if we couldn't remove anything (e.g. position mismatch),
+        # we'd loop forever. Bail out honestly with residual.
+        if not removed:
+            report["post_dangling_count"] = len(orphans)
+            report["residual_dangling"] = orphans
+            report["iterations_used"] = iteration
+            report["error"] = ("could not match any dangling via by position "
+                               "+ uuid — board may be unparseable or kicad-cli "
+                               "report format changed")
+            return report
+        out_path.write_text(new_txt)
+        report["iterations_used"] = iteration
+    # If we exhausted iterations and still have orphans, do a final count
+    drc_json, err = run_kicad_cli_drc_full(str(out_path), timeout_s=timeout_s)
+    if err is None:
+        residual = collect_dangling_via_positions(drc_json)
+        report["post_dangling_count"] = len(residual)
+        report["residual_dangling"] = residual
+    return report
+
+
+def stitch_via_density_per_cm2(out_path):
+    """Return (vmotor_via_count, board_area_cm2, density_per_cm2) so we
+    can sanity-check the G14 floor (4/cm²) post-cleanup. We count every
+    PCB_VIA on the +VMOTOR net. Returns (None, None, None) on error."""
+    try:
+        # In-process pcbnew load — read-only, no edits
+        import pcbnew  # type: ignore
+        board = pcbnew.LoadBoard(str(out_path))
+        n = 0
+        for t in board.GetTracks():
+            if isinstance(t, pcbnew.PCB_VIA) and t.GetNetname() == VMOTOR_NET_NAME:
+                n += 1
+        bbox = board.GetBoardEdgesBoundingBox()
+        w_mm = bbox.GetWidth() / 1e6
+        h_mm = bbox.GetHeight() / 1e6
+        area_cm2 = (w_mm * h_mm) / 100.0
+        return n, area_cm2, (n / area_cm2) if area_cm2 else 0.0
+    except Exception:
+        return None, None, None
+
+
+# ----------------------------------------------------------------------
 # Main
 # ----------------------------------------------------------------------
 
@@ -548,6 +785,26 @@ def main():
                     help="DEBUG: skip the pcbnew refill subprocess (output "
                          "board will have un-filled zones — for inspecting "
                          "the S-expression mutation alone)")
+    ap.add_argument("--remove-orphan-vias", dest="remove_orphan_vias",
+                    action="store_true", default=True,
+                    help=("Stage 5 (default ON): after refill, invoke "
+                          "kicad-cli pcb drc, identify via_dangling "
+                          "violations, and DELETE those orphan vias from "
+                          "the output board (any net — not just +VMOTOR). "
+                          "Each removal is logged in the report. Drone-grade "
+                          "default: a dangling via is a connectivity defect, "
+                          "honest removal is safer than silent retention."))
+    ap.add_argument("--keep-orphan-vias", dest="remove_orphan_vias",
+                    action="store_false",
+                    help="DISABLE Stage 5 orphan-via removal "
+                         "(diagnostic / pre-fix baseline only).")
+    ap.add_argument("--g14-density-floor", type=float, default=4.0,
+                    help=("G14 +VMOTOR stitch-via density floor in "
+                          "vias/cm² (default 4.0). Stage 5 reports the "
+                          "post-cleanup density vs this floor; the tool "
+                          "exits 0 with a WARN log if cleanup pushed "
+                          "density below floor, exit 1 only on actual "
+                          "connectivity failure."))
     args = ap.parse_args()
 
     in_path = Path(args.board)
@@ -581,11 +838,35 @@ def main():
           f"{needs_surface(diag_before, surface_layers)}")
     print()
 
-    # Idempotence — exit early if nothing to do
-    if (not needs_swap(diag_before)) and (not needs_surface(diag_before, surface_layers)):
-        print("Board already satisfies multi-layer +VMOTOR pour spec — NO-OP.")
+    # Idempotence — early-exit for the structural mutation, but Stage 5
+    # orphan-via cleanup still runs against the canonical board if the
+    # user opted in. This handles the lever-V residual case where the
+    # board already has the right pour topology (+VMOTOR on ≥2 layers)
+    # but contains orphan vias from earlier tools (add_sw_vias/route_*)
+    # that ZONE_FILLER on the refilled board now leaves dangling.
+    structural_no_op = ((not needs_swap(diag_before))
+                        and (not needs_surface(diag_before, surface_layers)))
+    if structural_no_op:
+        print("Board already satisfies multi-layer +VMOTOR pour spec — "
+              "STRUCTURAL NO-OP.")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(txt)
+
+        cleanup_report = None
+        if args.remove_orphan_vias:
+            print("\n=== STAGE 5: orphan-via cleanup "
+                  "(NO-OP path — board already structurally correct) ===")
+            cleanup_report = cleanup_orphan_vias(out_path)
+            _print_cleanup_report(cleanup_report)
+
+        vmotor_via_n, board_cm2, density = stitch_via_density_per_cm2(
+            str(out_path))
+        if density is not None:
+            floor = args.g14_density_floor
+            print(f"\nG14 +VMOTOR stitch-via density: {density:.2f}/cm² "
+                  f"({vmotor_via_n} vias on {board_cm2:.1f}cm²)  "
+                  f"floor={floor:.2f}  "
+                  f"{'PASS' if density >= floor else 'WARN<FLOOR'}")
         if args.report:
             Path(args.report).write_text(json.dumps({
                 "input_board": str(in_path),
@@ -597,9 +878,26 @@ def main():
                     "needs_surface": needs_surface(diag_before, surface_layers),
                 },
                 "mutations": 0,
+                "stage5_orphan_via_cleanup": cleanup_report,
+                "stitch_density_per_cm2": {
+                    "vmotor_via_count": vmotor_via_n,
+                    "board_area_cm2": board_cm2,
+                    "density_per_cm2": density,
+                    "g14_floor": args.g14_density_floor,
+                    "meets_floor": (density is not None
+                                     and density >= args.g14_density_floor),
+                },
                 "verdict": "NO_OP_IDEMPOTENT",
             }, indent=2))
-        print("\nRESULT: NO_OP (idempotent)")
+        # NO_OP is success unless Stage 5 left residual dangling vias
+        if cleanup_report and cleanup_report.get("post_dangling_count", 0):
+            print(f"\nFAIL: Stage 5 cleanup left "
+                  f"{cleanup_report['post_dangling_count']} residual "
+                  f"dangling vias.", file=sys.stderr)
+            return 1
+        print("\nRESULT: NO_OP_IDEMPOTENT (Stage 5 clean)" if
+              args.remove_orphan_vias else
+              "\nRESULT: NO_OP (idempotent; Stage 5 disabled)")
         return 0
 
     # Stage 1 — In3↔In5 net swap
@@ -670,6 +968,24 @@ def main():
                 print(f"    {k}: {v}")
         print()
 
+    cleanup_report = None
+    if args.remove_orphan_vias:
+        print("=== STAGE 5: orphan-via cleanup "
+              "(via_dangling → REMOVE) ===")
+        cleanup_report = cleanup_orphan_vias(out_path)
+        _print_cleanup_report(cleanup_report)
+        print()
+
+    vmotor_via_n, board_cm2, density = stitch_via_density_per_cm2(
+        str(out_path))
+    if density is not None:
+        floor = args.g14_density_floor
+        print(f"G14 +VMOTOR stitch-via density: {density:.2f}/cm² "
+              f"({vmotor_via_n} vias on {board_cm2:.1f}cm²)  "
+              f"floor={floor:.2f}  "
+              f"{'PASS' if density >= floor else 'WARN<FLOOR'}")
+        print()
+
     if args.report:
         Path(args.report).write_text(json.dumps({
             "input_board": str(in_path),
@@ -686,6 +1002,15 @@ def main():
             },
             "verification_gates": gates,
             "kicad_cli_drc": g4,
+            "stage5_orphan_via_cleanup": cleanup_report,
+            "stitch_density_per_cm2": {
+                "vmotor_via_count": vmotor_via_n,
+                "board_area_cm2": board_cm2,
+                "density_per_cm2": density,
+                "g14_floor": args.g14_density_floor,
+                "meets_floor": (density is not None
+                                 and density >= args.g14_density_floor),
+            },
             "verdict": "PASS" if ok else "FAIL",
         }, indent=2))
 
@@ -693,8 +1018,43 @@ def main():
         print("FAIL: post-emit verification failed.", file=sys.stderr)
         return 1
 
+    # Stage 5 connectivity failure is a hard FAIL — drone-grade rule.
+    if cleanup_report and cleanup_report.get("post_dangling_count", 0):
+        print(f"FAIL: Stage 5 cleanup left "
+              f"{cleanup_report['post_dangling_count']} residual "
+              f"dangling vias (could not be matched & removed). "
+              f"Inspect report['stage5_orphan_via_cleanup']['residual_dangling'].",
+              file=sys.stderr)
+        return 1
+
     print("RESULT: PASS")
     return 0
+
+
+def _print_cleanup_report(rep):
+    """Pretty-print the Stage 5 cleanup report to stdout."""
+    if rep is None:
+        return
+    if rep.get("error"):
+        print(f"  ERROR: {rep['error']}")
+        return
+    pre = rep.get("pre_dangling_count")
+    post = rep.get("post_dangling_count")
+    iters = rep.get("iterations_used")
+    removed = rep.get("all_removed", [])
+    print(f"  pre-cleanup via_dangling count: {pre}")
+    print(f"  iterations used:                {iters}")
+    print(f"  vias removed:                   {len(removed)}")
+    for r in removed[:20]:
+        desc = r.get("matched_orphan", {}).get("description", "")
+        # description often contains the net name — keep first 80 chars
+        print(f"    - ({r['x']:.3f}, {r['y']:.3f}) uuid={r['uuid'][:8]}… "
+              f"{desc[:80]}")
+    if len(removed) > 20:
+        print(f"    ... +{len(removed) - 20} more")
+    print(f"  post-cleanup via_dangling count: {post}")
+    print(f"  STAGE 5 verdict: "
+          f"{'PASS (0 residual)' if post == 0 else 'FAIL (residual present)'}")
 
 
 if __name__ == "__main__":
