@@ -361,8 +361,8 @@ Locking in based on the findings above. The 30/30 PR must pass ALL:
 | A1 | All 30 CH1 nets ROUTED (no UNROUTED) | `audit_routing.py` PASS UNROUTED=0 |
 | A2 | On-board clearance violations all ≥ 0.180 mm AND documented in per-class table OR raised to ≥ 0.20 mm | KiCad DRC + worker per-class table review |
 | A3 | Shorts = 0 (R-J5) | `audit_routing.py` |
-| A4 | MOTOR_A/B/C_CH1: each ≥ 16 SW vias (loop-L planned-fit) AND `audit_via_current_capacity` ampacity check PASS at 100 A × 1.5 = 150 A continuous, 280 A × 1.2 = 336 A burst | G_R5 (with the new MOTOR_* declarations added to routing_topology.yaml — see Finding #1 master action) |
-| A5 | +VMOTOR plane via-stitching ≥ 4 / cm² | G14 `audit_via_stitching_density` |
+| A4 | MOTOR_A/B/C_CH1: each ≥ 16 SW vias (loop-L planned-fit) AND `audit_via_current_capacity` ampacity check PASS at 100 A × 1.5 = 150 A continuous, 280 A × 1.2 = 336 A burst. **Hole-to-hole target ≥ 0.25 mm** (drone-grade multi-fab supply-chain default, lever R 2026-05-29): JLC HDI Class 2 floor is 0.20 mm but pinning to the floor leaves ZERO process margin for fab swap to PCBWay / Sierra / JLC-Class-1-standard which all require 0.25 mm. Override to `--hole-hole-mm 0.20` only when build is JLC-Class-2-locked AND max via density is required for ampacity. FoS-implication: 0.25 mm reduces per-phase max via count by ~40-50 % on the CH1 SW cluster (synthetic measurement on canonical 2026-05-29: A=22 vs 40, B=35 vs 60-cap, C=24 vs 49); the ≥ 16 loop-L floor is met at 0.25 mm but the 150 A continuous FoS still falls short — both 0.20 and 0.25 mm need a pour-expansion / cluster relocation pass to fully meet the FoS. | G_R5 (with the new MOTOR_* declarations added to routing_topology.yaml — see Finding #1 master action); via-cluster geometry FoS audit reads `add_sw_vias.py --hole-hole-mm` config. |
+| A5 | +VMOTOR plane via-stitching ≥ 4 / cm². **Hole-to-hole target ≥ 0.25 mm** (lever R 2026-05-29 drone-grade multi-fab default — same rationale as A4). FoS-implication: `stitch_vmotor_plane.py` grid pitch (default 5 mm × 0.78 over-supply = 3.9 mm) is much larger than the h2h floor so h2h is NOT the binding constraint on stitch density — synthetic measurement on canonical 2026-05-29: 515 +VMOTOR + 515 GND at 5.145 vias/cm² IDENTICAL at 0.20 mm and 0.25 mm h2h (density still PASSes target 4.0/cm² with FoS 1.29×). Free reliability win. | G14 `audit_via_stitching_density`. |
 | A6 | SW vias all paired with GND return via per `audit_sw_gnd_return_pair` (Mode A ≤ 0.5 mm or Mode B ≤ 1.5 mm cluster centroid) | G_SW_GND_VIA |
 | A7 | Loop-L per-phase: A = B = C symmetric routed via count; each phase L_loop ≤ 2 nH; max deviation ≤ 5 % | `loop_extract.py` + CSV artifact |
 | A8 | All HDI vias inside J18/J19 pad bbox (whitelist scope) | G_HDI_VIA_IN_PAD |
@@ -385,8 +385,19 @@ Locking in based on the findings above. The 30/30 PR must pass ALL:
 
 1. **Raise MOTOR_A/B/C_CH1 SW vias to ≥ 16 per phase** (loop-L planned-fit;
    ampacity FoS only fully met at ≥ 50). Maintain phase-symmetric count.
+   **Use `add_sw_vias.py` defaults** — default `--hole-hole-mm 0.25`
+   (drone-grade multi-fab; lever R 2026-05-29). Override to `0.20` ONLY
+   when JLC-Class-2-locked. Synthetic on canonical 2026-05-29 shows the
+   0.25 mm default yields A=22 / B=35 / C=24 vs 40 / 60 / 49 at 0.20 mm
+   — all still ≥ 16 loop-L floor, but the 150 A FoS gap widens; pour
+   expansion (PR #245) or cluster relocation is needed to fully close
+   FoS at 0.25 mm.
 2. **Add +VMOTOR plane stitching grid ≥ 4 vias/cm²** board-wide (target
-   ≥ 400 stitching vias).
+   ≥ 400 stitching vias). **Use `stitch_vmotor_plane.py` defaults** —
+   `--hole-hole-mm 0.25` (drone-grade multi-fab; lever R). Synthetic on
+   canonical 2026-05-29 confirms 515 +VMOTOR + 515 GND at 5.145
+   vias/cm² IDENTICAL at 0.20 mm and 0.25 mm — h2h is not binding at
+   the 3.9 mm stitch grid pitch. Free reliability win.
 3. **Pair the 2 isolated SW vias** at (18, 54) MOTOR_A + (18, 82)
    MOTOR_C with GND return vias within 0.5 mm.
 4. **Raise +3V3↔+3V3A on-board clearance at (72.1, 92.6)** from
