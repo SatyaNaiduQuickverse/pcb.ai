@@ -1,0 +1,21 @@
+248:[coop] multi-mech fallback (CH1 30/30 lever K3): attempting 5 unrouted net(s)
+249:      pair J18.19->J19.23: chain=[] len_mm=14.07 tracks=5 vias=0
+250:  [+] PWM_INHB_CH1: routed via multi-mech chain
+251:  [.] PWM_INLA_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+252:  [.] GLB_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+253:  [.] KILL_RAIL_N_CH1: K3 multi-mech aggregate status=partial (0/2 pairs routed) — atomic rollback (per-net)
+254:      pair J18.23->TP22.1: chain=['through', 'through'] len_mm=8.95 tracks=5 vias=2
+255:  [+] SWDIO_CH1: routed via multi-mech chain
+256:[coop] multi-mech fallback done; remaining unrouted = 3
+257:[coop] UNROUTED nets: ['PWM_INLA_CH1', 'GLB_CH1', 'KILL_RAIL_N_CH1']
+258:[coop] PARTIAL nets (with unrouted pad-pairs):
+262:[targeted-ripup] cooperative plateau at 2 routed / 3 residual; engaging targeted ripup-rebuild phase (R36-R39 + R-J5; depth ≤ 2; provenance under sims/routing_provenance/targeted_ripup/)
+265:[targeted-ripup] KILL_RAIL_N_CH1: ROLLBACK — no_conflict (corridor unobstructed by foreigns)
+266:[targeted-ripup] GLB_CH1: ROLLBACK — no_conflict (corridor unobstructed by foreigns)
+267:[targeted-ripup] PWM_INLA_CH1: ROLLBACK — no_conflict (corridor unobstructed by foreigns)
+268:[targeted-ripup] phase done: 0/3 attempts committed.
+270:[leaf-route] cooperative + targeted-ripup phases done; scanning committed nets for disconnected leaves (lever Q; R42 / G_Q1; provenance under sims/routing_provenance/leaf_route/)
+271:[leaf-route] no disconnected leaves found (vacuous-PASS — every committed net is single-island)
+272:[leaf-route] phase done: 0/0 leaf-attempts committed.
+274:Saved: /tmp/post_route_w.kicad_pcb
+275:Result: full=2/5 partial=0 unrouted=3, 30 iterations, 30 ripups
