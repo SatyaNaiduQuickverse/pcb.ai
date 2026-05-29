@@ -1759,6 +1759,7 @@ def fill_region_with_maze(plan, region: "RegionSpec",
 
 
 def _board_obstacles_from_pcbnew(board, region, exclude_refs=(),
+                                  exclude_pads=(),
                                  exclude_nets=(),
                                  mode: str = "per_pad_and_tracks"):
     """Build the live-board OBSTACLE list (`maze_router.Obstacle` records) the
@@ -1788,8 +1789,18 @@ def _board_obstacles_from_pcbnew(board, region, exclude_refs=(),
     Args:
         board        : pcbnew BOARD.
         region       : RegionSpec (bbox + allowed_layers).
-        exclude_refs : footprint references to skip entirely — the route's
-                       own start/end footprints. Empty by default.
+        exclude_refs : footprint references to skip ENTIRELY — every pad of
+                       these footprints is excluded from obstacles. This is
+                       the legacy pre-EE behaviour and BREAKS the shorts-gate
+                       at fine-pitch HDI footprints (the via at one pad
+                       collides with a sibling pad of the same footprint).
+                       Empty by default. Prefer `exclude_pads` for K3.
+        exclude_pads : list of (ref, pad_number) tuples to skip SPECIFICALLY.
+                       Only the route's actual start/end PADS are excluded;
+                       sibling pads of the same footprint REMAIN as
+                       obstacles, so the via halo check catches the
+                       fine-pitch QFN collision. Lever EE fix (2026-05-30) —
+                       per-pad exclusion for HDI sibling-pad collision.
         exclude_nets : net names whose pads/tracks/vias should NOT become
                        obstacles (the route's own net pads/tracks). Empty
                        by default — caller passes (net_name,) for K3 fallback.
@@ -1799,6 +1810,7 @@ def _board_obstacles_from_pcbnew(board, region, exclude_refs=(),
     stays loadable on hosts without KiCad bundle.
     """
     exclude_set = set(exclude_refs)
+    exclude_pad_set = set((ref, str(pad)) for (ref, pad) in exclude_pads)
     exclude_nets_set = set(exclude_nets)
     import pcbnew  # lazy — live-board path only
     try:
@@ -1931,6 +1943,20 @@ def _board_obstacles_from_pcbnew(board, region, exclude_refs=(),
             except Exception:                                       # pragma: no cover
                 netname = ""
             if netname and netname in exclude_nets_set:
+                continue
+            # Lever EE (2026-05-30): per-pad exclude check. The route's
+            # start/end PADS are excluded (they ARE the via target), but
+            # sibling pads of the same footprint REMAIN as obstacles —
+            # this is the fix for K3 chain emit through-via collision at
+            # fine-pitch QFN (J18/J19 0.5mm pin pitch), where the legacy
+            # exclude_refs=whole-footprint behaviour masked the sibling-
+            # pin collision and let shorts through to DRC.
+            try:
+                pad_name = pad.GetPadName() if hasattr(pad, "GetPadName") else \
+                           pad.GetNumber()
+            except Exception:                                       # pragma: no cover
+                pad_name = ""
+            if (ref, str(pad_name)) in exclude_pad_set:
                 continue
             pos = pad.GetPosition()
             size = pad.GetSize()
@@ -2144,7 +2170,8 @@ def _pin_from_pcbnew(board, pin_ref):
 def _emit_plan_to_board(plan_obj, board, net_obj, width_mm,
                         allowed_via_classes, allowed_layers,
                         clearance_fos_mm, added_items,
-                        exclude_refs=()):
+                        exclude_refs=(),
+                        exclude_pads=()):
     """Emit a `RoutePlan` to the live pcbnew board as PCB_TRACK +
     PCB_VIA records. Mirrors `route_subsystem_cooperative.emit_to_board`
     (the SSoT for via-class emit) so the multi-mech adapter produces
@@ -2242,7 +2269,8 @@ def _emit_plan_to_board(plan_obj, board, net_obj, width_mm,
     region_for_obstacles.bbox = (bx0, by0, bx1, by1)
     region_for_obstacles.allowed_layers = allowed_layers
     obstacles = _board_obstacles_from_pcbnew(board, region_for_obstacles,
-                                              exclude_refs=exclude_refs)
+                                              exclude_refs=exclude_refs,
+                                              exclude_pads=exclude_pads)
     for v in plan_obj.vias:
         halo = MR.maze_via_halo_radius_mm(v.via_class, clearance_fos_mm)
         if halo is None:
@@ -2682,23 +2710,39 @@ def fill_region_with_multi_mech(plan, region: "RegionSpec",
         from . import multi_mech_planner as MMP
     except ImportError:                 # pragma: no cover
         import multi_mech_planner as MMP  # type: ignore
-    # Collect ALL footprint refs that appear in net_pairs — they should
-    # NOT be obstacles to their own routes (the net's own pads are not
-    # foreign copper). Mirrors RC._stamp_foreign_obstacles pattern.
+    # LEVER EE (2026-05-30): per-PAD exclude semantics for K3 chain emit.
+    #
+    # PREVIOUS (broken) behaviour — own_refs added whole footprints:
+    #   For "J18.15"→"J19.1", own_refs = {"J18", "J19"} → ALL J18 + ALL
+    #   J19 pads excluded from obstacles. Via at J19.1 location passed
+    #   halo check (no obstacle), got emitted, then DRC caught J19.1
+    #   through-via colliding with neighbor J19.2 pad on F.Cu. This is
+    #   the 27/30 wall — 34 K3-induced shorts at J18/J19 0.5mm pitch.
+    #
+    # FIX (lever EE) — own_pads excludes only the route's specific
+    # endpoint pads. Sibling pads of the same footprint REMAIN as
+    # obstacles, so the via halo check catches the fine-pitch collision
+    # and the planner either picks a smaller-pad HDI class
+    # (microvia/blind) or fails the pair (atomic-rollback, NO shorts).
+    own_pads = set()
     own_refs = set()
     for sp, ep in net_pairs:
         if "." in sp:
-            own_refs.add(sp.split(".", 1)[0])
+            ref, pad = sp.split(".", 1)
+            own_pads.add((ref, pad))
+            own_refs.add(ref)
         if "." in ep:
-            own_refs.add(ep.split(".", 1)[0])
-    # W-lever: also pass the net's name as exclude_nets so the route's
-    # own pads/tracks/vias (across ALL footprints, not just own_refs)
-    # don't become obstacles to itself. Mirrors the cooperative router's
+            ref, pad = ep.split(".", 1)
+            own_pads.add((ref, pad))
+            own_refs.add(ref)
+    # W-lever: pass the net's name as exclude_nets so the route's own
+    # pads/tracks/vias (across ALL footprints, not just own_refs) don't
+    # become obstacles to itself. Mirrors the cooperative router's
     # net-aware foreign-stamping semantics (_stamp_foreign_obstacles).
     own_nets = set(region.net_names) if region.net_names else set()
     obstacles = _board_obstacles_from_pcbnew(
         board, region,
-        exclude_refs=own_refs,
+        exclude_pads=tuple(own_pads),    # lever EE: per-pad exclusion
         exclude_nets=own_nets,
         mode="per_pad_and_tracks",
     )
@@ -2760,7 +2804,10 @@ def fill_region_with_multi_mech(plan, region: "RegionSpec",
                 allowed_layers=region.allowed_layers,
                 clearance_fos_mm=inv.clearance_fos_mm,
                 added_items=added_for_pair,
-                exclude_refs=own_refs,
+                # Lever EE: pad-level exclude (was exclude_refs=own_refs which
+                # masked sibling-pin collisions at fine-pitch QFN). Sibling
+                # pads of J19/J18 are now obstacles to the via halo check.
+                exclude_pads=tuple(own_pads),
             )
         except ValueError as e:
             # Pre-emit validation failure: ROLL BACK the pair's items
@@ -3044,15 +3091,20 @@ def fill_region_with_multi_mech_joint(
         # tracks emitted earlier in this call ARE obstacles. This is the
         # negotiation mechanism: net B sees net A's committed corridor as
         # blocked + plans around it.
-        own_refs = set()
+        # Lever EE (2026-05-30): per-PAD exclude instead of per-footprint.
+        # Sibling pads of J18/J19 stay as obstacles → halo check catches
+        # 0.5mm pitch through-via collisions.
+        own_pads = set()
         for sp, ep in net_pairs:
             if "." in sp:
-                own_refs.add(sp.split(".", 1)[0])
+                ref, pad = sp.split(".", 1)
+                own_pads.add((ref, pad))
             if "." in ep:
-                own_refs.add(ep.split(".", 1)[0])
+                ref, pad = ep.split(".", 1)
+                own_pads.add((ref, pad))
         obstacles = _board_obstacles_from_pcbnew(
             board, region,
-            exclude_refs=own_refs,
+            exclude_pads=tuple(own_pads),
             exclude_nets={net_name},
             mode="per_pad_and_tracks",
         )
@@ -3114,7 +3166,7 @@ def fill_region_with_multi_mech_joint(
                     allowed_layers=region.allowed_layers,
                     clearance_fos_mm=inv.clearance_fos_mm,
                     added_items=added_for_pair,
-                    exclude_refs=own_refs,
+                    exclude_pads=tuple(own_pads),  # lever EE: per-pad exclude
                 )
             except ValueError as e:
                 # Per-pair rollback (same as single-net adapter).
