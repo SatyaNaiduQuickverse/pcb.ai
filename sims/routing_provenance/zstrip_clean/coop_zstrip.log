@@ -1,0 +1,807 @@
+[coop] layer-pref-bias: ON (v5 per-net-class layer cost multiplier; BEMF→In4, PWM/CSA→In2, SWD/GH/GL/BST→In8, etc.)
+[coop] via-in-pad-allowed: ON (v6 HDI whitelist=['J18', 'J19']; unblocks J18/J19 QFN escape per worker per-pin diagnosis)
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[coop] 33 target nets in CH1: CSA_MAX_CH1, BEMF_A_CH1, BEMF_B_CH1, BEMF_C_CH1, CSA_A_OUT_CH1, CSA_B_OUT_CH1, CSA_C_OUT_CH1, PWM_INHA_CH1...
+
+[coop] LEVER Z: route-hardest-first enabled — identifying HDI-whitelisted nets BEFORE main cooperative pass
+  [Z] HDI-whitelisted target nets (6): ['BSTB_CH1', 'GLB_CH1', 'KILL_RAIL_N_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+  [Y] cascade k=6: trying subset ['KILL_RAIL_N_CH1', 'BSTB_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1', 'SWDIO_CH1']
+      joint try (6 nets, 3 routed): {'KILL_RAIL_N_CH1': 'failed', 'BSTB_CH1': 'routed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'routed', 'SWDIO_CH1': 'failed'}
+  [Y] cascade k=5: trying subset ['KILL_RAIL_N_CH1', 'BSTB_CH1', 'GLB_CH1', 'PWM_INHB_CH1', 'PWM_INLA_CH1']
+      joint try (5 nets, 3 routed): {'KILL_RAIL_N_CH1': 'failed', 'BSTB_CH1': 'routed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed', 'PWM_INLA_CH1': 'routed'}
+  [Y] cascade k=4: trying subset ['KILL_RAIL_N_CH1', 'BSTB_CH1', 'GLB_CH1', 'PWM_INHB_CH1']
+      joint try (4 nets, 2 routed): {'KILL_RAIL_N_CH1': 'failed', 'BSTB_CH1': 'routed', 'GLB_CH1': 'failed', 'PWM_INHB_CH1': 'routed'}
+  [Y] cascade k=3: trying subset ['KILL_RAIL_N_CH1', 'BSTB_CH1', 'GLB_CH1']
+      joint try (3 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'BSTB_CH1': 'routed', 'GLB_CH1': 'failed'}
+  [Y] cascade k=2: trying subset ['KILL_RAIL_N_CH1', 'BSTB_CH1']
+      joint try (2 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'BSTB_CH1': 'routed'}
+  [Y] cascade k=1: trying subset ['KILL_RAIL_N_CH1']
+      joint try (1 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed'}
+  [Y] cascade: NO feasible subset (size 1 also failed) — restoring snapshot, deferring to per-net sequential pass
+  [Z] HDI-first phase: 0/6 rescued — proceeding to normal cooperative pass (HDI residuals will be retried at the K3 fallback after the loop)
+
+[coop] === Iteration 1/30 (present_factor=1.00) ===
+  [+] BEMF_A_CH1: routed (4 segs, 3 vias) verify=1-island fail_count_was=0
+  [+] BEMF_B_CH1: routed (4 segs, 3 vias) verify=1-island fail_count_was=0
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.8', 'J20.5'], ['C71.1', 'D34.2']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=1)
+  [.] PWM_INHA_CH1: FAILED (fail_count=1)
+  [+] PWM_INHB_CH1: routed (15 segs, 2 vias) verify=1-island fail_count_was=0
+  [+] PWM_INHC_CH1: routed (21 segs, 2 vias) verify=1-island fail_count_was=0
+  [+] PWM_INLA_CH1: routed (19 segs, 2 vias) verify=1-island fail_count_was=0
+  [.] PWM_INLB_CH1: FAILED (fail_count=1)
+  [.] PWM_INLC_CH1: FAILED (fail_count=1)
+  [.] BSTA_CH1: FAILED (fail_count=1)
+  [+] BSTB_CH1: routed (7 segs, 2 vias) verify=1-island fail_count_was=0
+  [+] BSTC_CH1: routed (13 segs, 2 vias) verify=1-island fail_count_was=0
+  [+] GHA_CH1: routed (12 segs, 2 vias) verify=1-island fail_count_was=0
+  [.] GHB_CH1: FAILED (fail_count=1)
+  [.] GHC_CH1: FAILED (fail_count=1)
+  [+] GLA_CH1: routed (18 segs, 2 vias) verify=1-island fail_count_was=0
+  [.] GLB_CH1: FAILED (fail_count=1)
+  [.] GLC_CH1: FAILED (fail_count=1)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] I_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U3.1', 'U4.1'], ['R75.1', 'R73.1']]) — ripping + retry
+  [+] KILL_LOCAL_N_CH1: routed (8 segs, 1 vias) verify=1-island fail_count_was=0
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['D38.2', 'D37.2'], ['J19.8'], ['R76.1']]) — ripping + retry
+  [+] LED_GPIO_CH1: routed (24 segs, 3 vias) verify=1-island fail_count_was=0
+  [+] NRST_CH1: routed (11 segs, 2 vias) verify=1-island fail_count_was=0
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] SWCLK_CH1: FAILED (fail_count=1)
+  [+] SWDIO_CH1: routed (13 segs, 3 vias) verify=1-island fail_count_was=0
+  [!] VREF_I_TRIP_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U3.3', 'R69.1', 'R68.2'], ['R75.2']]) — ripping + retry
+  [+] VREF_OTP_CH1: routed (13 segs, 2 vias) verify=1-island fail_count_was=0
+  pass result: routed=14 partial=0 still_unrouted=19 repairs_ok=0 open_partials=9
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INHC_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 2/30 (present_factor=1.40) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.8', 'J20.5'], ['C71.1', 'D34.2']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=2)
+  [.] PWM_INHA_CH1: FAILED (fail_count=2)
+  [.] PWM_INLB_CH1: FAILED (fail_count=2)
+  [.] PWM_INLC_CH1: FAILED (fail_count=2)
+  [+] BSTA_CH1: routed (31 segs, 2 vias) verify=1-island fail_count_was=1
+  [.] GHB_CH1: FAILED (fail_count=2)
+  [.] GHC_CH1: FAILED (fail_count=2)
+  [+] GLB_CH1: routed (10 segs, 2 vias) verify=1-island fail_count_was=1
+  [.] GLC_CH1: FAILED (fail_count=2)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] I_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U3.1', 'U4.1'], ['R75.1', 'R73.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['D38.2', 'D37.2'], ['J19.8'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [+] SWCLK_CH1: routed (14 segs, 2 vias) verify=1-island fail_count_was=1
+  [!] VREF_I_TRIP_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U3.3', 'R69.1', 'R68.2'], ['R75.2']]) — ripping + retry
+  [+] PWM_INHB_CH1: routed (21 segs, 4 vias) verify=1-island fail_count_was=0
+  [.] PWM_INHC_CH1: FAILED (fail_count=1)
+  pass result: routed=4 partial=0 still_unrouted=17 repairs_ok=0 open_partials=9
+  ripping 2 congestion-blocker nets: ['PWM_INLA_CH1', 'GLB_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 3/30 (present_factor=1.96) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.8', 'J20.5'], ['C71.1', 'D34.2']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=3)
+  [.] PWM_INHA_CH1: FAILED (fail_count=3)
+  [+] PWM_INLB_CH1: routed (15 segs, 2 vias) verify=1-island fail_count_was=2
+  [.] PWM_INLC_CH1: FAILED (fail_count=3)
+  [.] GHB_CH1: FAILED (fail_count=3)
+  [.] GHC_CH1: FAILED (fail_count=3)
+  [.] GLC_CH1: FAILED (fail_count=3)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [+] I_TRIP_N_CH1: routed (44 segs, 4 vias) verify=1-island fail_count_was=2
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [!] VREF_I_TRIP_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U3.3', 'R69.1', 'R68.2'], ['R75.2']]) — ripping + retry
+  [.] PWM_INHC_CH1: FAILED (fail_count=2)
+  [.] GLB_CH1: FAILED (fail_count=2)
+  [+] PWM_INLA_CH1: routed (22 segs, 3 vias) verify=1-island fail_count_was=0
+  pass result: routed=3 partial=0 still_unrouted=16 repairs_ok=0 open_partials=8
+  ripping 2 congestion-blocker nets: ['PWM_INLB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 4/30 (present_factor=2.74) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.8', 'J20.5'], ['C71.1', 'D34.2']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=4)
+  [.] PWM_INHA_CH1: FAILED (fail_count=4)
+  [.] PWM_INLC_CH1: FAILED (fail_count=4)
+  [.] GHB_CH1: FAILED (fail_count=4)
+  [.] GHC_CH1: FAILED (fail_count=4)
+  [.] GLC_CH1: FAILED (fail_count=4)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [+] VREF_I_TRIP_CH1: routed (43 segs, 5 vias) verify=1-island fail_count_was=3
+  [.] PWM_INHC_CH1: FAILED (fail_count=3)
+  [.] PWM_INLB_CH1: FAILED (fail_count=3)
+  [.] GLB_CH1: FAILED (fail_count=3)
+  [+] PWM_INLA_CH1: routed (23 segs, 4 vias) verify=1-island fail_count_was=0
+  pass result: routed=2 partial=0 still_unrouted=16 repairs_ok=0 open_partials=7
+  ripping 2 congestion-blocker nets: ['PWM_INLA_CH1', 'VREF_I_TRIP_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 5/30 (present_factor=3.84) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=5)
+  [.] PWM_INHA_CH1: FAILED (fail_count=5)
+  [+] PWM_INLC_CH1: routed (14 segs, 2 vias) verify=1-island fail_count_was=4
+  [.] GHB_CH1: FAILED (fail_count=5)
+  [.] GHC_CH1: FAILED (fail_count=5)
+  [.] GLC_CH1: FAILED (fail_count=5)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHC_CH1: FAILED (fail_count=4)
+  [.] PWM_INLB_CH1: FAILED (fail_count=4)
+  [.] GLB_CH1: FAILED (fail_count=4)
+  [+] VREF_I_TRIP_CH1: routed (52 segs, 5 vias) verify=1-island fail_count_was=3
+  [.] PWM_INLA_CH1: FAILED (fail_count=1)
+  pass result: routed=2 partial=0 still_unrouted=16 repairs_ok=0 open_partials=7
+  ripping 2 congestion-blocker nets: ['PWM_INLC_CH1', 'VREF_I_TRIP_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 6/30 (present_factor=5.38) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [!] CSA_MAX_CH1: MST-ROUTED but VERIFY-SPLIT (4 islands: [['D34.1', 'R72.1'], ['U3.2'], ['D35.1'], ['D36.1']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=6)
+  [.] GHB_CH1: FAILED (fail_count=6)
+  [.] GHC_CH1: FAILED (fail_count=6)
+  [.] GLC_CH1: FAILED (fail_count=6)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['J19.8', 'D37.2'], ['D38.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHC_CH1: FAILED (fail_count=5)
+  [.] PWM_INLB_CH1: FAILED (fail_count=5)
+  [.] PWM_INLC_CH1: FAILED (fail_count=5)
+  [+] GLB_CH1: routed (6 segs, 2 vias) verify=1-island fail_count_was=4
+  [+] VREF_I_TRIP_CH1: routed (53 segs, 6 vias) verify=1-island fail_count_was=3
+  [+] PWM_INLA_CH1: routed (15 segs, 4 vias) verify=1-island fail_count_was=1
+  pass result: routed=3 partial=0 still_unrouted=15 repairs_ok=0 open_partials=8
+  ripping 2 congestion-blocker nets: ['PWM_INLA_CH1', 'PWM_INHB_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 7/30 (present_factor=7.53) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: PARTIAL+ROLLBACK (1/4 edges, would-be 9 segs) — failed pairs: [('U3.2', 'D35.1'), ('D35.1', 'D36.1'), ('D35.1', 'D34.1')] (fail_count=7)
+  [+] PWM_INHA_CH1: routed (38 segs, 3 vias) verify=1-island fail_count_was=6
+  [.] GHB_CH1: FAILED (fail_count=7)
+  [.] GHC_CH1: FAILED (fail_count=7)
+  [.] GLC_CH1: FAILED (fail_count=7)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHC_CH1: FAILED (fail_count=6)
+  [.] PWM_INLB_CH1: FAILED (fail_count=6)
+  [.] PWM_INLC_CH1: FAILED (fail_count=6)
+  [.] PWM_INLA_CH1: FAILED (fail_count=2)
+  [.] PWM_INHB_CH1: FAILED (fail_count=1)
+  pass result: routed=1 partial=0 still_unrouted=16 repairs_ok=0 open_partials=10
+  ripping 2 congestion-blocker nets: ['PWM_INHA_CH1', 'NRST_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 8/30 (present_factor=10.54) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=8)
+  [.] GHB_CH1: FAILED (fail_count=8)
+  [.] GHC_CH1: FAILED (fail_count=8)
+  [.] GLC_CH1: FAILED (fail_count=8)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=7)
+  [+] PWM_INHC_CH1: routed (40 segs, 3 vias) verify=1-island fail_count_was=6
+  [.] PWM_INLB_CH1: FAILED (fail_count=7)
+  [.] PWM_INLC_CH1: FAILED (fail_count=7)
+  [.] PWM_INLA_CH1: FAILED (fail_count=3)
+  [.] PWM_INHB_CH1: FAILED (fail_count=2)
+  [!] NRST_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C56.1', 'R42.1'], ['J18.4']]) — ripping + retry
+  pass result: routed=1 partial=0 still_unrouted=17 repairs_ok=0 open_partials=11
+  ripping 2 congestion-blocker nets: ['PWM_INHC_CH1', 'BEMF_A_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 9/30 (present_factor=14.76) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=9)
+  [.] GHB_CH1: FAILED (fail_count=9)
+  [.] GHC_CH1: FAILED (fail_count=9)
+  [.] GLC_CH1: FAILED (fail_count=9)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=8)
+  [.] PWM_INLB_CH1: FAILED (fail_count=8)
+  [.] PWM_INLC_CH1: FAILED (fail_count=8)
+  [+] PWM_INHC_CH1: routed (41 segs, 3 vias) verify=1-island fail_count_was=6
+  [.] PWM_INLA_CH1: FAILED (fail_count=4)
+  [+] PWM_INHB_CH1: routed (45 segs, 4 vias) verify=1-island fail_count_was=2
+  [+] NRST_CH1: routed (17 segs, 2 vias) verify=1-island fail_count_was=1
+  [!] BEMF_A_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['R61.1', 'C74.1', 'R60.2'], ['J18.6']]) — ripping + retry
+  pass result: routed=3 partial=0 still_unrouted=16 repairs_ok=0 open_partials=11
+  ripping 2 congestion-blocker nets: ['PWM_INHC_CH1', 'PWM_INHB_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 10/30 (present_factor=20.66) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=10)
+  [.] GHB_CH1: FAILED (fail_count=10)
+  [.] GHC_CH1: FAILED (fail_count=10)
+  [.] GLC_CH1: FAILED (fail_count=10)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=9)
+  [.] PWM_INLB_CH1: FAILED (fail_count=9)
+  [.] PWM_INLC_CH1: FAILED (fail_count=9)
+  [.] PWM_INHC_CH1: FAILED (fail_count=7)
+  [+] PWM_INLA_CH1: routed (31 segs, 2 vias) verify=1-island fail_count_was=4
+  [+] PWM_INHB_CH1: routed (42 segs, 4 vias) verify=1-island fail_count_was=2
+  [!] BEMF_A_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['R61.1', 'C74.1', 'R60.2'], ['J18.6']]) — ripping + retry
+  pass result: routed=2 partial=0 still_unrouted=16 repairs_ok=0 open_partials=11
+  ripping 2 congestion-blocker nets: ['PWM_INLA_CH1', 'PWM_INHB_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 11/30 (present_factor=28.93) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=11)
+  [.] GHB_CH1: FAILED (fail_count=11)
+  [.] GHC_CH1: FAILED (fail_count=11)
+  [.] GLC_CH1: FAILED (fail_count=11)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=10)
+  [.] PWM_INLB_CH1: FAILED (fail_count=10)
+  [.] PWM_INLC_CH1: FAILED (fail_count=10)
+  [.] PWM_INHC_CH1: FAILED (fail_count=8)
+  [+] PWM_INLA_CH1: routed (31 segs, 2 vias) verify=1-island fail_count_was=4
+  [!] BEMF_A_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['R61.1', 'C74.1', 'R60.2'], ['J18.6']]) — ripping + retry
+  [+] PWM_INHB_CH1: routed (42 segs, 4 vias) verify=1-island fail_count_was=2
+  pass result: routed=2 partial=0 still_unrouted=16 repairs_ok=0 open_partials=11
+  ripping 2 congestion-blocker nets: ['PWM_INLA_CH1', 'PWM_INHB_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 12/30 (present_factor=40.50) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=12)
+  [.] GHB_CH1: FAILED (fail_count=12)
+  [.] GHC_CH1: FAILED (fail_count=12)
+  [.] GLC_CH1: FAILED (fail_count=12)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=11)
+  [.] PWM_INLB_CH1: FAILED (fail_count=11)
+  [.] PWM_INLC_CH1: FAILED (fail_count=11)
+  [.] PWM_INHC_CH1: FAILED (fail_count=9)
+  [+] PWM_INLA_CH1: routed (31 segs, 2 vias) verify=1-island fail_count_was=4
+  [!] BEMF_A_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['R61.1', 'C74.1', 'R60.2'], ['J18.6']]) — ripping + retry
+  [.] PWM_INHB_CH1: FAILED (fail_count=3)
+  pass result: routed=1 partial=0 still_unrouted=17 repairs_ok=0 open_partials=11
+  ripping 2 congestion-blocker nets: ['PWM_INLA_CH1', 'NRST_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 13/30 (present_factor=56.69) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=13)
+  [.] GHB_CH1: FAILED (fail_count=13)
+  [.] GHC_CH1: FAILED (fail_count=13)
+  [.] GLC_CH1: FAILED (fail_count=13)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=12)
+  [.] PWM_INLB_CH1: FAILED (fail_count=12)
+  [.] PWM_INLC_CH1: FAILED (fail_count=12)
+  [.] PWM_INHC_CH1: FAILED (fail_count=10)
+  [!] BEMF_A_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['R61.1', 'C74.1', 'R60.2'], ['J18.6']]) — ripping + retry
+  [+] PWM_INLA_CH1: routed (31 segs, 2 vias) verify=1-island fail_count_was=4
+  [.] PWM_INHB_CH1: FAILED (fail_count=4)
+  [+] NRST_CH1: routed (9 segs, 2 vias) verify=1-island fail_count_was=1
+  pass result: routed=2 partial=0 still_unrouted=17 repairs_ok=0 open_partials=11
+  ripping 2 congestion-blocker nets: ['PWM_INLA_CH1', 'NRST_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 14/30 (present_factor=79.37) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=14)
+  [.] GHB_CH1: FAILED (fail_count=14)
+  [.] GHC_CH1: FAILED (fail_count=14)
+  [.] GLC_CH1: FAILED (fail_count=14)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=13)
+  [.] PWM_INLB_CH1: FAILED (fail_count=13)
+  [.] PWM_INLC_CH1: FAILED (fail_count=13)
+  [.] PWM_INHC_CH1: FAILED (fail_count=11)
+  [+] BEMF_A_CH1: routed (6 segs, 3 vias) verify=1-island fail_count_was=5
+  [.] PWM_INHB_CH1: FAILED (fail_count=5)
+  [+] PWM_INLA_CH1: routed (31 segs, 2 vias) verify=1-island fail_count_was=4
+  [+] NRST_CH1: routed (9 segs, 2 vias) verify=1-island fail_count_was=1
+  pass result: routed=3 partial=0 still_unrouted=16 repairs_ok=0 open_partials=10
+  ripping 2 congestion-blocker nets: ['PWM_INLA_CH1', 'NRST_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 15/30 (present_factor=111.12) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=15)
+  [.] GHB_CH1: FAILED (fail_count=15)
+  [.] GHC_CH1: FAILED (fail_count=15)
+  [.] GLC_CH1: FAILED (fail_count=15)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=14)
+  [.] PWM_INLB_CH1: FAILED (fail_count=14)
+  [.] PWM_INLC_CH1: FAILED (fail_count=14)
+  [.] PWM_INHC_CH1: FAILED (fail_count=12)
+  [.] PWM_INHB_CH1: FAILED (fail_count=6)
+  [+] PWM_INLA_CH1: routed (31 segs, 2 vias) verify=1-island fail_count_was=4
+  [+] NRST_CH1: routed (9 segs, 2 vias) verify=1-island fail_count_was=1
+  pass result: routed=2 partial=0 still_unrouted=16 repairs_ok=0 open_partials=10
+  ripping 2 congestion-blocker nets: ['PWM_INLA_CH1', 'NRST_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 16/30 (present_factor=155.57) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=16)
+  [.] GHB_CH1: FAILED (fail_count=16)
+  [.] GHC_CH1: FAILED (fail_count=16)
+  [.] GLC_CH1: FAILED (fail_count=16)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=15)
+  [.] PWM_INLB_CH1: FAILED (fail_count=15)
+  [.] PWM_INLC_CH1: FAILED (fail_count=15)
+  [.] PWM_INHC_CH1: FAILED (fail_count=13)
+  [.] PWM_INHB_CH1: FAILED (fail_count=7)
+  [+] PWM_INLA_CH1: routed (31 segs, 2 vias) verify=1-island fail_count_was=4
+  [+] NRST_CH1: routed (10 segs, 2 vias) verify=1-island fail_count_was=1
+  pass result: routed=2 partial=0 still_unrouted=16 repairs_ok=0 open_partials=10
+  ripping 2 congestion-blocker nets: ['PWM_INLA_CH1', 'NRST_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 17/30 (present_factor=217.80) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=17)
+  [.] GHB_CH1: FAILED (fail_count=17)
+  [.] GHC_CH1: FAILED (fail_count=17)
+  [.] GLC_CH1: FAILED (fail_count=17)
+  [!] BOOT0_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J18.31', 'R43.1', 'R41.1'], ['TP17.1']]) — ripping + retry
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=16)
+  [.] PWM_INLB_CH1: FAILED (fail_count=16)
+  [.] PWM_INLC_CH1: FAILED (fail_count=16)
+  [.] PWM_INHC_CH1: FAILED (fail_count=14)
+  [.] PWM_INHB_CH1: FAILED (fail_count=8)
+  [+] PWM_INLA_CH1: routed (31 segs, 2 vias) verify=1-island fail_count_was=4
+  [+] NRST_CH1: routed (10 segs, 2 vias) verify=1-island fail_count_was=1
+  pass result: routed=2 partial=0 still_unrouted=16 repairs_ok=0 open_partials=10
+  ripping 2 congestion-blocker nets: ['PWM_INLA_CH1', 'I_TRIP_N_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 18/30 (present_factor=304.91) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=18)
+  [.] GHB_CH1: FAILED (fail_count=18)
+  [.] GHC_CH1: FAILED (fail_count=18)
+  [.] GLC_CH1: FAILED (fail_count=18)
+  [+] BOOT0_CH1: routed (17 segs, 4 vias) verify=1-island fail_count_was=17
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=17)
+  [.] PWM_INLB_CH1: FAILED (fail_count=17)
+  [.] PWM_INLC_CH1: FAILED (fail_count=17)
+  [.] PWM_INHC_CH1: FAILED (fail_count=15)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [+] PWM_INLA_CH1: routed (39 segs, 4 vias) verify=1-island fail_count_was=4
+  [!] I_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['R75.1', 'U4.1', 'R73.1'], ['U3.1']]) — ripping + retry
+  pass result: routed=3 partial=0 still_unrouted=15 repairs_ok=0 open_partials=10
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 19/30 (present_factor=426.88) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=19)
+  [.] GHB_CH1: FAILED (fail_count=19)
+  [.] GHC_CH1: FAILED (fail_count=19)
+  [.] GLC_CH1: FAILED (fail_count=19)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=18)
+  [.] PWM_INLB_CH1: FAILED (fail_count=18)
+  [.] PWM_INLC_CH1: FAILED (fail_count=18)
+  [.] PWM_INHC_CH1: FAILED (fail_count=16)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [+] PWM_INLA_CH1: routed (39 segs, 4 vias) verify=1-island fail_count_was=4
+  [!] I_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['R75.1', 'U4.1', 'R73.1'], ['U3.1']]) — ripping + retry
+  pass result: routed=2 partial=0 still_unrouted=15 repairs_ok=0 open_partials=10
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 20/30 (present_factor=597.63) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=20)
+  [.] GHB_CH1: FAILED (fail_count=20)
+  [.] GHC_CH1: FAILED (fail_count=20)
+  [.] GLC_CH1: FAILED (fail_count=20)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=19)
+  [.] PWM_INLB_CH1: FAILED (fail_count=19)
+  [.] PWM_INLC_CH1: FAILED (fail_count=19)
+  [.] PWM_INHC_CH1: FAILED (fail_count=17)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [+] PWM_INLA_CH1: routed (39 segs, 4 vias) verify=1-island fail_count_was=4
+  [!] I_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['R75.1', 'U4.1', 'R73.1'], ['U3.1']]) — ripping + retry
+  pass result: routed=2 partial=0 still_unrouted=15 repairs_ok=0 open_partials=10
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 21/30 (present_factor=836.68) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=21)
+  [.] GHB_CH1: FAILED (fail_count=21)
+  [.] GHC_CH1: FAILED (fail_count=21)
+  [.] GLC_CH1: FAILED (fail_count=21)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=20)
+  [.] PWM_INLB_CH1: FAILED (fail_count=20)
+  [.] PWM_INLC_CH1: FAILED (fail_count=20)
+  [.] PWM_INHC_CH1: FAILED (fail_count=18)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [!] I_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['R75.1', 'U4.1', 'R73.1'], ['U3.1']]) — ripping + retry
+  [+] PWM_INLA_CH1: routed (39 segs, 4 vias) verify=1-island fail_count_was=4
+  pass result: routed=2 partial=0 still_unrouted=15 repairs_ok=0 open_partials=10
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 22/30 (present_factor=1171.36) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=22)
+  [.] GHB_CH1: FAILED (fail_count=22)
+  [.] GHC_CH1: FAILED (fail_count=22)
+  [.] GLC_CH1: FAILED (fail_count=22)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=21)
+  [.] PWM_INLB_CH1: FAILED (fail_count=21)
+  [.] PWM_INLC_CH1: FAILED (fail_count=21)
+  [.] PWM_INHC_CH1: FAILED (fail_count=19)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [+] I_TRIP_N_CH1: routed (31 segs, 3 vias) verify=1-island fail_count_was=6
+  [+] PWM_INLA_CH1: routed (14 segs, 4 vias) verify=1-island fail_count_was=4
+  pass result: routed=3 partial=0 still_unrouted=14 repairs_ok=0 open_partials=9
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 23/30 (present_factor=1639.90) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=23)
+  [.] GHB_CH1: FAILED (fail_count=23)
+  [.] GHC_CH1: FAILED (fail_count=23)
+  [.] GLC_CH1: FAILED (fail_count=23)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=22)
+  [.] PWM_INLB_CH1: FAILED (fail_count=22)
+  [.] PWM_INLC_CH1: FAILED (fail_count=22)
+  [.] PWM_INHC_CH1: FAILED (fail_count=20)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [+] PWM_INLA_CH1: routed (14 segs, 4 vias) verify=1-island fail_count_was=4
+  pass result: routed=2 partial=0 still_unrouted=14 repairs_ok=0 open_partials=9
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 24/30 (present_factor=2295.86) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=24)
+  [.] GHB_CH1: FAILED (fail_count=24)
+  [.] GHC_CH1: FAILED (fail_count=24)
+  [.] GLC_CH1: FAILED (fail_count=24)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=23)
+  [.] PWM_INLB_CH1: FAILED (fail_count=23)
+  [.] PWM_INLC_CH1: FAILED (fail_count=23)
+  [.] PWM_INHC_CH1: FAILED (fail_count=21)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [+] PWM_INLA_CH1: routed (14 segs, 4 vias) verify=1-island fail_count_was=4
+  pass result: routed=2 partial=0 still_unrouted=14 repairs_ok=0 open_partials=9
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 25/30 (present_factor=3214.20) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=25)
+  [.] GHB_CH1: FAILED (fail_count=25)
+  [.] GHC_CH1: FAILED (fail_count=25)
+  [.] GLC_CH1: FAILED (fail_count=25)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=24)
+  [.] PWM_INLB_CH1: FAILED (fail_count=24)
+  [.] PWM_INLC_CH1: FAILED (fail_count=24)
+  [.] PWM_INHC_CH1: FAILED (fail_count=22)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [+] PWM_INLA_CH1: routed (14 segs, 4 vias) verify=1-island fail_count_was=4
+  pass result: routed=2 partial=0 still_unrouted=14 repairs_ok=0 open_partials=9
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 26/30 (present_factor=4499.88) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=26)
+  [.] GHB_CH1: FAILED (fail_count=26)
+  [.] GHC_CH1: FAILED (fail_count=26)
+  [.] GLC_CH1: FAILED (fail_count=26)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=25)
+  [.] PWM_INLB_CH1: FAILED (fail_count=25)
+  [.] PWM_INLC_CH1: FAILED (fail_count=25)
+  [.] PWM_INHC_CH1: FAILED (fail_count=23)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [+] PWM_INLA_CH1: routed (14 segs, 4 vias) verify=1-island fail_count_was=4
+  pass result: routed=2 partial=0 still_unrouted=14 repairs_ok=0 open_partials=9
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 27/30 (present_factor=6299.83) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [!] CSA_B_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C72.1', 'D35.2'], ['J21.5']]) — ripping + retry
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=27)
+  [.] GHB_CH1: FAILED (fail_count=27)
+  [.] GHC_CH1: FAILED (fail_count=27)
+  [.] GLC_CH1: FAILED (fail_count=27)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=26)
+  [.] PWM_INLB_CH1: FAILED (fail_count=26)
+  [.] PWM_INLC_CH1: FAILED (fail_count=26)
+  [.] PWM_INHC_CH1: FAILED (fail_count=24)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [+] PWM_INLA_CH1: routed (14 segs, 4 vias) verify=1-island fail_count_was=4
+  pass result: routed=2 partial=0 still_unrouted=14 repairs_ok=0 open_partials=9
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 28/30 (present_factor=8819.76) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [.] CSA_B_OUT_CH1: FAILED (fail_count=28)
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=28)
+  [.] GHB_CH1: FAILED (fail_count=28)
+  [.] GHC_CH1: FAILED (fail_count=28)
+  [.] GLC_CH1: FAILED (fail_count=28)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=27)
+  [.] PWM_INLB_CH1: FAILED (fail_count=27)
+  [.] PWM_INLC_CH1: FAILED (fail_count=27)
+  [.] PWM_INHC_CH1: FAILED (fail_count=25)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [+] PWM_INLA_CH1: routed (14 segs, 4 vias) verify=1-island fail_count_was=4
+  pass result: routed=2 partial=0 still_unrouted=14 repairs_ok=0 open_partials=9
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 29/30 (present_factor=12347.67) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [.] CSA_B_OUT_CH1: FAILED (fail_count=29)
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=29)
+  [.] GHB_CH1: FAILED (fail_count=29)
+  [.] GHC_CH1: FAILED (fail_count=29)
+  [.] GLC_CH1: FAILED (fail_count=29)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=28)
+  [.] PWM_INLB_CH1: FAILED (fail_count=28)
+  [.] PWM_INLC_CH1: FAILED (fail_count=28)
+  [.] PWM_INHC_CH1: FAILED (fail_count=26)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [+] PWM_INLA_CH1: routed (14 segs, 4 vias) verify=1-island fail_count_was=4
+  pass result: routed=2 partial=0 still_unrouted=14 repairs_ok=0 open_partials=9
+  ripping 2 congestion-blocker nets: ['PWM_INHB_CH1', 'PWM_INLA_CH1']
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+
+[coop] === Iteration 30/30 (present_factor=17286.74) ===
+  [!] BEMF_C_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C76.1', 'R65.1', 'R64.2'], ['J18.11']]) — ripping + retry
+  [!] CSA_A_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (3 islands: [['C71.1', 'D34.2'], ['J18.8'], ['J20.5']]) — ripping + retry
+  [.] CSA_B_OUT_CH1: FAILED (fail_count=30)
+  [!] CSA_C_OUT_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['C73.1', 'D36.2'], ['J22.5']]) — ripping + retry
+  [.] CSA_MAX_CH1: FAILED (fail_count=30)
+  [.] GHB_CH1: FAILED (fail_count=30)
+  [.] GHC_CH1: FAILED (fail_count=30)
+  [.] GLC_CH1: FAILED (fail_count=30)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [!] OTP_TRIP_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['U4.2', 'R74.1'], ['U3.7']]) — ripping + retry
+  [.] PWM_INHA_CH1: FAILED (fail_count=29)
+  [.] PWM_INLB_CH1: FAILED (fail_count=29)
+  [.] PWM_INLC_CH1: FAILED (fail_count=29)
+  [.] PWM_INHC_CH1: FAILED (fail_count=27)
+  [+] PWM_INHB_CH1: routed (63 segs, 2 vias) verify=1-island fail_count_was=8
+  [+] PWM_INLA_CH1: routed (14 segs, 4 vias) verify=1-island fail_count_was=4
+  pass result: routed=2 partial=0 still_unrouted=14 repairs_ok=0 open_partials=9
+
+[coop] DONE. full_routed=19/33 partial=0 unrouted=14 iterations=30 ripups=268 elapsed=14330.4s
+
+[coop] JOINT multi-mech fallback (CH1 30/30 lever Y): attempting 14 unrouted net(s) simultaneously
+  [Y] cascade k=14: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1', 'GHC_CH1', 'GLC_CH1', 'PWM_INHA_CH1', 'PWM_INHC_CH1', 'PWM_INLB_CH1', 'PWM_INLC_CH1', 'BEMF_C_CH1', 'CSA_A_OUT_CH1', 'CSA_B_OUT_CH1', 'CSA_C_OUT_CH1', 'CSA_MAX_CH1', 'OTP_TRIP_N_CH1']
+      joint try (14 nets, 5 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed', 'GHC_CH1': 'failed', 'GLC_CH1': 'failed', 'PWM_INHA_CH1': 'routed', 'PWM_INHC_CH1': 'failed', 'PWM_INLB_CH1': 'routed', 'PWM_INLC_CH1': 'failed', 'BEMF_C_CH1': 'failed', 'CSA_A_OUT_CH1': 'failed', 'CSA_B_OUT_CH1': 'routed', 'CSA_C_OUT_CH1': 'routed', 'CSA_MAX_CH1': 'failed', 'OTP_TRIP_N_CH1': 'failed'}
+  [Y] cascade k=13: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1', 'GHC_CH1', 'GLC_CH1', 'PWM_INHA_CH1', 'PWM_INHC_CH1', 'PWM_INLB_CH1', 'PWM_INLC_CH1', 'BEMF_C_CH1', 'CSA_A_OUT_CH1', 'CSA_B_OUT_CH1', 'CSA_C_OUT_CH1', 'CSA_MAX_CH1']
+      joint try (13 nets, 5 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed', 'GHC_CH1': 'failed', 'GLC_CH1': 'failed', 'PWM_INHA_CH1': 'routed', 'PWM_INHC_CH1': 'failed', 'PWM_INLB_CH1': 'routed', 'PWM_INLC_CH1': 'failed', 'BEMF_C_CH1': 'failed', 'CSA_A_OUT_CH1': 'failed', 'CSA_B_OUT_CH1': 'routed', 'CSA_C_OUT_CH1': 'routed', 'CSA_MAX_CH1': 'failed'}
+  [Y] cascade k=12: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1', 'GHC_CH1', 'GLC_CH1', 'PWM_INHA_CH1', 'PWM_INHC_CH1', 'PWM_INLB_CH1', 'PWM_INLC_CH1', 'BEMF_C_CH1', 'CSA_A_OUT_CH1', 'CSA_B_OUT_CH1', 'CSA_C_OUT_CH1']
+      joint try (12 nets, 5 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed', 'GHC_CH1': 'failed', 'GLC_CH1': 'failed', 'PWM_INHA_CH1': 'routed', 'PWM_INHC_CH1': 'failed', 'PWM_INLB_CH1': 'routed', 'PWM_INLC_CH1': 'failed', 'BEMF_C_CH1': 'failed', 'CSA_A_OUT_CH1': 'failed', 'CSA_B_OUT_CH1': 'routed', 'CSA_C_OUT_CH1': 'routed'}
+  [Y] cascade k=11: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1', 'GHC_CH1', 'GLC_CH1', 'PWM_INHA_CH1', 'PWM_INHC_CH1', 'PWM_INLB_CH1', 'PWM_INLC_CH1', 'BEMF_C_CH1', 'CSA_A_OUT_CH1', 'CSA_B_OUT_CH1']
+      joint try (11 nets, 4 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed', 'GHC_CH1': 'failed', 'GLC_CH1': 'failed', 'PWM_INHA_CH1': 'routed', 'PWM_INHC_CH1': 'failed', 'PWM_INLB_CH1': 'routed', 'PWM_INLC_CH1': 'failed', 'BEMF_C_CH1': 'failed', 'CSA_A_OUT_CH1': 'failed', 'CSA_B_OUT_CH1': 'routed'}
+  [Y] cascade k=10: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1', 'GHC_CH1', 'GLC_CH1', 'PWM_INHA_CH1', 'PWM_INHC_CH1', 'PWM_INLB_CH1', 'PWM_INLC_CH1', 'BEMF_C_CH1', 'CSA_A_OUT_CH1']
+      joint try (10 nets, 3 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed', 'GHC_CH1': 'failed', 'GLC_CH1': 'failed', 'PWM_INHA_CH1': 'routed', 'PWM_INHC_CH1': 'failed', 'PWM_INLB_CH1': 'routed', 'PWM_INLC_CH1': 'failed', 'BEMF_C_CH1': 'failed', 'CSA_A_OUT_CH1': 'failed'}
+  [Y] cascade k=9: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1', 'GHC_CH1', 'GLC_CH1', 'PWM_INHA_CH1', 'PWM_INHC_CH1', 'PWM_INLB_CH1', 'PWM_INLC_CH1', 'BEMF_C_CH1']
+      joint try (9 nets, 3 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed', 'GHC_CH1': 'failed', 'GLC_CH1': 'failed', 'PWM_INHA_CH1': 'routed', 'PWM_INHC_CH1': 'failed', 'PWM_INLB_CH1': 'routed', 'PWM_INLC_CH1': 'failed', 'BEMF_C_CH1': 'failed'}
+  [Y] cascade k=8: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1', 'GHC_CH1', 'GLC_CH1', 'PWM_INHA_CH1', 'PWM_INHC_CH1', 'PWM_INLB_CH1', 'PWM_INLC_CH1']
+      joint try (8 nets, 3 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed', 'GHC_CH1': 'failed', 'GLC_CH1': 'failed', 'PWM_INHA_CH1': 'routed', 'PWM_INHC_CH1': 'failed', 'PWM_INLB_CH1': 'routed', 'PWM_INLC_CH1': 'failed'}
+  [Y] cascade k=7: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1', 'GHC_CH1', 'GLC_CH1', 'PWM_INHA_CH1', 'PWM_INHC_CH1', 'PWM_INLB_CH1']
+      joint try (7 nets, 3 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed', 'GHC_CH1': 'failed', 'GLC_CH1': 'failed', 'PWM_INHA_CH1': 'routed', 'PWM_INHC_CH1': 'failed', 'PWM_INLB_CH1': 'routed'}
+  [Y] cascade k=6: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1', 'GHC_CH1', 'GLC_CH1', 'PWM_INHA_CH1', 'PWM_INHC_CH1']
+      joint try (6 nets, 2 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed', 'GHC_CH1': 'failed', 'GLC_CH1': 'failed', 'PWM_INHA_CH1': 'routed', 'PWM_INHC_CH1': 'failed'}
+  [Y] cascade k=5: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1', 'GHC_CH1', 'GLC_CH1', 'PWM_INHA_CH1']
+      joint try (5 nets, 2 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed', 'GHC_CH1': 'failed', 'GLC_CH1': 'failed', 'PWM_INHA_CH1': 'routed'}
+  [Y] cascade k=4: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1', 'GHC_CH1', 'GLC_CH1']
+      joint try (4 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed', 'GHC_CH1': 'failed', 'GLC_CH1': 'failed'}
+  [Y] cascade k=3: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1', 'GHC_CH1']
+      joint try (3 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed', 'GHC_CH1': 'failed'}
+  [Y] cascade k=2: trying subset ['KILL_RAIL_N_CH1', 'GHB_CH1']
+      joint try (2 nets, 1 routed): {'KILL_RAIL_N_CH1': 'failed', 'GHB_CH1': 'routed'}
+  [Y] cascade k=1: trying subset ['KILL_RAIL_N_CH1']
+      joint try (1 nets, 0 routed): {'KILL_RAIL_N_CH1': 'failed'}
+  [Y] cascade: NO feasible subset (size 1 also failed) — restoring snapshot, deferring to per-net sequential pass
+[coop] JOINT K3 result: 0/14 rescued ([])
+
+[coop] SEQUENTIAL multi-mech fallback (CH1 30/30 lever K3): attempting 14 residual net(s)
+  [.] BEMF_C_CH1: K3 multi-mech aggregate status=partial (1/3 pairs routed) — atomic rollback (per-net)
+      pair J18.8->C71.1: chain=[] len_mm=19.52 tracks=7 vias=0
+      pair J18.8->D34.2: chain=['through', 'through', 'through'] len_mm=17.79 tracks=6 vias=3
+      pair J18.8->J20.5: chain=[] len_mm=15.66 tracks=6 vias=0
+  [+] CSA_A_OUT_CH1: routed via multi-mech chain
+  [.] CSA_B_OUT_CH1: K3 multi-mech aggregate status=partial (1/2 pairs routed) — atomic rollback (per-net)
+      pair J22.5->C73.1: chain=[] len_mm=14.07 tracks=3 vias=0
+      pair J22.5->D36.2: chain=[] len_mm=11.82 tracks=2 vias=0
+  [+] CSA_C_OUT_CH1: routed via multi-mech chain
+  [.] CSA_MAX_CH1: K3 multi-mech aggregate status=partial (3/4 pairs routed) — atomic rollback (per-net)
+  [.] GHB_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+      pair J19.13->R53.1: chain=['through', 'through'] len_mm=23.90 tracks=10 vias=2
+  [+] GHC_CH1: routed via multi-mech chain
+  [.] GLC_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+  [.] KILL_RAIL_N_CH1: K3 multi-mech aggregate status=partial (0/2 pairs routed) — atomic rollback (per-net)
+  [.] OTP_TRIP_N_CH1: K3 multi-mech aggregate status=partial (1/2 pairs routed) — atomic rollback (per-net)
+      pair J18.20->J19.22: chain=['through', 'through'] len_mm=12.80 tracks=6 vias=2
+  [+] PWM_INHA_CH1: routed via multi-mech chain
+  [.] PWM_INLB_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+      pair J18.13->J19.3: chain=['through', 'through', 'through'] len_mm=13.30 tracks=9 vias=3
+  [+] PWM_INLC_CH1: routed via multi-mech chain
+  [.] PWM_INHC_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+[coop] multi-mech fallback done; remaining unrouted = 9
+[coop] UNROUTED nets: ['BEMF_C_CH1', 'CSA_B_OUT_CH1', 'CSA_MAX_CH1', 'GHB_CH1', 'GLC_CH1', 'KILL_RAIL_N_CH1', 'OTP_TRIP_N_CH1', 'PWM_INLB_CH1', 'PWM_INHC_CH1']
+[coop] PARTIAL nets (with unrouted pad-pairs):
+  CSA_MAX_CH1: [('U3.2', 'D35.1'), ('D35.1', 'D36.1'), ('D35.1', 'D34.1')]
+  CSA_B_OUT_CH1: [('C72.1', 'J21.5')]
+  BEMF_C_CH1: [('C76.1', 'J18.11')]
+  CSA_A_OUT_CH1: [('C71.1', 'J18.8')]
+  CSA_C_OUT_CH1: [('C73.1', 'J22.5')]
+  KILL_RAIL_N_CH1: [('J19.8', 'R76.1')]
+  OTP_TRIP_N_CH1: [('U4.2', 'U3.7')]
+[coop] K2 partial-MST provenance: wrote 254 entry(ies)
+
+[targeted-ripup] cooperative plateau at 24 routed / 9 residual; engaging targeted ripup-rebuild phase (R36-R39 + R-J5; depth ≤ 2; provenance under sims/routing_provenance/targeted_ripup/)
+/home/novatics64/escworker/pcb.ai/hardware/kicad/scripts/route_subsystem_cooperative.py:4647: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  timestamp_iso=_tr_dt.datetime.utcnow().isoformat() + "Z",
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[targeted-ripup] KILL_RAIL_N_CH1: ROLLBACK — reroute_failed (one or more rerouted nets did not complete)
+[targeted-ripup] GHB_CH1: ROLLBACK — conflict_set_all_protected (every foreign is frozen-banked or >= blocked priority 80); cannot fix without higher-level escalation (HDI / placement change)
+[targeted-ripup] GLC_CH1: ROLLBACK — conflict_set_all_protected (every foreign is frozen-banked or >= blocked priority 80); cannot fix without higher-level escalation (HDI / placement change)
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[targeted-ripup] PWM_INHC_CH1: ROLLBACK — reroute_failed (one or more rerouted nets did not complete)
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[targeted-ripup] PWM_INLB_CH1: ROLLBACK — reroute_failed (one or more rerouted nets did not complete)
+[targeted-ripup] BEMF_C_CH1: ROLLBACK — conflict_set_all_protected (every foreign is frozen-banked or >= blocked priority 70); cannot fix without higher-level escalation (HDI / placement change)
+[targeted-ripup] CSA_B_OUT_CH1: ROLLBACK — no_conflict (corridor unobstructed by foreigns)
+[targeted-ripup] CSA_MAX_CH1: ROLLBACK — conflict_set_all_protected (every foreign is frozen-banked or >= blocked priority 40); cannot fix without higher-level escalation (HDI / placement change)
+[targeted-ripup] OTP_TRIP_N_CH1: ROLLBACK — conflict_set_all_protected (every foreign is frozen-banked or >= blocked priority 40); cannot fix without higher-level escalation (HDI / placement change)
+[targeted-ripup] phase done: 0/9 attempts committed.
+
+[leaf-route] cooperative + targeted-ripup phases done; scanning committed nets for disconnected leaves (lever Q; R42 / G_Q1; provenance under sims/routing_provenance/leaf_route/)
+[leaf-route] no disconnected leaves found (vacuous-PASS — every committed net is single-island)
+[leaf-route] phase done: 0/0 leaf-attempts committed.
+
+Saved: /tmp/post_route_zstrip.kicad_pcb
+Result: full=13/33 partial=2 unrouted=9, 30 iterations, 277 ripups
+Report: /tmp/coop_report_zstrip.json
