@@ -56,7 +56,7 @@ Usage:
         --output <path>
         [--grid-pitch-mm 5.0]
         [--gnd-pair-spacing-mm 1.5]
-        [--hole-hole-mm 0.20]
+        [--hole-hole-mm 0.25]      # drone-grade multi-fab default; 0.20 = JLC-Class-2-only
         [--fos-foreign-mm 0.25]
         [--sensitive-keepout-mm 1.5]
         [--via-drill-mm 0.30 --via-pad-mm 0.60]
@@ -66,7 +66,16 @@ Engineering bounds (defaults):
     grid-pitch-mm 5.0       — 1 via / 25 mm² = 4 vias / cm² target
     gnd-pair-spacing-mm 1.5 — ≤ Howard-Johnson 1-inch ≈ 25 mm; we pair
                               within 1.5 mm for tight loop area.
-    hole-hole-mm 0.20       — JLC default minimum hole-to-hole.
+    hole-hole-mm 0.25       — Drone-grade multi-fab supply-chain default
+                              (lever R 2026-05-29). JLC HDI Class 2 floor is
+                              0.20mm but pinning to floor leaves zero
+                              process margin for fab swap to
+                              PCBWay/Sierra/JLC-Class-1-standard which all
+                              require 0.25mm. Override to 0.20 only when
+                              JLC-Class-2-locked AND max stitch density
+                              needed. Stitch grid pitch (3.9mm typical) is
+                              much larger than h2h so density is unaffected
+                              at 0.25mm in practice.
     fos-foreign-mm 0.25     — § 5c FoS target (0.20 mm JLC min × 1.25).
     sensitive-keepout-mm 1.5 — keep stitch via 1.5 mm from any
                               BEMF/CSA/SHUNT/MOTOR phase/Hall divider pad.
@@ -478,8 +487,20 @@ def main():
                     help="candidate-grid pitch (default: derived from target density)")
     ap.add_argument("--gnd-pair-spacing-mm", type=float, default=1.5,
                     help="GND return via offset from each +VMOTOR stitch via")
-    ap.add_argument("--hole-hole-mm", type=float, default=0.20,
-                    help="min hole-to-hole edge clearance")
+    ap.add_argument(
+        "--hole-hole-mm", type=float, default=0.25,
+        help=(
+            "min hole-to-hole edge-to-edge clearance in mm "
+            "(default 0.25 = drone-grade multi-fab supply-chain safe; "
+            "JLC HDI Class 2 min is 0.20 but pinning to that floor leaves "
+            "ZERO margin for fab swap to PCBWay/Sierra/JLC-Class-1 standard "
+            "library which all require 0.25mm. Override to 0.20 only when "
+            "the build is JLC-Class-2-locked AND max stitch density is "
+            "required to hit the 4-vias/cm2 density target). "
+            "TRADE-OFF: 0.25mm vs 0.20mm reduces max achievable stitch "
+            "density by ~14 pct in tight pad/track clusters."
+        ),
+    )
     ap.add_argument("--fos-foreign-mm", type=float, default=0.25,
                     help="FoS clearance to foreign-net copper")
     ap.add_argument("--sensitive-keepout-mm", type=float, default=1.5,
@@ -493,7 +514,7 @@ def main():
                           "via must sit ≥ (pad_radius + this) inside the "
                           "+VMOTOR pour to guarantee zone-refill picks it "
                           "up. Worker R22 catch 2026-05-29: PR #241 "
-                          "without this margin emitted 42% dangling vias."))
+                          "without this margin emitted 42 pct dangling vias."))
     ap.add_argument("--skip-post-verify", action="store_true",
                     help=("DANGEROUS: skip the post-refill electrical-"
                           "connection verify pass. Default OFF — every "
