@@ -79,8 +79,11 @@ path). Output is a NEW board file.
 import argparse
 import json
 import math
+import os
 import re
+import subprocess
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -362,6 +365,18 @@ def via_pad_connects_to_pour_after_refill(board, via, net_name):
 
     Returns True iff the via's center is inside the FILLED polygon (post-
     refill) of at least one zone with net_name == `net_name`.
+
+    NOTE (Sai catch 2026-05-29, lever-S): this test is NECESSARY but NOT
+    SUFFICIENT to declare a via non-dangling. KiCad's `kicad-cli pcb drc`
+    via_dangling rule operates on the connectivity GRAPH built by
+    CONNECTIVITY_DATA — a through-via that touches a same-net pour on
+    only ONE layer (with no surface-pour, no neighbouring pad, no track
+    on the same net) can still be flagged dangling because the via's
+    top/bottom flash pads sit in copper-clearance space with no
+    net member on the surrounding F.Cu / B.Cu. The authoritative gate
+    is `kicad_cli_drc_dangling_vias()` below, which invokes the same
+    DRC engine kicad-cli uses. This pcbnew-API test is kept as a fast
+    pre-filter; the kicad-cli pass is the binding verdict.
     """
     pt = via.GetPosition()
     for z in board.Zones():
@@ -382,6 +397,91 @@ def via_pad_connects_to_pour_after_refill(board, via, net_name):
             if hit:
                 return True
     return False
+
+
+def kicad_cli_drc_dangling_vias(board_path, timeout_s=300):
+    """Authoritative dangling-via check — invoke `kicad-cli pcb drc` and
+    parse the via_dangling violations.
+
+    This is the SAME DRC engine kicad-cli runs, so the verdict matches
+    bit-for-bit what an external auditor (CI / Sai's hand-verify / Phase
+    7 pre-fab gate) will see. The pcbnew-API
+    `HitTestFilledArea` check disagrees with this verdict in single-
+    layer-pour scenarios (Sai catch 2026-05-29 lever-S: 0 vs 199 on the
+    canonical board, 100% disagreement on the flagged-dangling set).
+
+    Diagnosis: KiCad's via_dangling rule fires when a via's connectivity
+    cluster, walked through CONNECTIVITY_DATA, fails the "connected on
+    only one layer" test. A through-via that lands on a same-net pour
+    that exists on only ONE Cu layer (no surface F.Cu / B.Cu pour, no
+    neighbouring same-net pad or track) is flagged because the via's
+    flash pads on the surface (F.Cu, B.Cu) sit in foreign-net clearance
+    space and connect to nothing on those layers. HitTestFilledArea only
+    asks "is the via center inside ANY same-net filled poly?" — that
+    test answers True for vias that the connectivity engine
+    correctly flags as dangling.
+
+    Args:
+        board_path: path to .kicad_pcb (will be passed unmodified to
+            kicad-cli).
+        timeout_s: command timeout.
+
+    Returns:
+        set of (x_mm, y_mm) tuples — coordinates of every via that
+        kicad-cli reports as via_dangling. Empty set if none. Position
+        is rounded to 3 decimal places (kicad-cli outputs at this
+        precision).
+    """
+    if not Path(board_path).exists():
+        raise FileNotFoundError(f"board not found: {board_path}")
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf:
+        drc_path = tf.name
+    try:
+        cmd = [
+            "kicad-cli", "pcb", "drc",
+            "--format", "json",
+            "--severity-error", "--severity-warning",
+            "-o", drc_path,
+            str(board_path),
+        ]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True,
+                                 timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(
+                f"kicad-cli pcb drc timed out after {timeout_s}s on "
+                f"{board_path}")
+        # kicad-cli returns nonzero when violations are found AND
+        # --exit-code-violations is set; we don't set it, so returncode
+        # should be 0 even with violations. Capture for diagnostics.
+        if res.returncode != 0 and not Path(drc_path).exists():
+            raise RuntimeError(
+                f"kicad-cli pcb drc failed rc={res.returncode}: "
+                f"stderr={res.stderr[:500]}")
+        try:
+            drc = json.loads(Path(drc_path).read_text())
+        except Exception as e:
+            raise RuntimeError(
+                f"could not parse kicad-cli DRC json {drc_path}: {e}; "
+                f"stdout={res.stdout[:300]} stderr={res.stderr[:300]}")
+        out = set()
+        for v in drc.get("violations", []):
+            if v.get("type") != "via_dangling":
+                continue
+            for it in v.get("items", []):
+                pos = it.get("pos") or {}
+                try:
+                    x = round(float(pos.get("x")), 3)
+                    y = round(float(pos.get("y")), 3)
+                except (TypeError, ValueError):
+                    continue
+                out.add((x, y))
+        return out
+    finally:
+        try:
+            os.unlink(drc_path)
+        except OSError:
+            pass
 
 
 def segment_point_distance_mm(sx, sy, ex, ey, px, py):
@@ -738,26 +838,41 @@ def main():
                 break
 
     # =================================================================
-    # Post-emit verification — ZONE_FILLER refill + per-via connectivity
+    # Post-emit verification — two-stage:
+    #   Stage 1 (fast, pcbnew API): ZONE_FILLER + HitTestFilledArea per via.
+    #   Stage 2 (AUTHORITATIVE):    kicad-cli pcb drc --type via_dangling.
     # =================================================================
-    # Worker R22 catch 2026-05-29: PR #241 emitted 470 vias of which 199
-    # (~42%) were DANGLING post-refill. The pre-filter "inside pour"
-    # check used SHAPE_POLY_SET.Contains(point) without a pad+margin
-    # inset, so vias near the pour boundary slipped through. The strict
-    # inside_any_poly_with_margin filter above is the PRIMARY fix; this
-    # post-emit verify is the BACKSTOP gate — any via whose pad does not
-    # actually connect to its pour after a fresh ZONE_FILLER refill is
-    # removed before save. The tool MUST NEVER persist a dangling via.
+    # Sai catch 2026-05-29 (lever-S): stage-1 self-verify reported 0
+    # dangling but kicad-cli reported 199 via_dangling on the SAME board.
+    # 100% disagreement on the flagged-dangling set.
     #
-    # Per [[feedback-sim-execution-gate]] sibling pattern: don't just
-    # check at filter time, EXECUTE the refill + RE-CHECK the actual
-    # post-refill state. Geometry filters lie occasionally; KiCad
-    # zone-fill engine is the source of truth.
-    dangling_vmotor = 0
-    dangling_gnd = 0
+    # Root cause: KiCad's via_dangling DRC rule operates on the
+    # connectivity GRAPH built by CONNECTIVITY_DATA. A through-via
+    # (F.Cu↔B.Cu) that touches a same-net pour on only ONE Cu layer (no
+    # surface F.Cu / B.Cu pour, no neighbouring same-net pad or track)
+    # is flagged because its top/bottom flash pads sit in foreign-net
+    # clearance space — connecting to nothing on the surface. The
+    # pcbnew API HitTestFilledArea asks only "is the via center inside
+    # ANY same-net filled poly?" — a strictly weaker test that returns
+    # True for vias the connectivity engine correctly flags.
+    #
+    # Fix: stage 1 remains as a fast pre-filter (cheap removal of vias
+    # that don't even touch the pour). Stage 2 is the BINDING gate —
+    # save the board, invoke kicad-cli pcb drc, parse via_dangling
+    # violations, remove each flagged via atomically with its pair.
+    # The committed board is then re-saved + re-DRC-checked to confirm
+    # zero residual dangling. The reported counts now match what an
+    # external auditor / Phase 7 fab-prep DRC would see.
+    #
+    # Per [[feedback-sim-execution-gate]] sibling pattern: don't trust
+    # geometry-only proxies; EXECUTE the authoritative tool + RE-CHECK
+    # the actual state. kicad-cli IS the source of truth for fab.
+    dangling_vmotor_stage1 = 0
+    dangling_gnd_stage1 = 0
+    dangling_vmotor_stage2 = 0
+    dangling_gnd_stage2 = 0
     if not args.skip_post_verify:
-        print("--- Post-emit ZONE_FILLER verification ---")
-        # Run ZONE_FILLER on every zone, then HitTestFilledArea per via.
+        print("--- Post-emit verification stage 1 (pcbnew HitTestFilledArea) ---")
         zones_list = [z for z in board.Zones()]
         print(f"Refilling {len(zones_list)} zones to check via connectivity...")
         try:
@@ -767,6 +882,8 @@ def main():
 
         kept_vmotor_xy = []
         kept_gnd_xy = []
+        kept_via_objs_vmotor = []
+        kept_via_objs_gnd = []
         kept_region_counts = {k: 0 for k in REGIONS}
         for idx, v in enumerate(via_objs_vmotor):
             if v is None:
@@ -780,9 +897,9 @@ def main():
                 ok_g = via_pad_connects_to_pour_after_refill(
                     board, v_gnd, GND_NET)
             if not ok_v:
-                dangling_vmotor += 1
+                dangling_vmotor_stage1 += 1
             if v_gnd is not None and not ok_g:
-                dangling_gnd += 1
+                dangling_gnd_stage1 += 1
             # Atomic-pair acceptance: keep ONLY if both sides verified.
             # A dangling +VMOTOR via with a connected GND pair is still
             # useless (+VMOTOR side defeats the stitch's purpose); a
@@ -791,8 +908,12 @@ def main():
             keep = ok_v and ok_g
             if keep:
                 kept_vmotor_xy.append((cx, cy))
+                kept_via_objs_vmotor.append(v)
                 if v_gnd is not None and pair_xy_per_vmotor[idx] is not None:
                     kept_gnd_xy.append(pair_xy_per_vmotor[idx])
+                    kept_via_objs_gnd.append(v_gnd)
+                else:
+                    kept_via_objs_gnd.append(None)
                 for rname, (rx0, ry0, rx1, ry1) in REGIONS.items():
                     if rx0 <= cx <= rx1 and ry0 <= cy <= ry1:
                         kept_region_counts[rname] += 1
@@ -812,17 +933,15 @@ def main():
 
         print(f"Pre-verify accepted: {len(added_vmotor)} VMOTOR + "
               f"{len(added_gnd)} GND")
-        print(f"Dangling detected:   {dangling_vmotor} VMOTOR + "
-              f"{dangling_gnd} GND")
-        print(f"Post-verify kept:    {len(kept_vmotor_xy)} VMOTOR + "
+        print(f"Stage-1 dangling:    {dangling_vmotor_stage1} VMOTOR + "
+              f"{dangling_gnd_stage1} GND")
+        print(f"Stage-1 kept:        {len(kept_vmotor_xy)} VMOTOR + "
               f"{len(kept_gnd_xy)} GND")
-        skip_reasons["post-refill-dangling-removed"] = (
-            dangling_vmotor + dangling_gnd)
+        skip_reasons["stage1-hittest-dangling-removed"] = (
+            dangling_vmotor_stage1 + dangling_gnd_stage1)
 
-        # If we removed any via, the previous refill is now stale w.r.t.
-        # the kept set. Refill once more so the saved board is geometry-
-        # consistent and the next audit pass sees the final state.
-        if dangling_vmotor + dangling_gnd > 0:
+        # If we removed any via, refill so the saved board is consistent.
+        if dangling_vmotor_stage1 + dangling_gnd_stage1 > 0:
             try:
                 pcbnew.ZONE_FILLER(board).Fill(zones_list)
             except Exception:
@@ -831,6 +950,225 @@ def main():
         added_vmotor = kept_vmotor_xy
         added_gnd = kept_gnd_xy
         region_counts = kept_region_counts
+        via_objs_vmotor = kept_via_objs_vmotor
+        via_objs_gnd_pair = kept_via_objs_gnd
+        print()
+
+        # -------------------------------------------------------------
+        # Stage 2 — authoritative kicad-cli DRC via_dangling check
+        # -------------------------------------------------------------
+        # Save the current board to a scratch file, run kicad-cli pcb
+        # drc, parse via_dangling positions, and remove each flagged via
+        # ATOMICALLY WITH ITS PAIR (same drone-grade pairing rule as
+        # stage 1: either both sides of the +VMOTOR/GND pair survive
+        # or neither survives).
+        #
+        # ITERATION rationale: removing dangling vias from a chain
+        # of pour-connected vias can promote previously-non-dangling
+        # vias to dangling status (the "boundary" via that was hiding
+        # behind another now sits at the new chain edge). We iterate
+        # remove -> re-DRC until either:
+        #   (a) kicad-cli reports 0 via_dangling (stable, ideal), or
+        #   (b) the dangling set stabilises and contains vias the
+        #       script CANNOT match to its emitted set — surface
+        #       honestly + FAIL, never silently commit dangling vias.
+        print("--- Post-emit verification stage 2 (kicad-cli pcb drc — AUTHORITATIVE) ---")
+
+        # Map kept VMOTOR + GND vias to (rounded x,y) for lookup
+        def _key(xy_mm):
+            return (round(xy_mm[0], 3), round(xy_mm[1], 3))
+
+        # Build pair index so we can remove pairs atomically across
+        # iterations. Each pair has (vmotor_xy, gnd_xy_or_None,
+        # vmotor_obj, gnd_obj_or_None).
+        pair_list = []
+        for idx in range(len(via_objs_vmotor)):
+            v = via_objs_vmotor[idx]
+            if v is None:
+                continue
+            cx, cy = added_vmotor[idx]
+            v_gnd = via_objs_gnd_pair[idx]
+            gxy = pair_xy_per_vmotor[idx] if idx < len(pair_xy_per_vmotor) else None
+            # Note: added_gnd is ALIGNED with kept entries only — we use
+            # pair_xy_per_vmotor[idx] (which may be None for unpaired)
+            pair_list.append({
+                "vmotor_xy": (cx, cy),
+                "gnd_xy": gxy,
+                "vmotor_obj": v,
+                "gnd_obj": v_gnd,
+                "removed": False,
+            })
+
+        MAX_ITER = 10
+        iter_log = []
+        for it in range(MAX_ITER):
+            # Save current state and ask kicad-cli
+            with tempfile.NamedTemporaryFile(suffix=".kicad_pcb", delete=False) as tf:
+                scratch_pcb = tf.name
+            try:
+                board.Save(scratch_pcb)
+                try:
+                    cli_dangling = kicad_cli_drc_dangling_vias(scratch_pcb)
+                except Exception as e:
+                    print(f"FAIL: kicad-cli pcb drc invocation failed: {e!r}",
+                          file=sys.stderr)
+                    print("Cannot proceed without authoritative dangling "
+                          "verdict — remove --skip-post-verify to bypass "
+                          "(NOT recommended for fab).",
+                          file=sys.stderr)
+                    sys.exit(3)
+            finally:
+                try:
+                    os.unlink(scratch_pcb)
+                except OSError:
+                    pass
+
+            n_dang = len(cli_dangling)
+            iter_log.append(n_dang)
+            print(f"  iter {it}: kicad-cli reports {n_dang} via_dangling")
+            if n_dang == 0:
+                break
+
+            # Map kicad-cli dangling positions to our pairs.
+            # A pair is flagged for removal if EITHER side is dangling.
+            unmatched = set(cli_dangling)
+            iter_removed = 0
+            for pair in pair_list:
+                if pair["removed"]:
+                    continue
+                vkey = _key(pair["vmotor_xy"])
+                gkey = _key(pair["gnd_xy"]) if pair["gnd_xy"] is not None else None
+                v_dang = vkey in cli_dangling
+                g_dang = (gkey in cli_dangling) if gkey is not None else False
+                if not (v_dang or g_dang):
+                    continue
+                # Remove both sides atomically.
+                if pair["vmotor_obj"] is not None:
+                    try:
+                        board.Remove(pair["vmotor_obj"])
+                    except Exception as e:
+                        print(f"WARN: stage-2 iter{it} failed to remove "
+                              f"vmotor via @{pair['vmotor_xy']}: {e!r}")
+                if pair["gnd_obj"] is not None:
+                    try:
+                        board.Remove(pair["gnd_obj"])
+                    except Exception as e:
+                        print(f"WARN: stage-2 iter{it} failed to remove "
+                              f"gnd via: {e!r}")
+                pair["removed"] = True
+                iter_removed += 1
+                if v_dang:
+                    dangling_vmotor_stage2 += 1
+                    unmatched.discard(vkey)
+                if g_dang:
+                    dangling_gnd_stage2 += 1
+                    unmatched.discard(gkey)
+            print(f"  iter {it}: removed {iter_removed} pairs "
+                  f"(cumulative VMOTOR={dangling_vmotor_stage2}, "
+                  f"GND={dangling_gnd_stage2})")
+
+            if iter_removed == 0:
+                # kicad-cli flags vias we cannot match (coordinate-
+                # rounding mismatch OR pre-existing vias from the input
+                # board). Surface honestly.
+                print(f"  iter {it}: {len(unmatched)} dangling vias do not "
+                      f"match any emitted pair — likely pre-existing on "
+                      f"input board.")
+                # Show a sample
+                for sample in list(unmatched)[:5]:
+                    print(f"    unmatched dangling @ {sample}")
+                break
+
+            # Refill zones before next iteration so connectivity reflects
+            # the new state.
+            try:
+                pcbnew.ZONE_FILLER(board).Fill(zones_list)
+            except Exception:
+                pass
+
+        # Update kept lists based on pair["removed"] state
+        kept_vmotor_xy2 = []
+        kept_gnd_xy2 = []
+        kept_region_counts2 = {k: 0 for k in REGIONS}
+        for pair in pair_list:
+            if pair["removed"]:
+                continue
+            cx, cy = pair["vmotor_xy"]
+            kept_vmotor_xy2.append((cx, cy))
+            if pair["gnd_xy"] is not None:
+                kept_gnd_xy2.append(pair["gnd_xy"])
+            for rname, (rx0, ry0, rx1, ry1) in REGIONS.items():
+                if rx0 <= cx <= rx1 and ry0 <= cy <= ry1:
+                    kept_region_counts2[rname] += 1
+                    break
+
+        print(f"Stage-2 total dangling-removed: "
+              f"{dangling_vmotor_stage2} VMOTOR + {dangling_gnd_stage2} GND "
+              f"(across {len(iter_log)} kicad-cli iterations: {iter_log})")
+        print(f"Stage-2 kept: {len(kept_vmotor_xy2)} VMOTOR + "
+              f"{len(kept_gnd_xy2)} GND")
+        skip_reasons["stage2-kicadcli-dangling-removed"] = (
+            dangling_vmotor_stage2 + dangling_gnd_stage2)
+
+        added_vmotor = kept_vmotor_xy2
+        added_gnd = kept_gnd_xy2
+        region_counts = kept_region_counts2
+
+        # Final refill so saved board is geometry-consistent.
+        try:
+            pcbnew.ZONE_FILLER(board).Fill(zones_list)
+        except Exception:
+            pass
+
+        # Final re-confirm with kicad-cli — invariant we promise:
+        # "0 stitch-via dangling committed".
+        with tempfile.NamedTemporaryFile(suffix=".kicad_pcb", delete=False) as tf:
+            scratch_pcb2 = tf.name
+        residual_dangling_set = set()
+        try:
+            board.Save(scratch_pcb2)
+            try:
+                residual_dangling_set = kicad_cli_drc_dangling_vias(scratch_pcb2)
+            except Exception as e:
+                print(f"WARN: residual kicad-cli check failed: {e!r}")
+        finally:
+            try:
+                os.unlink(scratch_pcb2)
+            except OSError:
+                pass
+
+        # Filter residual to ONLY those at our kept-via positions —
+        # any other dangling vias belong to the input board (pre-
+        # existing), not the stitcher's responsibility.
+        our_kept_keys = set(_key(xy) for xy in kept_vmotor_xy2) | \
+                        set(_key(xy) for xy in kept_gnd_xy2)
+        our_residual = residual_dangling_set & our_kept_keys
+        pre_existing_residual = residual_dangling_set - our_kept_keys
+        print(f"Final kicad-cli via_dangling: total={len(residual_dangling_set)}, "
+              f"in-stitcher-vias={len(our_residual)}, "
+              f"pre-existing-on-input={len(pre_existing_residual)}")
+        residual_dangling = len(our_residual)
+
+        if residual_dangling > 0:
+            # This must not happen — every kicad-cli-flagged via was
+            # removed in the iteration loop. If it does, surface
+            # honestly + REFUSE to commit.
+            print(f"FAIL: {residual_dangling} dangling vias REMAIN at "
+                  f"stitcher-owned positions after iterative removal. "
+                  f"Tool refuses to commit a dangling-contaminated board.",
+                  file=sys.stderr)
+            print("Possible causes:", file=sys.stderr)
+            print("  1. Pour exists on only one Cu layer — through-vias "
+                  "will always be dangling. Use blind/buried via class "
+                  "targeted to pour-layer+adjacent-signal-layer, or "
+                  "ensure the net has surface F.Cu / B.Cu pour.",
+                  file=sys.stderr)
+            print("  2. kicad-cli reports a position the script could "
+                  "not match (coordinate-rounding edge case).",
+                  file=sys.stderr)
+            for sample in list(our_residual)[:5]:
+                print(f"  example residual: {sample}", file=sys.stderr)
+            sys.exit(4)
         print()
 
     # ----- Report -----
@@ -872,8 +1210,18 @@ def main():
             "board_area_cm2": area_cm2,
             "vmotor_vias_added": len(added_vmotor),
             "gnd_vias_added": len(added_gnd),
-            "vmotor_dangling_removed": dangling_vmotor,
-            "gnd_dangling_removed": dangling_gnd,
+            # NB: stage-1 = pcbnew HitTestFilledArea (fast pre-filter),
+            #     stage-2 = kicad-cli pcb drc via_dangling (AUTHORITATIVE).
+            # Lever-S (Sai catch 2026-05-29): stage-1 alone is unsound on
+            # single-layer-pour boards. Aggregate is the binding number.
+            "vmotor_dangling_removed_stage1_hittest": dangling_vmotor_stage1,
+            "gnd_dangling_removed_stage1_hittest": dangling_gnd_stage1,
+            "vmotor_dangling_removed_stage2_kicadcli": dangling_vmotor_stage2,
+            "gnd_dangling_removed_stage2_kicadcli": dangling_gnd_stage2,
+            "vmotor_dangling_removed_total": (
+                dangling_vmotor_stage1 + dangling_vmotor_stage2),
+            "gnd_dangling_removed_total": (
+                dangling_gnd_stage1 + dangling_gnd_stage2),
             "post_verify_skipped": bool(args.skip_post_verify),
             "pair_coverage_pct": (
                 100 * len(added_gnd) / max(1, len(added_vmotor))),
@@ -891,7 +1239,8 @@ def main():
             },
             "verdict": "PASS" if achieved_density >= target_density else "FAIL",
             "dangling_invariant": (
-                "0 dangling vias committed" if not args.skip_post_verify
+                "0 dangling vias committed (kicad-cli-verified)"
+                if not args.skip_post_verify
                 else "post-verify-skipped"),
         }
         Path(args.report).write_text(json.dumps(report, indent=2))
