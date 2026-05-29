@@ -2527,19 +2527,50 @@ def _build_T20():
         B.Cu signal. 5-layer minimum so blind_F_In2 has a sanctioned span
         (F.Cu+In1+In2) and through has a sanctioned span (F.Cu..B.Cu).
       * 1 NET: MM from S=(0,5,F.Cu, HDI-whitelisted) to E=(10,5,B.Cu).
-      * 2 OBSTACLES:
-        - F.Cu blocking field at x∈[0.5, 11.5], y∈[-1, 11] on
-          layers={"F.Cu"}. The start cell at (0,5) is the only F.Cu cell
-          that clears; F.Cu past x=0.5 is blocked. The route MUST escape
-          off F.Cu at the start cell — and the start cell is HDI-
-          whitelisted, so through is REFUSED there; blind_F_In2 is the
-          ONLY legal escape.
-        - B.Cu blocking field at x∈[-1.5, 9.5], y∈[-1, 11] on
-          layers={"B.Cu"}. B.Cu cells before x≈9.5 are blocked. The
-          through-via to B.Cu MUST land near the end cell (x≥9.5); the
-          via comes AFTER the In2.Cu route to (~9.5, 5).
+      * 5 OBSTACLES (X-lever redo 2026-05-29, post-W HDI-relaxation hardening):
+        FOUR F.Cu blockers around the HDI start pin, each positioned
+        JUST OUTSIDE the W-lever HDI relaxation radius (0.5mm) so the
+        planner's `_in_hdi_relaxation` does NOT admit them:
+        - F_BLOCK_E on F.Cu at x∈[0.6, 11.5], y∈[-2, 12].
+          Closest edge to pin (0,5): dx=0.6mm > 0.5mm relaxation —
+          NOT relaxation-eligible.
+        - F_BLOCK_N on F.Cu at x∈[-2, 0.6], y∈[5.6, 12].
+          Closest edge to pin: dy=0.6mm > 0.5mm — NOT eligible.
+        - F_BLOCK_S on F.Cu at x∈[-2, 0.6], y∈[-2, 4.4].
+          Closest edge to pin: dy=0.6mm > 0.5mm — NOT eligible.
+        - F_BLOCK_W on F.Cu at x∈[-2, -0.6], y∈[-2, 12].
+          Closest edge to pin: dx=0.6mm > 0.5mm — NOT eligible.
+          The start cell at (0,5) F.Cu sits in a clear "slot" between
+          the four blockers (trace inflate 0.3mm; clearance edges at
+          ±0.3 well inside ±0.6 obstacle edges). EVERY adjacent F.Cu
+          cell (the 8 octilinear neighbors of the start cell) is
+          BLOCKED — the route cannot detour on F.Cu at all. The ONLY
+          legal escape is a via AT the start cell, and at HDI cells
+          `candidate_via_classes` REFUSES through-via (HDI policy /
+          the v6/v7 shorts lesson). The ONLY admissible via class at
+          the start cell is blind_F_In2 — the canonical K3 escape.
+        - B_BLOCK on B.Cu at x∈[-2.5, 9.4], y∈[-1, 11] — does NOT
+          engulf the end pin (10, 5). End pin is NOT HDI-whitelisted
+          (it is a TP-style pad). The through-via to B.Cu MUST land
+          at x≥9.5 (through halo 0.5mm + B_BLOCK x_max=9.4 ⇒ first
+          grid cell at x=10.0 clears — the END pin itself).
       * HDI WHITELIST: the start pin is HDI-whitelisted (mirrors J18.23
         per BOARD_INVARIANTS).
+
+      WHY THE X-LEVER REDO (2026-05-29): the prior T20 geometry had
+      F_BLOCK_E at x≥0.4 + F_BLOCK_N at y≥5.4 + F_BLOCK_S at y≤4.6 +
+      F_BLOCK_W at x≤-0.4. All four blockers sat at distance ≤0.4mm
+      from the HDI pin POINT, INSIDE the W-lever HDI relaxation
+      radius (0.5mm). After W landed, `_in_hdi_relaxation` admitted
+      all four — a through-only LIAR could detour on F.Cu (e.g. via
+      cell (0, 5.5) where F_BLOCK_N WOULD have blocked) and place a
+      through-via at a non-HDI F.Cu cell, ROUTING WITH ONE
+      MECHANISM. T20 stopped distinguishing single-mech from multi-
+      mech. The X-lever redo pushes every F.Cu blocker edge to
+      0.6mm from the pin POINT — outside the 0.5mm relaxation
+      radius — so they remain HARD obstacles on F.Cu even with
+      W's relaxation active. The geometry is now relaxation-robust
+      and the through-only LIAR is NO-PATH.
 
     GROUND TRUTH (re-derivable by hand, no solver):
       verdict        = ROUTABLE under multi-mech (CONDITIONAL on the K3
@@ -2599,40 +2630,47 @@ def _build_T20():
         Pin("MM_E", 10.0, 5.0, "B.Cu"),
     ]
     nets = [Net("MM", ("MM_S", "MM_E"), "signal")]
-    # Two-layer obstacle field that forces the chain:
+    # Obstacle field that forces the K3 chain (X-lever redo 2026-05-29,
+    # post-W HDI-relaxation hardening). Every F.Cu blocker edge sits at
+    # distance 0.6mm from the HDI pin POINT — outside the W-lever 0.5mm
+    # relaxation radius — so `_in_hdi_relaxation` does NOT admit them.
+    # See docstring above for the geometric proof.
     obstacles = (
-        # F.Cu east blocker (no F.Cu detour east of start).
-        Obstacle("F_BLOCK_E", 0.4, -2.0, 11.5, 12.0,
+        # F_BLOCK_E — F.Cu east of start, x_min=0.6 > 0.5mm relaxation.
+        # Blocks ALL F.Cu cells east of start (including (0.5,5)).
+        Obstacle("F_BLOCK_E", 0.6, -2.0, 11.5, 12.0,
                  kind="body", layers=frozenset({"F.Cu"})),
-        # F.Cu north blocker (no F.Cu detour north of start). Stops at
-        # x=0.3 so the start cell itself (x=0) is clear.
-        Obstacle("F_BLOCK_N", -2.0, 5.4, 0.3, 12.0,
+        # F_BLOCK_N — F.Cu north of start, y_min=5.6 > 0.5mm + 5 = 5.5.
+        # Blocks ALL F.Cu cells north of start (including (0,5.5)).
+        Obstacle("F_BLOCK_N", -2.0, 5.6, 0.6, 12.0,
                  kind="body", layers=frozenset({"F.Cu"})),
-        # F.Cu south blocker (no F.Cu detour south of start).
-        Obstacle("F_BLOCK_S", -2.0, -2.0, 0.3, 4.6,
+        # F_BLOCK_S — F.Cu south of start, y_max=4.4 < 5 - 0.5 = 4.5.
+        # Blocks ALL F.Cu cells south of start (including (0,4.5)).
+        Obstacle("F_BLOCK_S", -2.0, -2.0, 0.6, 4.4,
                  kind="body", layers=frozenset({"F.Cu"})),
-        # F.Cu west blocker (no F.Cu detour west of start; the start cell
-        # at (0,5) sits in a clear "slot" between -0.3 and 0.3 on x).
-        Obstacle("F_BLOCK_W", -2.0, -2.0, -0.4, 12.0,
+        # F_BLOCK_W — F.Cu west of start, x_max=-0.6 < -0.5mm.
+        # Blocks ALL F.Cu cells west of start (including (-0.5,5)).
+        Obstacle("F_BLOCK_W", -2.0, -2.0, -0.6, 12.0,
                  kind="body", layers=frozenset({"F.Cu"})),
-        # B.Cu blocking field (B.Cu clear only near the end cell).
-        # Through halo 0.50mm; chain cell at x>=9.5 lands clear of body
-        # at x_max=9.4 (clearance >= 0.10mm at the chain edge; ample).
-        Obstacle("B_BLOCK", -2.5, -2.0, 9.4, 12.0,
+        # B_BLOCK — B.Cu blocker, x_max=9.4 leaves the through-via
+        # halo (0.50mm) clear at the end cell (10, 5). End is NOT
+        # HDI-whitelisted (TP-style pad). The In2.Cu→B.Cu through-
+        # via sits AT the end cell.
+        Obstacle("B_BLOCK", -2.5, -1.0, 9.4, 11.0,
                  kind="body", layers=frozenset({"B.Cu"})),
     )
-    # Witness chain — provable by hand:
+    # Witness chain — provable by hand (X-lever redo geometry):
     #   start (F.Cu, 0, 5)
-    #     blind_F_In2 → In2.Cu
+    #     blind_F_In2 → In2.Cu     (at start cell; the ONLY legal escape)
     #   trace (In2.Cu, 0, 5) → (10, 5)
-    #     through → B.Cu     (lands at end pin — chain cell == end cell)
+    #     through → B.Cu           (lands at end pin — chain cell == end cell)
     # The chain cell sits AT the end pin (10, 5) because B_BLOCK extends to
-    # x=9.4 and the through-via halo (0.50mm pad+clearance) needs >= 0.1mm
-    # gap to the body — only x>=9.9 clears, so the LAST grid-aligned cell
-    # the through-via can land at (with 0.5mm grid pitch) is x=10.0 = the
-    # end cell. The B.Cu segment is the zero-length "segment" between the
-    # via and the end pin — encoded in the witness as the path's final
-    # vertex (10, 5).
+    # x=9.4 and the through-via halo (0.50mm pad+clearance) clears at the
+    # next grid cell x=10.0 = the end pin itself. The B.Cu "segment" is
+    # the zero-length terminus at (10, 5) — the path's final vertex.
+    # NOTE the F.Cu "segment" is ALSO zero-length: F_BLOCK_ALL engulfs the
+    # start pin so no F.Cu trace is possible. The blind_F_In2 via sits
+    # AT (0,5) and the route leaves F.Cu immediately.
     chain_x = 10.0
     witness_vias = [
         {"point": (0.0, 5.0), "via_class": "blind_F_In2",
@@ -2643,12 +2681,9 @@ def _build_T20():
     witness_segments = [
         {"p1": (0.0, 5.0), "p2": (chain_x, 5.0),
          "layer": "In2.Cu", "width_mm": 0.20},
-        {"p1": (chain_x, 5.0), "p2": (10.0, 5.0),
-         "layer": "B.Cu", "width_mm": 0.20},
     ]
-    witness_path = [(0.0, 5.0), (chain_x, 5.0), (10.0, 5.0)]
-    witness_length = ((chain_x - 0.0) ** 2 + 0.0) ** 0.5 \
-        + ((10.0 - chain_x) ** 2 + 0.0) ** 0.5
+    witness_path = [(0.0, 5.0), (chain_x, 5.0)]
+    witness_length = ((chain_x - 0.0) ** 2 + 0.0) ** 0.5
     gt = GroundTruth(
         verdict="CONDITIONAL",
         metrics={
@@ -2687,37 +2722,44 @@ def _build_T20():
         "single route — the canonical SWDIO_CH1 unblocker). Stackup: "
         "F.Cu signal + In1=GND plane + In2.Cu signal + In8.Cu signal + "
         "B.Cu signal (5 layers). ONE net MM: S=(0,5,F.Cu,HDI-whitelisted) "
-        "→ E=(10,5,B.Cu). TWO body obstacles encapsulate the route on "
-        "F.Cu and B.Cu: F_BLOCK on F.Cu at x∈[0.5,11.5] y∈[-1,11] forces "
-        "the route off F.Cu at the start cell (no detour available); "
-        "B_BLOCK on B.Cu at x∈[-1.5,9.5] y∈[-1,11] forces the through-"
-        "via to land near the end cell (x≥9.5). At the HDI start cell, "
-        "through-via is REFUSED (cooperative router's via_class_for_span "
-        "policy; the v6/v7 shorts lesson: through F.Cu↔B.Cu at a fine-"
-        "pitch QFN pad shorts adjacent inner-layer copper on every "
-        "barrel layer). So blind_F_In2 is the ONLY legal escape — lands "
-        "on In2.Cu. From In2.Cu the route runs east to x=9.5 (the first "
-        "B.Cu-clear column) and emits a through-via to B.Cu, then a "
-        "0.5mm B.Cu hop to the end pin. Two distinct mechanisms chained: "
-        "via_chain = ['blind_F_In2', 'through']. Witness path = "
-        "[(0,5)→(9.5,5)→(10,5)] (the In2.Cu segment + B.Cu segment); "
+        "→ E=(10,5,B.Cu). FIVE body obstacles encapsulate the route. "
+        "FOUR F.Cu blockers (E/N/S/W) surround the HDI start pin, each "
+        "with closest edge 0.6mm from the pin POINT — JUST OUTSIDE the "
+        "W-lever HDI relaxation radius (0.5mm) so the planner's "
+        "`_in_hdi_relaxation` does NOT admit them. F_BLOCK_E at x≥0.6, "
+        "F_BLOCK_N at y≥5.6, F_BLOCK_S at y≤4.4, F_BLOCK_W at x≤-0.6. "
+        "The start cell at (0,5) sits in a clear slot; EVERY adjacent "
+        "F.Cu cell (the 8 octilinear neighbors) is BLOCKED. "
+        "B_BLOCK on B.Cu at x∈[-2.5,9.4] forces the through-via to land "
+        "at x≥9.5 (the end pin (10,5)). At the HDI start cell, through-"
+        "via is REFUSED (cooperative router's via_class_for_span policy; "
+        "the v6/v7 shorts lesson: through F.Cu↔B.Cu at a fine-pitch QFN "
+        "pad shorts adjacent inner-layer copper on every barrel layer). "
+        "So blind_F_In2 is the ONLY legal escape — lands on In2.Cu. "
+        "From In2.Cu the route runs east to (10,5) and emits a through-"
+        "via to B.Cu — chain cell coincides with the end pin. Two "
+        "distinct mechanisms chained: via_chain = ['blind_F_In2', "
+        f"'through']. Witness path = [(0,5)→(10,5)] on In2.Cu; "
         f"witness length = {witness_length:.2f}mm. SINGLE-MECH-ONLY "
-        "LIARS fail: a blind-only solver lands on In2.Cu and cannot "
-        "reach B.Cu (no second mechanism); a through-only solver is "
-        "REFUSED at the HDI start AND the F.Cu blocking field prevents "
-        "stepping to a non-HDI F.Cu cell — NO-PATH on both. The K3 "
-        "MULTI-MECH planner lifts the A* state-space to (cell, layer, "
-        "last_via_class) and admits 2+ via transitions in one path, "
-        "routing the chain natively. Self-check (a) asserts the start "
-        "pin is HDI-whitelisted; (b) the witness chain has 2 vias of "
-        "2 distinct classes; (c) first via is blind_F_In2 F→In2 at "
-        "start; (d) second via is through In2→B at chain cell; (e) "
-        "In2.Cu segment clears every In2-applicable body by ≥0.30mm; "
-        "(f) the chain cell at x=9.5 clears B_BLOCK by ≥ through halo "
-        "0.50mm; (g) a single-mech-only liar reports NO-PATH (bug "
-        "class is real, regression FAILS T20); (h) invokes "
-        "multi_mech_planner.solve and asserts the engine emits "
-        "verdict=ROUTABLE, routed=1, n_vias=2, via_chain == witness."
+        "LIARS fail under the X-lever geometry: a blind-only solver "
+        "lands on In2.Cu and cannot reach B.Cu (no second mechanism); "
+        "a through-only solver is REFUSED at the HDI start AND every "
+        "adjacent F.Cu cell is blocked by a NON-relaxation-eligible "
+        "blocker — NO-PATH on both. The K3 MULTI-MECH planner lifts "
+        "the A* state-space to (cell, layer, last_via_class) and "
+        "admits 2+ via transitions in one path, routing the chain "
+        "natively. Self-check (a) asserts the start pin is HDI-"
+        "whitelisted; (b) the witness chain has 2 vias of 2 distinct "
+        "classes; (c) first via is blind_F_In2 F→In2 at start; (d) "
+        "second via is through In2→B at chain cell; (e) In2.Cu segment "
+        "clears every In2-applicable body by ≥0.30mm; (f) the chain "
+        "cell at x=10 clears B_BLOCK by ≥ through halo 0.50mm; (g) "
+        "FIVE single-mech-only liars (through-only, blind_F_In2-only, "
+        "microvia_F_In1-only, microvia_B_In8-only, blind-only) ALL "
+        "report NO-PATH (bug class is real, regression FAILS T20); "
+        "(h) invokes multi_mech_planner.solve and asserts the engine "
+        "emits verdict=ROUTABLE, routed=1, n_vias=2, n_mechanisms=2, "
+        "via_chain == ['blind_F_In2', 'through']."
     )
     return Fixture("T20",
                    "multi-mech path planning (CH1 30/30 (K3) lockfile)",
