@@ -3410,6 +3410,60 @@ class CooperativeRouter:
         self.log(f"[coop] {len(unrouted)} target nets in {self.subsystem}: "
                  f"{', '.join(unrouted[:8])}{'...' if len(unrouted) > 8 else ''}")
 
+        # ─── CH1 30/30 lever (Z) ROUTE-HARDEST-FIRST REORDER ─────────────
+        # Y proved canonical 0/5 for both joint AND sequential K3 — the 24
+        # already-committed routes greedy-locked the J19 escape corridors.
+        # W's standalone test (5/5) proved the 5 residuals CAN route from
+        # a clean canonical state. The fix is REORDERING: route the
+        # HDI-whitelisted residuals FIRST (with K3 joint multi-mech from
+        # the clean canonical state), then run normal cooperative
+        # iteration on the remaining (easier) nets. Worker enables this
+        # for CH1 close-out via --route-hdi-first; default OFF for
+        # back-compat.
+        #
+        # SSoT preserved: nets identified via the same gate the audit
+        # uses (HDI_VIA_IN_PAD_REFS pad-ref intersection + the per-net
+        # BLIND_F_IN2_NET_WHITELIST / STACKED_MICROVIA_NET_WHITELIST
+        # canonical lists). Routing uses the SAME joint K3 mechanism
+        # (_try_multi_mech_fallback_joint) the Y lever already exercises;
+        # atomic subset cascade gives all-or-none commit semantics.
+        if (getattr(self, "route_hdi_first_enabled", False)
+                and self.via_in_pad_allowed
+                and getattr(self, "multi_mech_fallback_enabled", False)):
+            hdi_targets = self._identify_hdi_whitelisted_nets(unrouted)
+            if hdi_targets:
+                self.log(f"\n[coop] LEVER Z: route-hardest-first enabled — "
+                         f"identifying HDI-whitelisted nets BEFORE main "
+                         f"cooperative pass")
+                self.log(f"  [Z] HDI-whitelisted target nets ({len(hdi_targets)}): "
+                         f"{sorted(hdi_targets)}")
+                rescued = self._route_hdi_first_phase(list(hdi_targets))
+                if rescued:
+                    self.log(f"  [Z] HDI-first phase routed "
+                             f"{len(rescued)}/{len(hdi_targets)}: "
+                             f"{sorted(rescued)}")
+                    # Drop rescued nets from the cooperative work list —
+                    # they are already self.committed (the joint adapter
+                    # populated self.committed via _try_multi_mech_fallback_joint).
+                    unrouted = [n for n in unrouted if n not in rescued]
+                else:
+                    self.log(f"  [Z] HDI-first phase: 0/{len(hdi_targets)} "
+                             "rescued — proceeding to normal cooperative "
+                             "pass (HDI residuals will be retried at the "
+                             "K3 fallback after the loop)")
+            else:
+                self.log(f"\n[coop] LEVER Z enabled but no HDI-whitelisted "
+                         f"target nets identified — skipping HDI-first phase")
+        elif getattr(self, "route_hdi_first_enabled", False):
+            # Honest log: caller asked for Z but the prerequisites
+            # (via_in_pad_allowed + multi_mech_fallback) are missing.
+            # Refuse-silently is a corner-cut; tell the operator.
+            self.log(f"\n[coop] LEVER Z REFUSED: --route-hdi-first requires "
+                     f"BOTH --via-in-pad-allowed AND --multi-mech-fallback "
+                     f"(via_in_pad_allowed={self.via_in_pad_allowed}, "
+                     f"multi_mech_fallback="
+                     f"{getattr(self, 'multi_mech_fallback_enabled', False)})")
+
         present_factor = PRESENT_COST_FACTOR_INIT
         plateau_count = 0
         last_routed = -1
@@ -4200,6 +4254,114 @@ class CooperativeRouter:
             if nn not in out:
                 out[nn] = "failed"
         return out
+
+    def _identify_hdi_whitelisted_nets(self, candidate_nets):
+        """CH1 30/30 lever (Z) — identify HDI-whitelisted nets.
+
+        A net is HDI-whitelisted iff BOTH conditions hold:
+
+          (1) the net touches at least one footprint in HDI_VIA_IN_PAD_REFS
+              (J18 / J19 — the SSoT for HDI via-in-pad footprints), AND
+
+          (2) the net name appears in either BLIND_F_IN2_NET_WHITELIST
+              or STACKED_MICROVIA_NET_WHITELIST (the per-net SSoT for
+              which nets the audit will accept HDI mechanisms on).
+
+        Both gates MUST pass — a J18-touching net that is NOT in the
+        per-net whitelist would have no sanctioned HDI mechanism and
+        belongs to the normal cooperative pass; a whitelisted-name net
+        that touches no J18/J19 footprint would have no HDI cell to
+        emit on and routes fine without HDI.
+
+        The intersection is the set of nets the W test proved CAN route
+        from a clean canonical state (the canonical 5 residuals:
+        PWM_INHB_CH1, PWM_INLA_CH1, GLB_CH1, KILL_RAIL_N_CH1, SWDIO_CH1
+        + their commonly-sanctioned-cousin BSTB_CH1 if any pad is
+        in-zone). The Y test proved they DO NOT route after 24 non-HDI
+        routes have greedy-claimed the J19 escape corridors. Z routes
+        them FIRST to claim those corridors before the 24 non-HDI
+        residuals get the chance.
+
+        SSoT preserved — gate uses the SAME module-level constants the
+        audit + the K3 single-net + joint adapters use. NO duplication.
+
+        Args:
+            candidate_nets: iterable of net names to filter (typically
+                the cooperative router's target nets — `self.nets`
+                modulo already-committed).
+
+        Returns:
+            set of net names matching both gates.
+        """
+        whitelist_names = set(blind_f_in2_net_whitelist())
+        whitelist_names.update(stacked_microvia_net_whitelist())
+        if not whitelist_names:
+            self.log("  [Z] HDI whitelist is empty (audit module not "
+                     "importable?) — refuse to identify (degrade safely)")
+            return set()
+        # Filter: a candidate is HDI-whitelisted iff (1) the net name is
+        # in the canonical whitelist AND (2) at least one of its pads is
+        # on a J18/J19 footprint.
+        out = set()
+        for nn in candidate_nets:
+            if nn not in whitelist_names:
+                continue
+            pads = self.state.net_pads.get(nn, [])
+            if any(ref in HDI_VIA_IN_PAD_REFS for (ref, *_rest) in pads):
+                out.add(nn)
+        return out
+
+    def _route_hdi_first_phase(self, hdi_nets):
+        """CH1 30/30 lever (Z) — route HDI-whitelisted nets FIRST.
+
+        Drives the joint K3 multi-mech adapter on `hdi_nets` from the
+        CURRENT board state (which, when run at the top of `run()`, is
+        the clean canonical state — no cooperative routes committed
+        yet, only any preserved pre-existing routes the operator
+        explicitly preserved with --no-rip-routed).
+
+        Atomic-on-all-or-none: delegates to the existing
+        _try_multi_mech_fallback_joint which already implements the
+        criticality-ordered subset cascade (try N → N-1 → ... → 1
+        most-critical-first; first subset where ALL nets route wins).
+        The subset cascade gives us all-or-none subset commit semantics
+        — nets not in the winning subset are rolled back and re-queued
+        for the normal cooperative pass.
+
+        If the joint adapter fully fails (no feasible subset at any
+        size), this returns an empty set; the normal cooperative pass
+        then attempts every HDI net as part of the regular work list.
+        The cooperative loop's K3 fallback (at the end of run()) will
+        then make a SECOND attempt at the residuals after the main
+        pass settles.
+
+        Args:
+            hdi_nets: list of HDI-whitelisted net names (from
+                _identify_hdi_whitelisted_nets). Must be ≥1.
+
+        Returns:
+            set of net names successfully rescued + committed. Nets
+            not in this set remain unrouted on the board (their attempt
+            was rolled back).
+        """
+        if not hdi_nets:
+            return set()
+        # Defensive: this path is meaningful only when the K3 mech is
+        # available. Caller in run() already gates on this; double-check
+        # for safety (so future direct callers of this method don't
+        # silently route HDI nets via a stale mechanism).
+        if not getattr(self, "multi_mech_fallback_enabled", False):
+            self.log("  [Z] _route_hdi_first_phase REFUSED: "
+                     "multi_mech_fallback_enabled is False (K3 mech "
+                     "unavailable). HDI nets will fall through to the "
+                     "normal cooperative pass.")
+            return set()
+        # Single-net joint K3 cascade requires ≥1 net (the size-1
+        # cascade tier handles the degenerate case). For ≥2 nets the
+        # full N → 1 cascade runs.
+        verdicts = self._try_multi_mech_fallback_joint(list(hdi_nets))
+        rescued = {nn for nn, v in verdicts.items() if v == "routed"}
+        return rescued
 
     def _rollback_added_since(self, before_item_keys):
         """Per-net atomic rollback helper for the K3 fallback. Removes
@@ -5371,6 +5533,27 @@ def main():
                          "disconnected leaf via single-mech maze + "
                          "multi-mech (≤ 2 attempts/leaf). Shorts-gated. "
                          "Provenance under sims/routing_provenance/leaf_route/.")
+    # CH1 30/30 lever Z (2026-05-29): route HDI-whitelisted nets FIRST.
+    # Y proved canonical 0/5 for both joint AND sequential K3 on a board
+    # where 24 non-HDI routes had already greedy-locked the J19 escape
+    # corridors. W's standalone test (5/5) proved the 5 residuals CAN
+    # route from a clean canonical state. The fix is REORDERING:
+    # identify all nets whose pads touch the HDI whitelist
+    # (HDI_VIA_IN_PAD_REFS + BLIND_F_IN2_NET_WHITELIST sanctioned
+    # landings) and route them FIRST via K3 joint multi-mech (atomic
+    # all-or-none via subset cascade), then run the normal cooperative
+    # iteration on the remaining nets. The non-HDI nets are EASIER
+    # (no HDI required) and they route around the committed HDI routes
+    # naturally. Default OFF (back-compat for existing CH1/CH2/CH3/CH4
+    # flows); worker enables for CH1 close-out.
+    ap.add_argument("--route-hdi-first", action="store_true",
+                    help="CH1 30/30 lever Z: identify HDI-whitelisted "
+                         "nets (HDI_VIA_IN_PAD_REFS + "
+                         "BLIND_F_IN2_NET_WHITELIST landings) and route "
+                         "them FIRST via K3 joint multi-mech (atomic "
+                         "subset cascade). Easier non-HDI nets then "
+                         "route around them in the normal cooperative "
+                         "pass. Default OFF (back-compat).")
     args = ap.parse_args()
 
     board = pcbnew.LoadBoard(args.board)
@@ -5388,6 +5571,8 @@ def main():
     router.multi_mech_fallback_enabled = bool(args.multi_mech_fallback)
     # CH1 30/30 lever Q: leaf-route opt-in flag.
     router.leaf_route_enabled = bool(args.enable_leaf_route)
+    # CH1 30/30 lever Z: route HDI-whitelisted nets first (REORDER).
+    router.route_hdi_first_enabled = bool(args.route_hdi_first)
     unrouted = router.run(max_iter=args.max_iterations)
     # v11 — targeted ripup-rebuild phase (CH1 30/30 lever J)
     if router.targeted_ripup_enabled and unrouted:
