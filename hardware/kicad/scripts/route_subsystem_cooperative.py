@@ -3768,6 +3768,19 @@ class CooperativeRouter:
         # _pin_from_pcbnew's outer-first preference.
         allowed_layer_names = ("F.Cu", "B.Cu", "In2.Cu", "In4.Cu",
                                "In6.Cu", "In8.Cu")
+        # W-lever (CH1 30/30 lever W) — expand A* expansion_cap to 500_000
+        # for the K3 RESCUE path. Default RegionSpec.expansion_cap = 200_000
+        # which is appropriate for a normal Phase-B-bounded region; but the
+        # K3 rescue ONLY runs as a last-resort fallback for nets the single-
+        # mech cooperative router could NOT route, where the geometry forces
+        # a longer chain across full-stack obstacles + foreign tracks. The
+        # diag on 2026-05-29 showed PWM_INHB_CH1 hit the 200k cap at
+        # octi=5.0 cells from goal (the corridor is tight; the cap was
+        # the bottleneck, not the geometry). 500_000 is a 2.5× headroom
+        # over the empirically-observed peak with the per-pad obstacle
+        # model. The K3 path runs on ≤5 nets per subsystem so the cost
+        # envelope stays bounded (5 × 500k = 2.5M expansions per CH).
+        K3_RESCUE_EXPANSION_CAP = 500_000
         region = PC.RegionSpec(
             subsystem=self.subsystem,
             bbox=(float(zone_xmin), float(zone_ymin),
@@ -3776,6 +3789,7 @@ class CooperativeRouter:
             via_budget={"std": std_budget, "hdi": hdi_budget},
             hdi_refs=hdi_refs_for_net,
             net_names=(netname,),
+            expansion_cap=K3_RESCUE_EXPANSION_CAP,
         )
 
         # ── 4. Snapshot the board's track/via items BEFORE the adapter
@@ -3830,6 +3844,15 @@ class CooperativeRouter:
         # as the verdict; any non-'routed' aggregate triggers the
         # per-net atomic rollback below.
         try:
+            # W-lever (CH1 30/30): chain depth 3->4 for the rescue path.
+            # Empirically the canonical chain is blind_F_In2 + through (2
+            # mechanisms) but the tight CH1 corridors at J19 may need
+            # blind+through+through (3) or blind+through+microvia (3).
+            # depth=4 leaves one extra slot of headroom without violating
+            # R37 (cascade-depth ≤ 2 was the discipline; for via chains
+            # the analogous bound is ≤ 4 mechanisms — chains beyond that
+            # ARE a placement-bug indicator).
+            K3_RESCUE_CHAIN_DEPTH = 4
             res = PC.fill_region_with_multi_mech(
                 plan, region,
                 board=self.board,
@@ -3839,7 +3862,7 @@ class CooperativeRouter:
                 width_mm=width_for(netname),
                 clearance_fos_mm=PC.MAZE_DEFAULT_CLEARANCE_FOS_MM,
                 grid_pitch_mm=self.grid_pitch,
-                max_chain_depth=PC.MULTI_MECH_DEFAULT_CHAIN_DEPTH,
+                max_chain_depth=K3_RESCUE_CHAIN_DEPTH,
                 dry_run=False,
             )
         except Exception as exc:
