@@ -2743,6 +2743,386 @@ def fill_region_with_multi_mech(plan, region: "RegionSpec",
 
 
 # ============================================================================
+# CH1 30/30 lever (Y) — JOINT K3 MULTI-MECH (2026-05-29)
+# ============================================================================
+# WHY THIS LEVER EXISTS
+#   Post-W diagnostic (worker provenance sims/routing_provenance/27of30_post_W/)
+#   showed a clean NET-SWAP OCCUPANCY OSCILLATION on the 5 CH1 residual nets
+#   (PWM_INHB+PWM_INLA+GLB+KILL_RAIL_N+SWDIO):
+#     * Standalone (only 1 net unrouted at a time) the multi-mech planner
+#       rescues 5/5.
+#     * On the canonical POST-W board (24 other nets already committed)
+#       sequential K3 rescues only 2/5 — and which 2 depends on the per-net
+#       commit order. Pre-W: PWM_INLA succeeded, PWM_INHB failed. Post-W:
+#       PWM_INHB succeeds, PWM_INLA fails. The other 3 NEVER succeed
+#       because each preceding success EXHAUSTS the corridor the next one
+#       wanted.
+#
+#   Root cause: `fill_region_with_multi_mech` is per-pair sequential. The
+#   caller (`_try_multi_mech_fallback`) is per-net sequential. Each net's
+#   success/failure depends on board occupancy AT ATTEMPT TIME — once net A
+#   commits the In4 corridor, net B which needed it goes NO-PATH; rolling
+#   back A doesn't help because B's plan was made BEFORE A committed.
+#   A negotiated-congestion router (PathFinder) handles this via cost
+#   history; for our SUREshot-over-SOTA discipline ([[feedback-sureshot-over-sota]]),
+#   a simpler approximation is JOINT EXPLORATION: try N nets simultaneously
+#   with the planner free to pick which corridor each net takes; if any
+#   net fails, fall back to the largest-feasible subset.
+#
+# DESIGN
+#   `fill_region_with_multi_mech_joint(plan, region, net_pairs_by_net, ...)`
+#   accepts a DICT (net_name -> list of (start_ref, end_ref) pairs) instead
+#   of a flat list. Behaviour:
+#     1. Build the bounded MultiMechInvocation ONCE (same SSoT as the
+#        single-net adapter).
+#     2. Per net (in CRITICALITY ORDER — safety→motor→analog→bus→debug),
+#        compute obstacles AT-ATTEMPT-TIME with `exclude_nets={current_net}`,
+#        so within-call previously-committed tracks become obstacles for
+#        subsequent nets. THIS IS THE NEGOTIATION: each net sees a board
+#        that includes its predecessors' just-committed copper, NOT the
+#        stale obstacles set captured at call start.
+#     3. Per net, route every pair under PER-NET atomicity. If ALL pairs
+#        succeed → keep the net's items + advance to the next net.
+#        If ANY pair fails → roll back the PER-NET items + continue with
+#        remaining nets (the subset cascade decides which subset to keep).
+#     4. The aggregate status REPORTS per-net verdicts; caller decides
+#        the cascade-fallback policy (commit largest-feasible subset).
+#
+#   Important atomicity property: this function emits each net's tracks as
+#   they're planned, then per-net rolls back on intra-net failure. The
+#   CALLER (`_try_multi_mech_fallback_joint`) decides whether to commit
+#   the cumulative set (largest-feasible subset) or rollback ENTIRELY
+#   (all-or-nothing semantics per the lever Y contract).
+#
+#   The negotiated-congestion semantics: in joint mode, when net A's plan
+#   commits In4 corridor, net B (planned next) sees In4 as an obstacle and
+#   the planner may pick In6 (or another mechanism) instead — a tradeoff
+#   the SEQUENTIAL per-net mode (which sees ONLY committed-before-call
+#   tracks) cannot explore.
+#
+#   ROUTE ORDER SENSITIVITY: yes, joint mode is still order-sensitive
+#   (a PathFinder-style cost-history router is the next-step upgrade for
+#   true order independence). The criticality ordering is the
+#   sureshot-over-sota heuristic: safety-critical nets (KILL_RAIL_N)
+#   get first pick of corridors; debug nets (SWDIO) take leftovers.
+#   This matches Sai's [[feedback-anticipate-sai-default]] rule —
+#   when in doubt, do the safety-first thing.
+# ============================================================================
+def fill_region_with_multi_mech_joint(
+        plan, region: "RegionSpec",
+        net_pairs_by_net,
+        board=None,
+        board_path: Optional[str] = None,
+        output_path: Optional[str] = None,
+        width_mm_by_net: Optional[Dict[str, float]] = None,
+        clearance_fos_mm: float = MAZE_DEFAULT_CLEARANCE_FOS_MM,
+        grid_pitch_mm: float = 0.1,
+        max_chain_depth: int = MULTI_MECH_DEFAULT_CHAIN_DEPTH,
+        net_order: Optional[List[str]] = None,
+        dry_run: bool = False) -> dict:
+    """JOINT REAL-BOARD ADAPTER — CH1 30/30 lever (Y).
+
+    Routes MULTIPLE NETS in a single call with obstacle refresh between
+    nets, breaking the net-swap occupancy oscillation observed post-W.
+
+    USAGE
+        Use this from `_try_multi_mech_fallback_joint` to attempt the
+        K3 rescue on N residual nets simultaneously. The planner sees
+        each net's predecessors' just-committed tracks as obstacles,
+        enabling cross-net corridor tradeoffs.
+
+    CONTRACT
+      INPUTS
+        plan              : Phase B GlobalPlan (verdict gate).
+        region            : RegionSpec — bbox / allowed layers / via budget /
+                            hdi_refs / net_names (UNION of all joint nets).
+        net_pairs_by_net  : dict[net_name -> list of (start_ref, end_ref)].
+                            Each net's pairs form a star MST (caller decides).
+        board             : live pcbnew BOARD or None.
+        board_path        : canonical .kicad_pcb path (provenance).
+        output_path       : adapter does NOT write — provenance only.
+        width_mm_by_net   : dict[net_name -> width_mm]. Falls back to
+                            MAZE_DEFAULT_WIDTH_MM when missing.
+        clearance_fos_mm  : FoS-inflated clearance (§5c).
+        grid_pitch_mm     : signal grid pitch.
+        max_chain_depth   : per-pair via-chain cap (default 3).
+        net_order         : explicit net ordering. None => criticality
+                            order via targeted_ripup.net_criticality
+                            (safety-first; sureshot-over-sota).
+        dry_run           : True => construct + validate; do NOT route.
+
+      BEHAVIOUR
+        1. Build bounded MultiMechInvocation (region SSoT).
+        2. Determine net ordering.
+        3. Per net (in order):
+             a. Recompute obstacles with exclude_nets={net} so the
+                planner sees other-net previously-committed copper.
+             b. For each pad-pair: plan + emit + per-pair pre-emit
+                validation (same as single-net adapter).
+             c. Per-NET atomic rollback: if ANY pair fails, roll
+                back the NET's items + record verdict='partial'/'failed'
+                in per-net summary.
+             d. On all-pairs-succeed: net stays committed; next net
+                sees its tracks as obstacles.
+        4. Return per-net verdicts + aggregate status.
+
+      OUTPUT
+        {
+          'status': 'routed' (all nets routed) | 'partial' (some nets failed)
+                    | 'skipped' | 'error',
+          'invocation': MultiMechInvocation,
+          'per_net': dict[net_name -> {
+              'status': 'routed' | 'partial' | 'skipped' | 'error',
+              'routes': list of per-pair route records,
+              'added_keys': list of stable item keys this net contributed
+                            (caller uses this for cascade-subset rollback),
+          }],
+          'net_order': list of net names in attempt order,
+        }
+
+    SSOT DISCIPLINE preserved:
+      * Same MultiMechInvocation construction as single-net adapter.
+      * Same per-pair pre-emit validation, same _emit_plan_to_board,
+        same per-class halo check.
+      * Same allowed_via_classes derivation from region.via_budget.
+      * exclude_nets ONLY contains the CURRENT net (so other-net joint
+        emissions ARE obstacles to subsequent nets — the negotiation
+        mechanism).
+
+    ATOMICITY
+      Per-pair: pre-emit validation failure rolls back the pair (same
+                as single-net adapter).
+      Per-net : ANY pair failure rolls back the NET's items + records
+                status='partial' in per_net.
+      Per-batch : CALLER decides. The aggregate status reports the
+                  largest-feasible subset; the caller can keep all
+                  successfully-routed nets OR roll back to the snapshot
+                  for true all-or-nothing semantics.
+    """
+    inv = build_multi_mech_invocation(
+        board_path or "", output_path or "", region,
+        width_mm=MAZE_DEFAULT_WIDTH_MM, clearance_fos_mm=clearance_fos_mm,
+        grid_pitch_mm=grid_pitch_mm, max_chain_depth=max_chain_depth)
+
+    plan_verdict = (plan.get("verdict") if isinstance(plan, dict)
+                    else getattr(plan, "verdict", None))
+    if plan_verdict not in (None, "ROUTABLE"):
+        return {"status": "skipped",
+                "reason": (f"plan verdict {plan_verdict!r} is not ROUTABLE "
+                           "— joint K3 does not run on un-certified region."),
+                "invocation": inv,
+                "per_net": {},
+                "net_order": []}
+
+    if dry_run:
+        return {"status": "skipped", "reason": "dry_run",
+                "invocation": inv, "per_net": {}, "net_order": []}
+
+    if not net_pairs_by_net:
+        return {"status": "skipped",
+                "reason": "empty net_pairs_by_net",
+                "invocation": inv, "per_net": {}, "net_order": []}
+
+    try:
+        import pcbnew  # noqa: F401  (lazy: live only)
+    except Exception as e:  # pragma: no cover
+        return {"status": "skipped",
+                "reason": (f"pcbnew unavailable ({type(e).__name__}: {e})"),
+                "invocation": inv, "per_net": {}, "net_order": []}
+
+    if (board is None or not board_path or not output_path):
+        return {"status": "skipped",
+                "reason": ("no live BOARD / board_path / output_path"),
+                "invocation": inv, "per_net": {}, "net_order": []}
+
+    try:                                # pragma: no cover (real-board only)
+        from . import multi_mech_planner as MMP
+    except ImportError:                 # pragma: no cover
+        import multi_mech_planner as MMP  # type: ignore
+
+    # Determine net ordering. Caller can override; default = criticality.
+    if net_order is None:
+        try:
+            import targeted_ripup as _TR  # type: ignore
+        except ImportError:                                            # pragma: no cover
+            try:
+                from .. import targeted_ripup as _TR  # type: ignore
+            except Exception:
+                _TR = None
+        if _TR is not None:
+            net_order = sorted(net_pairs_by_net.keys(),
+                               key=lambda n: (-_TR.net_criticality(n)[0], n))
+        else:
+            net_order = sorted(net_pairs_by_net.keys())
+    else:
+        # Keep only nets actually in the dict (defensive).
+        net_order = [n for n in net_order if n in net_pairs_by_net]
+
+    width_mm_by_net = width_mm_by_net or {}
+    per_net = {}
+
+    # Stable item key helper (cooperative router's UUID-based SSoT;
+    # falls back to ptr/id for items without UUID).
+    def _stable_key(item):
+        try:
+            return f"uuid:{item.m_Uuid.AsString()}"
+        except Exception:
+            try:
+                return f"ptr:{int(item.this)}"
+            except Exception:
+                return f"id:{id(item)}"
+
+    for net_name in net_order:
+        net_pairs = net_pairs_by_net[net_name]
+        if not net_pairs:
+            per_net[net_name] = {"status": "skipped",
+                                 "reason": "no pairs",
+                                 "routes": [],
+                                 "added_keys": []}
+            continue
+
+        # ── PER-NET SNAPSHOT — for atomic rollback if any pair fails.
+        before_keys = set(_stable_key(t) for t in board.GetTracks())
+
+        # ── PER-NET OBSTACLE REFRESH — exclude ONLY this net; other-net
+        # tracks emitted earlier in this call ARE obstacles. This is the
+        # negotiation mechanism: net B sees net A's committed corridor as
+        # blocked + plans around it.
+        own_refs = set()
+        for sp, ep in net_pairs:
+            if "." in sp:
+                own_refs.add(sp.split(".", 1)[0])
+            if "." in ep:
+                own_refs.add(ep.split(".", 1)[0])
+        obstacles = _board_obstacles_from_pcbnew(
+            board, region,
+            exclude_refs=own_refs,
+            exclude_nets={net_name},
+            mode="per_pad_and_tracks",
+        )
+
+        net_width_mm = width_mm_by_net.get(net_name, MAZE_DEFAULT_WIDTH_MM)
+        net_routes = []
+        all_pairs_routed = True
+        for start_ref, end_ref in net_pairs:
+            added_for_pair: List = []
+            try:
+                start = _pin_from_pcbnew(board, start_ref)
+                end = _pin_from_pcbnew(board, end_ref)
+            except ValueError as e:
+                net_routes.append({"start": start_ref, "end": end_ref,
+                                   "status": "skipped",
+                                   "reason": f"pin resolution: {e}"})
+                all_pairs_routed = False
+                continue
+            try:
+                plan_obj = MMP.plan_multi_mech_route(
+                    start=start, end=end, region_bbox=region.bbox,
+                    obstacles=obstacles,
+                    allowed_layers=region.allowed_layers,
+                    allowed_via_classes=inv.allowed_via_classes,
+                    width_mm=net_width_mm,
+                    clearance_fos_mm=inv.clearance_fos_mm,
+                    expansion_cap=inv.expansion_cap,
+                    grid_pitch_mm=inv.grid_pitch_mm,
+                    max_chain_depth=inv.max_chain_depth,
+                )
+            except ValueError as e:
+                net_routes.append({"start": start_ref, "end": end_ref,
+                                   "status": "skipped",
+                                   "reason": f"planner refused: {e}"})
+                all_pairs_routed = False
+                continue
+            if plan_obj is None:
+                net_routes.append({"start": start_ref, "end": end_ref,
+                                   "status": "NO-PATH"})
+                all_pairs_routed = False
+                continue
+            # Net-obj resolution (mirrors single-net adapter).
+            try:
+                ref, padname = start_ref.split(".", 1)
+                fp = board.FindFootprintByReference(ref)
+                net_obj = None
+                if fp is not None:
+                    for p in fp.Pads():
+                        if p.GetPadName() == padname:
+                            net_obj = p.GetNet()
+                            break
+            except Exception:
+                net_obj = None
+            try:
+                n_tracks, n_vias = _emit_plan_to_board(
+                    plan_obj, board, net_obj,
+                    width_mm=net_width_mm,
+                    allowed_via_classes=inv.allowed_via_classes,
+                    allowed_layers=region.allowed_layers,
+                    clearance_fos_mm=inv.clearance_fos_mm,
+                    added_items=added_for_pair,
+                    exclude_refs=own_refs,
+                )
+            except ValueError as e:
+                # Per-pair rollback (same as single-net adapter).
+                for it in added_for_pair:
+                    try:
+                        board.Remove(it)
+                    except Exception:
+                        pass
+                net_routes.append({"start": start_ref, "end": end_ref,
+                                   "status": "rollback",
+                                   "reason": f"pre-emit validation: {e}"})
+                all_pairs_routed = False
+                continue
+            net_routes.append({"start": start_ref, "end": end_ref,
+                               "length_mm": plan_obj.length_mm,
+                               "n_tracks_emitted": n_tracks,
+                               "n_vias_emitted": n_vias,
+                               "via_chain": list(plan_obj.via_chain),
+                               "expansions": plan_obj.expansions,
+                               "status": "routed"})
+
+        if all_pairs_routed:
+            # NET commits — its items stay on the board for subsequent
+            # nets to negotiate against.
+            after_keys = set(_stable_key(t) for t in board.GetTracks())
+            added_keys = list(after_keys - before_keys)
+            per_net[net_name] = {"status": "routed",
+                                 "routes": net_routes,
+                                 "added_keys": added_keys}
+        else:
+            # PER-NET ATOMIC ROLLBACK. Remove every item this net added
+            # (across all its pair attempts) so the next net sees the
+            # board as it was BEFORE this net was attempted (i.e., the
+            # partial corridor is freed).
+            added_now = [t for t in board.GetTracks()
+                         if _stable_key(t) not in before_keys]
+            for it in added_now:
+                try:
+                    board.Remove(it)
+                except Exception:
+                    pass
+            per_net[net_name] = {"status": "partial",
+                                 "routes": net_routes,
+                                 "added_keys": []}
+
+    # Aggregate verdict.
+    n_total = len(net_order)
+    n_routed = sum(1 for n in net_order
+                   if per_net.get(n, {}).get("status") == "routed")
+    if n_routed == n_total and n_total > 0:
+        agg = "routed"
+    elif n_routed == 0:
+        agg = "partial"
+    else:
+        agg = "partial"
+    return {"status": agg,
+            "invocation": inv,
+            "per_net": per_net,
+            "net_order": list(net_order),
+            "n_routed": n_routed,
+            "n_total": n_total}
+
+
+# ============================================================================
 # SELF-TEST — validate the region-bounding / argument-construction logic without
 # pcbnew or a live board (the adapter's testable half). Run: python3 phase_c.py
 # ============================================================================

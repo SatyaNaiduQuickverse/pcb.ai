@@ -3600,8 +3600,36 @@ class CooperativeRouter:
         # tested via the abstract T20 fixture so the integration semantics
         # are clear without needing pcbnew.
         if unrouted and getattr(self, "multi_mech_fallback_enabled", False):
-            self.log("\n[coop] multi-mech fallback (CH1 30/30 lever K3): "
-                     f"attempting {len(unrouted)} unrouted net(s)")
+            # ── CH1 30/30 lever (Y) — JOINT K3 first, sequential as fallback.
+            #
+            # Why joint first: post-W diagnostic showed sequential K3 hits a
+            # net-swap occupancy oscillation (worker provenance
+            # sims/routing_provenance/27of30_post_W/). The joint adapter
+            # explores cross-net corridor tradeoffs in one pass; if it can
+            # rescue every residual, the subset cascade never fires.
+            # If joint partially succeeds, the remaining nets still get the
+            # per-net sequential pass (with the post-joint board state) so
+            # any net the joint adapter could NOT plan still gets a clean
+            # standalone attempt.
+            joint_rescued = set()
+            if (getattr(self, "joint_k3_enabled", True)
+                    and len(unrouted) >= 2):
+                self.log("\n[coop] JOINT multi-mech fallback "
+                         "(CH1 30/30 lever Y): "
+                         f"attempting {len(unrouted)} unrouted net(s) "
+                         "simultaneously")
+                joint_res = self._try_multi_mech_fallback_joint(list(unrouted))
+                for nn, verdict in joint_res.items():
+                    if verdict == "routed":
+                        joint_rescued.add(nn)
+                self.log(f"[coop] JOINT K3 result: "
+                         f"{len(joint_rescued)}/{len(unrouted)} rescued "
+                         f"({sorted(joint_rescued)})")
+                unrouted = [n for n in unrouted if n not in joint_rescued]
+            if unrouted:
+                self.log("\n[coop] SEQUENTIAL multi-mech fallback "
+                         "(CH1 30/30 lever K3): "
+                         f"attempting {len(unrouted)} residual net(s)")
             still_unrouted = []
             for nn in unrouted:
                 routed = self._try_multi_mech_fallback(nn)
@@ -3908,6 +3936,270 @@ class CooperativeRouter:
                      f"vias={r.get('n_vias_emitted', 0)}")
         self.committed[netname] = (set(), added_items)
         return True
+
+    def _try_multi_mech_fallback_joint(self, unrouted_nets):
+        """CH1 30/30 lever (Y) — JOINT K3 MULTI-MECH RESCUE.
+
+        CONTRACT
+            INPUTS: unrouted_nets — list of net names still unrouted after
+                    single-mech cooperative + (optional) per-net K3.
+            BEHAVIOUR:
+              1. Collect every net's in-zone pad-pairs into net_pairs_by_net.
+              2. Build a UNION RegionSpec (allowed via classes derived from
+                 the union of hdi_refs; net_names = all joint nets).
+              3. Snapshot board state PER BATCH for cascade rollback.
+              4. Call phase_c.fill_region_with_multi_mech_joint — which
+                 routes nets in criticality order with PER-NET obstacle
+                 refresh (negotiation mechanism).
+              5. ALL-OR-NONE first: if every net rescued, commit + return.
+              6. SUBSET CASCADE: if joint returned partial, try the
+                 largest-subset-including-most-critical cascades (N-1, N-2,
+                 ... 2, 1). For each subset attempt, restore the per-batch
+                 snapshot, then re-call the joint adapter with the subset.
+                 First feasible subset wins.
+              7. ATOMIC: at exit, the board state EITHER contains all
+                 rescued nets' tracks (with self.committed populated for
+                 each) OR is restored to the pre-call snapshot.
+
+            OUTPUT: dict[net_name -> 'routed' | 'failed']. Caller filters
+                    routed nets out of `unrouted` list.
+
+        SUBSET ORDERING (sureshot-over-sota):
+          Cascade order is by CRITICALITY (safety → motor → analog → bus
+          → debug). For each size k in [N-1, N-2, ... 2, 1] we attempt the
+          k-subset containing the k most-critical nets. This guarantees
+          the LARGEST feasible safety-first subset wins. PathFinder-style
+          cost-history routing would give true joint optimality; the
+          subset cascade is the sureshot approximation.
+
+        SSoT preserved: same hdi_refs gate, same allowed_via_classes
+        derivation, same emit pipeline, same per-pair pre-emit validation
+        as the single-net adapter. Joint mode is a CALLER-side wrapper —
+        no router internals are bypassed.
+        """
+        try:
+            from routing_engine import multi_mech_planner as MMP  # type: ignore  # noqa: F401
+            from routing_engine import phase_c as PC  # type: ignore
+        except ImportError:
+            self.log(f"  [.] joint K3 unavailable "
+                     "(routing_engine not importable)")
+            return {nn: "failed" for nn in unrouted_nets}
+
+        try:
+            import pcbnew  # noqa: F401
+        except Exception:
+            self.log(f"  [.] joint K3 unavailable (pcbnew not importable)")
+            return {nn: "failed" for nn in unrouted_nets}
+
+        try:
+            import targeted_ripup as _TR  # type: ignore
+        except Exception:                                              # pragma: no cover
+            _TR = None
+
+        # ── 1. Gather per-net in-zone pads + build pair lists.
+        zone_xmin, zone_ymin, zone_xmax, zone_ymax = self.zone
+        net_pairs_by_net = {}
+        width_mm_by_net = {}
+        hdi_refs_union = set()
+        skip_nets = []
+        for nn in unrouted_nets:
+            pads_all = self.state.net_pads.get(nn, [])
+            pads_in_zone = [
+                (ref, padname, x, y, layers, sx, sy)
+                for (ref, padname, x, y, layers, sx, sy) in pads_all
+                if zone_xmin <= x <= zone_xmax and zone_ymin <= y <= zone_ymax
+            ]
+            if len(pads_in_zone) < 2:
+                skip_nets.append(nn)
+                continue
+            ref0, pad0, _x0, _y0, _l0, _sx0, _sy0 = pads_in_zone[0]
+            start_ref = f"{ref0}.{pad0}"
+            pairs = [(start_ref, f"{ref}.{padname}")
+                     for (ref, padname, _x, _y, _l, _sx, _sy)
+                     in pads_in_zone[1:]]
+            net_pairs_by_net[nn] = pairs
+            width_mm_by_net[nn] = width_for(nn)
+            for (ref, _p, _x, _y, _l, _sx, _sy) in pads_in_zone:
+                if ref in HDI_VIA_IN_PAD_REFS:
+                    hdi_refs_union.add(ref)
+        for nn in skip_nets:
+            self.log(f"  [.] {nn}: joint K3 skip (<2 in-zone pads)")
+        if not net_pairs_by_net:
+            return {nn: "failed" for nn in unrouted_nets}
+
+        # ── 2. Build the union RegionSpec.
+        # via_budget aggregated across all joint nets: each net star-MST
+        # has N-1 edges × 3 vias-per-chain headroom; HDI budget gated by
+        # hdi_refs_union × operator flag.
+        total_pad_count = sum(len(p) + 1 for p in net_pairs_by_net.values())
+        std_budget = max(8, 4 * total_pad_count)
+        hdi_budget = (max(4, 2 * total_pad_count)
+                      if (hdi_refs_union and self.via_in_pad_allowed)
+                      else 0)
+        allowed_layer_names = ("F.Cu", "B.Cu", "In2.Cu", "In4.Cu",
+                               "In6.Cu", "In8.Cu")
+        # Same K3 rescue expansion cap as single-net path (500k per pair
+        # — joint mode loops over pairs, so the cap is per-pair not
+        # per-net; total bound = N_pairs × 500k expansions).
+        K3_RESCUE_EXPANSION_CAP = 500_000
+        K3_RESCUE_CHAIN_DEPTH = 4
+        region = PC.RegionSpec(
+            subsystem=self.subsystem,
+            bbox=(float(zone_xmin), float(zone_ymin),
+                  float(zone_xmax), float(zone_ymax)),
+            allowed_layers=allowed_layer_names,
+            via_budget={"std": std_budget, "hdi": hdi_budget},
+            hdi_refs=tuple(sorted(hdi_refs_union)),
+            net_names=tuple(sorted(net_pairs_by_net.keys())),
+            expansion_cap=K3_RESCUE_EXPANSION_CAP,
+        )
+
+        # ── 3. Snapshot board for batch-level cascade rollback.
+        before_items = set(self._stable_item_key(t)
+                           for t in self.board.GetTracks())
+
+        try:
+            board_path = (self.board.GetFileName()
+                          or "<synthetic>.kicad_pcb")
+        except Exception:
+            board_path = "<synthetic>.kicad_pcb"
+
+        plan = {"verdict": "ROUTABLE"}
+
+        # ── 4. Determine criticality-ordered net list (for the subset
+        # cascade). Safety-first; debug-last.
+        if _TR is not None:
+            ordered_nets = sorted(net_pairs_by_net.keys(),
+                                  key=lambda n: (-_TR.net_criticality(n)[0], n))
+        else:
+            ordered_nets = sorted(net_pairs_by_net.keys())
+
+        def _attempt(net_subset):
+            """Helper: restore snapshot, run joint adapter on net_subset.
+            Returns dict[net_name -> verdict_string]."""
+            # Restore per-batch snapshot before each attempt so prior
+            # cascade rounds don't leave half-committed tracks.
+            self._rollback_added_since(before_items)
+            subset_pairs = {n: net_pairs_by_net[n] for n in net_subset}
+            try:
+                res = PC.fill_region_with_multi_mech_joint(
+                    plan, region,
+                    net_pairs_by_net=subset_pairs,
+                    board=self.board,
+                    board_path=board_path,
+                    output_path=board_path,
+                    width_mm_by_net=width_mm_by_net,
+                    clearance_fos_mm=PC.MAZE_DEFAULT_CLEARANCE_FOS_MM,
+                    grid_pitch_mm=self.grid_pitch,
+                    max_chain_depth=K3_RESCUE_CHAIN_DEPTH,
+                    net_order=net_subset,
+                    dry_run=False,
+                )
+            except Exception as exc:
+                self.log(f"  [.] JOINT K3 adapter raised "
+                         f"{type(exc).__name__}: {exc} — restoring snapshot")
+                self._rollback_added_since(before_items)
+                return {n: "failed" for n in net_subset}
+            verdicts = {}
+            for nn in net_subset:
+                v = res.get("per_net", {}).get(nn, {}).get("status", "failed")
+                verdicts[nn] = "routed" if v == "routed" else "failed"
+            n_routed = sum(1 for v in verdicts.values() if v == "routed")
+            self.log(f"      joint try ({len(net_subset)} nets, "
+                     f"{n_routed} routed): {verdicts}")
+            return verdicts
+
+        # ── 5. Cascade. Try N-net, N-1, N-2, ... down to 1.
+        # For each size k, take the TOP-k MOST CRITICAL nets.
+        # First subset where ALL nets route wins.
+        n = len(ordered_nets)
+        best_verdicts = None
+        best_subset = None
+        for k in range(n, 0, -1):
+            subset = ordered_nets[:k]
+            self.log(f"  [Y] cascade k={k}: trying subset "
+                     f"{subset}")
+            verdicts = _attempt(subset)
+            if all(v == "routed" for v in verdicts.values()):
+                best_verdicts = verdicts
+                best_subset = subset
+                self.log(f"  [Y] cascade k={k}: ALL ROUTED — "
+                         f"committing subset {subset}")
+                break
+
+        if best_verdicts is None:
+            # No feasible subset (down to size 1). The k=1 cascade tried
+            # the single most-critical net standalone; if that failed too,
+            # the joint mode has no rescue. Restore snapshot + report all
+            # failed; the per-net sequential fallback runs next (it may
+            # rescue nets the joint mode could not, by trying different
+            # standalone orderings via the existing _try_multi_mech_fallback
+            # caller-loop).
+            self._rollback_added_since(before_items)
+            self.log("  [Y] cascade: NO feasible subset (size 1 also "
+                     "failed) — restoring snapshot, deferring to "
+                     "per-net sequential pass")
+            return {nn: "failed" for nn in unrouted_nets}
+
+        # ── 6. SUCCESS subset. Populate self.committed for each rescued
+        # net so rip_net / provenance stays compatible. The board state
+        # already contains the rescued nets' tracks from the winning
+        # _attempt() call.
+        # NB: self.committed[net] = (cells, added). For K3 fallback the
+        # cells set is empty (planner doesn't use CongestionGrid); the
+        # added list = the tracks attributable to the net.
+        # We re-compute per-net added items by looking at the joint
+        # adapter's per_net.added_keys.
+        # Re-call: we need the LAST attempt's per_net dict. Refactor:
+        # _attempt() returns verdicts; we re-attempt to capture per_net.
+        # Simpler: re-run the winning attempt ONE more time after restore.
+        self._rollback_added_since(before_items)
+        try:
+            res = PC.fill_region_with_multi_mech_joint(
+                plan, region,
+                net_pairs_by_net={n: net_pairs_by_net[n]
+                                  for n in best_subset},
+                board=self.board,
+                board_path=board_path,
+                output_path=board_path,
+                width_mm_by_net=width_mm_by_net,
+                clearance_fos_mm=PC.MAZE_DEFAULT_CLEARANCE_FOS_MM,
+                grid_pitch_mm=self.grid_pitch,
+                max_chain_depth=K3_RESCUE_CHAIN_DEPTH,
+                net_order=best_subset,
+                dry_run=False,
+            )
+        except Exception as exc:
+            self.log(f"  [.] JOINT K3 final commit raised "
+                     f"{type(exc).__name__}: {exc} — restoring snapshot")
+            self._rollback_added_since(before_items)
+            return {nn: "failed" for nn in unrouted_nets}
+
+        # Per-net commit bookkeeping.
+        for nn in best_subset:
+            entry = res.get("per_net", {}).get(nn, {})
+            if entry.get("status") != "routed":
+                # Defensive: should not happen given _attempt agreed.
+                continue
+            # Compute added_items list for this net from added_keys.
+            added_key_set = set(entry.get("added_keys", []))
+            added_items = [t for t in self.board.GetTracks()
+                           if self._stable_item_key(t) in added_key_set]
+            self.committed[nn] = (set(), added_items)
+            # Log chain summary.
+            for r in entry.get("routes", []):
+                if r.get("status") == "routed":
+                    chain = r.get("via_chain", [])
+                    self.log(f"      [Y] {nn} "
+                             f"{r.get('start')}->{r.get('end')}: "
+                             f"chain={chain} "
+                             f"len_mm={r.get('length_mm', 0.0):.2f}")
+
+        out = {nn: "routed" for nn in best_subset}
+        for nn in unrouted_nets:
+            if nn not in out:
+                out[nn] = "failed"
+        return out
 
     def _rollback_added_since(self, before_item_keys):
         """Per-net atomic rollback helper for the K3 fallback. Removes
