@@ -1,0 +1,276 @@
+[coop] layer-pref-bias: ON (v5 per-net-class layer cost multiplier; BEMF→In4, PWM/CSA→In2, SWD/GH/GL/BST→In8, etc.)
+[coop] via-in-pad-allowed: ON (v6 HDI whitelist=['J18', 'J19']; unblocks J18/J19 QFN escape per worker per-pin diagnosis)
+[coop] HDI via-in-pad: skipped via-keepout on 113 pad-layer entries (whitelist=['J18', 'J19']; expected ~50-60 for J18 32 sigpads + J19 24 sigpads on F.Cu)
+[coop] 5 target nets in CH1: PWM_INHB_CH1, PWM_INLA_CH1, GLB_CH1, KILL_RAIL_N_CH1, SWDIO_CH1
+
+[coop] === Iteration 1/30 (present_factor=1.00) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=1)
+  [.] PWM_INLA_CH1: FAILED (fail_count=1)
+  [.] GLB_CH1: FAILED (fail_count=1)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=1)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 2/30 (present_factor=1.40) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=2)
+  [.] PWM_INLA_CH1: FAILED (fail_count=2)
+  [.] GLB_CH1: FAILED (fail_count=2)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=2)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 3/30 (present_factor=1.96) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=3)
+  [.] PWM_INLA_CH1: FAILED (fail_count=3)
+  [.] GLB_CH1: FAILED (fail_count=3)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=3)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 4/30 (present_factor=2.74) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=4)
+  [.] PWM_INLA_CH1: FAILED (fail_count=4)
+  [.] GLB_CH1: FAILED (fail_count=4)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=4)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 5/30 (present_factor=3.84) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=5)
+  [.] PWM_INLA_CH1: FAILED (fail_count=5)
+  [.] GLB_CH1: FAILED (fail_count=5)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=5)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 6/30 (present_factor=5.38) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=6)
+  [.] PWM_INLA_CH1: FAILED (fail_count=6)
+  [.] GLB_CH1: FAILED (fail_count=6)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=6)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 7/30 (present_factor=7.53) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=7)
+  [.] PWM_INLA_CH1: FAILED (fail_count=7)
+  [.] GLB_CH1: FAILED (fail_count=7)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=7)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 8/30 (present_factor=10.54) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=8)
+  [.] PWM_INLA_CH1: FAILED (fail_count=8)
+  [.] GLB_CH1: FAILED (fail_count=8)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=8)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 9/30 (present_factor=14.76) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=9)
+  [.] PWM_INLA_CH1: FAILED (fail_count=9)
+  [.] GLB_CH1: FAILED (fail_count=9)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=9)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 10/30 (present_factor=20.66) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=10)
+  [.] PWM_INLA_CH1: FAILED (fail_count=10)
+  [.] GLB_CH1: FAILED (fail_count=10)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=10)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 11/30 (present_factor=28.93) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=11)
+  [.] PWM_INLA_CH1: FAILED (fail_count=11)
+  [.] GLB_CH1: FAILED (fail_count=11)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=11)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 12/30 (present_factor=40.50) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=12)
+  [.] PWM_INLA_CH1: FAILED (fail_count=12)
+  [.] GLB_CH1: FAILED (fail_count=12)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=12)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 13/30 (present_factor=56.69) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=13)
+  [.] PWM_INLA_CH1: FAILED (fail_count=13)
+  [.] GLB_CH1: FAILED (fail_count=13)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=13)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 14/30 (present_factor=79.37) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=14)
+  [.] PWM_INLA_CH1: FAILED (fail_count=14)
+  [.] GLB_CH1: FAILED (fail_count=14)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=14)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 15/30 (present_factor=111.12) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=15)
+  [.] PWM_INLA_CH1: FAILED (fail_count=15)
+  [.] GLB_CH1: FAILED (fail_count=15)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=15)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 16/30 (present_factor=155.57) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=16)
+  [.] PWM_INLA_CH1: FAILED (fail_count=16)
+  [.] GLB_CH1: FAILED (fail_count=16)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=16)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 17/30 (present_factor=217.80) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=17)
+  [.] PWM_INLA_CH1: FAILED (fail_count=17)
+  [.] GLB_CH1: FAILED (fail_count=17)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=17)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 18/30 (present_factor=304.91) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=18)
+  [.] PWM_INLA_CH1: FAILED (fail_count=18)
+  [.] GLB_CH1: FAILED (fail_count=18)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=18)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 19/30 (present_factor=426.88) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=19)
+  [.] PWM_INLA_CH1: FAILED (fail_count=19)
+  [.] GLB_CH1: FAILED (fail_count=19)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=19)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 20/30 (present_factor=597.63) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=20)
+  [.] PWM_INLA_CH1: FAILED (fail_count=20)
+  [.] GLB_CH1: FAILED (fail_count=20)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=20)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 21/30 (present_factor=836.68) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=21)
+  [.] PWM_INLA_CH1: FAILED (fail_count=21)
+  [.] GLB_CH1: FAILED (fail_count=21)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=21)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 22/30 (present_factor=1171.36) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=22)
+  [.] PWM_INLA_CH1: FAILED (fail_count=22)
+  [.] GLB_CH1: FAILED (fail_count=22)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=22)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 23/30 (present_factor=1639.90) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=23)
+  [.] PWM_INLA_CH1: FAILED (fail_count=23)
+  [.] GLB_CH1: FAILED (fail_count=23)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=23)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 24/30 (present_factor=2295.86) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=24)
+  [.] PWM_INLA_CH1: FAILED (fail_count=24)
+  [.] GLB_CH1: FAILED (fail_count=24)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=24)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 25/30 (present_factor=3214.20) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=25)
+  [.] PWM_INLA_CH1: FAILED (fail_count=25)
+  [.] GLB_CH1: FAILED (fail_count=25)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=25)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 26/30 (present_factor=4499.88) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=26)
+  [.] PWM_INLA_CH1: FAILED (fail_count=26)
+  [.] GLB_CH1: FAILED (fail_count=26)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=26)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 27/30 (present_factor=6299.83) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=27)
+  [.] PWM_INLA_CH1: FAILED (fail_count=27)
+  [.] GLB_CH1: FAILED (fail_count=27)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=27)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 28/30 (present_factor=8819.76) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=28)
+  [.] PWM_INLA_CH1: FAILED (fail_count=28)
+  [.] GLB_CH1: FAILED (fail_count=28)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=28)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 29/30 (present_factor=12347.67) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=29)
+  [.] PWM_INLA_CH1: FAILED (fail_count=29)
+  [.] GLB_CH1: FAILED (fail_count=29)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=29)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] === Iteration 30/30 (present_factor=17286.74) ===
+  [.] PWM_INHB_CH1: FAILED (fail_count=30)
+  [.] PWM_INLA_CH1: FAILED (fail_count=30)
+  [.] GLB_CH1: FAILED (fail_count=30)
+  [!] KILL_RAIL_N_CH1: MST-ROUTED but VERIFY-SPLIT (2 islands: [['J19.8', 'D38.2', 'D37.2'], ['R76.1']]) — ripping + retry
+  [.] SWDIO_CH1: FAILED (fail_count=30)
+  pass result: routed=0 partial=0 still_unrouted=5 repairs_ok=0 open_partials=1
+
+[coop] DONE. full_routed=0/5 partial=0 unrouted=5 iterations=30 ripups=30 elapsed=101.4s
+
+[coop] multi-mech fallback (CH1 30/30 lever K3): attempting 5 unrouted net(s)
+  [.] PWM_INHB_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+      pair J18.15->J19.1: chain=[] len_mm=17.13 tracks=5 vias=0
+  [+] PWM_INLA_CH1: routed via multi-mech chain
+  [.] GLB_CH1: K3 multi-mech aggregate status=partial (0/1 pairs routed) — atomic rollback (per-net)
+  [.] KILL_RAIL_N_CH1: K3 multi-mech aggregate status=partial (0/2 pairs routed) — atomic rollback (per-net)
+      pair J18.23->TP22.1: chain=['through'] len_mm=8.07 tracks=2 vias=1
+  [+] SWDIO_CH1: routed via multi-mech chain
+[coop] multi-mech fallback done; remaining unrouted = 3
+[coop] UNROUTED nets: ['PWM_INHB_CH1', 'GLB_CH1', 'KILL_RAIL_N_CH1']
+[coop] PARTIAL nets (with unrouted pad-pairs):
+  KILL_RAIL_N_CH1: [('J19.8', 'R76.1')]
+[coop] K2 partial-MST provenance: wrote 120 entry(ies)
+
+[targeted-ripup] cooperative plateau at 2 routed / 3 residual; engaging targeted ripup-rebuild phase (R36-R39 + R-J5; depth ≤ 2; provenance under sims/routing_provenance/targeted_ripup/)
+/home/novatics64/escworker/pcb.ai/hardware/kicad/scripts/route_subsystem_cooperative.py:4170: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  timestamp_iso=_tr_dt.datetime.utcnow().isoformat() + "Z",
+[targeted-ripup] KILL_RAIL_N_CH1: ROLLBACK — no_conflict (corridor unobstructed by foreigns)
+[targeted-ripup] GLB_CH1: ROLLBACK — no_conflict (corridor unobstructed by foreigns)
+[targeted-ripup] PWM_INHB_CH1: ROLLBACK — no_conflict (corridor unobstructed by foreigns)
+[targeted-ripup] phase done: 0/3 attempts committed.
+
+[leaf-route] cooperative + targeted-ripup phases done; scanning committed nets for disconnected leaves (lever Q; R42 / G_Q1; provenance under sims/routing_provenance/leaf_route/)
+[leaf-route] no disconnected leaves found (vacuous-PASS — every committed net is single-island)
+[leaf-route] phase done: 0/0 leaf-attempts committed.
+
+Saved: /tmp/post_route2.kicad_pcb
+Result: full=2/5 partial=0 unrouted=3, 30 iterations, 30 ripups
+Report: /tmp/coop_report2.json
