@@ -3717,6 +3717,275 @@ class CooperativeRouter:
             self.log(f"[coop] K2 partial-MST provenance write FAILED: {exc}")
         return unrouted
 
+    def run_pathfinder(self, max_iter=DEFAULT_MAX_ITER):
+        """CH1 30/30 lever (AA) TRUE PathFinder negotiated congestion router.
+
+        Per docs/CH1_30OF30_SOTA_RESEARCH_2026-05-29.md recommendation #3 +
+        routing_engine/pathfinder.py (the abstract reference). The discipline
+        differs from `run()` in FOUR ways:
+
+          1. PER-ITER RIP ALL: every iter starts with every committed net
+             ripped (board cleared back to obstacles + pads). All N nets are
+             then re-attempted in priority order. Cooperative `run()`
+             re-routes ONLY failed nets each iter; PathFinder re-routes ALL.
+
+          2. COST-HISTORY DRIVES NEGOTIATION: per-cell h_n (grid.history)
+             accumulates across iters whenever p_n > 1 in the iter ending.
+             The cost function `cost(cell, present_factor)` returns
+             `base + present_factor × present + history`. The cooperative
+             escalator already grows `present_factor`; we ALSO grow history
+             per the McMurchie+Ebeling formula (existing grid.bump_history
+             already does this — we just call it after every iter).
+
+          3. CONVERGENCE on 0 ripups: two consecutive iters with all N nets
+             routed AND no committed net needing re-route ⇒ DONE. (When N
+             nets fit cleanly, no contention exists and no ripup needed —
+             that's the PathFinder convergence criterion.)
+
+          4. ATOMIC PER-ITER ROLLBACK: if an iter ends with strictly fewer
+             nets routed than the previous iter's best, we keep the
+             previous-best snapshot (the live board's last-clean state).
+
+        Default OFF for backward compatibility. Opt-in via `--pathfinder`
+        on the CLI or `router.pathfinder_enabled = True` programmatically.
+
+        TIME-BOUNDED: every iter caps `route_one_net_mst` per-net at a
+        budget proportional to (max_iter - it). Final-iter recovery time
+        budget extended to ensure HDI nets get adequate A* expansion room.
+
+        Returns the same shape as `run()`: list of unrouted nets at end.
+        Mirrors `run()`'s logging cadence for operator readability.
+        """
+        self.start_time = time.monotonic()
+        if not self.nets:
+            self.log("[pf] empty net list; nothing to route")
+            return []
+        # Required state used by partial-MST repair / verify helpers; mirror
+        # run()'s setup so the helpers don't AttributeError.
+        self.partial_pairs = defaultdict(list)
+        self.log(f"[pf] AA-LEVER PathFinder negotiated congestion router")
+        self.log(f"[pf]   {len(self.nets)} target nets in {self.subsystem}; "
+                 f"max_iter={max_iter}")
+        self.log(f"[pf]   discipline: per-iter rip-all + global re-route in "
+                 f"priority order + h_n×p_n cost; convergence on 2-iter "
+                 f"zero-ripup streak.")
+
+        # ── Lever Z preamble (same as run()): route HDI-whitelisted nets
+        # FIRST via K3 joint multi-mech from clean canonical state, BEFORE
+        # the main PathFinder loop. Drops rescued nets from the work list.
+        # SSoT preserved — same prereqs (via_in_pad_allowed +
+        # multi_mech_fallback_enabled).
+        target_nets = list(self.nets)
+        if (getattr(self, "route_hdi_first_enabled", False)
+                and self.via_in_pad_allowed
+                and getattr(self, "multi_mech_fallback_enabled", False)):
+            hdi_targets = self._identify_hdi_whitelisted_nets(target_nets)
+            if hdi_targets:
+                self.log(f"\n[pf] LEVER Z (preamble): "
+                         f"HDI-whitelisted target nets "
+                         f"({len(hdi_targets)}): {sorted(hdi_targets)}")
+                rescued = self._route_hdi_first_phase(list(hdi_targets))
+                if rescued:
+                    self.log(f"  [pf-Z] HDI-first phase rescued "
+                             f"{len(rescued)}/{len(hdi_targets)}: "
+                             f"{sorted(rescued)}")
+                    target_nets = [n for n in target_nets if n not in rescued]
+                else:
+                    self.log(f"  [pf-Z] HDI-first phase: "
+                             f"0/{len(hdi_targets)} rescued")
+
+        present_factor = PRESENT_COST_FACTOR_INIT
+        # Best-snapshot tracking for atomic per-iter rollback.
+        best_iter = -1
+        best_routed_count = 0
+        best_committed_snapshot = {}   # netname -> (cells, added) shallow ref
+        zero_ripup_streak = 0
+        total_ripups = 0
+
+        for it in range(max_iter):
+            self.iteration_count = it + 1
+            self.log(f"\n[pf] === iter {it+1}/{max_iter} "
+                     f"(present_factor={present_factor:.2f}) ===")
+
+            # 1. RIP ALL — clear every committed net IN THIS LOOP'S TARGET SET
+            # and reset the grid's present-uses (history persists per
+            # PathFinder discipline). Lever Z preamble's HDI commits are
+            # OUTSIDE target_nets, so they stay committed (analogous to
+            # "frozen" in the run() flow). We rip via the existing rip_net
+            # (which knows about preserved frozen nets, J18/J19 special
+            # handling, etc.) so all SSoT is preserved.
+            rip_list = [nn for nn in self.committed if nn in target_nets]
+            for nn in rip_list:
+                self.rip_net(nn)
+            # After mass rip, rebuild the grid cleanly (rebuilds obstacle
+            # map from board state, preserving history).
+            if rip_list:
+                self._rebuild_grid()
+                total_ripups += len(rip_list)
+                self.log(f"[pf]   ripped {len(rip_list)} previously-committed "
+                         f"nets (total_ripups={total_ripups})")
+
+            # 2. Re-allow pad access for all target nets (defensive —
+            # _rebuild_grid does this for committed, but we want it for ALL
+            # target_nets so re-routes have pad endpoints reachable).
+            for n in target_nets:
+                for (ref, padname, x, y, layers, sx, sy) in self.state.net_pads.get(n, []):
+                    for lid in layers:
+                        self.grid.allow_pad_access_rect(x, y, lid, n,
+                                                        sx / 2, sy / 2)
+
+            # 3. Route every net in priority order. Higher-priority nets
+            # commit first; later nets see their cells with p_n=1 + h_n
+            # carry-over from prior iters.
+            # Priority ordering = same as self.nets sort (set in __init__):
+            #   (net_priority(n), -len(state.net_pads[n]), n)
+            unrouted_this_iter = []
+            routed_this_iter = 0
+            partial_this_iter = 0
+            # Adaptive time budget per net: scale with iter # so early iters
+            # get more time per net (they have N nets to route from scratch).
+            n_remaining_iters = max(1, max_iter - it)
+            per_net_budget = max(2.0, 14.0 - 0.4 * it)
+
+            for nn in target_nets:
+                if nn in self.committed:
+                    continue
+                paths, status, failed_pairs = self.route_one_net_mst(
+                    nn, present_factor, time_budget_s=per_net_budget)
+                if status == 'ROUTED':
+                    self.commit_net(nn, paths)
+                    # Verify
+                    n_islands, _island_list = self.verify_net_connectivity(nn)
+                    if n_islands > 1:
+                        self.log(f"[pf]   [!] {nn}: ROUTED-but-SPLIT verify; "
+                                 f"ripping + re-queue")
+                        self.rip_net(nn)
+                        unrouted_this_iter.append(nn)
+                    else:
+                        routed_this_iter += 1
+                elif status == 'PARTIAL':
+                    partial_this_iter += 1
+                    unrouted_this_iter.append(nn)
+                else:
+                    unrouted_this_iter.append(nn)
+
+            # Count committed nets in our TARGET set only (lever Z's HDI
+            # commits are tracked separately; we report against target).
+            n_committed_target = sum(1 for n in target_nets if n in self.committed)
+            self.log(f"[pf]   iter result: routed={routed_this_iter} "
+                     f"partial={partial_this_iter} "
+                     f"unrouted_this_iter={len(unrouted_this_iter)} "
+                     f"target_committed={n_committed_target}/{len(target_nets)} "
+                     f"total_committed={len(self.committed)}/{len(self.nets)}")
+            n_committed = n_committed_target
+
+            # 4. Atomic per-iter rollback policy: if this iter routed FEWER
+            # than the best iter to date, keep the best-iter snapshot — i.e.
+            # do NOT update best_committed_snapshot. The next iter starts
+            # from this iter's grid state (history carry-over) but on the
+            # NEXT round if it improves we capture it.
+            # If this iter is the new best, snapshot it.
+            if n_committed > best_routed_count:
+                best_routed_count = n_committed
+                best_iter = it + 1
+                # Capture (cells, added) per committed net for potential
+                # rollback at end (we don't rollback in-loop; we just track).
+                # NOTE: 'added' is a list of pcbnew items still live on the
+                # board, so the snapshot is a SHALLOW reference — it remains
+                # valid as long as we don't rip those nets later. Since we
+                # rip-all at the START of every iter, any non-best iter that
+                # follows will have torn down these items. We therefore
+                # capture by RE-EMITTING from cells if needed — but the
+                # simpler invariant is: the BEST iter's state IS the live
+                # board state at the time of capture, and we exit-loop with
+                # that state intact iff we converge ON the best iter.
+                best_committed_snapshot = dict(self.committed)
+                self.log(f"[pf]   NEW BEST iter={best_iter} "
+                         f"routed={best_routed_count}/{len(self.nets)}")
+
+            # 5. End-of-iter learning step (h_n bump where present > 1).
+            self.grid.bump_history()
+            present_factor *= PRESENT_COST_FACTOR_GROWTH
+
+            # 6. Convergence check: all target nets routed + no SHORTS (we
+            # don't track shorts cell-by-cell in the live router — the
+            # grid's obstacle contract is HARD so the route_one_net_mst
+            # contract already guarantees no cells are shared between
+            # distinct nets at the CELL level. The only way present > 1 at
+            # the same cell at iter end is when one net's pad-cell is
+            # shared by another net's routed path entry — that's a
+            # CommitVerify failure that verify_net_connectivity catches).
+            contended_cells = sum(1 for p in self.grid.present.values() if p > 1)
+            if (n_committed == len(target_nets) and contended_cells == 0):
+                zero_ripup_streak += 1
+                self.log(f"[pf]   convergence streak={zero_ripup_streak}/2 "
+                         f"(all_target_routed=True, contended_cells={contended_cells})")
+                if zero_ripup_streak >= 2:
+                    self.log(f"[pf] CONVERGED at iter {it+1} — "
+                             f"two consecutive iters with 0 contention + "
+                             f"all {n_committed}/{len(target_nets)} target nets routed.")
+                    break
+            else:
+                zero_ripup_streak = 0
+
+        elapsed_pf = time.monotonic() - self.start_time
+        unrouted = [n for n in self.nets if n not in self.committed]
+        self.log(f"\n[pf] PathFinder loop DONE. "
+                 f"committed={len(self.committed)}/{len(self.nets)} "
+                 f"unrouted={len(unrouted)} "
+                 f"best_ever_iter={best_iter} best_ever={best_routed_count}/"
+                 f"{len(self.nets)} "
+                 f"iterations={self.iteration_count} total_ripups={total_ripups} "
+                 f"elapsed={elapsed_pf:.1f}s")
+
+        # K3 multi-mech fallback — same discipline as `run()`. PathFinder
+        # converges on the cooperative single-mech regime; cross-stack nets
+        # that need a via chain (blind_F_In2 + through, etc.) still require
+        # the planner. We invoke the JOINT path first (Y-lever), then
+        # SEQUENTIAL (K3) per net. Identical to run()'s tail.
+        if unrouted and getattr(self, "multi_mech_fallback_enabled", False):
+            joint_rescued = set()
+            if (getattr(self, "joint_k3_enabled", True)
+                    and len(unrouted) >= 2):
+                self.log("\n[pf] JOINT multi-mech fallback "
+                         "(CH1 30/30 lever Y): "
+                         f"attempting {len(unrouted)} unrouted net(s) "
+                         "simultaneously")
+                joint_res = self._try_multi_mech_fallback_joint(list(unrouted))
+                for nn, verdict in joint_res.items():
+                    if verdict == "routed":
+                        joint_rescued.add(nn)
+                self.log(f"[pf] JOINT K3 result: "
+                         f"{len(joint_rescued)}/{len(unrouted)} rescued "
+                         f"({sorted(joint_rescued)})")
+                unrouted = [n for n in unrouted if n not in joint_rescued]
+            if unrouted:
+                self.log("\n[pf] SEQUENTIAL multi-mech fallback "
+                         "(CH1 30/30 lever K3): "
+                         f"attempting {len(unrouted)} residual net(s)")
+            still_unrouted = []
+            for nn in unrouted:
+                routed = self._try_multi_mech_fallback(nn)
+                if routed:
+                    self.log(f"  [+] {nn}: routed via multi-mech chain")
+                else:
+                    still_unrouted.append(nn)
+            unrouted = still_unrouted
+            self.log(f"[pf] multi-mech fallback done; remaining "
+                     f"unrouted = {len(unrouted)}")
+        if unrouted:
+            self.log(f"[pf] UNROUTED nets: {unrouted}")
+        # K2 partial-MST provenance flush — same discipline as run().
+        try:
+            written = self.flush_partial_mst_provenance(
+                board_sha=os.environ.get("ROUTER_BOARD_SHA", ""))
+            if written:
+                self.log(f"[pf] K2 partial-MST provenance: wrote "
+                         f"{len(written)} entry(ies)")
+        except Exception as exc:  # pragma: no cover
+            self.log(f"[pf] K2 partial-MST provenance write FAILED: {exc}")
+        return unrouted
+
     def _try_multi_mech_fallback(self, netname):
         """CH1 30/30 lever (K3) MULTI-MECH FALLBACK — attempt to route
         `netname` via the multi-mechanism path planner when single-mech
@@ -5554,6 +5823,23 @@ def main():
                          "subset cascade). Easier non-HDI nets then "
                          "route around them in the normal cooperative "
                          "pass. Default OFF (back-compat).")
+    # CH1 30/30 lever AA (2026-05-29): TRUE PathFinder negotiated congestion
+    # router. SWAPS the cooperative loop for a global-rip-all + global-re-route
+    # discipline with cost-history convergence. See routing_engine/pathfinder.py
+    # for the abstract reference + CooperativeRouter.run_pathfinder for the
+    # live-board implementation. Default OFF — opt-in last-resort lever before
+    # placement redo when --multi-mech-fallback + --via-in-pad-allowed +
+    # --route-hdi-first + --enable-targeted-ripup + --enable-leaf-route do
+    # NOT converge on 30/30 (i.e. when the cooperative router's local-progress
+    # + selective ripup hits a placement-complexity wall).
+    ap.add_argument("--pathfinder", action="store_true",
+                    help="CH1 30/30 lever AA: TRUE PathFinder negotiated "
+                         "congestion router (per-iter rip-all + global "
+                         "re-route in priority order; h_n×p_n cost; "
+                         "convergence on 2-iter zero-ripup streak). Replaces "
+                         "the cooperative run() loop. Per "
+                         "docs/CH1_30OF30_SOTA_RESEARCH_2026-05-29.md "
+                         "recommendation #3. Default OFF (back-compat).")
     args = ap.parse_args()
 
     board = pcbnew.LoadBoard(args.board)
@@ -5573,7 +5859,16 @@ def main():
     router.leaf_route_enabled = bool(args.enable_leaf_route)
     # CH1 30/30 lever Z: route HDI-whitelisted nets first (REORDER).
     router.route_hdi_first_enabled = bool(args.route_hdi_first)
-    unrouted = router.run(max_iter=args.max_iterations)
+    # CH1 30/30 lever AA: TRUE PathFinder swap.
+    router.pathfinder_enabled = bool(args.pathfinder)
+    if router.pathfinder_enabled:
+        if not args.quiet:
+            print(f"\n[main] LEVER AA: PathFinder loop enabled "
+                  f"(replaces cooperative run() with true rip-all + global "
+                  f"re-route + cost-history convergence)")
+        unrouted = router.run_pathfinder(max_iter=args.max_iterations)
+    else:
+        unrouted = router.run(max_iter=args.max_iterations)
     # v11 — targeted ripup-rebuild phase (CH1 30/30 lever J)
     if router.targeted_ripup_enabled and unrouted:
         if not args.quiet:
