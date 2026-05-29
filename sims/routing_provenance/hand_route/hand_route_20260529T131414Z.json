@@ -1,0 +1,22 @@
+{
+  "input": "hardware/kicad/pcbai_fpv4in1.kicad_pcb",
+  "output": "/tmp/board_hand4.kicad_pcb",
+  "dry_run": true,
+  "summary": {
+    "GLB_CH1": {
+      "status": "COLLISION",
+      "issues_count": 8,
+      "issues_sample": [
+        "  seg0 (24.45, 64.46)\u2192(28.0, 64.46) on In8.Cu: track 'BSTC_CH1' on In8.Cu d=0.211mm < 0.290mm",
+        "  seg0 (24.45, 64.46)\u2192(28.0, 64.46) on In8.Cu: track 'GHC_CH1' on In8.Cu d=0.200mm < 0.290mm",
+        "  seg1 (28.0, 64.46)\u2192(28.0, 78.0) on In8.Cu: track 'BSTC_CH1' on In8.Cu d=0.211mm < 0.290mm",
+        "  seg1 (28.0, 64.46)\u2192(28.0, 78.0) on In8.Cu: track 'GHC_CH1' on In8.Cu d=0.200mm < 0.290mm",
+        "  seg2 (28.0, 78.0)\u2192(6.81, 78.0) on In8.Cu: track 'BSTC_CH1' on In8.Cu d=0.211mm < 0.290mm",
+        "  seg2 (28.0, 78.0)\u2192(6.81, 78.0) on In8.Cu: track 'GHC_CH1' on In8.Cu d=0.200mm < 0.290mm",
+        "  seg2 (28.0, 78.0)\u2192(6.81, 78.0) on In8.Cu: pad TP21.1 net='MOTOR_C_CH1' on In8.Cu d=0.200mm < 0.490mm",
+        "  seg2 (28.0, 78.0)\u2192(6.81, 78.0) on In8.Cu: pad TP21.1 net='MOTOR_C_CH1' on In8.Cu d=0.200mm < 0.490mm"
+      ]
+    }
+  },
+  "timestamp_utc": "20260529T131414Z"
+}
