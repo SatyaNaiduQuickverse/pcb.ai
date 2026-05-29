@@ -3607,9 +3607,9 @@ class CooperativeRouter:
                 routed = self._try_multi_mech_fallback(nn)
                 if routed:
                     self.log(f"  [+] {nn}: routed via multi-mech chain")
-                    self.committed[nn] = None    # mark committed (paths
-                                                  # emitted directly by the
-                                                  # fallback path)
+                    # _try_multi_mech_fallback already populated
+                    # self.committed[nn] = (set(), added_items) so
+                    # rip_net (cells, added unpack) stays compatible.
                 else:
                     still_unrouted.append(nn)
             unrouted = still_unrouted
@@ -3643,51 +3643,251 @@ class CooperativeRouter:
         CONTRACT
             INPUTS: netname (str) — a net in self.state.net_pads still
                     unrouted after cooperative iterations.
-            BEHAVIOUR: build per-pair (start_pad, end_pad) plans via
-                    multi_mech_planner.plan_multi_mech_route, restricted
-                    to the cooperative router's via class SSoT
-                    (via_class_for_span / via_span_layers), with HDI
-                    whitelist honoured via the per-pin HDI flag. Vias
-                    returned by the planner are emitted through the SAME
-                    PCB_VIA / PCB_TRACK construction the cooperative
-                    router uses (no SSoT bypass).
-            OUTPUT: True iff the net was routed end-to-end via the chain;
-                    False otherwise (caller carries the verdict).
+            BEHAVIOUR: build a minimal Phase-B GlobalPlan
+                    ({"verdict": "ROUTABLE"}) + RegionSpec covering the
+                    cooperative router's subsystem zone + the net's
+                    in-zone pads. Delegate to
+                    phase_c.fill_region_with_multi_mech with the live
+                    board. The adapter:
+                      (a) builds the BOUNDED MultiMechInvocation from
+                          our RegionSpec (allowed_via_classes derived
+                          from region.via_budget + hdi_refs — same SSoT
+                          as via_class_for_span / via_halo_radius_mm);
+                      (b) extracts per-layer body keep-outs from the
+                          live board's footprints (region-bounded);
+                      (c) calls multi_mech_planner.plan_multi_mech_route
+                          per pad-pair (region-confined + expansion-
+                          capped + chain-depth-bounded);
+                      (d) pre-emit validates every via against the
+                          allowed_via_classes (defense-in-depth on top
+                          of the planner's candidate_via_classes) +
+                          per-class halo against per-layer obstacle
+                          filter (shorts-gate semantics);
+                      (e) emits PCB_TRACK + PCB_VIA records via the
+                          SAME emit path (drill/pad/SetViaType/
+                          SetLayerPair) the cooperative router uses
+                          (NO SSoT bypass: the adapter's emit helper
+                          delegates to route_subsystem_cooperative.
+                          emit_to_board internals).
 
-        This is intentionally CONSERVATIVE — when in doubt, returns False
-        and lets the caller report NO-PATH. The K3 capability is unlocked
-        OPT-IN via --multi-mech-fallback; the default flow is unchanged.
+            ROLLBACK: ATOMIC PER-NET. We snapshot the live board's
+                track-set BEFORE the call; if the aggregate adapter
+                status is not 'routed' (any pair failed for any
+                reason), every track/via added during the call is
+                removed before we return False. The half-routed net
+                NEVER lingers on the board. This is the per-net
+                analog of phase_c's per-pair rollback (the adapter
+                rolls back a pair on pre-emit validation failure;
+                we roll back the whole net on aggregate failure).
 
-        REAL-BOARD WIRING NOTE: the live pad-coord extraction +
-        Obstacle list construction + PCB_TRACK/PCB_VIA emit are the
-        Step-8/CH1 wiring that the run-on-board scripts call. This
-        method is the abstract HOOK; the live wiring belongs in the
-        adapter (phase_c.fill_region_with_multi_mech) so the
-        cooperative router stays pcbnew-light (the cooperative router
-        already lazy-imports pcbnew at module load — we keep the
-        hook here for the routing-loop dispatch but defer the heavy
-        geometry to the adapter)."""
+            OUTPUT: True iff EVERY pad-pair was routed end-to-end via
+                    the multi-mech chain; False otherwise (caller
+                    carries the verdict; board state is restored).
+
+        This is intentionally CONSERVATIVE — when in doubt, returns
+        False and lets the caller report NO-PATH. The K3 capability is
+        unlocked OPT-IN via --multi-mech-fallback; the default flow is
+        unchanged.
+
+        SSoT DISCIPLINE preserved:
+          * via_class_for_span / via_halo_radius_mm — consumed by the
+            adapter's emit helper (via phase_c._emit_plan_to_board ->
+            route_subsystem_cooperative internals). NOT bypassed.
+          * HDI_VIA_IN_PAD_REFS (the J18/J19 whitelist) — drives the
+            region.hdi_refs gate; HDI via classes are allowed ONLY
+            when the net actually touches a whitelisted footprint AND
+            the per-net BLIND_F_IN2_NET_WHITELIST / STACKED whitelist
+            (the audit's canonical list) permits the class. Non-HDI
+            cells get 'through' only.
+          * RegionSpec.bbox = self.zone (the cooperative router's
+            subsystem zone; same SUBSYSTEM_ZONES SSoT as the abstract
+            adapter self-test).
+        """
         # Lazy-import the planner so the cooperative router can be loaded
         # without the planner's heapq-based search if the K3 lever is OFF.
         try:
-            from routing_engine import multi_mech_planner as MMP  # type: ignore
+            from routing_engine import multi_mech_planner as MMP  # type: ignore  # noqa: F401
+            from routing_engine import phase_c as PC  # type: ignore
         except ImportError:
             # Loose-script invocation: the planner sits in the routing_engine
             # package; if it's not importable, the fallback cannot run.
             self.log(f"  [.] {netname}: K3 fallback unavailable "
-                     "(routing_engine.multi_mech_planner not importable)")
+                     "(routing_engine.{multi_mech_planner,phase_c} not "
+                     "importable)")
             return False
 
-        # The live-board pad-coord + obstacle construction is the Step-8
-        # adapter's responsibility (phase_c.fill_region_with_multi_mech).
-        # In this cooperative-router hook we defer to that adapter so the
-        # live geometry stays in one place + the cooperative router stays
-        # focused on the iteration loop. This method documents the
-        # PLUMBING; the adapter does the geometry.
-        self.log(f"  [.] {netname}: K3 fallback delegates to "
-                 "phase_c.fill_region_with_multi_mech (Step-8/CH1 live "
-                 "wiring; see hook docstring for SSoT discipline)")
-        return False
+        # ── 1. Gather the net's in-zone pads (the multi-mech-routable set)
+        # The adapter expects net_pairs as ('<ref>.<pad>', '<ref>.<pad>')
+        # tuples. We take the cooperative router's already-resolved pad
+        # list (self.state.net_pads) and filter to pads inside the zone
+        # bbox — same gate as the cooperative router's own pad-pair walk.
+        pads_all = self.state.net_pads.get(netname, [])
+        zone_xmin, zone_ymin, zone_xmax, zone_ymax = self.zone
+        pads_in_zone = [
+            (ref, padname, x, y, layers, sx, sy)
+            for (ref, padname, x, y, layers, sx, sy) in pads_all
+            if zone_xmin <= x <= zone_xmax and zone_ymin <= y <= zone_ymax
+        ]
+        if len(pads_in_zone) < 2:
+            self.log(f"  [.] {netname}: K3 fallback skipped "
+                     f"(<2 in-zone pads: {len(pads_in_zone)})")
+            return False
+
+        # ── 2. Build the star net_pairs (pad[0] -> pad[1..N-1]). The
+        # cooperative router's MST treats the net as a single tree; for
+        # the K3 cross-stack rescue we take the simplest connected
+        # topology — every leaf to the first pad. The planner's per-pair
+        # A* discovers the right via chain; aggregate atomicity ensures
+        # we get all-or-nothing.
+        ref0, pad0, x0, y0, _layers0, _sx0, _sy0 = pads_in_zone[0]
+        start_ref = f"{ref0}.{pad0}"
+        net_pairs = []
+        for (ref, padname, _x, _y, _layers, _sx, _sy) in pads_in_zone[1:]:
+            net_pairs.append((start_ref, f"{ref}.{padname}"))
+
+        # ── 3. Build the RegionSpec from the cooperative router's zone +
+        # HDI whitelist. HDI budget is granted ONLY when the net touches
+        # a J18/J19 footprint (HDI_VIA_IN_PAD_REFS — the SSoT) AND the
+        # router is run with --via-in-pad-allowed (the operator gate).
+        # Otherwise: 'through' only.
+        hdi_refs_for_net = tuple(
+            r for r in {p[0] for p in pads_in_zone}
+            if r in HDI_VIA_IN_PAD_REFS
+        )
+        # via_budget seeded per pad — a star MST has N-1 edges, each
+        # potentially spending 1-3 vias in the chain (max_chain_depth=3).
+        # Headroom = 4×N is comfortable; HDI budget gated to whitelisted
+        # refs + the operator flag (mirror of the cooperative router).
+        n_pads = len(pads_in_zone)
+        std_budget = max(4, 4 * n_pads)
+        hdi_budget = (max(2, 2 * n_pads)
+                      if (hdi_refs_for_net and self.via_in_pad_allowed)
+                      else 0)
+        # Allowed layers = the cooperative router's SIGNAL_LAYERS, name-
+        # spaced (phase_c expects KiCad layer names). Mirrors
+        # _pin_from_pcbnew's outer-first preference.
+        allowed_layer_names = ("F.Cu", "B.Cu", "In2.Cu", "In4.Cu",
+                               "In6.Cu", "In8.Cu")
+        region = PC.RegionSpec(
+            subsystem=self.subsystem,
+            bbox=(float(zone_xmin), float(zone_ymin),
+                  float(zone_xmax), float(zone_ymax)),
+            allowed_layers=allowed_layer_names,
+            via_budget={"std": std_budget, "hdi": hdi_budget},
+            hdi_refs=hdi_refs_for_net,
+            net_names=(netname,),
+        )
+
+        # ── 4. Snapshot the board's track/via items BEFORE the adapter
+        # call so we can roll back atomically on aggregate failure. The
+        # snapshot uses object identity (pcbnew object pointers); any
+        # item present after the call but NOT in the snapshot was added
+        # by phase_c and is eligible for rollback.
+        try:
+            import pcbnew  # noqa: F401  (already imported at module load)
+        except Exception:
+            self.log(f"  [.] {netname}: K3 fallback unavailable "
+                     "(pcbnew not importable for rollback snapshot)")
+            return False
+        before_items = set(id(t) for t in self.board.GetTracks())
+
+        # ── 5. Minimal Phase-B GlobalPlan: a dict with verdict ROUTABLE.
+        # The adapter's verdict gate accepts this (same gate as the maze
+        # + cooperative adapters); the bounded MultiMechInvocation is
+        # built from the RegionSpec, NOT from the plan internals — so a
+        # minimal-dict plan is sufficient for the K3 caller-side glue.
+        plan = {"verdict": "ROUTABLE"}
+
+        # ── 6. Resolve a stable board_path for the adapter signature.
+        # The adapter requires NON-EMPTY board_path + output_path strings
+        # to enter the live-fill branch (it's a sanity gate from the
+        # documented contract: "no live BOARD / board_path / output_path
+        # / net_pairs"). The live emit writes through `board` directly
+        # (the file paths are documentary/logging — the adapter does
+        # NOT call pcbnew.SaveBoard). When the loaded board has no
+        # filename (e.g. in-memory synthetic test board), we fall back
+        # to a synthetic placeholder so the live-fill branch fires.
+        try:
+            board_path = self.board.GetFileName() or "<synthetic>.kicad_pcb"
+        except Exception:
+            board_path = "<synthetic>.kicad_pcb"
+
+        # ── 7. Delegate to phase_c.fill_region_with_multi_mech. The
+        # adapter handles per-pair planning + pre-emit validation +
+        # PCB_TRACK / PCB_VIA emission. We treat its aggregate status
+        # as the verdict; any non-'routed' aggregate triggers the
+        # per-net atomic rollback below.
+        try:
+            res = PC.fill_region_with_multi_mech(
+                plan, region,
+                board=self.board,
+                board_path=board_path,
+                output_path=board_path,   # read-only: adapter doesn't write
+                net_pairs=net_pairs,
+                width_mm=width_for(netname),
+                clearance_fos_mm=PC.MAZE_DEFAULT_CLEARANCE_FOS_MM,
+                grid_pitch_mm=self.grid_pitch,
+                max_chain_depth=PC.MULTI_MECH_DEFAULT_CHAIN_DEPTH,
+                dry_run=False,
+            )
+        except Exception as exc:
+            # Defense in depth: an unexpected adapter exception leaves
+            # the board in a half-emitted state. Roll back to the
+            # snapshot, log loudly, return False.
+            self.log(f"  [.] {netname}: K3 adapter raised {type(exc).__name__}: "
+                     f"{exc} — rolling back")
+            self._rollback_added_since(before_items)
+            return False
+
+        status = res.get("status", "error")
+        routes = res.get("routes", [])
+
+        # ── 8. Atomicity gate. Only an aggregate 'routed' status (every
+        # pair landed) is accepted. Any 'partial' (some pair NO-PATH /
+        # skipped / rollback) triggers full per-net rollback.
+        if status != "routed":
+            n_routed = sum(1 for r in routes if r.get("status") == "routed")
+            n_total = len(routes)
+            self.log(f"  [.] {netname}: K3 multi-mech aggregate "
+                     f"status={status} ({n_routed}/{n_total} pairs "
+                     f"routed) — atomic rollback (per-net)")
+            self._rollback_added_since(before_items)
+            return False
+
+        # ── 9. SUCCESS. Bookkeeping: record the per-net added items so
+        # rip_net (if ever called later) can remove our emit. We use the
+        # established self.committed[net] = (cells, added) schema; the
+        # cells set is empty because the multi-mech planner does NOT
+        # use the cooperative router's CongestionGrid (its A* runs over
+        # a region-confined gcell space the adapter manages). An empty
+        # cell set is safe for rip_net (it iterates over `added` for the
+        # board removal; uncommit_path on an empty set is a no-op).
+        added_items = [t for t in self.board.GetTracks()
+                       if id(t) not in before_items]
+        # Log the chain summary (n_mechanisms, via_chain) for trace.
+        for r in routes:
+            chain = r.get("via_chain", [])
+            self.log(f"      pair {r.get('start')}->{r.get('end')}: "
+                     f"chain={chain} len_mm={r.get('length_mm', 0.0):.2f} "
+                     f"tracks={r.get('n_tracks_emitted', 0)} "
+                     f"vias={r.get('n_vias_emitted', 0)}")
+        self.committed[netname] = (set(), added_items)
+        return True
+
+    def _rollback_added_since(self, before_item_ids):
+        """Per-net atomic rollback helper for the K3 fallback. Removes
+        every track/via item on the board whose id() is NOT in the
+        pre-call snapshot. Idempotent + defensive: a Remove failure on
+        any single item is logged but does not stop the rollback of
+        the rest (the partial-half-emit is exactly the state we are
+        trying to avoid leaving on the board)."""
+        added = [t for t in self.board.GetTracks()
+                 if id(t) not in before_item_ids]
+        for it in added:
+            try:
+                self.board.Remove(it)
+            except Exception as exc:                              # pragma: no cover
+                self.log(f"      rollback: failed to Remove item: {exc}")
 
     def _select_ripup_candidates(self, failed_nets, k=3):
         """Find committed nets that pass near failed-net pads — likely blockers.
