@@ -1,0 +1,59 @@
+{
+  "lever": "B+ J19 micro-relief (CH1 30/30 close-out)",
+  "approval": "Sai 2026-05-29 Option A",
+  "j19_ch1": {
+    "ref": "J19",
+    "footprint": "HVQFN-24-1EP_4x4mm_P0.5mm_EP2.6x2.6mm",
+    "from": [
+      24.2,
+      62.519615
+    ],
+    "to": [
+      25.7,
+      62.519615
+    ],
+    "delta_mm": [
+      1.5,
+      0.0
+    ],
+    "direction_label": "no-Y-move"
+  },
+  "mirror_state": {
+    "CH2": {
+      "ref": "J24",
+      "pos": [
+        215.0,
+        -25.0
+      ],
+      "on_board": false,
+      "status": "OFF_BOARD_PARKED"
+    },
+    "CH3": {
+      "ref": "J25",
+      "pos": [
+        220.0,
+        -25.0
+      ],
+      "on_board": false,
+      "status": "OFF_BOARD_PARKED"
+    },
+    "CH4": {
+      "ref": "J26",
+      "pos": [
+        225.0,
+        -25.0
+      ],
+      "on_board": false,
+      "status": "OFF_BOARD_PARKED"
+    }
+  },
+  "deviation_flags_R21": [
+    "CH2 mirror target J24 at (215.0, -25.0) is off-board parked (Phase 5 placement scope); R19 cross-channel mirror DEFERRED",
+    "CH3 mirror target J25 at (220.0, -25.0) is off-board parked (Phase 5 placement scope); R19 cross-channel mirror DEFERRED",
+    "CH4 mirror target J26 at (225.0, -25.0) is off-board parked (Phase 5 placement scope); R19 cross-channel mirror DEFERRED"
+  ],
+  "phase_5_debt": "R19 cross-channel mirror cascade DEFERRED until CH2/3/4 drivers (J24/J25/J26) placed; tag = PHASE_5_R19_DEBT",
+  "input_md5": "f119ac7e8a42a78f06e1acd553cb60fb",
+  "output_md5": "e0bd63a8be97a21f1a1d8ad6cb3ed350",
+  "timestamp_utc": "20260529T150605Z"
+}
