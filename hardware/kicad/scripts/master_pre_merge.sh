@@ -891,6 +891,23 @@ else
 fi
 
 # ──────────────────────────────────────────────────────────────────
+# G_Q1: leaf-route provenance (R42; CH1 30/30 lever Q)
+# Every targeted-leaf-route attempt by route_subsystem_cooperative's
+# run_leaf_route_phase MUST write a provenance entry under
+# sims/routing_provenance/leaf_route/. Cascade-bounded: ≤
+# LEAF_ROUTE_ATTEMPT_CAP = 2. SHORTS DELTA ≤ 0 on every COMMITTED
+# entry (R-J5 / G_J5 invariant extended to the leaf-route path).
+# Mirrors R36/G_J1 + R40/G_K1 discipline. Vacuous-PASS when no
+# committed net had a disconnected leaf.
+# ──────────────────────────────────────────────────────────────────
+if [[ -f "$SCRIPTS/audit_leaf_route_provenance.py" ]]; then
+  run_gate "G_Q1_leaf_route_provenance" \
+    "cd '$REPO_ROOT' && python3 '$SCRIPTS/audit_leaf_route_provenance.py'" true
+else
+  echo "[G_Q1_leaf_route_provenance] ⏭  SKIP"; GATES_SKIP=$((GATES_SKIP+1)); echo
+fi
+
+# ──────────────────────────────────────────────────────────────────
 # G_HDI_VIA_IN_PAD: HDI via-in-pad cost-scope whitelist (PR #207)
 # Any HDI microvia (≤0.15mm drill) in an SMD pad must be on the J18/J19
 # QFN whitelist (cost envelope). Board-wide whitelist check — no staged

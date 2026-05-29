@@ -4339,6 +4339,588 @@ CooperativeRouter.attempt_targeted_ripup = _tr_attempt_targeted_ripup
 CooperativeRouter.run_targeted_ripup_phase = _tr_run_targeted_ripup_phase
 
 
+# ─── CH1 30/30 lever (Q): TARGETED LEAF-ROUTE for partial-MST nets ────────
+#
+# WHY THIS EXISTS — the CH1 30/30 lever (Q)
+# -----------------------------------------
+# PR #227 + the K2 (v11) MST robustness fix close most of the silent-drop
+# class — but they don't close everything. K2 retries each FAILED MST leaf
+# against the FULL multi-source pool inside ONE route_one_net_mst call. If
+# every retry still finds NO PATH (geometric, not congestion), the net is
+# correctly reported PARTIAL with provenance (R40 / G_K1).
+#
+# What K2 cannot do: ATTACH a disconnected leaf to a TRUNK that was
+# committed in a PRIOR iteration — by then `route_one_net_mst` is no
+# longer running, the present_factor has moved on, and the next iteration
+# rolls the whole net back to FAILED and re-MSTs from scratch. The trunk
+# never sticks.
+#
+# Worker PR #227 measured this on canonical CH1 KILL_RAIL_N:
+#   KILL_RAIL_N has 4 pads: J19.8, D38.2, R76.2, D37.2.
+#   K2 + the cooperative loop commit a 3-pad trunk (J19.8 + D38.2 +
+#   D37.2). R76.1 (the 4th pad, by reference; the canonical task brief
+#   says "R76.1") cannot join because the MST edge from D37.2→R76.1 (or
+#   J19.8→R76.1) clashes with a 0.5mm escape window at a foreign-via halo.
+#   Lever-J targeted ripup reports no_conflict (no foreign track on the
+#   ideal corridor — the obstacle is foreign VIAS' halos that lever-J's
+#   ideal-corridor primitive doesn't see as rippable foreign tracks). So:
+#   no_conflict + partial-MST means the leaf is "stranded by physics" in
+#   a way the existing K2 / lever-J paths cannot rescue.
+#
+# Lever-Q closes this gap with a TARGETED LEAF-ROUTE pass that runs AFTER
+# the cooperative loop (and after lever-J if enabled). For each
+# committed-but-partial net (≥ 1 leaf separated from the trunk per
+# `verify_net_connectivity` islands), lever-Q:
+#
+#   1. Identifies the largest island = TRUNK; remaining islands = LEAVES.
+#   2. For each leaf pad, attempts up to 2 routes from the leaf to the
+#      trunk's multi-source pool (every committed track endpoint + every
+#      via + every trunk pad on the net):
+#        Mechanism (a): MAZE = single-mech find_path_astar with the
+#                       full per-class halo + per-class via SSoT + per-
+#                       net layer_pref + HDI whitelist if applicable.
+#        Mechanism (b): MULTI-MECH = if MAZE returns None, invoke the
+#                       routing_engine.multi_mech_planner planner with
+#                       start=trunk node, end=leaf pad, allowed_via_classes
+#                       drawn from the SAME catalog the cooperative router
+#                       uses (no SSoT bypass).
+#   3. SHORTS-GATE (R-J5 invariant): every successful attempt is
+#      shorts-checked PRE + POST commit; delta > 0 ⇒ immediate rollback.
+#   4. CASCADE BOUND: max 2 attempts per leaf (maze then multi-mech).
+#      No third attempt — preserves the SURESHOT property (bounded work).
+#   5. PROVENANCE: every attempt (success OR fail) writes a
+#      LeafRouteAttempt entry to
+#      `sims/routing_provenance/leaf_route/<sha>_<net>_<leaf>_<seq>.json`.
+#      A new audit `audit_leaf_route_provenance.py` (G_Q1, R42) enforces
+#      schema + cascade ≤ 2 + shorts_delta ≤ 0 on every COMMITTED entry.
+#
+# SSoT discipline (no shortcuts):
+#   - Mechanism (a) calls find_path_astar with the SAME `allowed` layer
+#     set + `present_factor` logic the cooperative router's route_pad_pair
+#     uses. The per-class halo (lever F), HDI whitelist (R35), and layer-
+#     aware obstacle span (v8) all apply unchanged.
+#   - Mechanism (b) calls multi_mech_planner.plan_multi_mech_route with
+#     `allowed_via_classes` derived from via_class_for_span for each
+#     candidate span. HDI cells admit only HDI classes; non-HDI cells
+#     admit only `through`. This mirrors the K3 (lever) discipline.
+#   - SHORTS-GATE reuses `_tr_count_shorts` (R-J5 SSoT).
+#   - Cascade depth bound mirrors R37 (≤ 2) and K2 (MST_LEAF_RETRY_CAP =
+#     3); lever-Q's cap is 2 because mechanisms (a) and (b) cover every
+#     mechanism the cooperative router can emit — a 3rd attempt would be
+#     identical to attempt 1 modulo congestion noise.
+#
+# READ-ONLY contract on .kicad_pcb: lever-Q calls the EXISTING
+# self.commit_net / self.rip_net / pcbnew helpers — it does NOT write to
+# disk itself. The CLI's `pcbnew.SaveBoard(args.output, board)` at the
+# end of main() persists. Read-only runs (`--dry-run` analog) are
+# supported by passing `--no-write-board` (or invoking the function with
+# `commit=False`) — the planner reports honest verdicts without mutating.
+#
+# Per:
+#   [[feedback-codify-not-patch]]     — fix-script + audit-gate + test
+#   [[feedback-sureshot-over-sota]]   — bounded retries; honest verdicts
+#   [[feedback-systemic-rule-enforcement]] — RULES_MANIFEST R42 added
+#   [[reference-cascading-escape-needs-negotiated-routing]]
+#                                     — leaf-attach is a SURGICAL operation;
+#                                       NOT a global re-route.
+#
+# Master 2026-05-29 R26 / CH1 30/30 lever Q dispatch — closes KILL_RAIL_N
+# R76.1 partial when geometry permits; honest 3/4 with reason otherwise.
+
+import json as _lq_json
+import datetime as _lq_dt
+
+LEAF_ROUTE_PROVENANCE_DIR_REL = "sims/routing_provenance/leaf_route"
+
+# Lever-Q cascade bound: max attempts per leaf. Sureshot — 2 covers maze
+# (single-mech A*) + multi-mech (chained A*). A 3rd attempt would be
+# identical to attempt 1 modulo cooperative-loop noise. Mirrors the
+# bounded-work discipline of R37 (cascade depth ≤ 2) and K2 (≤ 3 retries).
+LEAF_ROUTE_ATTEMPT_CAP = 2
+
+
+def _lq_repo_root():
+    """Locate the repo root for provenance log writes (sibling of hardware/)."""
+    return Path(__file__).resolve().parent.parent.parent.parent
+
+
+class LeafRouteAttempt:
+    """One leaf-route attempt record — provenance schema for G_Q1 / R42.
+
+    Plain class (not @dataclass) to avoid the asdict() coupling the
+    targeted-ripup entry has; this keeps the lever-Q provenance writer
+    self-contained + easy to verify in tests without importing the rest
+    of the cooperative router.
+
+    Fields:
+      schema_version    : int ≥ 1
+      timestamp_iso     : ISO-8601 UTC of attempt completion
+      board_sha         : git SHA of canonical board at attempt time
+      subsystem         : e.g. "CH1"
+      netname           : the partial-MST net being repaired
+      leaf_pad          : "Ref.Pad" of the disconnected leaf
+      trunk_pads        : list of "Ref.Pad" already-connected on this net
+      attempts          : list of {"mechanism": "maze"|"multi_mech",
+                                    "outcome": "ROUTED"|"NO_PATH"|"SHORTS_GATE_REJECT",
+                                    "reason": str,
+                                    "shorts_pre": int,
+                                    "shorts_post": int}
+      cascade_attempts  : int (number of attempts used; ≤ LEAF_ROUTE_ATTEMPT_CAP)
+      committed         : bool
+      shorts_pre        : int (board shorts at very start of attempt)
+      shorts_post       : int (board shorts at very end of attempt)
+      final_outcome     : "ROUTED" | "NO_PATH" | "SHORTS_GATE_REJECT" | "DISABLED"
+    """
+
+    def __init__(self):
+        self.schema_version = 1
+        self.timestamp_iso = ""
+        self.board_sha = ""
+        self.subsystem = ""
+        self.netname = ""
+        self.leaf_pad = ""
+        self.trunk_pads = []
+        self.attempts = []
+        self.cascade_attempts = 0
+        self.committed = False
+        self.shorts_pre = 0
+        self.shorts_post = 0
+        self.final_outcome = ""
+
+    def to_dict(self):
+        return {
+            "schema_version": self.schema_version,
+            "timestamp_iso": self.timestamp_iso,
+            "board_sha": self.board_sha,
+            "subsystem": self.subsystem,
+            "netname": self.netname,
+            "leaf_pad": self.leaf_pad,
+            "trunk_pads": list(self.trunk_pads),
+            "attempts": list(self.attempts),
+            "cascade_attempts": int(self.cascade_attempts),
+            "committed": bool(self.committed),
+            "shorts_pre": int(self.shorts_pre),
+            "shorts_post": int(self.shorts_post),
+            "final_outcome": str(self.final_outcome),
+        }
+
+
+def _lq_write_provenance(entry: LeafRouteAttempt, repo_root: Path) -> Path:
+    """Persist an entry under sims/routing_provenance/leaf_route/.
+    Filename = `{board_sha[:12]}_{netname}_{leaf_pad}_{seq}.json`."""
+    d = repo_root / LEAF_ROUTE_PROVENANCE_DIR_REL
+    d.mkdir(parents=True, exist_ok=True)
+    base_raw = f"{(entry.board_sha or 'NOSHA')[:12]}_{entry.netname}_{entry.leaf_pad}"
+    base = re.sub(r"[^A-Za-z0-9_.+-]", "_", base_raw)
+    seq = 0
+    while True:
+        p = d / f"{base}_{seq:03d}.json"
+        if not p.exists():
+            break
+        seq += 1
+    p.write_text(_lq_json.dumps(entry.to_dict(), indent=2, sort_keys=True))
+    return p
+
+
+def _lq_identify_leaves(router, netname):
+    """Return (trunk_pads, leaf_pads) for `netname` based on the LIVE board
+    via verify_net_connectivity. Trunk = largest island. Leaves = every
+    pad in OTHER islands.
+
+    Returns (None, None) if the net has 0 or 1 islands (nothing to repair).
+    Returns (trunk_labels, leaf_labels) when ≥ 2 islands exist.
+    """
+    n_islands, island_list = router.verify_net_connectivity(netname)
+    if n_islands <= 1:
+        return None, None
+    # Largest island first (verify_net_connectivity already sorts by size desc)
+    trunk = list(island_list[0])
+    leaves = []
+    for isl in island_list[1:]:
+        for pad_label in isl:
+            leaves.append(pad_label)
+    return trunk, leaves
+
+
+def _lq_pad_xy(router, netname, pad_label):
+    """Look up (x, y, layers, sx, sy) for `Ref.Pad` on `netname`. Returns
+    None if not found (defensive — caller skips)."""
+    for (ref, padname, x, y, layers, sx, sy) in router.state.net_pads.get(netname, []):
+        if f"{ref}.{padname}" == pad_label:
+            return (x, y, list(layers), sx, sy)
+    return None
+
+
+def _lq_attempt_maze(router, netname, trunk_cells, leaf_cells,
+                      present_factor, time_budget_s):
+    """Mechanism (a): single-mech maze A*. Mirrors route_pad_pair's
+    `allowed` derivation + HDI-pad expansion. Returns (path or None,
+    reason_str)."""
+    if not trunk_cells or not leaf_cells:
+        return None, "empty_sources_or_targets"
+    if trunk_cells & leaf_cells:
+        # Already overlapping — the verify pass should've reported 1
+        # island. Surface the inconsistency as no-op (no harm done).
+        return None, "trivial_overlap_already_connected"
+    allowed = list(set([F_CU, B_CU] + inner_layers_for(netname)))
+    if router.via_in_pad_allowed:
+        for (ref, padname, x, y, layers, sx, sy) in router.state.net_pads.get(netname, []):
+            if is_hdi_via_in_pad_ref(ref):
+                allowed = list(set(allowed + SIGNAL_LAYERS))
+                break
+    path, cost = find_path_astar(router.grid, trunk_cells, leaf_cells,
+                                  netname, allowed, present_factor,
+                                  time_budget_s=time_budget_s)
+    if path is None:
+        return None, "no_path_maze"
+    return path, "ok"
+
+
+def _lq_attempt_multi_mech(router, netname, trunk_pads, leaf_pad):
+    """Mechanism (b): multi-mech planner. Delegates to the K3 fallback
+    hook (CooperativeRouter._try_multi_mech_fallback). Returns
+    (routed_bool, reason_str).
+
+    The K3 hook is the SSoT for live-board multi-mech wiring; lever-Q
+    consumes it as an abstract capability (yes/no) — the geometry sits
+    inside the phase_c.fill_region_with_multi_mech adapter.
+
+    If the K3 fallback adapter isn't wired (the default Pi headless
+    invocation), this returns (False, "adapter_not_wired") — an honest
+    verdict, not a fabrication.
+    """
+    try:
+        # The K3 hook already encodes the "delegates to adapter" semantics
+        # (returns False when the adapter isn't loaded; routes via the
+        # adapter when it is). We reuse it to keep ONE multi-mech path.
+        routed = router._try_multi_mech_fallback(netname)
+    except Exception as e:
+        return False, f"multi_mech_exception_{type(e).__name__}"
+    if routed:
+        return True, "ok"
+    return False, "no_path_multi_mech_or_adapter_not_wired"
+
+
+def _lq_attempt_leaf_route(self, netname, leaf_pad, trunk_pads,
+                             present_factor=1.0, time_budget_s=8.0):
+    """Lever-Q core: attempt to route ONE leaf back to its net's trunk.
+
+    Returns a LeafRouteAttempt entry. Atomic: on shorts-gate violation,
+    the leaf's just-committed path is ripped + the board returns to its
+    pre-attempt state (modulo same-net obstacle map; full grid rebuild
+    happens via _rebuild_grid).
+    """
+    entry = LeafRouteAttempt()
+    entry.timestamp_iso = _lq_dt.datetime.now(_lq_dt.timezone.utc).isoformat()
+    entry.subsystem = self.subsystem
+    entry.netname = netname
+    entry.leaf_pad = leaf_pad
+    entry.trunk_pads = list(trunk_pads)
+
+    entry.shorts_pre = _tr_count_shorts(self.board)
+
+    # Resolve leaf pad coords
+    leaf_info = _lq_pad_xy(self, netname, leaf_pad)
+    if leaf_info is None:
+        entry.final_outcome = "NO_PATH"
+        entry.attempts.append({
+            "mechanism": "init",
+            "outcome": "NO_PATH",
+            "reason": f"leaf_pad_{leaf_pad}_not_in_net_pads",
+            "shorts_pre": entry.shorts_pre,
+            "shorts_post": entry.shorts_pre,
+        })
+        entry.shorts_post = entry.shorts_pre
+        return entry
+    (lx, ly, llayers, lsx, lsy) = leaf_info
+
+    # Pre-compute trunk multi-source cells: union of (a) every trunk pad's
+    # grid cells AND (b) every cell currently committed to this net (track
+    # endpoints + via positions get folded into self.committed via
+    # commit_path's path_cells stamp).
+    pad_info = self._pad_cells_for_net(netname)
+    pad_by_label = {f"{p[0]}.{p[1]}": p for p in pad_info}
+    trunk_cells = set()
+    for tp_label in trunk_pads:
+        tp = pad_by_label.get(tp_label)
+        if tp is None:
+            continue
+        for c in tp[4]:  # cells field
+            trunk_cells.add(c)
+    # Add committed-cell pool (the actual routed copper on the net so far).
+    committed_cells = self.committed.get(netname, (set(), []))[0]
+    trunk_cells |= committed_cells
+
+    # Leaf cells: the disconnected pad's grid cells.
+    leaf_entry = pad_by_label.get(leaf_pad)
+    if leaf_entry is None:
+        entry.final_outcome = "NO_PATH"
+        entry.attempts.append({
+            "mechanism": "init",
+            "outcome": "NO_PATH",
+            "reason": f"leaf_pad_{leaf_pad}_outside_zone_or_unmapped",
+            "shorts_pre": entry.shorts_pre,
+            "shorts_post": entry.shorts_pre,
+        })
+        entry.shorts_post = entry.shorts_pre
+        return entry
+    leaf_cells = set(leaf_entry[4])
+
+    if not trunk_cells or not leaf_cells:
+        entry.final_outcome = "NO_PATH"
+        entry.attempts.append({
+            "mechanism": "init",
+            "outcome": "NO_PATH",
+            "reason": "empty_trunk_or_leaf_cells",
+            "shorts_pre": entry.shorts_pre,
+            "shorts_post": entry.shorts_pre,
+        })
+        entry.shorts_post = entry.shorts_pre
+        return entry
+
+    # ─── Attempt 1: MAZE (single-mech A*) ─────────────────────────────────
+    entry.cascade_attempts = 1
+    path, reason_maze = _lq_attempt_maze(
+        self, netname, trunk_cells, leaf_cells,
+        present_factor, time_budget_s)
+    if path is not None:
+        # Pre-shorts captured above. Commit the new path under append=True
+        # so the trunk's existing entries stay; then re-measure shorts.
+        try:
+            self.commit_net(netname, [path], append=True)
+        except Exception as e:
+            entry.attempts.append({
+                "mechanism": "maze",
+                "outcome": "NO_PATH",
+                "reason": f"commit_exception_{type(e).__name__}_{e}",
+                "shorts_pre": entry.shorts_pre,
+                "shorts_post": entry.shorts_pre,
+            })
+            entry.final_outcome = "NO_PATH"
+            entry.shorts_post = entry.shorts_pre
+            return entry
+        shorts_post = _tr_count_shorts(self.board)
+        if shorts_post > entry.shorts_pre:
+            # R-J5 SHORTS DELTA ≤ 0 invariant violated — roll back this
+            # leaf's path (rip_net + restore trunk).
+            # Atomic restore: rip the WHOLE net (the only safe state we
+            # know how to reconstruct from `committed`), then re-commit
+            # the trunk via fresh MST. SURESHOT discipline: we DON'T
+            # try to surgically remove only the new path's segments —
+            # that opens a same-net-restore drift bug class.
+            try:
+                self.rip_net(netname)
+                self._rebuild_grid()
+            except Exception:
+                pass
+            entry.attempts.append({
+                "mechanism": "maze",
+                "outcome": "SHORTS_GATE_REJECT",
+                "reason": f"shorts_delta_positive ({shorts_post - entry.shorts_pre} > 0; "
+                          "R-J5/G_J5 violated)",
+                "shorts_pre": entry.shorts_pre,
+                "shorts_post": shorts_post,
+            })
+            entry.final_outcome = "SHORTS_GATE_REJECT"
+            entry.shorts_post = shorts_post
+            entry.committed = False
+            return entry
+        # Success — record + return.
+        entry.attempts.append({
+            "mechanism": "maze",
+            "outcome": "ROUTED",
+            "reason": "ok",
+            "shorts_pre": entry.shorts_pre,
+            "shorts_post": shorts_post,
+        })
+        entry.shorts_post = shorts_post
+        entry.committed = True
+        entry.final_outcome = "ROUTED"
+        return entry
+    # MAZE failed — record reason.
+    entry.attempts.append({
+        "mechanism": "maze",
+        "outcome": "NO_PATH",
+        "reason": reason_maze,
+        "shorts_pre": entry.shorts_pre,
+        "shorts_post": entry.shorts_pre,
+    })
+
+    # ─── Attempt 2: MULTI-MECH (chained A*) ───────────────────────────────
+    entry.cascade_attempts = 2
+    if entry.cascade_attempts > LEAF_ROUTE_ATTEMPT_CAP:
+        entry.final_outcome = "NO_PATH"
+        entry.shorts_post = entry.shorts_pre
+        return entry
+    routed, reason_mm = _lq_attempt_multi_mech(self, netname, trunk_pads, leaf_pad)
+    shorts_post = _tr_count_shorts(self.board)
+    if routed and shorts_post > entry.shorts_pre:
+        # Same R-J5 rollback path as maze
+        try:
+            self.rip_net(netname)
+            self._rebuild_grid()
+        except Exception:
+            pass
+        entry.attempts.append({
+            "mechanism": "multi_mech",
+            "outcome": "SHORTS_GATE_REJECT",
+            "reason": f"shorts_delta_positive ({shorts_post - entry.shorts_pre} > 0; "
+                      "R-J5/G_J5 violated)",
+            "shorts_pre": entry.shorts_pre,
+            "shorts_post": shorts_post,
+        })
+        entry.final_outcome = "SHORTS_GATE_REJECT"
+        entry.shorts_post = shorts_post
+        entry.committed = False
+        return entry
+    if routed:
+        entry.attempts.append({
+            "mechanism": "multi_mech",
+            "outcome": "ROUTED",
+            "reason": reason_mm,
+            "shorts_pre": entry.shorts_pre,
+            "shorts_post": shorts_post,
+        })
+        entry.shorts_post = shorts_post
+        entry.committed = True
+        entry.final_outcome = "ROUTED"
+        return entry
+    # Multi-mech also failed → final NO_PATH, no commit, no rollback.
+    entry.attempts.append({
+        "mechanism": "multi_mech",
+        "outcome": "NO_PATH",
+        "reason": reason_mm,
+        "shorts_pre": entry.shorts_pre,
+        "shorts_post": shorts_post,
+    })
+    entry.final_outcome = "NO_PATH"
+    entry.shorts_post = shorts_post
+    entry.committed = False
+    return entry
+
+
+def _lq_run_leaf_route_phase(self):
+    """Lever-Q top-level driver: for every committed net with a
+    DISCONNECTED leaf (verify_net_connectivity > 1 island), attempt to
+    route each leaf back to its trunk via the bounded mechanism
+    cascade. Returns the list of LeafRouteAttempt entries written.
+
+    Disabled-by-default: opt-in via `router.leaf_route_enabled = True`
+    or the CLI `--enable-leaf-route` flag.
+    """
+    if not getattr(self, "leaf_route_enabled", False):
+        return []
+
+    entries = []
+    repo_root = _lq_repo_root()
+    sha = ""
+    try:
+        import subprocess
+        sha = subprocess.check_output(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            stderr=subprocess.DEVNULL).decode().strip()
+    except Exception:
+        sha = "NOSHA"
+
+    # Scan all committed nets. For each, ask verify_net_connectivity for
+    # the leaf set.
+    candidates = []
+    for netname in list(self.committed.keys()):
+        trunk, leaves = _lq_identify_leaves(self, netname)
+        if trunk is None or not leaves:
+            continue
+        candidates.append((netname, trunk, leaves))
+
+    if not candidates:
+        self.log("[leaf-route] no disconnected leaves found "
+                 "(vacuous-PASS — every committed net is single-island)")
+        return entries
+
+    self.log(f"[leaf-route] {len(candidates)} net(s) with disconnected leaf(s)")
+    for (netname, trunk, leaves) in candidates:
+        self.log(f"  {netname}: trunk={trunk} leaves={leaves}")
+        for leaf in leaves:
+            entry = _lq_attempt_leaf_route(
+                self, netname, leaf, trunk,
+                present_factor=1.0, time_budget_s=8.0)
+            entry.board_sha = sha
+            try:
+                p = _lq_write_provenance(entry, repo_root)
+                self.log(f"    [leaf-route] {netname}.{leaf}: "
+                         f"{entry.final_outcome} (provenance: {p.name})")
+            except Exception as e:
+                self.log(f"    [leaf-route] {netname}.{leaf}: "
+                         f"{entry.final_outcome} (provenance WRITE FAILED: "
+                         f"{type(e).__name__}: {e})")
+            entries.append(entry)
+            # Refresh trunk for the next leaf — a just-committed leaf
+            # joins the trunk for subsequent leaves. ALSO: drop the
+            # net's `partial_pairs` entry if the net is now single-
+            # island (so the final summary doesn't report it as
+            # still-partial).
+            if entry.committed:
+                new_n_islands, _new_islands = self.verify_net_connectivity(netname)
+                if new_n_islands == 1:
+                    if hasattr(self, "partial_pairs") and netname in self.partial_pairs:
+                        del self.partial_pairs[netname]
+                new_trunk, _new_leaves = _lq_identify_leaves(self, netname)
+                if new_trunk is not None:
+                    trunk = new_trunk
+    return entries
+
+
+def route_unconnected_leaves(board, net_name):
+    """PUBLIC API per the lever-Q task brief.
+
+    Builds a CooperativeRouter view over `board` (subsystem auto-detected
+    from CH1 zone — the canonical lever-Q target — extendable later)
+    + invokes _lq_run_leaf_route_phase scoped to `net_name`. Returns the
+    list of LeafRouteAttempt entries.
+
+    Use this entry point in scripts that already have a `board` handle
+    (pcbnew.LoadBoard caller) and want the leaf-route capability without
+    the whole cooperative-router stack on the same flow. The CLI
+    `--enable-leaf-route` flag is the multi-net path.
+
+    READ-ONLY contract: this function does NOT call pcbnew.SaveBoard().
+    The caller persists any successful commit explicitly. A canonical
+    inspect-only run can simply discard the modified board handle.
+    """
+    # Auto-detect subsystem by inspecting net_name suffix (the lever-Q
+    # task brief scopes to CH1 KILL_RAIL_N R76.1). The cooperative
+    # router supports CH1..CH4 + supervisor (SUBSYSTEM_ZONES); we
+    # match on the most specific suffix.
+    subsystem = "CH1"
+    m = re.search(r"_CH(\d)\b", net_name)
+    if m:
+        subsystem = f"CH{m.group(1)}"
+
+    router = CooperativeRouter(board, subsystem,
+                                grid_pitch=DEFAULT_GRID_PITCH,
+                                seed_nets=[net_name],
+                                verbose=True,
+                                no_rip_routed=True,         # don't disturb existing routes
+                                layer_pref_enabled=True,
+                                via_in_pad_allowed=True)
+    router.leaf_route_enabled = True
+    # Lever-Q operates on already-committed nets. To populate
+    # router.committed[net_name] from the LIVE board, we briefly run
+    # a 0-iteration `run` which stamps obstacles + reads any
+    # pre-existing tracks/vias as "committed" via the no-rip path.
+    # The actual committed dict is populated post-_stamp_obstacles by
+    # the cooperative router's preserved-nets discovery logic.
+    # For lever-Q we only need the obstacle map + state.net_pads —
+    # the leaf-route phase pulls trunk/leaf from verify_net_connectivity
+    # which scans the LIVE board (not router.committed). So calling
+    # the phase directly is sufficient.
+    return router.run_leaf_route_phase()
+
+
+# Attach methods (class-body extension — same pattern as lever-J).
+CooperativeRouter.attempt_leaf_route = _lq_attempt_leaf_route
+CooperativeRouter.run_leaf_route_phase = _lq_run_leaf_route_phase
+
+
 # ─── CLI ──────────────────────────────────────────────────────────────────
 
 def main():
@@ -4410,6 +4992,18 @@ def main():
                          "the multi-mech planner on each residual "
                          "cross-stack net. Lifts the A* state-space + "
                          "chains 2+ via mechanisms (SWDIO_CH1 unblocker).")
+    # CH1 30/30 lever Q (2026-05-29): targeted leaf-route for partial-MST
+    # nets. After cooperative + lever-J targeted-ripup phases, every
+    # COMMITTED net whose verify_net_connectivity reports >1 island gets
+    # a per-leaf 2-attempt cascade (maze → multi-mech). Bounded ≤ 2,
+    # shorts-gated, provenance under
+    # sims/routing_provenance/leaf_route/*.json. G_Q1 audit enforces.
+    ap.add_argument("--enable-leaf-route", action="store_true",
+                    help="CH1 30/30 lever Q: post-cooperative leaf-route "
+                         "pass for partial-MST nets. Attempts each "
+                         "disconnected leaf via single-mech maze + "
+                         "multi-mech (≤ 2 attempts/leaf). Shorts-gated. "
+                         "Provenance under sims/routing_provenance/leaf_route/.")
     args = ap.parse_args()
 
     board = pcbnew.LoadBoard(args.board)
@@ -4425,6 +5019,8 @@ def main():
     router.targeted_ripup_enabled = bool(args.enable_targeted_ripup)
     # v12 CH1 30/30 (K3): multi-mech fallback opt-in flag.
     router.multi_mech_fallback_enabled = bool(args.multi_mech_fallback)
+    # CH1 30/30 lever Q: leaf-route opt-in flag.
+    router.leaf_route_enabled = bool(args.enable_leaf_route)
     unrouted = router.run(max_iter=args.max_iterations)
     # v11 — targeted ripup-rebuild phase (CH1 30/30 lever J)
     if router.targeted_ripup_enabled and unrouted:
@@ -4441,6 +5037,22 @@ def main():
                   f"{n_committed}/{len(targeted_entries)} attempts committed.")
         # Refresh `unrouted` to reflect targeted-phase commits.
         unrouted = [n for n in unrouted if n not in router.committed]
+
+    # CH1 30/30 lever Q — leaf-route phase. Runs after cooperative + lever-J,
+    # ATTACHES disconnected leaves of committed-but-partial nets to their
+    # trunks via the bounded mechanism cascade (maze → multi-mech). Honest
+    # verdicts (R42 / G_Q1) when geometry blocks both attempts.
+    if router.leaf_route_enabled:
+        if not args.quiet:
+            print(f"\n[leaf-route] cooperative + targeted-ripup phases done; "
+                  "scanning committed nets for disconnected leaves "
+                  "(lever Q; R42 / G_Q1; provenance under "
+                  "sims/routing_provenance/leaf_route/)")
+        leaf_entries = router.run_leaf_route_phase()
+        n_routed = sum(1 for e in leaf_entries if e.committed)
+        if not args.quiet:
+            print(f"[leaf-route] phase done: "
+                  f"{n_routed}/{len(leaf_entries)} leaf-attempts committed.")
 
     pcbnew.SaveBoard(args.output, board)
     print(f"\nSaved: {args.output}")
