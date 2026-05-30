@@ -3304,6 +3304,59 @@ class CooperativeRouter:
         all_paths = []
         my_route_cells = set()
         failed_pairs = []
+        # LEVER UU.12 (2026-05-30): force HDI via-in-pad at chronic-net
+        # IC pads per Sai dispatch post-UU.11 PR #285. UU.11 proved that
+        # at JLC HDI Class 2 fab-compliant halo (0.205mm), surface escape
+        # from J18 0.5mm-pitch QFN is geometrically sealed (0.5 - 2×0.205
+        # = 0.09mm = 0 cells). The fix: skip surface F.Cu escape entirely
+        # — emit a microvia/blind via at the IC pad center FIRST, dropping
+        # onto an inner signal layer (In2 for blind_F_In2 whitelist nets,
+        # or stacked-microvia chain for In8-preferred nets). Then route
+        # planar on the inner layer to the destination.
+        #
+        # Mechanism: pre-seed a 2-cell [F.Cu_pad_center, In2_pad_center]
+        # path into all_paths. commit_net→path_to_segments→emit_to_board
+        # turns this into the actual PCB_VIA at the pad center via the
+        # existing via_class_for_span('blind_F_In2', ...) machinery.
+        # Then widen the pad's accessible cell set with In2 cells so the
+        # subsequent A* MST edge can route from the In2 cell as source.
+        if (netname in _BLIND_F_IN2_NET_WHITELIST
+                and self.via_in_pad_allowed
+                and getattr(self.grid, 'pad_accessible_cells', None) is not None):
+            new_pad_info = []
+            for idx, entry in enumerate(pad_info):
+                ref, padname, x, y, cells, pad_layers, sx, sy = entry
+                if (is_hdi_via_in_pad_ref(ref)
+                        and F_CU in pad_layers):
+                    ci, cj = self.grid.xy_to_ij(x, y)
+                    if self.grid.in_bounds(ci, cj):
+                        # Pre-seed F.Cu → In2.Cu via at pad center.
+                        # UU.12 v8: seed via + In2 source = EXACT pad
+                        # center only. No corridor exemption on In2 (v6
+                        # caused 3 SHORTS by exempting foreign obstacles).
+                        # A* must route on In2 obeying is_blocked_for
+                        # normally; if In2 around pad is sealed, the net
+                        # remains unrouted (better than SHORTS regression).
+                        seed_path = [(ci, cj, F_CU), (ci, cj, IN2_CU)]
+                        all_paths.append(seed_path)
+                        in2_cells = {(ci, cj, F_CU), (ci, cj, IN2_CU)}
+                        # Only exempt the exact seed via In2 cell (so A*
+                        # can start from it). Don't widen further.
+                        self.grid.pad_accessible_cells[netname].add(
+                            (ci, cj, IN2_CU))
+                        new_pad_info.append((ref, padname, x, y, in2_cells,
+                                              list(pad_layers) + [IN2_CU],
+                                              sx, sy))
+                        if netname == _ASTAR_TRACE_NET:
+                            _astar_trace_emit({
+                                "net": netname, "event": "UU12_SEED_VIA",
+                                "pad": f"{ref}.{padname}",
+                                "cell": (ci, cj, F_CU),
+                                "target_layer": IN2_CU,
+                            })
+                        continue
+                new_pad_info.append(entry)
+            pad_info = new_pad_info
         # K2 (v11) per-leaf retry tracking: edge index -> retries used.
         retries_per_leaf = {}
         # K2: capture pad-coord for each failed pair so the provenance file
