@@ -3401,6 +3401,76 @@ class CooperativeRouter:
                           grid=self.grid,
                           via_target_layers=via_layers)
             for c in path: all_cells.add(c)
+        # LEVER UU.5 (2026-05-30): snap-to-pad-center per DEV-025.
+        # A* grid cells quantize to grid_pitch (~0.1mm). The cell→segment
+        # conversion can leave the FINAL endpoint up to grid_pitch outside
+        # the pad's actual mm bbox, leaving a sub-grid gap that
+        # verify_net_connectivity's TOL_COINCIDENT=0.05mm can't bridge
+        # → ROUTED-but-SPLIT chronic per UU.3/UU.4 finding (PR #277/#278).
+        #
+        # Fix: for each pad of this net, if NO existing track endpoint OR
+        # via center is within pad bbox + TOL_COINCIDENT but a nearby
+        # endpoint exists within TOL_SNAP=0.5mm on the same signal layer
+        # the pad occupies, emit a short SNAP track from that endpoint
+        # to the pad center. Reject snap if no endpoint within TOL_SNAP
+        # (the gap is real, not a grid quantization artifact).
+        try:
+            import pcbnew as _pcb
+            TOL_SNAP_MM = 0.5
+            TOL_COIN_MM = 0.05
+            net_pad_list = self.state.net_pads.get(netname, [])
+            for (pref, ppad, px, py, players, sx, sy) in net_pad_list:
+                hx, hy = sx / 2.0, sy / 2.0
+                # Existing endpoint/via within bbox+TOL? if yes, snap not needed.
+                covered = False
+                nearest = None
+                nearest_d = TOL_SNAP_MM + 1e-9
+                nearest_layer = None
+                for t in self.board.GetTracks():
+                    if t.GetNet() is None or t.GetNet().GetNetCode() != \
+                            (net_obj.GetNetCode() if net_obj else -1):
+                        continue
+                    if t.GetClass() == 'PCB_VIA':
+                        pos = t.GetPosition()
+                        ex, ey = iu_to_mm(pos.x), iu_to_mm(pos.y)
+                        # via spans all layers; treat as covering any layer
+                        if (abs(ex - px) <= hx + TOL_COIN_MM
+                                and abs(ey - py) <= hy + TOL_COIN_MM):
+                            covered = True; break
+                        d = ((ex-px)**2 + (ey-py)**2) ** 0.5
+                        if d < nearest_d:
+                            nearest_d = d; nearest = (ex, ey)
+                            nearest_layer = players[0] if players else F_CU
+                    else:
+                        s, e = t.GetStart(), t.GetEnd()
+                        L = t.GetLayer()
+                        if L not in players:
+                            continue
+                        for ex, ey in ((iu_to_mm(s.x), iu_to_mm(s.y)),
+                                        (iu_to_mm(e.x), iu_to_mm(e.y))):
+                            if (abs(ex - px) <= hx + TOL_COIN_MM
+                                    and abs(ey - py) <= hy + TOL_COIN_MM):
+                                covered = True; break
+                            d = ((ex-px)**2 + (ey-py)**2) ** 0.5
+                            if d < nearest_d:
+                                nearest_d = d; nearest = (ex, ey)
+                                nearest_layer = L
+                        if covered: break
+                if covered or nearest is None:
+                    continue
+                # Emit short snap track from nearest endpoint to pad center
+                snap = _pcb.PCB_TRACK(self.board)
+                snap.SetStart(_pcb.VECTOR2I(mm_to_iu(nearest[0]),
+                                             mm_to_iu(nearest[1])))
+                snap.SetEnd  (_pcb.VECTOR2I(mm_to_iu(px), mm_to_iu(py)))
+                snap.SetLayer(nearest_layer)
+                snap.SetWidth(mm_to_iu(width))
+                if net_obj is not None:
+                    snap.SetNet(net_obj)
+                self.board.Add(snap)
+                added.append(snap)
+        except Exception:
+            pass   # snap is opportunistic — never fail commit on it
         self.grid.commit_path(all_cells, netname)
         # Also stamp committed segments as obstacles for OTHER nets in next iters
         # by adding to track_obstacles (so next A* sees them as hard blockers).
