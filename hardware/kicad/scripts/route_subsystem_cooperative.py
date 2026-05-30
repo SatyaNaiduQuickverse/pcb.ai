@@ -2068,6 +2068,39 @@ def heuristic(c1, c2, pitch):
     return (d * pitch + lc) * HEURISTIC_WEIGHT
 
 
+# LEVER UU.6 (2026-05-30): upstream A* trace gate per Sai dispatch.
+# When ASTAR_TRACE_NET env var matches `netname`, find_path_astar emits a
+# JSONL log to ASTAR_TRACE_OUT (default /tmp/astar_trace.jsonl) with one
+# record per pop (every Nth pop after the first ASTAR_TRACE_HEAD pops to
+# bound size) and a final TERMINATION record classifying the exit:
+#   GOAL_REACHED   — cell popped is in targets_set
+#   BUDGET_HIT     — wall-clock exceeded time_budget_s
+#   EXHAUSTED      — heap drained, no goal (this is the chronic-net
+#                    smoking gun: all reachable cells expanded, none in
+#                    targets — i.e. goal pads are obstacle-isolated)
+#   NO_SOURCES     — sources empty (start pads marked as obstacle?)
+#   NO_TARGETS     — targets empty
+# Self-block check at start: for every source S, count S's
+# is_blocked_for(netname) verdict and emit SOURCE_BLOCKED record per
+# blocked source; same for targets. If ALL sources or ALL targets are
+# blocked-for-this-net, that's hypothesis (d) confirmed.
+import os as _os
+_ASTAR_TRACE_NET = _os.environ.get("ASTAR_TRACE_NET", "")
+_ASTAR_TRACE_OUT = _os.environ.get("ASTAR_TRACE_OUT",
+                                    "/tmp/astar_trace.jsonl")
+_ASTAR_TRACE_HEAD = int(_os.environ.get("ASTAR_TRACE_HEAD", "50"))
+_ASTAR_TRACE_EVERY = int(_os.environ.get("ASTAR_TRACE_EVERY", "500"))
+
+
+def _astar_trace_emit(rec):
+    try:
+        import json as _json
+        with open(_ASTAR_TRACE_OUT, "a") as _f:
+            _f.write(_json.dumps(rec) + "\n")
+    except Exception:
+        pass
+
+
 def find_path_astar(grid: CongestionGrid, sources, targets,
                     netname, allowed_layers, present_factor,
                     move_set=SAME_LAYER_MOVES_8, time_budget_s=5.0):
@@ -2078,6 +2111,7 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
     Returns (path_cells, cost) or (None, None).
     """
     start_time = time.monotonic()
+    _trace = (netname == _ASTAR_TRACE_NET)
     # Open: (f, g, cell, parent_key)
     open_heap = []
     came_from = {}      # cell -> parent cell
@@ -2112,9 +2146,39 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
             via_block_cache[key] = v
         return v
     # Precompute one representative target for heuristic
-    if not targets: return None, None
+    if not targets:
+        if _trace:
+            _astar_trace_emit({"net": netname, "event": "TERMINATION",
+                                "reason": "NO_TARGETS"})
+        return None, None
+    if not sources:
+        if _trace:
+            _astar_trace_emit({"net": netname, "event": "TERMINATION",
+                                "reason": "NO_SOURCES"})
+        return None, None
     targets_set = set(targets)
     target_list = list(targets)
+    if _trace:
+        # Self-block check (hypothesis d): are start/goal cells marked
+        # as obstacle for this net?
+        srcs_list = list(sources)
+        blocked_src = [s for s in srcs_list
+                       if grid.is_blocked_for(s, netname)]
+        blocked_tgt = [t for t in target_list
+                       if grid.is_blocked_for(t, netname)]
+        _astar_trace_emit({
+            "net": netname, "event": "START",
+            "n_sources": len(srcs_list),
+            "n_targets": len(target_list),
+            "n_blocked_sources": len(blocked_src),
+            "n_blocked_targets": len(blocked_tgt),
+            "sample_src": srcs_list[:3],
+            "sample_tgt": target_list[:3],
+            "blocked_src_sample": blocked_src[:3],
+            "blocked_tgt_sample": blocked_tgt[:3],
+            "allowed_layers": list(allowed_layers),
+            "time_budget_s": time_budget_s,
+        })
     # Choose nearest target as heuristic anchor (it's lower-bound to any)
     def h(cell):
         if not targets:
@@ -2128,12 +2192,36 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
         came_from[s] = None
 
     nodes_expanded = 0
+    last_cell = None
+    last_g = None
     while open_heap:
         if time.monotonic() - start_time > time_budget_s:
+            if _trace:
+                _astar_trace_emit({
+                    "net": netname, "event": "TERMINATION",
+                    "reason": "BUDGET_HIT",
+                    "nodes_expanded": nodes_expanded,
+                    "last_cell": last_cell, "last_g": last_g,
+                    "open_heap_size": len(open_heap),
+                })
             return None, None
         f, g, cell, parent = heapq.heappop(open_heap)
         if g > g_score.get(cell, math.inf): continue
         nodes_expanded += 1
+        last_cell = cell; last_g = g
+        if _trace and (nodes_expanded <= _ASTAR_TRACE_HEAD
+                       or nodes_expanded % _ASTAR_TRACE_EVERY == 0):
+            try:
+                gd = min(heuristic(cell, t, grid.pitch)
+                         for t in target_list[:8]) / grid.pitch
+            except Exception:
+                gd = -1
+            _astar_trace_emit({
+                "net": netname, "event": "POP",
+                "expansion_count": nodes_expanded,
+                "current_cell": cell, "current_cost": g,
+                "f_score": f, "goal_distance_cells": gd,
+            })
         if cell in targets_set:
             # Reconstruct
             path = []
@@ -2142,6 +2230,13 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
                 path.append(cur)
                 cur = came_from.get(cur)
             path.reverse()
+            if _trace:
+                _astar_trace_emit({
+                    "net": netname, "event": "TERMINATION",
+                    "reason": "GOAL_REACHED",
+                    "nodes_expanded": nodes_expanded,
+                    "goal_cell": cell, "g": g, "path_len": len(path),
+                })
             return path, g
         i, j, L = cell
         # Same-layer neighbors
@@ -2235,6 +2330,14 @@ def find_path_astar(grid: CongestionGrid, sources, targets,
                     g_score[ncell] = ng
                     came_from[ncell] = cell
                     heapq.heappush(open_heap, (ng + h(ncell), ng, ncell, cell))
+    if _trace:
+        _astar_trace_emit({
+            "net": netname, "event": "TERMINATION",
+            "reason": "EXHAUSTED",
+            "nodes_expanded": nodes_expanded,
+            "last_cell": last_cell, "last_g": last_g,
+            "g_score_count": len(g_score),
+        })
     return None, None
 
 
