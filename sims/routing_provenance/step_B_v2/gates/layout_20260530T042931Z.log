@@ -1,0 +1,1 @@
+usage: audit_layout_compliance.py <board.kicad_pcb> [--parked-exempt]
