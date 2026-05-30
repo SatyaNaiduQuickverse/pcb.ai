@@ -369,7 +369,23 @@ _LAYER_PREF_CACHE: dict = {}
 # Whitelist matches by Footprint REFERENCE (J18, J19) — the exact two
 # components Sai cost-cleared. To extend, add the reference here AND
 # update docs/MASTER_HDI_SPEC.md + audit_hdi_via_in_pad.py whitelist.
-HDI_VIA_IN_PAD_REFS = ("J18", "J19")
+HDI_VIA_IN_PAD_REFS = (
+    # Original CH1 30/30 lever D + G whitelist (HDI starts at the chip pins):
+    "J18", "J19",
+    # CH1 30/30 lever CC HDI SYMMETRIC (2026-05-30 Sai approved):
+    # destination-side footprints for the 3 chronic residual chains.
+    # Per Sai's CC physics analysis post-EE merge: K3 multi-mech refuses
+    # through-via at fine-pitch chip pads (0.60mm pad > 0.5mm pitch).
+    # Adding HDI via-in-pad geometry at the CHAIN DESTINATIONS lets K3
+    # use microvia (0.25mm pad) at BOTH chain endpoints, completing the
+    # chain through HDI classes only. Mirrors BOTTOM_MICROVIA_REFS — same
+    # surgical-scope envelope; closes the symmetric loop for chronics.
+    "TP22",    # SWDIO_CH1 destination (test point — 1mm pad)
+    "R50",     # GLB_CH1 destination at R50.1
+    "R76",     # KILL_RAIL_N_CH1 destination at R76.1
+    "D37",     # KILL_RAIL_N_CH1 chained at D37.2
+    "D38",     # KILL_RAIL_N_CH1 chained at D38.2
+)
 
 
 def is_hdi_via_in_pad_ref(footprint_ref: str) -> bool:
