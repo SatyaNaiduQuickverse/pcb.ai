@@ -369,6 +369,46 @@ _LAYER_PREF_CACHE: dict = {}
 # Whitelist matches by Footprint REFERENCE (J18, J19) — the exact two
 # components Sai cost-cleared. To extend, add the reference here AND
 # update docs/MASTER_HDI_SPEC.md + audit_hdi_via_in_pad.py whitelist.
+# ─── CH1 30/30 lever DD — MST root inversion for chronic-leaf nets ──────────
+# Per Sai 2026-05-30 DD directive (post Z verify-split diagnosis): the
+# chronic R76.1 isolation persists at any K3 chain depth because the MST
+# grows greedy-nearest-neighbor FROM J19.8 (pad index 0 in net_pads ordering)
+# and consistently strands R76.1 as the last leaf — which then NO_PATHs
+# under the verify-split gate.
+#
+# Inverting the MST root (start from R76.1 instead of J19.8) makes the trunk
+# grow OUTWARD toward J19.8 last; the R76.1 leaf becomes the trunk root,
+# and the J19.8 escape becomes the last edge — which the HDI lever can
+# still solve, just in reverse direction. Per Sai DD spec:
+#   KILL_RAIL_N_CH1: root = R76.1  (vs current J19.8)
+#   PWM_INLA_CH1:    root = J18.15 (vs current J19.1)
+#   GLB_CH1:         root = R50.1  (vs current J19.10)
+MST_ROOT_OVERRIDE = {
+    # netname -> (footprint_ref, pad_name) — the pad to use as MST root.
+    "KILL_RAIL_N_CH1":  ("R76",  "1"),
+    "PWM_INLA_CH1":     ("J18",  "15"),
+    "GLB_CH1":          ("R50",  "1"),
+}
+
+
+def mst_root_index_for_net(netname: str, pad_info_list) -> int:
+    """Return the index in `pad_info_list` whose (ref, padname) matches
+    MST_ROOT_OVERRIDE[netname]. Falls back to 0 (current behavior) when no
+    override exists or the override pad is not in the list. The list items
+    are 8-tuples (ref, padname, x, y, layers, sx, sy) per BoardState.net_pads
+    OR (ref, padname, x, y, cells, pad_layers, sx, sy) per _pad_cells_for_net."""
+    override = MST_ROOT_OVERRIDE.get(netname)
+    if not override:
+        return 0
+    target_ref, target_pad = override
+    for i, item in enumerate(pad_info_list):
+        # First two elements are always (ref, padname) in both forms.
+        ref, padname = item[0], item[1]
+        if ref == target_ref and str(padname) == str(target_pad):
+            return i
+    return 0
+
+
 # ─── CH1 30/30 lever Z — extended K3 chain depth for chronic residuals ──────
 # Per Sai 2026-05-30 Z directive: K3 multi-mech chain max_depth = 4 default
 # leaves chronic chains short of HDI-symmetric F→In2→…→B.Cu paths. Each
@@ -2948,8 +2988,14 @@ class CooperativeRouter:
         pad_info = self._pad_cells_for_net(netname)
         if len(pad_info) < 2:
             return [], 'FAILED', []  # nothing to route
-        # MST: greedy nearest-neighbor from pad 0
-        connected = {0}
+        # MST: greedy nearest-neighbor from root pad.
+        # LEVER DD (2026-05-30): per-net MST root override for chronic-leaf
+        # nets — root at the leaf instead of HDI-corner, so the trunk
+        # grows OUTWARD with the chronic-leaf already-connected at the
+        # root (eliminates the verify-split rejection observed under
+        # canonical/Z attempts).
+        root_idx = mst_root_index_for_net(netname, pad_info)
+        connected = {root_idx}
         edges = []
         while len(connected) < len(pad_info):
             best = None; best_d = math.inf
