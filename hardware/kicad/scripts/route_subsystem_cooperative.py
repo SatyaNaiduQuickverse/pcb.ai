@@ -3251,6 +3251,14 @@ class CooperativeRouter:
         # K2 enhancement: when an edge fails, record its pad indices for the
         # PASS-2 rejoin attempt against the FULL multi-source pool.
         pending_leaves = []  # list[(edge_idx, a, b)] for K2 rejoin
+        # LEVER UU.9 (2026-05-30): per-edge outcome trace per Sai dispatch
+        # post-UU.8 PR #282 finding. Each edge gets {ROUTED_NEW,
+        # FAILED_PASS1, REACH_REJECTED, MERGED_VIA_POOL, ROUTED_PASS2,
+        # FAILED} verdict, logged when ASTAR_TRACE_NET matches netname.
+        # Plus path_to_segments output diagnostic (seg_count + endpoints)
+        # so we surface zero-segment commits.
+        _trace_edges = (netname == _ASTAR_TRACE_NET)
+        edge_outcomes = []  # list[(i_edge, a, b, verdict, extra)]
         for (i_edge, (a, b)) in enumerate(edges):
             sources = set()
             for cell in pad_info[a][4]:
@@ -3267,6 +3275,7 @@ class CooperativeRouter:
             if path is None:
                 retries_per_leaf[i_edge] = 1   # 1st attempt (forward greedy)
                 pending_leaves.append((i_edge, a, b))
+                edge_outcomes.append((i_edge, a, b, "FAILED_PASS1", None))
                 continue  # v3: keep going — don't abandon prior edges
             # LEVER UU.4 (2026-05-30): pre-commit geometric reach check.
             # A* returns path that should land in target cell set, but if
@@ -3283,11 +3292,18 @@ class CooperativeRouter:
                 # geometrically-incomplete result. Reject + queue retry.
                 retries_per_leaf[i_edge] = 1
                 pending_leaves.append((i_edge, a, b))
+                edge_outcomes.append((i_edge, a, b, "REACH_REJECTED",
+                                       {"path_len": len(path),
+                                        "last_cell": path[-1] if path else None}))
                 continue
             # Track cells — add to multi-source pool for subsequent MST edges
             for c in path: my_route_cells.add(c)
             all_paths.append(path)
             retries_per_leaf[i_edge] = 1
+            edge_outcomes.append((i_edge, a, b, "ROUTED_NEW",
+                                   {"path_len": len(path),
+                                    "first_cell": path[0],
+                                    "last_cell": path[-1]}))
         # PASS 2 (K2): rejoin loop. Each pending leaf gets up to
         # MST_LEAF_RETRY_CAP attempts against the FULL net multi-source pool
         # (which now includes cells routed by later edges that may have
@@ -3329,11 +3345,43 @@ class CooperativeRouter:
                 # before claiming "merged via prior edges".
                 a_cells = set(pad_info[a][4])
                 b_cells = set(pad_info[b][4])
+                # LEVER UU.9 (2026-05-30): electrical-path proof per Sai
+                # dispatch. Prior check (a_cells & pool) AND (b_cells & pool)
+                # only proved BOTH pads have ≥1 access cell in the routed
+                # POOL — but the pool is a UNION across all prior MST edges,
+                # so the two pads can each touch DIFFERENT components of the
+                # pool and still be claimed MERGED. Fix: BFS the pool from
+                # any a-cell using 6-neighborhood (4 same-layer + 2 layer-
+                # change) and verify we actually reach a b-cell.
+                merged = False
                 if (a_cells & my_route_cells) and (b_cells & my_route_cells):
-                    # Both pads have ≥1 access cell in the routed pool;
-                    # electrically connected via prior MST edges.
+                    # BFS connectivity check on the pool, restricted to
+                    # cells in my_route_cells. Same-layer 8-neighbor moves
+                    # cost-1; cross-layer transitions only on same (i,j).
+                    seed = next(iter(a_cells & my_route_cells))
+                    visited = {seed}
+                    queue = [seed]
+                    while queue:
+                        ci, cj, cL = queue.pop()
+                        if (ci, cj, cL) in b_cells:
+                            merged = True
+                            break
+                        # Same-layer 8-neighbors
+                        for di, dj in SAME_LAYER_MOVES_8:
+                            n = (ci + di, cj + dj, cL)
+                            if n in my_route_cells and n not in visited:
+                                visited.add(n); queue.append(n)
+                        # Cross-layer transitions at same (i,j)
+                        for L2 in self.grid.layers:
+                            if L2 == cL: continue
+                            n = (ci, cj, L2)
+                            if n in my_route_cells and n not in visited:
+                                visited.add(n); queue.append(n)
+                if merged:
                     routed_this_leaf = True
-                    # No new path emitted; the connection exists already.
+                    if _trace_edges:
+                        edge_outcomes.append((i_edge, a, b, "MERGED_VIA_POOL",
+                                               {"pool_size": len(my_route_cells)}))
                     break
                 pf = present_factor * (1.0 if retry_idx == 0 else 1.4)
                 edge_budget = max(2.0, time_budget_s / max(1, len(edges)))
@@ -3344,6 +3392,12 @@ class CooperativeRouter:
                     for c in path: my_route_cells.add(c)
                     all_paths.append(path)
                     routed_this_leaf = True
+                    if _trace_edges:
+                        edge_outcomes.append((i_edge, a, b, "ROUTED_PASS2",
+                                               {"path_len": len(path),
+                                                "first_cell": path[0],
+                                                "last_cell": path[-1],
+                                                "retry_idx": retry_idx}))
                     break
             retries_per_leaf[i_edge] = attempted
             if not routed_this_leaf:
@@ -3354,6 +3408,9 @@ class CooperativeRouter:
                     pad_info[b][2], pad_info[b][3],
                 )
                 next_pending.append((i_edge, a, b))
+                if _trace_edges:
+                    edge_outcomes.append((i_edge, a, b, "FAILED",
+                                           {"attempts": attempted}))
         # LEVER UU.8 (2026-05-30): multi-edge MST cell-continuity
         # diagnostic + forced-join bridge per Sai dispatch.
         # Per UU.7 PR #281 finding: chronics produce ROUTED-but-SPLIT
@@ -3404,6 +3461,36 @@ class CooperativeRouter:
                         })
             for (ca, cb) in bridges_added:
                 all_paths.append([ca, cb])
+        # UU.9: emit per-edge outcome trace + path_to_segments diagnostic
+        if _trace_edges:
+            seg_diag = []
+            for pi, p in enumerate(all_paths):
+                try:
+                    segs, vias = path_to_segments(p, self.grid)
+                    seg_diag.append({
+                        "path_idx": pi,
+                        "path_len": len(p),
+                        "seg_count": len(segs),
+                        "via_count": len(vias),
+                        "first_cell": p[0] if p else None,
+                        "last_cell": p[-1] if p else None,
+                        "first_seg": segs[0] if segs else None,
+                        "last_seg": segs[-1] if segs else None,
+                    })
+                except Exception as e:
+                    seg_diag.append({"path_idx": pi, "error": str(e)})
+            _astar_trace_emit({
+                "net": netname, "event": "MST_EDGE_OUTCOMES",
+                "n_pads": len(pad_info),
+                "n_edges": len(edges),
+                "n_paths_committed": len(all_paths),
+                "outcomes": [{"i_edge": e[0],
+                               "pad_a": pad_label(e[1]),
+                               "pad_b": pad_label(e[2]),
+                               "verdict": e[3], "extra": e[4]}
+                              for e in edge_outcomes],
+                "path_to_segments": seg_diag,
+            })
         # K2 (v11) provenance: any PARTIAL net (status) must record an
         # entry. We collect the info on `self` so the run() loop can
         # serialise + write to disk under PARTIAL_MST_PROVENANCE_DIR_REL.
