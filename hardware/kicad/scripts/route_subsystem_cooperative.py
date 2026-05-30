@@ -369,6 +369,34 @@ _LAYER_PREF_CACHE: dict = {}
 # Whitelist matches by Footprint REFERENCE (J18, J19) — the exact two
 # components Sai cost-cleared. To extend, add the reference here AND
 # update docs/MASTER_HDI_SPEC.md + audit_hdi_via_in_pad.py whitelist.
+# ─── CH1 30/30 lever Z — extended K3 chain depth for chronic residuals ──────
+# Per Sai 2026-05-30 Z directive: K3 multi-mech chain max_depth = 4 default
+# leaves chronic chains short of HDI-symmetric F→In2→…→B.Cu paths. Each
+# chronic residual (PWM_INLA/GLB/KILL_RAIL_N) needs depth ≥ 6-8 to traverse
+# the 5-via stacked microvia + B-side microvia chain. Per-net depth dict
+# bumps these specific nets to 8 while keeping the conservative default 4
+# for everything else (PathFinder cost-history naturally prefers shorter
+# chains; extra depth only consumed when shorter chains exhaust).
+K3_CHAIN_DEPTH_DEFAULT = 4
+K3_CHAIN_DEPTH_CHRONIC = 8
+K3_CHAIN_DEPTH_OVERRIDES = {
+    # Chronic residuals (from BOTTOM_MICROVIA_NET_WHITELIST + Phase 4 evidence):
+    "PWM_INLA_CH1":     K3_CHAIN_DEPTH_CHRONIC,
+    "GLB_CH1":          K3_CHAIN_DEPTH_CHRONIC,
+    "KILL_RAIL_N_CH1":  K3_CHAIN_DEPTH_CHRONIC,
+    # PWM_INHB + SWDIO were K3-routable pre-EE; bump for safety:
+    "PWM_INHB_CH1":     K3_CHAIN_DEPTH_CHRONIC,
+    "SWDIO_CH1":        K3_CHAIN_DEPTH_CHRONIC,
+}
+
+
+def k3_chain_depth_for_net(netname: str) -> int:
+    """Per-net K3 chain depth — per Sai 2026-05-30 lever Z.
+    Returns K3_CHAIN_DEPTH_CHRONIC (8) for chronic residual nets, otherwise
+    K3_CHAIN_DEPTH_DEFAULT (4)."""
+    return K3_CHAIN_DEPTH_OVERRIDES.get(netname, K3_CHAIN_DEPTH_DEFAULT)
+
+
 HDI_VIA_IN_PAD_REFS = (
     # Original CH1 30/30 lever D + G whitelist (HDI starts at the chip pins):
     "J18", "J19",
@@ -4316,7 +4344,11 @@ class CooperativeRouter:
             # R37 (cascade-depth ≤ 2 was the discipline; for via chains
             # the analogous bound is ≤ 4 mechanisms — chains beyond that
             # ARE a placement-bug indicator).
-            K3_RESCUE_CHAIN_DEPTH = 4
+            # LEVER Z (2026-05-30): per-net depth — chronic residuals
+            # (PWM_INLA/GLB/KILL_RAIL_N/PWM_INHB/SWDIO) bumped to 8 so the
+            # F→In2→…→B.Cu stacked microvia chain can traverse 5+ vias
+            # under EE-strict halo + CC HDI symmetric whitelist.
+            K3_RESCUE_CHAIN_DEPTH = k3_chain_depth_for_net(netname)
             res = PC.fill_region_with_multi_mech(
                 plan, region,
                 board=self.board,
@@ -4478,7 +4510,13 @@ class CooperativeRouter:
         # — joint mode loops over pairs, so the cap is per-pair not
         # per-net; total bound = N_pairs × 500k expansions).
         K3_RESCUE_EXPANSION_CAP = 500_000
-        K3_RESCUE_CHAIN_DEPTH = 4
+        # LEVER Z (2026-05-30): joint K3 cascade uses the MAX depth across
+        # all nets in the subset (so any chronic-residual net in the subset
+        # promotes the chain depth for the whole batch). Per-net override
+        # via k3_chain_depth_for_net().
+        K3_RESCUE_CHAIN_DEPTH = max(
+            (k3_chain_depth_for_net(n) for n in net_pairs_by_net),
+            default=K3_CHAIN_DEPTH_DEFAULT)
         region = PC.RegionSpec(
             subsystem=self.subsystem,
             bbox=(float(zone_xmin), float(zone_ymin),
