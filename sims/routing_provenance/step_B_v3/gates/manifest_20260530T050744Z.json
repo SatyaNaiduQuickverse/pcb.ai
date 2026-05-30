@@ -1,0 +1,11 @@
+{
+  "timestamp_utc": "20260530T050744Z",
+  "canonical_kicad_pcb_md5": "e7759a31a5f0743443318b33115f65a2",
+  "branch": "phase5-step-B-v3",
+  "head_commit": "bbb7b324f6a733370c0673ce6a8209d4836f6e60",
+  "audit_runners": {
+    "audit_meta.py": {"exit": 0, "log": "meta_20260530T050744Z.log"},
+    "audit_layout_compliance.py": {"exit": 1, "log": "layout_20260530T050744Z.log"},
+    "audit_routing.py": {"exit": 1, "log": "routing_pre_20260530T050744Z.log"}
+  }
+}
