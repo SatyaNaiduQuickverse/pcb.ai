@@ -92,7 +92,13 @@ except ImportError:
 # Whitelist references (footprints permitted to have HDI via-in-pad).
 # Must stay in sync with route_subsystem_cooperative.HDI_VIA_IN_PAD_REFS
 # and docs/MASTER_HDI_SPEC.md whitelist section.
-HDI_VIA_IN_PAD_WHITELIST = ("J18", "J19")
+HDI_VIA_IN_PAD_WHITELIST = (
+    # Mirrors route_subsystem_cooperative.HDI_VIA_IN_PAD_REFS — SoT
+    "J18", "J19",
+    # CH1 30/30 lever CC HDI SYMMETRIC (2026-05-30 Sai approved):
+    # destination-side footprints for the 3 chronic residual chains.
+    "TP22", "R50", "R76", "D37", "D38",
+)
 
 # OQ-020 ACTIVATE 2026-05-28 (Sai cost-OK): blind F.Cu↔In2 via class scoped
 # to the named residual escape nets ONLY. Must stay in sync with the
