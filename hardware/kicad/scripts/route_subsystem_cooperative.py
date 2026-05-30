@@ -3130,6 +3130,22 @@ class CooperativeRouter:
                 retries_per_leaf[i_edge] = 1   # 1st attempt (forward greedy)
                 pending_leaves.append((i_edge, a, b))
                 continue  # v3: keep going — don't abandon prior edges
+            # LEVER UU.4 (2026-05-30): pre-commit geometric reach check.
+            # A* returns path that should land in target cell set, but if
+            # the last cell doesn't intersect pad b's accessible cells,
+            # the resulting committed route has a geometric gap to pad b
+            # → verifier rejects as SPLIT. Per UU.3 #277 finding (chronic
+            # is multi-mm gap, route reports ROUTED but doesn't reach
+            # endpoints), enforce: the path's final cell must be in
+            # pad b's accessible cell set, else treat as A* failure
+            # (no commit, queue for retry / mark failed).
+            target_cells = set(pad_info[b][4])
+            if path and path[-1] not in target_cells:
+                # Path didn't reach target pad — A* returned a
+                # geometrically-incomplete result. Reject + queue retry.
+                retries_per_leaf[i_edge] = 1
+                pending_leaves.append((i_edge, a, b))
+                continue
             # Track cells — add to multi-source pool for subsequent MST edges
             for c in path: my_route_cells.add(c)
             all_paths.append(path)
@@ -3163,10 +3179,21 @@ class CooperativeRouter:
                 # original a→b sources; K2 lets b attach to whatever island
                 # the net has).
                 targets |= my_route_cells
-                if sources & targets and not (set(pad_info[a][4])
-                                              & set(pad_info[b][4])):
-                    # Both pads already merged into the same island via
-                    # later edges — leaf is electrically connected.
+                # LEVER UU.4 (2026-05-30): pre-commit geometric reach
+                # check. The prior `sources & targets` test always fired
+                # when my_route_cells was non-empty (because both sources
+                # and targets include it) — even when pad b had NO cells
+                # in the routed pool, causing chronic R76.1 split: leaf
+                # marked routed_this_leaf=True without pad b actually
+                # being reachable. Per UU.3 #277 finding (chronic is
+                # multi-mm geometric gap), require BOTH pad a AND pad b
+                # cell sets to have at least one cell in my_route_cells
+                # before claiming "merged via prior edges".
+                a_cells = set(pad_info[a][4])
+                b_cells = set(pad_info[b][4])
+                if (a_cells & my_route_cells) and (b_cells & my_route_cells):
+                    # Both pads have ≥1 access cell in the routed pool;
+                    # electrically connected via prior MST edges.
                     routed_this_leaf = True
                     # No new path emitted; the connection exists already.
                     break
