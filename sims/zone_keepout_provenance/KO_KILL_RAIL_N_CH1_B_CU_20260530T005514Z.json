@@ -1,0 +1,27 @@
+{
+  "lever": "Phase 5 Option A: +VMOTOR zone keepout for chronic leaf corridor",
+  "approval": "Sai 2026-05-30 Option A approved",
+  "keepout": {
+    "ref": "KO_KILL_RAIL_N_CH1_B_CU",
+    "net_opened": "KILL_RAIL_N_CH1",
+    "layer": "B.Cu",
+    "rect_mm": [
+      28.0,
+      60.0,
+      36.0,
+      62.0
+    ],
+    "area_mm2": 16.0,
+    "rule_settings": {
+      "is_rule_area": true,
+      "no_zone_fills": true,
+      "tracks_allowed": true,
+      "vias_allowed": true,
+      "pads_allowed": true
+    }
+  },
+  "input_md5": "f119ac7e8a42a78f06e1acd553cb60fb",
+  "output_md5": "09f8ae3150eec7e6e59693adf2650b67",
+  "timestamp_utc": "20260530T005514Z",
+  "R21_deviation": "DEV-010: zone keepout added board-only; reconciled via DRC + DRU rule set; R19 mirror to CH2/3/4 when those routed"
+}
