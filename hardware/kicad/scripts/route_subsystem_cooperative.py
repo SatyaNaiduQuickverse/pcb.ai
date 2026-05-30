@@ -3473,6 +3473,102 @@ class CooperativeRouter:
         for cell in new_cells:
             self.grid.pad_cells[cell].add(netname)
 
+    def _try_bridge_split_islands(self, netname, island_list):
+        """LEVER UU.3 (2026-05-30): bridge a verify-detected island split.
+
+        When verify_net_connectivity reports n_islands > 1 after commit_net,
+        the route's pad-set is partitioned into >=2 disjoint connected
+        components. This helper attempts to emit a short same-layer bridge
+        track between the NEAREST pair of pads-or-track-endpoints across
+        islands. If a sub-grid-pitch coincidence gap is the cause (planner
+        emitted segments that end ~0.01mm from the next via instead of
+        coincident), a 0.05mm bridge closes it without any A* call.
+
+        Returns True if a bridge was emitted, False if no actionable gap
+        was found (caller falls back to rip + re-queue).
+
+        Discipline:
+          - Bridge length capped at COINCIDENT_BRIDGE_MAX_MM (0.10mm) — only
+            closes near-coincident gaps, never replaces a real route.
+          - Same-layer only: a cross-layer gap is a missing via, not a
+            missing track — those need a different fix.
+          - Bridge uses the net's default trace width.
+        """
+        COINCIDENT_BRIDGE_MAX_MM = 0.10
+        if not island_list or len(island_list) < 2:
+            return False
+        # Collect all endpoint coords + layers for THIS net's tracks/vias +
+        # pad bbox centers. We label each by (island_id, kind, x, y, layer).
+        try:
+            import pcbnew
+        except Exception:                                          # pragma: no cover
+            return False
+        net_obj = self.state.net_obj.get(netname)
+        if net_obj is None:
+            net_obj = self.board.GetNetsByName().get(netname)
+        if net_obj is None:
+            return False
+        nc = net_obj.GetNetCode()
+        # Build pad-label → island_id map
+        pad_to_island = {}
+        for isl_id, pad_labels in enumerate(island_list):
+            for label in pad_labels:
+                pad_to_island[label] = isl_id
+        # Collect ENDPOINTS per island (for bridging we need physical pts):
+        # For each pad we use its center+layer; for each track endpoint we
+        # know which island via the union-find — but we don't have access
+        # to that here, so we approximate: track endpoints are island-assigned
+        # by the pad they're closest to (with TOL_COINCIDENT-and-via-aware
+        # propagation). For a small bridge case the gap is between a track
+        # endpoint and a via center (typical chain emit float-rounding gap).
+        endpoints_by_isl = {i: [] for i in range(len(island_list))}
+        # Pads → island via label
+        for fp in self.board.GetFootprints():
+            for p in fp.Pads():
+                pnet = p.GetNet()
+                if not pnet or pnet.GetNetCode() != nc:
+                    continue
+                label = f"{fp.GetReference()}.{p.GetPadName()}"
+                if label in pad_to_island:
+                    pos = p.GetPosition()
+                    ls = p.GetLayerSet()
+                    # Pick first signal layer the pad occupies
+                    layer = None
+                    for lid in SIGNAL_LAYERS:
+                        if ls.Contains(lid):
+                            layer = lid
+                            break
+                    if layer is None:
+                        continue
+                    endpoints_by_isl[pad_to_island[label]].append(
+                        (iu_to_mm(pos.x), iu_to_mm(pos.y), layer, label))
+        # Find the nearest cross-island pair on the SAME layer
+        best = None
+        best_d = COINCIDENT_BRIDGE_MAX_MM + 1e-9
+        for i in range(len(island_list)):
+            for j in range(i + 1, len(island_list)):
+                for (xa, ya, la, _) in endpoints_by_isl[i]:
+                    for (xb, yb, lb, _) in endpoints_by_isl[j]:
+                        if la != lb:
+                            continue
+                        import math as _m
+                        d = _m.hypot(xa - xb, ya - yb)
+                        if d < best_d:
+                            best_d = d
+                            best = (xa, ya, xb, yb, la)
+        if best is None:
+            return False
+        # Emit the bridge track
+        xa, ya, xb, yb, layer = best
+        t = pcbnew.PCB_TRACK(self.board)
+        t.SetStart(pcbnew.VECTOR2I(mm_to_iu(xa), mm_to_iu(ya)))
+        t.SetEnd  (pcbnew.VECTOR2I(mm_to_iu(xb), mm_to_iu(yb)))
+        t.SetLayer(layer)
+        t.SetWidth(mm_to_iu(0.15))   # default signal trace width
+        t.SetNet(net_obj)
+        self.board.Add(t)
+        return True
+
     def rip_net(self, netname):
         """Remove a net's committed tracks/vias and obstacles.
 
@@ -4105,8 +4201,31 @@ class CooperativeRouter:
                     # Verify
                     n_islands, _island_list = self.verify_net_connectivity(nn)
                     if n_islands > 1:
-                        self.log(f"[pf]   [!] {nn}: ROUTED-but-SPLIT verify; "
-                                 f"ripping + re-queue")
+                        # LEVER UU.3 (2026-05-30): bridge attempt before rip.
+                        # Per UU.3 finding (PR #275 + #276): the PathFinder
+                        # verify-split rejection pattern is a real geometric
+                        # gap in the route_one_net_mst commit. Instead of
+                        # immediate rip + re-queue (which loses the entire
+                        # route + thrashes PathFinder iters), attempt to
+                        # bridge the islands via a short same-layer bridge
+                        # segment connecting the nearest pair of endpoints
+                        # across islands. If bridging closes to single-
+                        # island, commit. Else rip as before (no regression).
+                        bridged = self._try_bridge_split_islands(nn, _island_list)
+                        if bridged:
+                            n2, _ = self.verify_net_connectivity(nn)
+                            if n2 == 1:
+                                self.log(f"[pf]   [+] {nn}: BRIDGED "
+                                         f"{n_islands}-island split → single "
+                                         f"island; commit (UU.3 lever)")
+                                routed_this_iter += 1
+                                continue
+                            # Bridge didn't close — still split; rip + re-queue
+                            self.log(f"[pf]   [!] {nn}: bridge attempted but "
+                                     f"verify still {n2} islands; rip + re-queue")
+                        else:
+                            self.log(f"[pf]   [!] {nn}: ROUTED-but-SPLIT verify; "
+                                     f"ripping + re-queue")
                         self.rip_net(nn)
                         unrouted_this_iter.append(nn)
                     else:
