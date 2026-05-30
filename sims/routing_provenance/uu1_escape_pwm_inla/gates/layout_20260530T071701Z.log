@@ -1,0 +1,119 @@
+=== Layout compliance audit: pcbai_fpv4in1.kicad_pcb ===
+Components: 574
+Board outline: (0.0,0.0) to (100.0,100.0) mm
+
+WARNINGS:
+  PASSIVE-ANCHORING: 92 passives 10-20mm from nearest parent (verify role)
+  DECOUPLING-L8-COMPARATOR-EXEMPT: 4 comparator-class IC(s) exempt from local decoupling (board-plane sufficient — see ROUTING_LESSONS L8)
+  MOTOR-PAD-CLEAR-EXEMPTS: 16 motor-adjacent-net components inside motor-TP zone (exempt per master path D 2026-05-24, see feedback-motor-pad-clear-zone)
+  STRAY-PAD-LAYER: 9 footprint(s) with 1+ stray pad on opposite layer (cosmetic, not fab-blocking)
+  LABEL-OVERLAP: 4 refdes silk text inside another component's body bbox (cosmetic, hidden under populated component; Sai catch #9 warn-only)
+    C4 silk inside C2
+    C2 silk inside C4
+    C1 silk inside C2
+    C3 silk inside C4
+  AUTO-BUCKET: auto-anchored NW↔NE Δ=28 — verify no mirror partner exists then document as structural
+  AUTO-BUCKET: auto-anchored SW↔SE Δ=120 — verify no mirror partner exists then document as structural
+
+FAIL (101 issues):
+  OFF-BOARD-CENTER: 433 footprints with center outside outline+2.0mm
+    C90 at (320.00, -35.00)
+    J35 at (220.00, 10.00)
+    J26 at (225.00, -25.00)
+    C18 at (315.00, 25.00)
+    C85 at (295.00, -35.00)
+    C26 at (205.00, 30.00)
+    J32 at (305.00, -10.00)
+    C118 at (235.00, -15.00)
+    C144 at (290.00, 0.00)
+    D42 at (300.00, -30.00)
+    ... and 423 more
+  PAD-OVERLAP-TOTAL: 161 (same-net 10 intentional, different-net 151 FAB-BLOCKING)
+  PAD-OVERLAP-DIFFNET: 151 different-net pad pairs
+    D42.2[MOTOR_B_CH2] <-> D41.2[GND]
+    D73.2[SHUNT_B_TOP_CH4] <-> D74.1[MOTOR_B_CH4]
+    D72.1[N$35] <-> D71.1[MOTOR_A_CH4]
+    J14.1[GND] <-> J12.5[AUX_GPIO_1]
+    J14.2[VBAT_SENSE_OUT] <-> J12.6[AUX_GPIO_2]
+    D7.1[GND] <-> D6.2[BUCK2_SW]
+    D7.2[BUCK3_SW] <-> D8.1[GND]
+    R3.2[GATE_RP] <-> R2.2[+VMOTOR]
+    J28.2[PF0_NC_CH3] <-> J29.18[MOTOR_A_CH3]
+    J28.3[PF1_NC_CH3] <-> J29.17[BSTB_CH3]
+    J28.4[NRST_CH3] <-> J29.16[GHB_CH3]
+    J28.5[+3V3A] <-> J29.15[MOTOR_B_CH3]
+    ... and 139 more different-net pairs
+  PAD-OVERLAP-SAMENET: 10 same-net pad pairs (intentional pour/bus overlap)
+    R3.1 <-> R2.2  net=+VMOTOR
+    Q24.6 <-> Q23.3  net=MOTOR_A_CH4
+    Q24.7 <-> Q23.2  net=MOTOR_A_CH4
+    Q24.8 <-> Q23.1  net=MOTOR_A_CH4
+    Q28.6 <-> Q27.3  net=MOTOR_C_CH4
+    ... and 5 more same-net pairs
+  SYMMETRY: CH2 has 0 FETs, expected 6
+  SYMMETRY: CH3 has 18 FETs, expected 6
+  SYMMETRY: CH4 has 0 FETs, expected 6
+  SYMMETRY: CH1 row pitch 5.40mm (expected 12.00mm)
+  SYMMETRY: CH3 row pitch 15.00mm (expected 12.00mm)
+  PASSIVE-ANCHORING: 102 passives >20mm from any FET/IC parent (likely islanded)
+    R10 at (300.0,35.0) -> nearest U9 @ 44.7 mm
+    R9 at (295.0,35.0) -> nearest Q28 @ 43.0 mm
+    R35 at (280.0,45.0) -> nearest Q28 @ 40.3 mm
+    R11 at (305.0,35.0) -> nearest U9 @ 40.3 mm
+    C25 at (200.0,30.0) -> nearest Q23 @ 40.3 mm
+    R8 at (290.0,35.0) -> nearest Q28 @ 39.1 mm
+    R32 at (200.0,25.0) -> nearest Q23 @ 38.1 mm
+    R113 at (200.0,-5.0) -> nearest Q23 @ 38.1 mm
+    C111 at (200.0,-15.0) -> nearest Q11 @ 36.4 mm
+    C15 at (300.0,25.0) -> nearest Q17 @ 36.4 mm
+  DECOUPLING: 5 ICs have no cap within 3mm
+    U2 at (245.0,25.0) — no C within 3mm
+    U10 at (345.0,15.0) — no C within 3mm
+    U8 at (270.0,0.0) — no C within 3mm
+    U1 at (240.0,25.0) — no C within 3mm
+    U6 at (345.0,-20.0) — no C within 3mm
+  DECOUPLING-R25-SAME-SIDE: 1 ICs have decoupling cap on OPPOSITE side (R25 violation)
+    U4 on F.Cu at (31.8,55.0) — nearest cap C67 on B.Cu (opposite side)
+  COINCIDENT-PLACEMENT: 1 component-pair(s) <1.5mm center-to-center on same layer (real bug, not intentional)
+    1.25mm: C51 <-> TP_ESCAPE_PWM_INLA near (34.19,70.15)
+  EXTERNAL-CONNECTOR-EDGE: 2 cable connector(s) >5.0mm from N/S edge (Sai catch #5)
+    J14 (SM08B-SRSS-TB) Y=45.0, 45.0mm from edge
+    J12 (BM06B-SRSS-TB) Y=45.0, 45.0mm from edge
+  SILK-ON-PAD: 20 refdes silk text on copper pad (Sai catch #10, DFM critical)
+    U10 silk on U9.pad6
+    Q24 silk on Q25.pad6
+    L3 silk on L2.pad1
+    Q17 silk on Q18.pad2
+    Q21 silk on Q22.pad2
+    Q28 silk on Q27.pad2
+    Q25 silk on Q24.pad2
+    Q23 silk on Q24.pad6
+    Q11 silk on Q12.pad2
+    Q27 silk on Q28.pad6
+  QUADRANT-BALANCE: channel and/or s_mirror bucket(s) over enforced limit
+    channel  NW=82 NE=82 SW=82 SE=82 (ENFORCED Δ≤2)
+    s_mirror NW=2 NE=0 SW=0 SE=46 (ENFORCED Δ≤2)
+    single   NW=2 NE=3 SW=2 SE=29 (EXEMPT — central/strip placement)
+    auto     NW=30 NE=2 SW=5 SE=125 (WARN-only — debris inherits parent asymmetry)
+    TOTAL    NW=116 NE=87 SW=89 SE=282
+    S-mirror SW↔SE Δ=46
+  CH-PASSIVE-QUADRANT: 183 channel-tagged passives outside parent quadrant
+    C101 expected CH2 actual (225.0,-30.0)
+    C102 expected CH2 actual (230.0,-30.0)
+    C103 expected CH2 actual (235.0,-30.0)
+    C104 expected CH2 actual (240.0,-30.0)
+    C105 expected CH2 actual (245.0,-30.0)
+    C106 expected CH2 actual (250.0,-30.0)
+    C116 expected CH3 actual (225.0,-15.0)
+    C119 expected CH3 actual (240.0,-15.0)
+    C120 expected CH3 actual (245.0,-15.0)
+    C121 expected CH3 actual (250.0,-15.0)
+    C131 expected CH3 actual (300.0,-15.0)
+    C132 expected CH3 actual (305.0,-15.0)
+    C133 expected CH3 actual (310.0,-15.0)
+    C134 expected CH3 actual (315.0,-15.0)
+    C135 expected CH3 actual (320.0,-15.0)
+    ... and 168 more
+  COMPONENT-INSIDE-BODY: 2 component(s) placed inside a ≥4× larger same-layer host's silk bbox (fab-blocking)
+    C45 inside J14 (Connector_JST:JST_SH_SM08B-SRSS-TB_1x08-1MP_P1.00mm_Horizontal) at (260.00,45.00) [CTR+PADS]
+    R5 inside C1 (Capacitor_SMD:CP_Elec_8x6.2) at (260.00,20.00) [CTR+PADS]
