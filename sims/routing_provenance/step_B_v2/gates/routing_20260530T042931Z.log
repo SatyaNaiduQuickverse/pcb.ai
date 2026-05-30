@@ -1,0 +1,1 @@
+usage: audit_routing.py <board.kicad_pcb> [--subsystem CH1|CH2|...]

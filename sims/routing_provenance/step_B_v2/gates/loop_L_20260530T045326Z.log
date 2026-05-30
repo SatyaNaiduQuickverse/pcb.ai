@@ -1,0 +1,33 @@
+=== HS-LS commutation loop inductance — CH1, board pcbai_fpv4in1.kicad_pcb ===
+Board thickness (from board): 1.600 mm  | tracks=1947 vias=1208
+Stage: ROUTED (SW via count taken from REAL board geometry)
+Target: L_loop <= 2.0 nH/phase
+
+Single SW-via partial L (h=1.6mm, r=0.15mm): 0.739 nH  (dispatch sanity ~1nH for 0.3mm/1.6mm)
+
+    n_sw_vias: actual=31 (counted from board net 'MOTOR_A_CH1'=31; planned-fit=16)
+  Phase A: HS=Q5(F.Cu) LS=Q6(B.Cu)
+    SW run l=5.919mm  width w=4.987mm  a_eff=0.1129mm
+    n_sw_vias(actual)=31  L_via_cluster=0.0238nH  L_rect(free-space)=13.5116nH
+    loop_area(XY proj)=26.93mm^2
+    [plane-referenced @ OQ-014 d=0.10mm — PHYSICAL] L_loop = 0.1730 nH  margin=+1.8270nH -> PASS
+    (sensitivity d=0.076..0.21mm: 0.1375..0.3370 nH; free-space no-plane worst case = 13.5355 nH)
+
+    n_sw_vias: actual=35 (counted from board net 'MOTOR_B_CH1'=35; planned-fit=16)
+  Phase B: HS=Q7(F.Cu) LS=Q8(B.Cu)
+    SW run l=5.919mm  width w=4.987mm  a_eff=0.1129mm
+    n_sw_vias(actual)=35  L_via_cluster=0.0211nH  L_rect(free-space)=13.5116nH
+    loop_area(XY proj)=26.93mm^2
+    [plane-referenced @ OQ-014 d=0.10mm — PHYSICAL] L_loop = 0.1703 nH  margin=+1.8297nH -> PASS
+    (sensitivity d=0.076..0.21mm: 0.1348..0.3343 nH; free-space no-plane worst case = 13.5327 nH)
+
+    n_sw_vias: actual=34 (counted from board net 'MOTOR_C_CH1'=34; planned-fit=16)
+  Phase C: HS=Q9(F.Cu) LS=Q10(B.Cu)
+    SW run l=5.919mm  width w=4.987mm  a_eff=0.1129mm
+    n_sw_vias(actual)=34  L_via_cluster=0.0217nH  L_rect(free-space)=13.5116nH
+    loop_area(XY proj)=26.93mm^2
+    [plane-referenced @ OQ-014 d=0.10mm — PHYSICAL] L_loop = 0.1709 nH  margin=+1.8291nH -> PASS
+    (sensitivity d=0.076..0.21mm: 0.1354..0.3349 nH; free-space no-plane worst case = 13.5334 nH)
+
+Wrote /home/novatics64/escworker/pcb.ai/sims/phase4v3/ch1_loop_l/loop_l_table.csv
+RESULT: PASS — all 3 phases <= 2.0 nH
