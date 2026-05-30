@@ -2785,6 +2785,15 @@ class CooperativeRouter:
         # ensures track centerline never lands closer than (clearance + trace_half) to pad edge
         # which means track edge stays ≥clearance from pad edge.
         halo_m = CLEARANCE_MM + TRACE_HALF_MM + GRID_SLOP_MM
+        # LEVER UU.10 (2026-05-30): narrow halo for HDI-pitch pads per
+        # Sai dispatch. Default halo_m = 0.20 + 0.08 + 0.025 = 0.305mm.
+        # At QFN 0.5mm pitch the pad-to-pad gap is only 0.2mm — the
+        # 0.305mm halo from both adjacent pads completely seals the gap
+        # (verified via UU.9 trace: expansion=27 nodes drains, J18.15
+        # walled despite pad_accessible_cells unblock). Per Sai option b:
+        # use a NARROW halo at HDI pads = 0.10mm so the 0.2mm pin gap
+        # retains a usable channel after halo stamping.
+        halo_m_hdi = 0.10  # 0.10 → 0.1mm channel at 0.5mm pitch
         # v2: iterate ALL_COPPER_LAYERS so through-hole pads stamp on plane
         # layers too. CongestionGrid.stamp_obstacle_rect silently skips layers
         # not in its self.layers list (signal layers only) for obstacle/halo
@@ -2806,11 +2815,17 @@ class CooperativeRouter:
                     if is_hdi_pad:
                         obstacle_before = set(g.obstacle)
                     g.stamp_obstacle_rect(x, y, hx, hy, layer)
+                    # UU.10: HDI pads (J18/J19 QFN at 0.5mm pitch) get
+                    # a NARROW halo so the 0.2mm pin gap remains a
+                    # usable routing channel.
+                    halo_eff = halo_m_hdi if is_hdi_pad else halo_m
                     if owner and owner != "<NC>":
                         g.allow_pad_access_rect(x, y, layer, owner, hx, hy)
-                        g.stamp_halo_rect(x, y, hx + halo_m, hy + halo_m, layer, owner)
+                        g.stamp_halo_rect(x, y, hx + halo_eff, hy + halo_eff,
+                                          layer, owner)
                     else:
-                        g.stamp_obstacle_rect(x, y, hx + halo_m, hy + halo_m, layer)
+                        g.stamp_obstacle_rect(x, y, hx + halo_eff,
+                                              hy + halo_eff, layer)
                     if is_hdi_pad:
                         # Track which obstacle cells came from this J18/J19 pad
                         # so HDI via_blocked_for_net can ignore them as
@@ -2983,6 +2998,43 @@ class CooperativeRouter:
             # set so is_blocked_for treats them as free for this net (the
             # net's own pad fanout is never an obstacle to itself).
             self.grid.pad_accessible_cells[netname].update(cells)
+            # LEVER UU.10 (2026-05-30): pad-exit-channel per Sai dispatch
+            # post-UU.9 PR #283 finding that A* expansion=27 nodes drains
+            # at QFN 0.5mm pitch — pad cells unblocked but immediate
+            # neighbors sealed by foreign-pad halo (0.2mm pin gap minus
+            # 2× ~0.09mm halo = ~0.02mm = 0 cells usable channel).
+            #
+            # Fix: register a 1-cell-wide CHANNEL extending CHANNEL_LEN
+            # cells from pad center along the long axis in BOTH directions,
+            # plus along the short axis. For SMD pads the long axis points
+            # perpendicular to the chip body so this channel reaches into
+            # the routing space; for square pads the channel is symmetric.
+            # All channel cells join pad_accessible_cells[netname] so
+            # is_blocked_for treats them as net own access regardless of
+            # foreign-pad halo overlap.
+            CHANNEL_LEN_CELLS = 12     # 1.2mm at 0.1mm pitch (clears 0.3mm halo)
+            CHANNEL_WIDE_CELLS = 1     # 1 cell wide (= 0.1mm trace + clearance)
+            # Long axis = whichever pad dimension is larger
+            long_is_y = (sy >= sx)
+            for L in pad_layers:
+                if long_is_y:
+                    # Channel along ±Y from pad center, 1-cell wide in X
+                    for dj in range(-CHANNEL_LEN_CELLS, CHANNEL_LEN_CELLS + 1):
+                        for di in range(-CHANNEL_WIDE_CELLS,
+                                         CHANNEL_WIDE_CELLS + 1):
+                            ci, cj = i + di, j + dj
+                            if self.grid.in_bounds(ci, cj):
+                                self.grid.pad_accessible_cells[netname].add(
+                                    (ci, cj, L))
+                else:
+                    # Channel along ±X, 1-cell wide in Y
+                    for di in range(-CHANNEL_LEN_CELLS, CHANNEL_LEN_CELLS + 1):
+                        for dj in range(-CHANNEL_WIDE_CELLS,
+                                         CHANNEL_WIDE_CELLS + 1):
+                            ci, cj = i + di, j + dj
+                            if self.grid.in_bounds(ci, cj):
+                                self.grid.pad_accessible_cells[netname].add(
+                                    (ci, cj, L))
         return cells_by_pad
 
     def verify_net_connectivity(self, netname):
