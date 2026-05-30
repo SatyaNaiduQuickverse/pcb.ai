@@ -1977,9 +1977,25 @@ class CongestionGrid:
         Cell is blocked if:
           - in self.obstacle AND not in pad_cells[netname] (pad copper of other net or track core)
           - in self.net_halo AND ANY owner other than netname (clearance halo of other net)
+
+        LEVER UU.7 (2026-05-30): self-block escape per UU.6 root cause.
+        At QFN 0.5mm pitch (0.2mm pad-to-pad gap) the neighbor pad's
+        clearance halo extends INTO this pad's bbox. The original halo
+        check ignored whether `cell` was a pad cell of `netname` itself
+        -> A* found 6 of 9 source cells "blocked" against their OWN net,
+        sealing the maze in a 15-cell pocket (UU.6 PR #280). Fix: a
+        cell that is `netname`'s own pad cell is definitionally not an
+        obstacle to `netname`, regardless of foreign-pad halo overlap.
+        This applies symmetrically to obstacle-case + halo-case.
+        Safe: pad_cells[cell] contains only the pad's home net for
+        non-overlapping pads (any overlap is a fab DRC violation that
+        the placement audit catches separately).
         """
+        own_pad_cells = self.pad_cells.get(cell)
+        if own_pad_cells and netname in own_pad_cells:
+            return False
         if cell in self.obstacle:
-            if netname not in self.pad_cells.get(cell, set()):
+            if netname not in (own_pad_cells or set()):
                 return True
         halos = self.net_halo.get(cell)
         # If ANY halo-owner is not netname, the cell is in another net's clearance halo => blocked
