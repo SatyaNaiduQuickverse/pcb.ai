@@ -1,0 +1,32 @@
+{
+  "lever": "Phase 5 UU.1 \u2014 schematic-level chain decoupling",
+  "approval": "Sai 2026-05-30 UU.1 dispatch",
+  "relay": {
+    "ref": "R_RELAY_PWM_INLA",
+    "value": "22R",
+    "layer": "F.Cu",
+    "position_mm": [
+      28.0,
+      65.0
+    ],
+    "template": "R45"
+  },
+  "net_split": {
+    "original_net": "PWM_INLA_CH1",
+    "new_net": "PWM_INLA_CH1_R",
+    "source_side": {
+      "pad": "J18.15",
+      "net": "PWM_INLA_CH1"
+    },
+    "dest_side": {
+      "pad": "J19.1",
+      "net": "PWM_INLA_CH1_R"
+    },
+    "relay_pad_1_net": "PWM_INLA_CH1",
+    "relay_pad_2_net": "PWM_INLA_CH1_R"
+  },
+  "input_md5": "f119ac7e8a42a78f06e1acd553cb60fb",
+  "output_md5": "0920cf59fff0e8c85d0bc55da24282d2",
+  "timestamp_utc": "20260530T055440Z",
+  "R21_deviation": "DEV-019: board-only relay add \u2014 schematic NOT updated. Pre-fab requirement: regenerate .kicad_sch with relay R + split net topology, then re-run kinet2pcb to verify board matches."
+}

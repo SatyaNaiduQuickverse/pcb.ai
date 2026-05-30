@@ -1,0 +1,35 @@
+=== Routing compliance audit: post_route_uu1.kicad_pcb ===
+Tracks: 728, Vias: 1206
+
+INFO:
+  TRACK-WIDTH: 26 pad-entry-neck segments exempted (≤2.0mm + endpoint on undersized pad)
+    exempt: MOTOR_A_CH1 0.60mm (class min 1.00mm) len 1.90mm → pad D24.2 min_dim 0.90mm
+    exempt: MOTOR_B_CH1 0.60mm (class min 1.00mm) len 1.87mm → pad C60.2 min_dim 0.56mm
+    exempt: MOTOR_B_CH1 0.60mm (class min 1.00mm) len 1.87mm → pad D27.2 min_dim 0.90mm
+    exempt: MOTOR_C_CH1 0.60mm (class min 1.00mm) len 1.87mm → pad C61.2 min_dim 0.56mm
+    exempt: MOTOR_C_CH1 0.60mm (class min 1.00mm) len 1.87mm → pad D30.2 min_dim 0.90mm
+  PLANE-ISLAND: In1.Cu has 1 zone(s)
+  PLANE-ISLAND: In3.Cu has 1 zone(s)
+  PLANE-ISLAND: In5.Cu has 1 zone(s)
+  UNROUTED: scoped to CH1 nets only; 217 non-CH1 multi-pad nets skipped (per §8 subsystem-PR scope)
+
+FAIL (19 issues):
+  TRACK-WIDTH: 58 tracks below net-class minimum (after pad-entry-neck exemption)
+    MOTOR: 33 undersized tracks
+      'MOTOR_A_CH1': 0.600mm < 1.0mm at (18.0,54.5)
+      'MOTOR_A_CH1': 0.600mm < 1.0mm at (16.0,54.5)
+      'MOTOR_A_CH1': 0.600mm < 1.0mm at (7.0,55.0)
+    SHUNT: 18 undersized tracks
+      'SHUNT_A_TOP_CH1': 0.400mm < 1.0mm at (5.4,58.4)
+      'SHUNT_A_TOP_CH1': 0.300mm < 1.0mm at (16.9,61.6)
+      'SHUNT_A_TOP_CH1': 0.500mm < 1.0mm at (8.4,58.4)
+    VMOTOR: 7 undersized tracks
+      'VMOTOR_CH': 0.350mm < 1.0mm at (7.0,53.0)
+      'VMOTOR_CH': 0.400mm < 1.0mm at (33.0,56.0)
+      'VMOTOR_CH': 0.400mm < 1.0mm at (30.0,56.0)
+  UNROUTED: net 'PWM_INLA_CH1' has 2 pads but 0 tracks — net not routed
+  UNROUTED: net 'PWM_INHB_CH1' has 2 pads but 0 tracks — net not routed
+  UNROUTED: net 'SWDIO_CH1' has 2 pads but 0 tracks — net not routed
+  UNROUTED: net 'KILL_LED_NODE_CH1' has 2 pads but 0 tracks — net not routed
+  UNROUTED: net 'KILL_RAIL_N_CH1' has 4 pads but 0 tracks — net not routed
+  UNROUTED: net 'GLB_CH1' has 2 pads but 0 tracks — net not routed
