@@ -454,7 +454,27 @@ def extract_problem(board_path, subsystem="CH1"):
                 continue
             seen.add(pid)
             # signal layer the pad escapes on (first signal layer it occupies)
-            layer_name = "F.Cu"
+            #
+            # Lever FF (2026-05-30): previously hard-coded to "F.Cu" — broken
+            # for SMD pads on B.Cu only (e.g. R76.1 KILL_RAIL_N_CH1 leaf with
+            # LayerSet={B.Cu}). Now derived from the pad's actual LayerSet
+            # via the cooperative router's SIGNAL_LAYERS SSoT. Preserves
+            # back-compat (F.Cu still picked first when present); honors
+            # B.Cu-only pads for Phase A's escape ledger.
+            layer_name = "F.Cu"   # default for back-compat
+            try:
+                lset = pad.GetLayerSet()
+                for candidate, lid in (("F.Cu",  pcbnew.F_Cu),
+                                        ("B.Cu",  pcbnew.B_Cu),
+                                        ("In2.Cu", pcbnew.In2_Cu),
+                                        ("In4.Cu", pcbnew.In4_Cu),
+                                        ("In6.Cu", pcbnew.In6_Cu),
+                                        ("In8.Cu", pcbnew.In8_Cu)):
+                    if lset.Contains(lid):
+                        layer_name = candidate
+                        break
+            except Exception:
+                pass
             pins.append(F.Pin(pid, round(px, 4), round(py, 4), layer_name))
 
     # ---- NETS as fixtures.Net: connect each net's in-zone pads -------------

@@ -2126,6 +2126,10 @@ def _pin_from_pcbnew(board, pin_ref):
     # layer (the cooperative router's convention). For a through-hole
     # pad this is F.Cu (the cooperative router's pin-layer rule); for
     # SMD pads it is the pad's own layer.
+    # Lever FF (2026-05-30): The default "F.Cu" here is a safety fallback;
+    # the loop below overrides via LayerSet.Contains for the actual pad
+    # mount layer. This preserves correctness for B.Cu-only SMD pads
+    # (R76 / D37 / D38 KILL_RAIL_N leaf).
     layer_name = "F.Cu"
     lset = pad.GetLayerSet()
     # Prefer outer layers when present (where signal routes start/end).
