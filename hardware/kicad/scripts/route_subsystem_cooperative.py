@@ -2953,6 +2953,65 @@ class CooperativeRouter:
                 if a[0] in ('trk_s', 'trk_e') and b[0] in ('trk_s', 'trk_e') and a[1] == b[1]:
                     union(i, j)
 
+        # ── LEVER UU.2 (2026-05-30) T-JUNCTION FIX ──────────────────────────
+        # Per Sai UU.2 directive + empirical evidence on Bv3 board: 6 nets
+        # (BSTA/BSTB/GHA/GHB/GHC/GLA/GLC) with 11-56 tracks emitted were
+        # reported as 2 islands by the prior endpoint-only union-find,
+        # while kicad-cli DRC ground-truth reports 0 unconnected_items
+        # for them. ROOT CAUSE: prior union-find only checked
+        # endpoint-to-endpoint coincidence. KiCad fab graph also connects:
+        #   - Track endpoint that lands on the INTERIOR of another track
+        #     of the same net + same layer (T-junction). This is the
+        #     dominant gap — the maze emits tracks that cross or T into
+        #     each other and KiCad fab sees them connected via the
+        #     copper overlap, but the prior verifier missed it.
+        #
+        # Fix: for every track endpoint, compute point-to-segment distance
+        # against every OTHER track of the same net + same layer. If the
+        # endpoint lies within TOL_COINCIDENT of any segment interior,
+        # union the endpoint with both endpoints of that other track.
+        # This matches KiCad's fab-truth connectivity within the existing
+        # 0.05mm tolerance — no widening, just an additional geometric
+        # relation that was missing from the prior incomplete check.
+        import math as _math
+
+        def _seg_point_dist(x1, y1, x2, y2, px, py):
+            dx = x2 - x1
+            dy = y2 - y1
+            if dx == 0 and dy == 0:
+                return _math.hypot(px - x1, py - y1)
+            t = max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy)
+                              / (dx * dx + dy * dy)))
+            cx = x1 + t * dx
+            cy = y1 + t * dy
+            return _math.hypot(px - cx, py - cy)
+
+        # Build a quick lookup from (track_index, endpoint_kind) → node index.
+        trk_node = {}
+        for k, node in enumerate(nodes):
+            if node[0] in ('trk_s', 'trk_e'):
+                trk_node[(node[1], node[0])] = k
+
+        for k, node in enumerate(nodes):
+            if node[0] not in ('trk_s', 'trk_e'):
+                continue
+            layer_k = node[4]
+            px, py = node[2], node[3]
+            for ti, (x1, y1, x2, y2, layer_t) in enumerate(tracks):
+                if ti == node[1]:
+                    continue  # the endpoint's own track
+                if layer_t != layer_k:
+                    continue
+                d = _seg_point_dist(x1, y1, x2, y2, px, py)
+                if d <= TOL_COINCIDENT:
+                    # Union this endpoint with track ti's endpoints
+                    s_k = trk_node.get((ti, 'trk_s'))
+                    e_k = trk_node.get((ti, 'trk_e'))
+                    if s_k is not None:
+                        union(k, s_k)
+                    if e_k is not None:
+                        union(k, e_k)
+
         # Group pad nodes by island
         islands = defaultdict(list)
         for i, node in enumerate(nodes):
