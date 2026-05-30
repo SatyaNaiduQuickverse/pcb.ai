@@ -1,0 +1,294 @@
+{
+  "location": [
+    30.7,
+    61.2
+  ],
+  "layer": "In4.Cu",
+  "radius_mm": 6.0,
+  "owner_net": "KILL_RAIL_N_CH1",
+  "foreign_tracks": [
+    {
+      "net": "BEMF_A_CH1",
+      "start": [
+        29.3,
+        66.8
+      ],
+      "end": [
+        24.7,
+        62.2
+      ],
+      "width_mm": 0.15,
+      "min_distance_mm": 5.772
+    },
+    {
+      "net": "NRST_CH1",
+      "start": [
+        30.1,
+        66.6
+      ],
+      "end": [
+        30.1,
+        67.6
+      ],
+      "width_mm": 0.15,
+      "min_distance_mm": 5.433
+    },
+    {
+      "net": "NRST_CH1",
+      "start": [
+        29.3,
+        65.8
+      ],
+      "end": [
+        30.1,
+        66.6
+      ],
+      "width_mm": 0.15,
+      "min_distance_mm": 4.808
+    }
+  ],
+  "foreign_pads": [
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        30.75,
+        65.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 3.8
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        30.75,
+        66.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 4.8
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        30.75,
+        67.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 5.8
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        31.75,
+        65.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 3.942
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        31.75,
+        66.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 4.914
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        31.75,
+        67.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 5.894
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        32.75,
+        65.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 4.318
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        32.75,
+        66.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 5.219
+    }
+  ],
+  "foreign_vias": [
+    {
+      "net": "BEMF_A_CH1",
+      "pos": [
+        29.3,
+        66.8
+      ],
+      "drill_mm": 0.1,
+      "distance_mm": 5.772
+    },
+    {
+      "net": "BOOT0_CH1",
+      "pos": [
+        30.5,
+        63.6
+      ],
+      "drill_mm": 0.1,
+      "distance_mm": 2.408
+    },
+    {
+      "net": "BSTA_CH1",
+      "pos": [
+        26.1,
+        59.1
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 5.057
+    },
+    {
+      "net": "BSTB_CH1",
+      "pos": [
+        26.1,
+        61.8
+      ],
+      "drill_mm": 0.15,
+      "distance_mm": 4.639
+    },
+    {
+      "net": "BSTC_CH1",
+      "pos": [
+        27.789028,
+        63.158023
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 3.508
+    },
+    {
+      "net": "GHA_CH1",
+      "pos": [
+        25.88364,
+        59.909838
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 4.986
+    },
+    {
+      "net": "GHB_CH1",
+      "pos": [
+        27.129252,
+        62.141449
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 3.693
+    },
+    {
+      "net": "GHC_CH1",
+      "pos": [
+        28.4,
+        63.8
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 3.471
+    },
+    {
+      "net": "GND",
+      "pos": [
+        26.0,
+        58.0
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 5.686
+    },
+    {
+      "net": "KILL_LOCAL_N_CH1",
+      "pos": [
+        33.0,
+        57.0
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 4.789
+    },
+    {
+      "net": "LED_GPIO_CH1",
+      "pos": [
+        34.5,
+        63.6
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 4.494
+    },
+    {
+      "net": "NRST_CH1",
+      "pos": [
+        29.3,
+        65.8
+      ],
+      "drill_mm": 0.1,
+      "distance_mm": 4.808
+    },
+    {
+      "net": "OTP_TRIP_N_CH1",
+      "pos": [
+        31.6,
+        56.8
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 4.491
+    },
+    {
+      "net": "PWM_INHC_CH1",
+      "pos": [
+        33.0,
+        62.5
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 2.642
+    }
+  ],
+  "zone_fills": [],
+  "owner_items": []
+}
