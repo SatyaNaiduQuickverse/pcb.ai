@@ -2793,7 +2793,18 @@ class CooperativeRouter:
         # walled despite pad_accessible_cells unblock). Per Sai option b:
         # use a NARROW halo at HDI pads = 0.10mm so the 0.2mm pin gap
         # retains a usable channel after halo stamping.
-        halo_m_hdi = 0.10  # 0.10 → 0.1mm channel at 0.5mm pitch
+        # UU.11 (2026-05-30): bump to JLC HDI Class 2 fab-compliant spec.
+        # UU.10 used 0.10mm which yielded trace-to-pad clearance of
+        # halo - trace_half = 0.02mm — sub-fab-tol. Each foreign track
+        # routing through this narrow halo failed clearance fab-DRC.
+        # 0.205 = TRACE_HALF_MM (0.08) + JLC_HDI_CLEARANCE (0.10) +
+        # GRID_SLOP_MM (0.025) — gives 0.10mm trace-to-pad edge =
+        # exactly the JLC HDI Class 2 minimum. Trade-off: at QFN 0.5mm
+        # pitch the channel between two adjacent pads narrows from 1 cell
+        # (UU.10) to ~0 cells — may regress PWM_INHB. Mitigation: 1.8mm
+        # corridor extension picks up the slack via pad_accessible_cells
+        # (which short-circuits is_blocked_for regardless of halo width).
+        halo_m_hdi = 0.205
         # v2: iterate ALL_COPPER_LAYERS so through-hole pads stamp on plane
         # layers too. CongestionGrid.stamp_obstacle_rect silently skips layers
         # not in its self.layers list (signal layers only) for obstacle/halo
@@ -3012,7 +3023,10 @@ class CooperativeRouter:
             # All channel cells join pad_accessible_cells[netname] so
             # is_blocked_for treats them as net own access regardless of
             # foreign-pad halo overlap.
-            CHANNEL_LEN_CELLS = 12     # 1.2mm at 0.1mm pitch (clears 0.3mm halo)
+            CHANNEL_LEN_CELLS = 18     # UU.11: 1.8mm (was 1.2mm; UU.10 left
+                                       # PWM_INLA walled past 1.2mm — extend
+                                       # to push corridor further into open
+                                       # routing space beyond QFN halo ring)
             CHANNEL_WIDE_CELLS = 1     # 1 cell wide (= 0.1mm trace + clearance)
             # Long axis = whichever pad dimension is larger
             long_is_y = (sy >= sx)
