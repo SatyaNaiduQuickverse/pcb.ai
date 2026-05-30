@@ -1,0 +1,19 @@
+{
+  "lever": "UU.4 STAR-POINT TP",
+  "approval": "Sai 2026-05-30 UU expansion",
+  "tp": {
+    "ref": "TP_ESCAPE_PWM_INLA",
+    "net": "PWM_INLA_CH1",
+    "position_mm": [
+      34.5,
+      68.94
+    ],
+    "layer": "F.Cu",
+    "template_ref": "TP23",
+    "pad_size_mm": 0.6
+  },
+  "input_md5": "f119ac7e8a42a78f06e1acd553cb60fb",
+  "output_md5": "89fca2de9d824f182182d28c2a1bc60b",
+  "timestamp_utc": "20260530T065355Z",
+  "R21_deviation": "DEV-007: TP added board-only; schematic edit required"
+}

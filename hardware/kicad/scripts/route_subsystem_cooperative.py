@@ -453,6 +453,8 @@ HDI_VIA_IN_PAD_REFS = (
     "R76",     # KILL_RAIL_N_CH1 destination at R76.1
     "D37",     # KILL_RAIL_N_CH1 chained at D37.2
     "D38",     # KILL_RAIL_N_CH1 chained at D38.2
+    # CH1 30/30 UU.1-ESCAPE (2026-05-30): adjacent-pin relay TPs
+    "TP_ESCAPE_PWM_INLA",   # adjacent to J18.15 for PWM_INLA escape
 )
 
 
