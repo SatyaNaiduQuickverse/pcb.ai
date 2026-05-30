@@ -1,0 +1,716 @@
+{
+  "location": [
+    35.26,
+    60.8
+  ],
+  "layer": "B.Cu",
+  "radius_mm": 8.0,
+  "owner_net": "KILL_RAIL_N_CH1",
+  "foreign_tracks": [
+    {
+      "net": "KILL_LOCAL_N_CH1",
+      "start": [
+        33.4,
+        57.0
+      ],
+      "end": [
+        33.9,
+        57.5
+      ],
+      "width_mm": 0.15,
+      "min_distance_mm": 3.569
+    },
+    {
+      "net": "KILL_LOCAL_N_CH1",
+      "start": [
+        33.9,
+        57.5
+      ],
+      "end": [
+        34.2,
+        57.5
+      ],
+      "width_mm": 0.15,
+      "min_distance_mm": 3.466
+    },
+    {
+      "net": "KILL_LOCAL_N_CH1",
+      "start": [
+        33.0,
+        57.0
+      ],
+      "end": [
+        33.4,
+        57.0
+      ],
+      "width_mm": 0.15,
+      "min_distance_mm": 4.231
+    },
+    {
+      "net": "OTP_TRIP_N_CH1",
+      "start": [
+        31.6,
+        56.0
+      ],
+      "end": [
+        31.9,
+        55.7
+      ],
+      "width_mm": 0.15,
+      "min_distance_mm": 6.036
+    },
+    {
+      "net": "OTP_TRIP_N_CH1",
+      "start": [
+        31.6,
+        56.8
+      ],
+      "end": [
+        31.6,
+        56.0
+      ],
+      "width_mm": 0.15,
+      "min_distance_mm": 5.422
+    },
+    {
+      "net": "OTP_TRIP_N_CH1",
+      "start": [
+        31.9,
+        55.7
+      ],
+      "end": [
+        31.9,
+        55.4
+      ],
+      "width_mm": 0.15,
+      "min_distance_mm": 6.107
+    },
+    {
+      "net": "OTP_TRIP_N_CH1",
+      "start": [
+        31.9,
+        55.4
+      ],
+      "end": [
+        32.2,
+        55.1
+      ],
+      "width_mm": 0.15,
+      "min_distance_mm": 6.36
+    },
+    {
+      "net": "VMOTOR_CH",
+      "start": [
+        34.5,
+        55.0
+      ],
+      "end": [
+        35.1,
+        54.3
+      ],
+      "width_mm": 0.4,
+      "min_distance_mm": 5.85
+    }
+  ],
+  "foreign_pads": [
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        30.75,
+        65.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 6.163
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        30.75,
+        66.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 6.883
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        30.75,
+        67.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 7.667
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        31.75,
+        65.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 5.474
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        31.75,
+        66.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 6.274
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        31.75,
+        66.0
+      ],
+      "size_mm": [
+        2.5,
+        2.5
+      ],
+      "distance_mm": 6.274
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        31.75,
+        67.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 7.125
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        32.75,
+        65.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 4.893
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        32.75,
+        66.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 5.774
+    },
+    {
+      "ref": "J18",
+      "pad": "33",
+      "net": "",
+      "pos": [
+        32.75,
+        67.0
+      ],
+      "size_mm": [
+        0.5,
+        0.5
+      ],
+      "distance_mm": 6.689
+    },
+    {
+      "ref": "D38",
+      "pad": "1",
+      "net": "KILL_LOCAL_N_CH1",
+      "pos": [
+        34.3,
+        57.598076
+      ],
+      "size_mm": [
+        0.6,
+        0.45
+      ],
+      "distance_mm": 3.343
+    },
+    {
+      "ref": "C55",
+      "pad": "1",
+      "net": "+3V3A",
+      "pos": [
+        32.23,
+        59.4
+      ],
+      "size_mm": [
+        0.56,
+        0.62
+      ],
+      "distance_mm": 3.338
+    },
+    {
+      "ref": "C55",
+      "pad": "2",
+      "net": "GND",
+      "pos": [
+        31.27,
+        59.4
+      ],
+      "size_mm": [
+        0.56,
+        0.62
+      ],
+      "distance_mm": 4.228
+    },
+    {
+      "ref": "R76",
+      "pad": "2",
+      "net": "+3V3",
+      "pos": [
+        34.24,
+        60.803847
+      ],
+      "size_mm": [
+        0.54,
+        0.64
+      ],
+      "distance_mm": 1.02
+    },
+    {
+      "ref": "R74",
+      "pad": "1",
+      "net": "OTP_TRIP_N_CH1",
+      "pos": [
+        32.26,
+        55.0
+      ],
+      "size_mm": [
+        0.54,
+        0.64
+      ],
+      "distance_mm": 6.53
+    },
+    {
+      "ref": "R74",
+      "pad": "2",
+      "net": "+3V3",
+      "pos": [
+        31.24,
+        55.0
+      ],
+      "size_mm": [
+        0.54,
+        0.64
+      ],
+      "distance_mm": 7.057
+    },
+    {
+      "ref": "C67",
+      "pad": "1",
+      "net": "VMOTOR_CH",
+      "pos": [
+        32.98,
+        53.5
+      ],
+      "size_mm": [
+        0.56,
+        0.62
+      ],
+      "distance_mm": 7.648
+    },
+    {
+      "ref": "C67",
+      "pad": "2",
+      "net": "GND",
+      "pos": [
+        32.02,
+        53.5
+      ],
+      "size_mm": [
+        0.56,
+        0.62
+      ],
+      "distance_mm": 7.987
+    },
+    {
+      "ref": "C70",
+      "pad": "1",
+      "net": "VMOTOR_CH",
+      "pos": [
+        34.48,
+        55.0
+      ],
+      "size_mm": [
+        0.56,
+        0.62
+      ],
+      "distance_mm": 5.852
+    },
+    {
+      "ref": "C70",
+      "pad": "2",
+      "net": "GND",
+      "pos": [
+        33.52,
+        55.0
+      ],
+      "size_mm": [
+        0.56,
+        0.62
+      ],
+      "distance_mm": 6.055
+    },
+    {
+      "ref": "D37",
+      "pad": "1",
+      "net": "PG_VMOTOR",
+      "pos": [
+        32.8,
+        61.2
+      ],
+      "size_mm": [
+        0.6,
+        0.45
+      ],
+      "distance_mm": 2.492
+    }
+  ],
+  "foreign_vias": [
+    {
+      "net": "+VMOTOR",
+      "pos": [
+        40.925,
+        60.425
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 5.677
+    },
+    {
+      "net": "+VMOTOR",
+      "pos": [
+        37.025,
+        60.425
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 1.804
+    },
+    {
+      "net": "+VMOTOR",
+      "pos": [
+        37.025,
+        68.225
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 7.632
+    },
+    {
+      "net": "+VMOTOR",
+      "pos": [
+        37.025,
+        56.525
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 4.625
+    },
+    {
+      "net": "+VMOTOR",
+      "pos": [
+        40.925,
+        56.525
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 7.097
+    },
+    {
+      "net": "+VMOTOR",
+      "pos": [
+        40.925,
+        64.325
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 6.672
+    },
+    {
+      "net": "+VMOTOR",
+      "pos": [
+        37.025,
+        64.325
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 3.942
+    },
+    {
+      "net": "BOOT0_CH1",
+      "pos": [
+        30.5,
+        63.6
+      ],
+      "drill_mm": 0.1,
+      "distance_mm": 5.522
+    },
+    {
+      "net": "BSTC_CH1",
+      "pos": [
+        27.789028,
+        63.158023
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 7.834
+    },
+    {
+      "net": "GHC_CH1",
+      "pos": [
+        28.4,
+        63.8
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 7.487
+    },
+    {
+      "net": "GND",
+      "pos": [
+        34.0,
+        54.0
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 6.916
+    },
+    {
+      "net": "GND",
+      "pos": [
+        38.525,
+        56.525
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 5.379
+    },
+    {
+      "net": "GND",
+      "pos": [
+        38.525,
+        60.425
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 3.286
+    },
+    {
+      "net": "GND",
+      "pos": [
+        42.425,
+        64.325
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 7.985
+    },
+    {
+      "net": "GND",
+      "pos": [
+        38.525,
+        64.325
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 4.805
+    },
+    {
+      "net": "GND",
+      "pos": [
+        42.425,
+        60.425
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 7.175
+    },
+    {
+      "net": "KILL_LOCAL_N_CH1",
+      "pos": [
+        33.0,
+        57.0
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 4.421
+    },
+    {
+      "net": "LED_GPIO_CH1",
+      "pos": [
+        34.5,
+        63.6
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 2.901
+    },
+    {
+      "net": "NRST_CH1",
+      "pos": [
+        29.3,
+        65.8
+      ],
+      "drill_mm": 0.1,
+      "distance_mm": 7.78
+    },
+    {
+      "net": "OTP_TRIP_N_CH1",
+      "pos": [
+        31.6,
+        56.8
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 5.422
+    },
+    {
+      "net": "PWM_INHA_CH1",
+      "pos": [
+        34.2,
+        66.2
+      ],
+      "drill_mm": 0.1,
+      "distance_mm": 5.503
+    },
+    {
+      "net": "PWM_INHC_CH1",
+      "pos": [
+        33.0,
+        62.5
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 2.828
+    },
+    {
+      "net": "PWM_INHC_CH1",
+      "pos": [
+        34.2,
+        67.2
+      ],
+      "drill_mm": 0.1,
+      "distance_mm": 6.487
+    },
+    {
+      "net": "SWCLK_CH1",
+      "pos": [
+        35.0,
+        68.3
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 7.505
+    },
+    {
+      "net": "VMOTOR_CH",
+      "pos": [
+        33.0,
+        53.5
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 7.642
+    },
+    {
+      "net": "VMOTOR_CH",
+      "pos": [
+        35.1,
+        54.3
+      ],
+      "drill_mm": 0.3,
+      "distance_mm": 6.502
+    }
+  ],
+  "zone_fills": [
+    {
+      "net": "+VMOTOR",
+      "bbox": [
+        2.0,
+        2.0,
+        98.0,
+        98.0
+      ],
+      "covers_location": true
+    },
+    {
+      "net": "GND",
+      "bbox": [
+        0.3,
+        49.5,
+        35.8,
+        99.7
+      ],
+      "covers_location": true
+    }
+  ],
+  "owner_items": [
+    {
+      "type": "pad",
+      "ref": "D38",
+      "pad": "2",
+      "net": "KILL_RAIL_N_CH1",
+      "pos": [
+        32.2,
+        57.598076
+      ],
+      "size_mm": [
+        0.6,
+        0.45
+      ],
+      "distance_mm": 4.429
+    },
+    {
+      "type": "pad",
+      "ref": "R76",
+      "pad": "1",
+      "net": "KILL_RAIL_N_CH1",
+      "pos": [
+        35.26,
+        60.803847
+      ],
+      "size_mm": [
+        0.54,
+        0.64
+      ],
+      "distance_mm": 0.004
+    },
+    {
+      "type": "pad",
+      "ref": "D37",
+      "pad": "2",
+      "net": "KILL_RAIL_N_CH1",
+      "pos": [
+        30.7,
+        61.2
+      ],
+      "size_mm": [
+        0.6,
+        0.45
+      ],
+      "distance_mm": 4.578
+    }
+  ]
+}
