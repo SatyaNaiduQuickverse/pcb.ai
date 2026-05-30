@@ -1454,6 +1454,13 @@ class CongestionGrid:
         self.cell_owners = defaultdict(set)  # (i,j,L) -> {netname,...}
         # Pad-cell map: cell -> netname when cell is a pad endpoint we permit access for that net
         self.pad_cells = defaultdict(set)  # (i,j,L) -> {netnames whose pads occupy this cell}
+        # LEVER UU.8 (2026-05-30): per-net accessible cell set — the 3x3
+        # fanout ring around each pad center (from _pad_cells_for_net).
+        # Wider than pad_cells (strict bbox); used as the second-layer
+        # escape hatch in is_blocked_for per UU.7 PR #281 finding that
+        # 3 of 9 source cells under PASS-1 remained blocked despite UU.7
+        # because they sit just outside the strict pad bbox.
+        self.pad_accessible_cells = defaultdict(set)  # netname -> {(i,j,L)}
         # Owner-net halo: cell -> set of net names that OWN this cell as clearance halo.
         # Blocked for ALL OTHER nets; accessible to listed nets.
         self.net_halo = defaultdict(set)  # (i,j,L) -> {netnames}
@@ -1993,6 +2000,14 @@ class CongestionGrid:
         """
         own_pad_cells = self.pad_cells.get(cell)
         if own_pad_cells and netname in own_pad_cells:
+            return False
+        # LEVER UU.8 (2026-05-30): widen escape hatch to per-net
+        # accessible cell set (3x3 fanout ring around each pad center).
+        # UU.7 only exempted strict-pad-bbox cells; the 3x3 ring includes
+        # cells just outside the bbox that the pad still needs A* entry
+        # to. Under QFN 0.5mm pitch the fanout ring lands in foreign-pad
+        # halo, walling A* off in the corner cases UU.7 missed.
+        if cell in self.pad_accessible_cells.get(netname, ()):
             return False
         if cell in self.obstacle:
             if netname not in (own_pad_cells or set()):
@@ -2964,6 +2979,10 @@ class CooperativeRouter:
                         if self.grid.in_bounds(ci, cj):
                             cells.add((ci, cj, L))
             cells_by_pad.append((ref, padname, x, y, cells, pad_layers, sx, sy))
+            # UU.8: register the 3x3 fanout cells in the per-net accessible
+            # set so is_blocked_for treats them as free for this net (the
+            # net's own pad fanout is never an obstacle to itself).
+            self.grid.pad_accessible_cells[netname].update(cells)
         return cells_by_pad
 
     def verify_net_connectivity(self, netname):
@@ -3335,6 +3354,56 @@ class CooperativeRouter:
                     pad_info[b][2], pad_info[b][3],
                 )
                 next_pending.append((i_edge, a, b))
+        # LEVER UU.8 (2026-05-30): multi-edge MST cell-continuity
+        # diagnostic + forced-join bridge per Sai dispatch.
+        # Per UU.7 PR #281 finding: chronics produce ROUTED-but-SPLIT
+        # despite GOAL_REACHED on every A* edge. Hypothesis: distinct
+        # MST edges emit paths whose endpoints land in same pad cell
+        # set but at cells that are CLOSE (a few cells apart) rather
+        # than coincident, so verify_net_connectivity's per-track
+        # union-find (TOL_COINCIDENT=0.05mm) doesn't merge them.
+        # Diagnostic: log path endpoint matrix. Bridge: for any pair
+        # of endpoints across different paths on the SAME layer and
+        # within TOL_BRIDGE_CELLS=3 (= 0.3mm at 0.1mm pitch), emit a
+        # tiny 2-cell bridge path that commit_net will turn into a
+        # short PCB_TRACK closing the geometric gap.
+        TOL_BRIDGE_CELLS = 3
+        if len(all_paths) >= 2 and _ASTAR_TRACE_NET == netname:
+            _astar_trace_emit({"net": netname, "event": "MST_PATHS",
+                                "n_paths": len(all_paths),
+                                "endpoints": [(p[0], p[-1])
+                                              for p in all_paths]})
+        bridges_added = []
+        if len(all_paths) >= 2:
+            # Build endpoint inventory per layer
+            endpoints = []  # (path_idx, end_idx, cell)
+            for pi, p in enumerate(all_paths):
+                if not p: continue
+                endpoints.append((pi, 0, p[0]))
+                endpoints.append((pi, -1, p[-1]))
+            for a_i in range(len(endpoints)):
+                pi_a, _, ca = endpoints[a_i]
+                for b_i in range(a_i + 1, len(endpoints)):
+                    pi_b, _, cb = endpoints[b_i]
+                    if pi_a == pi_b:
+                        continue
+                    if ca[2] != cb[2]:
+                        continue  # different layer — needs via not bridge
+                    if ca == cb:
+                        continue  # coincident — already connected
+                    di = abs(ca[0] - cb[0])
+                    dj = abs(ca[1] - cb[1])
+                    if max(di, dj) > TOL_BRIDGE_CELLS:
+                        continue
+                    bridges_added.append((ca, cb))
+                    if _ASTAR_TRACE_NET == netname:
+                        _astar_trace_emit({
+                            "net": netname, "event": "BRIDGE",
+                            "ca": ca, "cb": cb,
+                            "dist_cells": max(di, dj),
+                        })
+            for (ca, cb) in bridges_added:
+                all_paths.append([ca, cb])
         # K2 (v11) provenance: any PARTIAL net (status) must record an
         # entry. We collect the info on `self` so the run() loop can
         # serialise + write to disk under PARTIAL_MST_PROVENANCE_DIR_REL.
